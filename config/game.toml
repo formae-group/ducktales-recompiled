@@ -1,0 +1,16 @@
+# NESRecomp cycle-backend configuration for DuckTales (USA).
+# Every entry below must be backed by evidence recorded in docs/.
+
+[game]
+output_prefix = "ducktales"
+cycle_accurate = true
+console = "nes"
+cycle_seed_file = "ducktales.seeds"
+
+# Entry of the main task. Reset stores $D4E6 in $93/$94 and calls the task
+# creator at $FF7D; the scheduler at $FF35 starts it through JMP ($0093), which
+# static discovery cannot follow. See docs/functions.md.
+[[extra_func]]
+bank = 7
+addr = 0xD4E6
+

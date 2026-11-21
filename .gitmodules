@@ -1,0 +1,3 @@
+[submodule "external/nesrecomp"]
+	path = external/nesrecomp
+	url = https://github.com/mstan/nesrecomp

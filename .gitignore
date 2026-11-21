@@ -1,0 +1,23 @@
+# ROMs and anything derived from them stay local.
+/roms/*
+!/roms/README.md
+*.nes
+*.fds
+
+# Build trees (generated C lives here: it embeds translated game code).
+/build*/
+/out/
+
+# Runtime output written next to executables or during investigation.
+*.cycstate
+*.state
+*.sav
+dispatch_misses.log
+fallback_telemetry.jsonl
+config.ini
+keybinds.ini
+/captures/
+/traces/
+
+# Python caches from tools/
+__pycache__/
