@@ -11,6 +11,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <direct.h>
+#define make_dir(p) _mkdir(p)
+#else
+#include <sys/stat.h>
+#define make_dir(p) mkdir(p, 0777)
+#endif
 
 static int failures;
 
@@ -61,6 +68,9 @@ int main(int argc, char **argv)
 #else
     setenv("FORMAE_DATA_DIR", data_env, 1);
 #endif
+    make_dir(dir);
+    snprintf(stored, sizeof stored, "%s/" FORMAE_ROM_FILE_NAME, data_env);
+    remove(stored);
     snprintf(src, sizeof src, "%s/good.nes", dir);
     snprintf(bad, sizeof bad, "%s/bad.nes", dir);
     snprintf(txt, sizeof txt, "%s/notes.txt", dir);
