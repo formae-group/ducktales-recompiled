@@ -20,6 +20,34 @@ Addresses are CPU addresses; `bank N` is the 16 KiB PRG bank at `$8000` (bank 7 
 | `$C1AB` | `read_controllers` | Strobes `$4016` and shifts 8 bits from each port. | Static reading; RAM correlation in [memory-map.md](memory-map.md). |
 | `$D4E6` | `main_task` | Entry point of the first task. Static discovery cannot reach it (it is only reached through `JMP ($0093)`), so it is listed in `config/game.toml`. | Static reading of `reset`; first interpreter miss in the unseeded build. |
 
+### Game flow (details in [game-state.md](game-state.md), [levels.md](levels.md))
+
+| Address | Name | Behaviour |
+|---|---|---|
+| `$C7B0` | `map_header` | Loads map rows, stride and grid pointer. |
+| `$CF93` | `boss_trigger` | Boss-room entry and arena scroll. |
+| `$D630` | `land_select` | Land Select screen, banking, cursor skipping taken lands. |
+| `$D79B` | `land_load` | Loads a land. |
+| `$D8D9` | `bank_money` | Moves HUD money into TOTAL. |
+| `$D9CA` | `apply_land_tables` | Per-land tables indexed by `$F6`. |
+| `$DB36` | `frame_loop` | Per-frame gameplay loop. |
+| `$DC04` | `boss_checkpoint` | Sets `$7C`. |
+| `$DC3E` | `death_or_warp` | Handles `$7E`. |
+| `$DD4E` | `place_from_entry` | Places Scrooge from a `$DDC1` entry. |
+| `$DEB9` | `game_over` | Game-over music, 240-frame wait, reset. |
+| `$DF08` | `land_exit` | Back to Land Select after `$5D`. |
+| `$DF27` | `scene` | Loads a `$78` scene. |
+| `$E1AF` | `ending` | Selects and plays the ending variant. |
+| `$E28C` | `timer_tick` | HUD time countdown and time-out death. |
+| `$E88C` | `row_change` | Moves to the row above or below (static reading only). |
+| `$F752` | `music_request` | Sets `$C5` and queues a sound. |
+| bank 5 `$B760` | `reset_consumed` | Clears and pre-sets `$0120-$013F`. |
+| bank 5 `$B800` | `land_select_message` | Chooses the Land Select message. |
+| bank 6 `$8B21` | `pickup` | Dispatches on the touched object's type. |
+| bank 6 `$AE20/$AE60/$AEA0` | `spawner` | Object spawn set-up and per-frame spawning. |
+
+Evidence for each row is in the linked documents (traces, poke runs, static reading).
+
 ### Scrooge (details in [player.md](player.md))
 
 | Address | Name | Behaviour | Evidence |
