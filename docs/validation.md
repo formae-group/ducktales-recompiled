@@ -32,16 +32,19 @@ counted as interpretation.
 | `moon_intro` | 5,172 | The Moon, death, game over, back to title | 100.0% | all frames, 4 alignments |
 | `african_mines_easy` | 7,350 | Easy, African Mines, different input pattern, game over; did not contribute seeds | 100.0% | all frames, 4 alignments |
 | `re_amazon_moves` | 2,128 | Controlled moves used for RAM mapping | 100.0% | all frames, 4 alignments |
+| `full_amazon` | 9,600 | Normal, The Amazon from power-on to the LAND CLEAR tally: vine shaft, gorilla pogo, boulder corridor, hidden rope, golfed rock pile, boss (5 hits), treasure chest, $1,049,000; loses one life near frame 4840 and continues from the checkpoint | 100.0% | all frames, 4 alignments |
 
 Before seeding, the first title/Land Select/Amazon route ran 65.5% native (378 compiled
-instructions); after seeding 9,053 instructions are compiled.
+instructions); after seeding 9,053 instructions are compiled. Before `full_amazon` was seeded it started 731
+ROM instructions on the interpreter that no earlier route reached (the later Amazon screens, the boss
+and the clear tally); its misses were added to `config/ducktales.seeds` and the build regenerated.
 
 The windowed SDL2 build also ran 600 frames hidden (`--hidden --exit-after 600`) with audio
 enabled and exited cleanly.
 
 ## Not verified
 
-- A complete playthrough of any land, any boss, secret treasures, the Transylvania return, the
+- A complete playthrough of any land other than The Amazon on Normal, any other boss, secret treasures, the Transylvania return, the
   ending and the three endings' conditions.
 - Difficult mode (the "difficult" route was found to select Easy and was renamed).
 - Comparison with Mesen2 (not installed on this machine yet); the TriCNES oracle is the only
