@@ -20,7 +20,7 @@ decoded with `tools/framelog.py`.
 | `$27`/`$28` | Attribute / collision byte of the block being built | verified | `$CCFE-$CD22`. |
 | `$29`/`$38` | Stream direction last used / requested | hypothesis | `$C7D3`, `$C7FB`. |
 | `$2D` | Camera screen index = row x 8 + page | verified | Five intro routes. |
-| `$39` | Scrooge's mode: 0 ground, 1 air, 2 pogo, 3 climb, 4 cane, 6 knockback, `$0D` death | verified | Jump table at `$E387` ([player.md](player.md)). |
+| `$39` | Scrooge's mode: 0 ground, 1 air, 2 pogo, 3 climb, 4 cane, 6 knockback, 7 stuck in snow (Himalayas, freed by a jump, no HP cost), `$0D` death, `$10` holding a land treasure | verified | Jump table at `$E387` ([player.md](player.md)); `full_himalayas` frames 4037-4069 (7) and 5018 (`$10`, with `$A0` bit 3). |
 | `$3E`/`$3F` | Push counter (16 frames) / direction held when pushing started | verified | `$E458`, `$E45C`. |
 | `$71` | Slippery-floor flag | hypothesis | `$D1BB`, `$E48D`. |
 | `$75` | Invincibility timer | hypothesis | `$E360`, `$D282`. |
@@ -35,7 +35,7 @@ decoded with `tools/framelog.py`.
 | `$A3` | Key items (bit 1 = African Mines item that stops the redirect to Transylvania) | verified (bit 1) | Poke runs; bank 6 `$8BF5`. |
 | `$A4` | Redirect after a land: positive = Transylvania, negative = Land Select | verified | Poke runs. |
 | `$AC`/`$AD` | Ending start / ending variant 0-2 | verified | Poke runs ([game-state.md](game-state.md)). |
-| `$B1` | Boss hit counter (5 at the Amazon boss, decremented per hit) | hypothesis | `full_amazon` search runs: 05>04 at frame 7120, 04>03 at 7314. |
+| `$B1` | Boss hits left: 5 when the fight starts, minus 1 per hit, 0 when the boss is beaten | verified (Amazon, Himalayas) | `full_himalayas`: 5 at frame 3722 with `$FB = $FF` and music 6, then 4/3/2/1/0 at 3806/3974/4142/4536/4864; the chest appears after 0. |
 | `$B0` | Frames per HUD time tick (60) | verified | `$E2AA`. |
 | `$E6` | Pause; bit 0 also mutes the music in the sound driver | verified | `$DB46`; driver `$827B`, poke run. |
 | `$FB` | Bit 7 = boss fight | verified | Trigger poke runs. |
