@@ -8,6 +8,7 @@
 #endif
 
 #include "game/ducktales_jump.h"
+#include "game/enhancements.h"
 #include "game/ducktales_state.h"
 
 #include <stdio.h>
@@ -20,6 +21,10 @@ static FILE *s_log;
 static unsigned long s_every = 1;
 static struct { unsigned long frame; int percent; } s_jump_at[MAX_JUMP_EVENTS];
 static int s_jump_at_n;
+static struct { unsigned long frame; DtEnh e; int value; } s_enh_at[MAX_JUMP_EVENTS];
+static int s_enh_at_n;
+static unsigned long s_reset_at[MAX_JUMP_EVENTS];
+static int s_reset_at_n;
 
 static void report(void)
 {
@@ -28,6 +33,11 @@ static void report(void)
     FILE *f = s_log ? s_log : stdout;
     fprintf(f, "dt-diag: jump_scale=%d jumps_rescaled=%llu hook_fired=%llu\n", dt_jump_scale(),
             (unsigned long long)dt_jump_rescaled(), (unsigned long long)st.fired);
+    for (int e = 0; e < DT_ENH_COUNT; e++) {
+        char v[16];
+        fprintf(f, "dt-diag: %s=%s applied=%llu\n", dt_enh_info((DtEnh)e)->key,
+                dt_enh_format((DtEnh)e, dt_enh_get((DtEnh)e), v, sizeof v), (unsigned long long)dt_enh_applied((DtEnh)e));
+    }
     fflush(f);
     if (s_log && s_log != stdout) fclose(s_log);
     s_log = NULL;
@@ -53,6 +63,26 @@ bool dt_diag_option(const char *name, const char *value)
         s_jump_at_n++;
         return true;
     }
+    if (!strcmp(name, "--dt-enh-at")) {
+        unsigned long frame;
+        char key[32], text[16];
+        if (s_enh_at_n >= MAX_JUMP_EVENTS || sscanf(value, "%lu:%31[^=]=%15s", &frame, key, text) != 3) return false;
+        for (int e = 0; e < DT_ENH_COUNT; e++) {
+            int v;
+            if (strcmp(key, dt_enh_info((DtEnh)e)->key) || !dt_enh_parse((DtEnh)e, text, &v)) continue;
+            s_enh_at[s_enh_at_n].frame = frame;
+            s_enh_at[s_enh_at_n].e = (DtEnh)e;
+            s_enh_at[s_enh_at_n].value = v;
+            s_enh_at_n++;
+            return true;
+        }
+        return false;
+    }
+    if (!strcmp(name, "--dt-reset-at")) {
+        if (s_reset_at_n >= MAX_JUMP_EVENTS) return false;
+        s_reset_at[s_reset_at_n++] = strtoul(value, NULL, 10);
+        return true;
+    }
     return false;
 }
 
@@ -66,6 +96,10 @@ void dt_diag_frame_begin(void)
 {
     for (int i = 0; i < s_jump_at_n; i++)
         if (s_jump_at[i].frame == cyc_ring_frame) dt_jump_set_scale(s_jump_at[i].percent);
+    for (int i = 0; i < s_enh_at_n; i++)
+        if (s_enh_at[i].frame == cyc_ring_frame) dt_enh_set(s_enh_at[i].e, s_enh_at[i].value);
+    for (int i = 0; i < s_reset_at_n; i++)
+        if (s_reset_at[i] == cyc_ring_frame) dt_soft_reset();
 }
 
 void dt_diag_frame_end(void)

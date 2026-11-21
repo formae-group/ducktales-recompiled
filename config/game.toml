@@ -24,3 +24,36 @@ id = "ducktales.jump-scale"
 addr = 0xE3FE
 length = 8
 crc32 = 0xC37F991F
+
+# Enhancement hook sites (src/game/enhancements.c, docs/architecture.md
+# "Enhancements"). Each fires only while its enhancement differs from the
+# original game; the content keys are CRC32s of the 8 bytes at each site.
+
+# Entry of the damage routine; the callback returns from it (No damage).
+[[mod_function_hook]]
+id = "ducktales.no-damage"
+addr = 0xEB5E
+length = 8
+crc32 = 0xE8776DC5
+
+# The timer's decrement of the frames-per-tick counter $B0 (Infinite time).
+[[mod_function_hook]]
+id = "ducktales.infinite-time"
+addr = 0xE2A6
+length = 8
+crc32 = 0x1FF60228
+
+# The only decrement of the lives counter $0361 (Infinite lives).
+[[mod_function_hook]]
+id = "ducktales.infinite-lives"
+addr = 0xDCB0
+length = 8
+crc32 = 0x5E982A4B
+
+# After the title set-up copied the HUD template that sets $0361 to 2
+# (Extra lives at start).
+[[mod_function_hook]]
+id = "ducktales.start-lives"
+addr = 0xD59C
+length = 8
+crc32 = 0xB92CE193

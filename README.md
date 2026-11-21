@@ -14,7 +14,7 @@ it. Nothing from the game is stored in this repository.
 ## Build
 
 ```powershell
-git submodule update --init external/nesrecomp
+git submodule update --init external/nesrecomp external/imgui
 copy "C:\path\to\DuckTales (USA).nes" roms\
 cmake -S . -B build/windows -G "Visual Studio 17 2022" -A x64
 cmake --build build/windows --config Release --parallel
@@ -25,21 +25,52 @@ build\windows\Release\ducktales.exe
 before running. Generated C lives under `build/*/cycle-ducktales/` and is regenerated when the
 ROM, `config/` or NESRecomp's compiler changes.
 
-Window controls come from NESRecomp's host and are stored in `config.ini` next to the
-executable: keyboard Z/X = A/B, Return = Start, Backslash = Select, arrows = D-pad; game
-controllers work without setup. F11 or Alt+Enter toggles borderless fullscreen; Escape opens the
-host menu; Tab fast-forwards; F8/F9 save and load a state. `-DNESRECOMP_DEV_UI=ON` adds
-developer keys (F2 switches between recompiled code and the interpreter) and shows native
-coverage in the title bar.
+`-DNESRECOMP_DEV_UI=ON` adds developer keys (F2 switches between recompiled code and the
+interpreter) and shows native coverage in the title bar.
 
-## Experimental options
+## Playing
 
-All off by default; the original game is unchanged unless you set them.
+**First run.** Start `ducktales.exe` with no arguments. A window asks for your
+`DuckTales (USA).nes`: choose it, or drop it on the window. The file must match the original's
+SHA-256 exactly. A modified or different file is refused, and the screen shows its hash. The game
+keeps a copy in `%APPDATA%\Formae\DuckTales\`, and later starts use that copy directly. To import
+without a window, use `ducktales.exe --import-rom "C:\path\to\DuckTales (USA).nes"` (exit code 0
+when imported, 1 when refused). A ROM path on the command line is always used as given. The
+`FORMAE_DATA_DIR` environment variable moves the data folder.
 
-- `[Game] JumpScale` in `config.ini` (or `--jump-scale N`): Scrooge's jump take-off velocity in
-  percent (25-400, 100 = original). See [docs/architecture.md](docs/architecture.md).
-- `-DDUCKTALES_DEV_DIAGNOSTICS=ON`: developer build with a typed state log
-  (`--dt-state-log -`) and TCP commands; never used for distribution.
+**Menu.** Escape, or RB on a controller, pauses the game and opens the menu: Resume, Reset,
+Settings, Controls, Enhancements and Quit. It works with the keyboard (arrow keys, Enter, Esc),
+the mouse and a controller (D-pad, A, B). The game is paused while the menu is open.
+
+- Settings: display (windowed, borderless or exclusive fullscreen), window size, integer scaling,
+  VSync (applies at the next start) and volume.
+- Controls: keyboard and controller bindings for each NES button and for the menu. Choose a cell,
+  then press the new key or button. Esc cancels and Delete clears.
+
+Everything is saved in `config.ini` next to the executable, in NESRecomp's format
+(`--config FILE` uses another file). The defaults are Z/X = A/B, Return = Start, Backslash =
+Select and the arrow keys for the D-pad. Controllers work without setup. F11 or Alt+Enter toggles
+fullscreen, Tab fast-forwards, and F8/F9 save and load a state.
+
+**Enhancements.** All are off by default, and while one is off the game runs its original code.
+Set them in the menu, in `config.ini` `[Game]`, or on the command line:
+
+| Menu | `[Game]` key | Option | Values |
+|---|---|---|---|
+| Jump height | `JumpScale` | `--jump-scale N` | 25-400 percent, 100 = original |
+| No damage | `NoDamage` | `--no-damage on` | on/off: hits still knock Scrooge back but cost no health |
+| Infinite time | `InfiniteTime` | `--infinite-time on` | on/off: the level timer stops |
+| Infinite lives | `InfiniteLives` | `--infinite-lives on` | on/off: losing a life costs none |
+| Extra lives at start | `StartLives` | `--start-lives N` | 0-9 or off (original: 2), from the next new game |
+
+How each works, and the evidence for it, is in [docs/architecture.md](docs/architecture.md).
+`-DDUCKTALES_DEV_DIAGNOSTICS=ON` makes a developer build with a typed state log
+(`--dt-state-log -`), scheduled changes (`--dt-enh-at`, `--dt-reset-at`) and TCP commands. It is
+never used for distribution.
+
+**UI self-test.** `FORMAE_UI_SELFTEST=<folder>` (a Windows path) makes the first-run screen and the
+menu run by themselves and write PNGs of each screen. `py -3 -I tests/window_smoke.py --build
+build/windows` runs it, together with the start, import and refusal checks.
 
 ## Verification build
 
@@ -58,12 +89,14 @@ machine at four CPU/PPU alignments, and must match on every frame. See
 | Path | Contents |
 |---|---|
 | `external/nesrecomp` | NESRecomp, pinned submodule, unmodified |
+| `external/imgui` | Dear ImGui v1.91.9b, pinned submodule (window build only) |
 | `config/game.toml` | Recompiler configuration for this ROM |
 | `config/ducktales.seeds` | Bank-qualified entry points found by route runs (addresses only) |
 | `tests/routes/` | Deterministic input schedules (`<frame> <buttons>`) |
 | `tests/verify_routes.py` | Differential regression test |
 | `src/game/` | Typed game state, revision-specific symbols, behaviour hooks |
-| `src/host/` | Integration with NESRecomp's host (settings, options, dev diagnostics) |
+| `src/host/` | Integration with NESRecomp's host (`main`, settings, options, dev diagnostics) |
+| `src/ui/` | The Formae application: first run and ROM import, menu, live settings |
 | `tools/` | Investigation helpers (disassembler, frame logs, access tracer, map/OAM checks, RAM pokes in save states, Mesen2 replay) |
 | `docs/` | ROM identity, reverse-engineering notes, validation, licensing |
 
