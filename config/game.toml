@@ -14,3 +14,13 @@ cycle_seed_file = "ducktales.seeds"
 bank = 7
 addr = 0xD4E6
 
+# Jump experiment hook site (src/game/ducktales_jump.c, docs/architecture.md).
+# The instruction that follows the jump start's two velocity stores; the
+# content key (CRC32 of the 8 bytes there) keeps the site tied to this
+# revision's code. Nothing fires unless --jump-scale / [Game] JumpScale is
+# set to something other than 100.
+[[mod_function_hook]]
+id = "ducktales.jump-scale"
+addr = 0xE3FE
+length = 8
+crc32 = 0xC37F991F
