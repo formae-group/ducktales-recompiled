@@ -33,6 +33,7 @@ counted as interpretation.
 | `african_mines_easy` | 7,350 | Easy, African Mines, different input pattern, game over; did not contribute seeds | 100.0% | all frames, 4 alignments |
 | `re_amazon_moves` | 2,128 | Controlled moves used for RAM mapping | 100.0% | all frames, 4 alignments |
 | `full_amazon` | 9,600 | Normal, The Amazon from power-on to the LAND CLEAR tally: vine shaft, gorilla pogo, boulder corridor, hidden rope, golfed rock pile, boss (5 hits), treasure chest, $1,049,000; loses one life near frame 4840 and continues from the checkpoint | 100.0% | all frames, 4 alignments |
+| `full_transylvania` | 7,120 | Normal, Transylvania from power-on to the LAND CLEAR tally: rope to row 5, rope to row 4, fake wall under the mirror, right mirror to row 3 page 7, Magica DeSpell (5 hits), treasure chest, $1,041,000; no lives lost | 100.0% | all frames, 4 alignments |
 
 Before seeding, the first title/Land Select/Amazon route ran 65.5% native (378 compiled
 instructions); after seeding 9,053 instructions are compiled. Before `full_amazon` was seeded it started 731
@@ -44,7 +45,7 @@ enabled and exited cleanly.
 
 ## Not verified
 
-- A complete playthrough of any land other than The Amazon on Normal, any other boss, secret treasures, the Transylvania return, the
+- A complete playthrough of any land other than The Amazon and Transylvania on Normal, any other boss, secret treasures, the Transylvania return, the
   ending and the three endings' conditions.
 - Difficult mode (the "difficult" route was found to select Easy and was renamed).
 - Comparison with Mesen2 (not installed on this machine yet); the TriCNES oracle is the only
