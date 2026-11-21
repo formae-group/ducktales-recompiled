@@ -8,7 +8,11 @@ machine's state and, when a feature asks for it, changes behaviour at specific i
 src/game/ducktales_symbols.h         the only file that names revision-specific addresses
 src/game/ducktales_state.[ch]        typed state decoded from a CPU RAM image (pure functions)
 src/game/ducktales_jump.[ch]         jump-height experiment: one hook site, off by default
+src/game/enhancements.[ch]           the optional enhancements: one table, one hook site each
+src/game/enhancements_sites.h        their code sites (to move into ducktales_symbols.h)
 src/host/ducktales_host.c            cyc_host_extras(): settings, options, per-frame callbacks
+src/host/ducktales_main.c            main() of the window build: ROM choice, then the host
+src/ui/                              the Formae application: first run, menu, live settings
 src/host/ducktales_diagnostics.[ch]  developer diagnostics (DUCKTALES_DEV_DIAGNOSTICS only)
 tests/state_decode_test.c            unit test of the decoder (built with the headless build)
 tests/jump_experiment.py             measures the experiment and checks that it switches off cleanly
@@ -119,6 +123,165 @@ With the layer linked and the experiment off (the default), `tests/verify_routes
 build/headless` passes all seven routes at all four alignments: native, interpreter and oracle
 match on every frame, with 100.0% native cycles (2026-11-21).
 
+## Enhancements (`src/game/enhancements.[ch]`)
+
+Five optional changes, all off by default. `enhancements.c` holds one table that gives each its
+`config.ini` `[Game]` key, its command-line option, its menu label, its range and its stock value.
+The host (load, save, usage), the menu and the tests iterate that table. Every enhancement except
+the jump owns one `[[mod_function_hook]]` site (`config/game.toml`, addresses in
+`src/game/enhancements_sites.h`). Its hook is enabled only while its value differs from stock.
+So with an enhancement off, the generated code runs the original instruction, as described under
+Mechanism. All sites are in the fixed bank 7, so the bank mapped at `$8000` never matters.
+
+| Key / option | Values | Site | What the callback does |
+|---|---|---|---|
+| `JumpScale` / `--jump-scale` | 25-400, 100 = stock | `$E3FE` | See "Jump experiment" above. |
+| `NoDamage` / `--no-damage` | on/off | `$EB5E`, entry of `damage` | Returns as the routine's RTS would, so no HP dot is marked and the Easy hit counter `$5F` is left alone. The knock-back is done by the callers and still happens. |
+| `InfiniteTime` / `--infinite-time` | on/off | `$E2A6`, in `timer_tick` (`$E28C`) | Before the decrement of `$B0` (frames to the next time tick), sets `$B0` back to its reload value `$3C`, so it never reaches 0 and the HUD time never drops. |
+| `InfiniteLives` / `--infinite-lives` | on/off | `$DCB0`, in `death_or_warp` (`$DC3E`) | Before the decrement of `$0361`, adds one, so the count stays the same. |
+| `StartLives` / `--start-lives` | 0-9 or off (stock 2) | `$D59C`, title set-up | After the copy of the HUD template sets `$0361` to 2, writes the chosen count. It takes effect from the next new game (power-on, reset, or the restart after a game over). |
+
+Evidence for the sites (controlled runs with `tools/whoaccesses.py`, `tools/framelog.py` and a
+search of the ROM for every reference to the address; status: verified unless marked):
+
+- `$EB5E` is reached only by JSR, from `$EAD0` and `$EB22`, and the instruction before it is a
+  JMP, so no code falls into it. Stock `moon_intro` loses HP dots at frames 1004, 1075 and 1336,
+  and with the hook on, frame 1004 is the first frame that differs.
+- `$E2A6` is the decrement of `$B0` in `timer_tick`, after the time-out check. The timer reloads
+  `$B0` with `$3C` (60 frames) when the HUD digits (`$0151/$0155/$0159`) count down. In
+  `amazon_intro` the timer starts at about frame 896, which is also the first frame that differs
+  with the hook on.
+- `$DCB0` is the only instruction in the ROM that decrements `$0361`. In `moon_intro` stock
+  lives go 2 -> 1 at frame 1592 and 1 -> 0 at frame 2731. A death with 0 lives goes to the game
+  over instead (frame 3609).
+- `$D59C` is the first instruction after the loop at `$D591-$D59A` that copies the 13-byte HUD
+  template into `$0358-$0364`. `whoaccesses` shows that loop writing `$0361 = 2` at frame 44. The
+  game over restarts through the same set-up: `moon_intro` has lives 2 again at frame 3648.
+
+Measured with `py -3 -I tests/enhancements_test.py --build build/headless --dev-build
+build/headless-dev` (2026-11-21, all checks pass):
+
+| Enhancement | Off | On | On, then off before it first acts |
+|---|---|---|---|
+| No damage | identical to stock, frames 0-1300 of `moon_intro` | HP at frames 1010/1300: stock 2/1, on 3/3; first differing frame 1004 | identical to stock (off at 1000) |
+| Infinite lives | identical, frames 0-1600 | lives at 1600: stock 1, on 2; first differing frame 1592 | identical (off at 1500) |
+| Infinite time | identical, frames 0-3000 of `amazon_intro` | HUD time at 3000: stock 482, on 500; first differing frame 896 | identical (off at 600) |
+| Extra lives at start | identical, frames 0-1600 | `--start-lives 7`: lives 7 at frame 100 (stock 2), first differing frame 44; `--start-lives 0`: 0 | identical (off at 30) |
+
+"Identical" means the per-frame hashes of trace, memory, picture, registers, cycles and hardware
+all match. A route only follows its recorded inputs while the game behaves as recorded, so a run
+with an enhancement on drifts from the route after the first difference. For example
+`--start-lives 7` has 4 lives at frame 3700 of `moon_intro` while stock has 2: the three
+deaths of the route cost 3 of the 7 lives, and stock had a game over and a new game with 2.
+
+With every enhancement off, `tests/verify_routes.py --build build/headless` passes all seven
+routes, as before.
+
+### Reset
+
+The menu's Reset calls `dt_soft_reset()` between frames. Raising the CPU's reset line
+(`cpu.do_reset`) there is not enough: a frame starts at VBlank, and the NMI that arrives during
+the 7-cycle reset sequence takes over its vector. `cpu6502.c` models that hijack, and a trace of a
+reset at `amazon_intro` frame 1200 read `$FFFA` instead of `$FFFC`. The console's reset button
+also resets the PPU, so no NMI follows it on hardware. So the function puts the CPU where the reset
+sequence leaves it: S lowered by 3, I set, PC from `$FFFC/$FFFD`, pending NMI, IRQ and reset
+dropped. The game's reset handler re-initialises the PPU, the APU and RAM itself. Tested: after a
+reset at frame 1200 the title music is requested (`$C5 = 7`) from frame 1217 and lives are 2 by
+frame 1257. `--start-lives 7` gives 7 lives after the reset. The PPU and APU registers are not
+reset by the host. That is a difference from hardware, and it is harmless only because the handler
+writes them itself (hypothesis for any state the handler does not write).
+
+## Formae application (window build)
+
+### Why C++ Dear ImGui
+
+NESRecomp's cycle window (`cyc_sdl.c`) runs the game. Its launcher, in-game menu, pause and
+settings screens (`cyc_ui.h`, `cyc_ui_menu.c`, `cyc_ui_imgui.cpp`, `cyc_overlay.c`) are compiled
+only into builds that link NESRecomp's recomp-ui, and this port does not link it. So the window has
+no menu and no pause, and its `CycSettings` are private to `cyc_sdl.c`. These options were
+considered:
+
+- Link recomp-ui. It brings NESRecomp's own look and screens, and the application should look like
+  Formae, not like NESRecomp.
+- Draw with `cyc_overlay`. It draws simple text and boxes over the picture. It has no layout,
+  widgets, focus handling or gamepad navigation, so every one of those would have to be written
+  here.
+- Rust with dear-imgui-rs. It adds a second toolchain to the CMake/MSVC build and an FFI layer
+  around SDL handles that the C host owns, and it gives nothing a C++ build cannot.
+- C++ Dear ImGui (chosen). It is pinned as the submodule `external/imgui` (v1.91.9b) and uses
+  the official `imgui_impl_sdl2` and `imgui_impl_sdlrenderer2` backends. It draws with the
+  host's own `SDL_Renderer`, so there is no second graphics context. Only the window target
+  compiles it. The headless and oracle builds do not.
+
+### How it attaches to the host
+
+```
+src/host/ducktales_main.c   the real main(): chooses the ROM, then calls the host
+src/ui/formae_rom.[ch]      ROM check, import and the data folder (UTF-8 paths, _w* calls)
+src/ui/formae_app.[ch]      config.ini copy, live settings, bindings, menu shortcut
+src/ui/formae_ui.cpp        Dear ImGui: the first-run screen and the menu
+```
+
+- For the `ducktales` target only, CMake compiles NESRecomp's `cyc_host.c` with
+  `main=ducktales_host_main`. `ducktales_main.c` provides `main`, chooses the ROM (next
+  section) and then calls `ducktales_host_main` with the same arguments. Headless options skip
+  all of this.
+- `ducktales_host.c` connects the UI through the host's `CycHostExtras` callbacks:
+  `frame_begin`, `event`, `input`, `audio_mix`, and the `[Game]` section writer.
+- The menu opens from the `event` callback, on Escape or on the controller's Menu binding (RB by
+  default). It runs its own modal loop inside that callback. It pumps SDL events and draws over the
+  last game picture, so no machine frame runs while it is open, and the pause is exact. Its pages
+  are Resume, Reset, Settings, Controls and Enhancements, plus Quit. Keyboard, mouse and controller
+  all work.
+- Settings are applied live through what the window exposes. `formae_app.c` keeps its own copy of
+  `config.ini`, read and written with the host's `cyc_settings_load`/`cyc_settings_save`, so the
+  file format stays the host's:
+  - `[Display] Fullscreen` and `WindowScale` go through SDL.
+  - `IntegerScale` is applied again every frame, because the host resets it on a resize or F11.
+  - `[Audio] Volume` is applied in `audio_mix` as the ratio to the starting volume.
+  - The bindings go through the `input` callback with `cyc_input_eval`.
+  - `VSync` is saved and applies at the next launch, because the host reads it only at start.
+- The host also writes `config.ini`, on F11 and at exit, from its own stale copy. Its save calls
+  the `[Game]` writer (`formae_ui_host_saved`). On the next frame, or after the host exits, the
+  file is written again from the menu's copy, keeping only the host's fullscreen value. This runs
+  only after the player changed something in the menu. The FDS Disk shortcut stays off for a
+  cartridge.
+- The Controls page remaps the player 1 keyboard and controller bindings
+  (`[Keyboard.Player1]`/`[Gamepad.Player1]`) and the Menu shortcut
+  (`[Keyboard.Shortcuts]`/`[Gamepad.Shortcuts]`).
+
+### First run and ROM import
+
+The ROM is chosen in this order:
+
+1. A ROM path on the command line, used as given. The host checks it as before.
+2. The copy imported earlier, at `%APPDATA%\Formae\DuckTales\DuckTales (USA).nes` (or in
+   `FORMAE_DATA_DIR`). It is checked against the SHA-256 again at every start.
+3. Otherwise the first-run screen. The player chooses the file, or drops it on the window. The file
+   is imported only if its whole SHA-256 matches `DUCKTALES_ROM_SHA256`, which CMake takes from
+   the ROM the build was made with. Otherwise the screen shows why it was refused, with the file's
+   hash. The copy is written to a temporary file and then renamed.
+4. `--import-rom FILE` does the same with no window (exit 0 or 1). A `--hidden` start with no ROM
+   exits 2 with a message, instead of opening a window nobody can see.
+
+The data folder path is UTF-8 internally and uses the wide Windows calls. The host receives its
+8.3/ANSI form, because NESRecomp opens the ROM with `fopen`.
+
+### Self-test and checks
+
+`FORMAE_UI_SELFTEST=<folder>` (a Windows path) runs the UI without input. The menu opens by itself
+at frame 120, visits each page and writes a PNG of each. The first-run screen writes its two
+screens, and `FORMAE_UI_SELFTEST_PICK=<file>` sets the file it picks.
+`py -3 -I tests/window_smoke.py --build build/windows` uses this to check:
+
+- a hidden start and exit;
+- the refusal of a modified ROM and of a file that is not a ROM;
+- the import, and a start from the imported copy;
+- `[Game]` persistence;
+- both selftests.
+
+`formae_rom_test` (headless build) checks the ROM import code.
+
 ## Developer diagnostics
 
 `-DDUCKTALES_DEV_DIAGNOSTICS=ON` (default OFF) compiles `src/host/ducktales_diagnostics.c`. Without
@@ -129,6 +292,9 @@ it the host links empty inline stubs and lists none of these options.
 - `--dt-jump-at FRAME:PERCENT` (repeatable) changes the jump scale before that frame.
 - At exit the log reports the jump scale, how many jumps were rescaled and how many times the hook
   fired.
+- `--dt-enh-at FRAME:KEY=VALUE` (repeatable) changes an enhancement before that frame, for example
+  `--dt-enh-at 1000:NoDamage=off`. `--dt-reset-at FRAME` presses Reset before that frame.
+- At exit the log reports, for each enhancement, its value and how many times it changed the game.
 - In the window, with `--tcp PORT`: `dt_state` returns the typed state as JSON, and `dt_jump_scale`
   returns the scale or sets it with `{"value":N}`.
 
@@ -149,5 +315,10 @@ it the host links empty inline stubs and lists none of these options.
   another land or on the Moon. Only the land-entry constants have been seen.
 - How a scaled jump behaves with ceilings, things Scrooge can hang from and screen transitions has
   not been examined.
+- Nobody has used the menu with real keyboard, mouse or controller input yet, and nobody has tried
+  the file dialog, switching between windowed and fullscreen, VSync, a volume change by ear, or
+  remapping. Only the self-test drove it.
+- Infinite time and infinite lives have been measured in one land each. Whether every land, the
+  bosses and the Moon's timer use the same code is a hypothesis.
 - The window build compiles and links the layer, and `JumpScale` goes through the host's
   `load_setting`/`save_settings`. Nobody has played with it in the window yet.

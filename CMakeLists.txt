@@ -26,7 +26,29 @@ endif()
 set(_ducktales_extras
     "${CMAKE_SOURCE_DIR}/src/game/ducktales_state.c"
     "${CMAKE_SOURCE_DIR}/src/game/ducktales_jump.c"
+    "${CMAKE_SOURCE_DIR}/src/game/enhancements.c"
     "${CMAKE_SOURCE_DIR}/src/host/ducktales_host.c")
+# The Formae application (docs/architecture.md "Formae application"): the
+# program entry with the first-run ROM import, the in-game menu and live
+# settings, drawn with Dear ImGui (external/imgui) over the host's
+# SDL_Renderer. Window builds only; the headless host never links it.
+set(IMGUI_ROOT "${CMAKE_SOURCE_DIR}/external/imgui")
+if(NOT DUCKTALES_HEADLESS)
+    if(NOT EXISTS "${IMGUI_ROOT}/imgui.h")
+        message(FATAL_ERROR "external/imgui is missing; run: git submodule update --init external/imgui")
+    endif()
+    list(APPEND _ducktales_extras
+        "${CMAKE_SOURCE_DIR}/src/host/ducktales_main.c"
+        "${CMAKE_SOURCE_DIR}/src/ui/formae_app.c"
+        "${CMAKE_SOURCE_DIR}/src/ui/formae_rom.c"
+        "${CMAKE_SOURCE_DIR}/src/ui/formae_ui.cpp"
+        "${IMGUI_ROOT}/imgui.cpp"
+        "${IMGUI_ROOT}/imgui_draw.cpp"
+        "${IMGUI_ROOT}/imgui_tables.cpp"
+        "${IMGUI_ROOT}/imgui_widgets.cpp"
+        "${IMGUI_ROOT}/backends/imgui_impl_sdl2.cpp"
+        "${IMGUI_ROOT}/backends/imgui_impl_sdlrenderer2.cpp")
+endif()
 if(DUCKTALES_DEV_DIAGNOSTICS)
     list(APPEND _ducktales_extras "${CMAKE_SOURCE_DIR}/src/host/ducktales_diagnostics.c")
 endif()
@@ -36,6 +58,23 @@ nesrecomp_add_cycle_game(ducktales
     ${_ducktales_options}
     HOST_EXTRAS ${_ducktales_extras})
 target_include_directories(ducktales PRIVATE "${CMAKE_SOURCE_DIR}/src")
+if(NOT DUCKTALES_HEADLESS)
+    # The ROM identity the first-run import checks (docs/rom.md: SHA-256 of
+    # the whole file), taken from the ROM this build was generated from.
+    file(SHA256 "${DUCKTALES_ROM}" _ducktales_rom_sha256)
+    target_include_directories(ducktales PRIVATE "${IMGUI_ROOT}" "${IMGUI_ROOT}/backends")
+    target_compile_features(ducktales PRIVATE cxx_std_17)
+    target_compile_definitions(ducktales PRIVATE DUCKTALES_WINDOW=1
+        "DUCKTALES_ROM_SHA256=\"${_ducktales_rom_sha256}\"" IMGUI_DISABLE_OBSOLETE_FUNCTIONS)
+    # The Formae entry (src/host/ducktales_main.c) runs before NESRecomp's
+    # own main, which is compiled under another name for this target only;
+    # NESRecomp's sources stay unmodified.
+    set_property(SOURCE "${NESRECOMP_ROOT}/runner/cyc/cyc_host.c" APPEND PROPERTY COMPILE_DEFINITIONS
+        "$<$<STREQUAL:$<TARGET_PROPERTY:NAME>,ducktales>:main=ducktales_host_main>")
+    if(WIN32)
+        target_link_libraries(ducktales PRIVATE comdlg32 shell32)
+    endif()
+endif()
 if(DUCKTALES_DEV_DIAGNOSTICS)
     target_compile_definitions(ducktales PRIVATE DUCKTALES_DEV_DIAGNOSTICS=1)
 endif()
@@ -46,6 +85,12 @@ if(DUCKTALES_HEADLESS)
         "${CMAKE_SOURCE_DIR}/tests/state_decode_test.c"
         "${CMAKE_SOURCE_DIR}/src/game/ducktales_state.c")
     target_include_directories(ducktales_state_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+    # Unit test of the ROM identity check and import (no window).
+    add_executable(formae_rom_test
+        "${CMAKE_SOURCE_DIR}/tests/formae_rom_test.c"
+        "${CMAKE_SOURCE_DIR}/src/ui/formae_rom.c")
+    target_include_directories(formae_rom_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+    target_compile_definitions(formae_rom_test PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
 
 if(DUCKTALES_ORACLE)
