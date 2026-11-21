@@ -172,7 +172,6 @@ struct Layout {
     int cursor = 0;           // the item with the focus
     int index = 0;            // items drawn so far this frame
     bool accept = false, left = false, right = false, mouse_moved = false;
-    const char *focused_help = nullptr;
 };
 
 enum RowResult { ROW_NONE, ROW_ACTIVATE, ROW_DEC, ROW_INC };
@@ -216,8 +215,7 @@ void item_back(ImDrawList *dl, const Item &it, bool lit)
     if (it.focused || lit) dl->AddRectFilled(it.p, ImVec2(it.p.x + 3.0f, it.q.y), ACCENT, 1.5f);
 }
 
-RowResult row(Layout &L, const Fonts &F, const char *label, const char *value = nullptr, bool enabled = true,
-              const char *help = nullptr)
+RowResult row(Layout &L, const Fonts &F, const char *label, const char *value = nullptr, bool enabled = true)
 {
     Item it = item(L, ImVec2(L.x, ImGui::GetCursorScreenPos().y), ImVec2(L.width, L.row_h));
     ImGui::SetCursorScreenPos(ImVec2(L.x, it.q.y + 2.0f));
@@ -241,7 +239,6 @@ RowResult row(Layout &L, const Fonts &F, const char *label, const char *value = 
     } else if (enabled && (it.clicked || (it.focused && L.accept))) {
         r = ROW_ACTIVATE;
     }
-    if (it.focused && help) L.focused_help = help;
     return r;
 }
 
@@ -346,7 +343,7 @@ void page_main(Menu &m, Layout &L, const Fonts &F)
 
 void page_reset(Menu &m, Layout &L, const Fonts &F)
 {
-    if (row(L, F, "Reset the game", nullptr, true, "Like the console's reset button: back to the title screen. Progress in the current game is lost.") == ROW_ACTIVATE) {
+    if (row(L, F, "Reset the game") == ROW_ACTIVATE) {
         dt_soft_reset();
         m.resume = true;
     }
@@ -360,28 +357,21 @@ void page_settings(Menu &m, Layout &L, const Fonts &F, SDL_Window *win)
     formae_display_get(&d);
     FormaeDisplay was = d;
     static const char *MODES[] = { "Windowed", "Borderless full screen", "Exclusive full screen" };
-    RowResult r = row(L, F, "Display", MODES[d.fullscreen < 0 || d.fullscreen > 2 ? 0 : d.fullscreen], true,
-                      "Windowed, a borderless window over the whole screen, or exclusive full screen.");
+    RowResult r = row(L, F, "Display", MODES[d.fullscreen < 0 || d.fullscreen > 2 ? 0 : d.fullscreen]);
     if (r == ROW_DEC) d.fullscreen = (d.fullscreen + 2) % 3;
     if (r == ROW_INC || r == ROW_ACTIVATE) d.fullscreen = (d.fullscreen + 1) % 3;
     char scale[16];
     std::snprintf(scale, sizeof scale, F.system ? "%d\u00D7" : "%dx", d.window_scale);
-    r = row(L, F, "Window size", d.fullscreen ? (F.system ? "\u2014" : "-") : scale, d.fullscreen == 0,
-            "The window's size in multiples of the console's picture.");
+    r = row(L, F, "Window size", d.fullscreen ? (F.system ? "\u2014" : "-") : scale, d.fullscreen == 0);
     if (r == ROW_DEC && d.window_scale > 1) d.window_scale--;
     if ((r == ROW_INC || r == ROW_ACTIVATE) && d.window_scale < 8) d.window_scale++;
-    r = row(L, F, "Integer scaling", d.integer_scale ? "On" : "Off", true,
-            "Scale the picture by whole multiples only, for even pixels; the rest of the screen stays black.");
+    r = row(L, F, "Integer scaling", d.integer_scale ? "On" : "Off");
     if (r != ROW_NONE) d.integer_scale = !d.integer_scale;
-    r = row(L, F, "VSync", d.vsync ? "On" : "Off", true,
-            formae_vsync_pending() ? "Synchronise pictures with the display. Applies the next time the game starts."
-                                   : "Synchronise pictures with the display.");
+    r = row(L, F, "VSync", d.vsync ? "On" : "Off");
     if (r != ROW_NONE) d.vsync = !d.vsync;
     char vol[16];
     std::snprintf(vol, sizeof vol, "%d%%", d.volume);
-    r = row(L, F, "Volume", vol, true,
-            formae_volume_pending() ? "Sound volume. The game started muted, so this applies the next time it starts."
-                                    : "Sound volume.");
+    r = row(L, F, "Volume", vol);
     if (r == ROW_DEC) d.volume = d.volume >= 5 ? d.volume - 5 : 0;
     if (r == ROW_INC || r == ROW_ACTIVATE) d.volume = d.volume <= 95 ? d.volume + 5 : 100;
     if (std::memcmp(&d, &was, sizeof d)) formae_display_set(win, &d);
@@ -407,8 +397,6 @@ void page_controls(Menu &m, Layout &L, const Fonts &F)
             else formae_bind_text(b, c == 1, text, sizeof text);
             text_at(dl, F.body, it.p.x + L.pad, it.p.y + (L.row_h - F.body->FontSize) * 0.5f,
                     capturing ? ACCENT : !std::strcmp(text, "Unbound") ? TEXT_OFF : it.focused ? TEXT : TEXT_DIM, text);
-            if (it.focused) L.focused_help = c ? "Enter, then press a controller button. Esc cancels; Delete clears."
-                                               : "Enter, then press a key. Esc cancels; Delete clears.";
             if ((it.clicked || (it.focused && L.accept)) && m.capture_row < 0) {
                 m.capture_row = b;
                 m.capture_pad = c == 1;
@@ -417,7 +405,7 @@ void page_controls(Menu &m, Layout &L, const Fonts &F)
         ImGui::SetCursorScreenPos(ImVec2(L.x, p.y + L.row_h + 2.0f));
     }
     ImGui::Dummy(ImVec2(L.width, L.row_h * 0.3f));
-    if (row(L, F, "Restore defaults", nullptr, true, "Z / X for A / B, Return for Start, Backslash for Select, arrows; Escape opens this menu.") == ROW_ACTIVATE) {
+    if (row(L, F, "Restore defaults") == ROW_ACTIVATE) {
         formae_bind_defaults();
         say(m, "Default controls restored.");
     }
@@ -428,12 +416,12 @@ void page_enhancements(Menu &m, Layout &L, const Fonts &F)
     for (int e = 0; e < DT_ENH_COUNT; e++) {
         const DtEnhInfo *in = dt_enh_info((DtEnh)e);
         std::string v = enh_value((DtEnh)e);
-        RowResult r = row(L, F, in->label, v.c_str(), true, in->help);
+        RowResult r = row(L, F, in->label, v.c_str());
         if (r == ROW_DEC) enh_change((DtEnh)e, -1);
         if (r == ROW_INC || r == ROW_ACTIVATE) enh_change((DtEnh)e, +1);
     }
     ImGui::Dummy(ImVec2(L.width, L.row_h * 0.3f));
-    if (row(L, F, "Restore the original game", nullptr, true, "Turn every enhancement off.") == ROW_ACTIVATE) {
+    if (row(L, F, "Restore the original game") == ROW_ACTIVATE) {
         for (int e = 0; e < DT_ENH_COUNT; e++) {
             const DtEnhInfo *in = dt_enh_info((DtEnh)e);
             if (dt_enh_get((DtEnh)e) == in->stock) continue;
@@ -528,15 +516,6 @@ void draw_picture(SDL_Renderer *ren, SDL_Texture *tex, int ow, int oh)
     float s = (float)ow / 256.0f < (float)oh / 240.0f ? (float)ow / 256.0f : (float)oh / 240.0f;
     SDL_Rect dst = { (int)((ow - 256 * s) / 2), (int)((oh - 240 * s) / 2), (int)(256 * s), (int)(240 * s) };
     SDL_RenderCopy(ren, tex, nullptr, &dst);
-}
-
-const char *hints(const Menu &m, bool system)
-{
-    if (m.capture_row >= 0) return "Esc  Cancel      Delete  Clear";
-    if (m.page == PAGE_MAIN || m.page == PAGE_RESET)
-        return system ? "\u2191\u2193  Move      Enter  Select      Esc  Back" : "Up/Down  Move    Enter  Select    Esc  Back";
-    return system ? "\u2191\u2193  Move      \u2190\u2192  Change      Enter  Select      Esc  Back"
-                  : "Up/Down  Move    Left/Right  Change    Enter  Select    Esc  Back";
 }
 
 }   // namespace
@@ -658,16 +637,9 @@ extern "C" bool formae_menu_run(SDL_Window *win)
             m.count = L.index > 0 ? L.index : 1;
             m.cursor = L.cursor;
         }
-        float below = ImGui::GetCursorScreenPos().y + F.base * 0.8f;
-        const float text_w_max = L.width - L.pad * 2.0f;
-        if (!m.notice.empty() && SDL_GetTicks64() < m.notice_until) {
-            draw_wrapped(dl, F.small, L.x + L.pad, below, text_w_max, ACCENT, m.notice.c_str());
-            below += wrapped_h(F.small, text_w_max, m.notice.c_str()) + F.base * 0.5f;
-        }
-        const float footer = ds.y - F.base * 2.0f;
-        if (L.focused_help && below + wrapped_h(F.small, text_w_max, L.focused_help) < footer - F.base * 0.5f)
-            draw_wrapped(dl, F.small, L.x + L.pad, below, text_w_max, TEXT_DIM, L.focused_help);
-        text_at(dl, F.small, L.x + L.pad, footer, TEXT_DIM, hints(m, F.system));
+        if (!m.notice.empty() && SDL_GetTicks64() < m.notice_until)
+            draw_wrapped(dl, F.small, L.x + L.pad, ImGui::GetCursorScreenPos().y + F.base * 0.8f, L.width - L.pad * 2.0f, ACCENT,
+                         m.notice.c_str());
         ImGui::End();
         ImGui::Render();
         ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), ren);
