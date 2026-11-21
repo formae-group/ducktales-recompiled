@@ -35,6 +35,7 @@ decoded with `tools/framelog.py`.
 | `$A3` | Key items (bit 1 = African Mines item that stops the redirect to Transylvania) | verified (bit 1) | Poke runs; bank 6 `$8BF5`. |
 | `$A4` | Redirect after a land: positive = Transylvania, negative = Land Select | verified | Poke runs. |
 | `$AC`/`$AD` | Ending start / ending variant 0-2 | verified | Poke runs ([game-state.md](game-state.md)). |
+| `$B1` | Boss hit counter (5 at the Amazon boss, decremented per hit) | hypothesis | `full_amazon` search runs: 05>04 at frame 7120, 04>03 at 7314. |
 | `$B0` | Frames per HUD time tick (60) | verified | `$E2AA`. |
 | `$E6` | Pause | verified (static) | `$DB46`. |
 | `$FB` | Bit 7 = boss fight | verified | Trigger poke runs. |
