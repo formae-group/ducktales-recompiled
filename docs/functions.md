@@ -20,6 +20,19 @@ Addresses are CPU addresses; `bank N` is the 16 KiB PRG bank at `$8000` (bank 7 
 | `$C1AB` | `read_controllers` | Strobes `$4016` and shifts 8 bits from each port. | Static reading; RAM correlation in [memory-map.md](memory-map.md). |
 | `$D4E6` | `main_task` | Entry point of the first task. Static discovery cannot reach it (it is only reached through `JMP ($0093)`), so it is listed in `config/game.toml`. | Static reading of `reset`; first interpreter miss in the unseeded build. |
 
+### Scrooge (details in [player.md](player.md))
+
+| Address | Name | Behaviour | Evidence |
+|---|---|---|---|
+| `$D7EA` | `player_land_init` | Land-entry setup of Scrooge: start Y, jump take-off velocity (`$0790/$07A0`), walking speed. | Trace of land entry. |
+| `$E354` | `player_update` | Per-frame entry: gravity into `$EF`, timers, then dispatch on mode `$39` through the table at `$E387`. | Code; every route passes through it. |
+| `$F2A1` | `apply_y_velocity` | Y -= vertical velocity (X = slot). | Code and trace. |
+| `$F2B5` | `apply_gravity` | Vertical velocity -= `$EF` (X = slot). | Code and trace. |
+| `$F234`/`$F252` | `move_right`/`move_left` | Add/subtract horizontal speed to world X. | Code and trace. |
+| `$D120` | `bg_probe` | Tests probe points against the collision class map at `$0580`. | Code and trace. |
+| `$D202`/`$D291` | `object_contact_h`/`object_contact_v` | Scrooge-object contact tests; `$D202` starts knockback. | Code and trace. |
+| `$EB5E` | `damage` | Marks the last full HP dot lost; on Easy only every other hit. | Code and dumps. |
+
 ## Bank 3
 
 | Address | Name | Behaviour | Evidence |
