@@ -37,7 +37,7 @@ decoded with `tools/framelog.py`.
 | `$AC`/`$AD` | Ending start / ending variant 0-2 | verified | Poke runs ([game-state.md](game-state.md)). |
 | `$B1` | Boss hit counter (5 at the Amazon boss, decremented per hit) | hypothesis | `full_amazon` search runs: 05>04 at frame 7120, 04>03 at 7314. |
 | `$B0` | Frames per HUD time tick (60) | verified | `$E2AA`. |
-| `$E6` | Pause | verified (static) | `$DB46`. |
+| `$E6` | Pause; bit 0 also mutes the music in the sound driver | verified | `$DB46`; driver `$827B`, poke run. |
 | `$FB` | Bit 7 = boss fight | verified | Trigger poke runs. |
 | `$50` | Row sprite-CHR stream state (negative = done) | verified | `$C42C`. |
 | `$95` | Sprite-builder frame counter (parity flips slot order) | verified | Bank 5 `$8069`; OAM check. |
@@ -47,6 +47,14 @@ decoded with `tools/framelog.py`.
 | `$92` | Frame counter, incremented by every NMI | verified | NMI `$C0AC`. |
 | `$93/$94` | Task entry pointer (and wait count in `$93` for `task_yield`) | verified | `task_create`, `task_yield`. |
 | `$98` | When non-zero the NMI skips sprite DMA | verified | NMI `$C034`. |
+| `$D0` | Sound priorities: high nibble current effect, low nibble current music | verified | Bank 3 `$8044`, `$80BB`; frame logs ([audio.md](audio.md)). |
+| `$D4` | Sound driver busy while `$8003` runs | verified (static) | `$824C`. |
+| `$D7` | Sound ticks per frame (0/1 normal; unused speed control) | verified | `$86AC`; poke `$D7` = 2 halves loop periods. |
+| `$D8/$D9` | Global music fade rate (bit 7 = out) / step | verified | `$82CC-$833C`; poke runs. |
+| `$DA` | Sound frame counter (triplet parity) | verified (static) | `$824A`, `$86C2`. |
+| `$DB-$DE` | Driver loop: APU register offset, channel record pointer, channel countdown | verified (static) | `$8251-$82C9`. |
+| `$DF` | Channels owned by the current effect (bit 0 pulse 1 ... bit 3 noise) | verified | Frame logs of all 40 effects. |
+| `$E0/$E1`, `$E2`, `$E3` | Effect stream pointer, wait frames, loop counter | verified | Effect `$13` frame log; `$860D`. |
 | `$C5` | Last music id requested through `$F752` (land music = land number; 5 Land Select, 6 boss, 7 title, 9 game over, `$0A` death) | verified | `$F752`; poke runs. |
 | `$C6` | Sound ring write index | verified | Counts requests; not the land (refuted). |
 | `$C7`, `$C8-$CF` | Sound request ring: read index and 8 entries, `$88` = empty | verified | NMI `$C110-$C127`. |
@@ -94,6 +102,8 @@ column is the object slot (0-15). Slot 0 is Scrooge.
 | `$0151/$0155/$0159` | HUD time digits | verified | `$E2AE`; change every 60 frames. |
 | `$0200-$02FF` | OAM shadow, sent by sprite DMA every NMI | verified | NMI writes `$02` to `$4014`. |
 | `$0300-$031F` | Palette buffer | verified | NMI palette upload. |
+| `$0370/$038F/$03AE/$03CD` | Sound channel records, 31 bytes each (pulse 1, pulse 2, triangle, noise) | verified | `$8251` loop; frame logs. |
+| `$03EC/$03ED` | Current song's instrument table pointer | verified (static) | `$80A6`, `$88D9`. |
 | `$03F0-$03FF` | 4x4 tile buffer of the block being built | verified | `$CD7E`. |
 | `$0400-$043F` | VRAM update queue (address high, low, count-1, data; bit 7 of the high byte ends it); `$19` = pending | verified | `$C139`. |
 | `$0440-$047F` | Tile-edit queue; `$5C` = write offset, `$1A` = pending | verified | `$C15E`, `$F574`. |

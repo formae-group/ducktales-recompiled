@@ -91,6 +91,15 @@ Evidence for each row is in the linked documents (traces, poke runs, static read
 |---|---|---|---|
 | `$8000` | `sound_update` | Per-frame sound driver tick, called by the NMI with bank 3 mapped. | NMI code; executed 593 times in a 600-frame run (one per NMI). |
 | `$8003` | `sound_play` | A = sound/music id, called by the NMI for each queued request. | NMI code at `$C110-$C127`. |
+| `$823D` | `sound_tick` | Per-frame update: effect step, music step, APU output. | Static; runs. |
+| `$86AC` | `music_step` | Advances one channel's music stream `$D7` times. | Static; simulator matches runs. |
+| `$856B` | `sfx_step` | Effect stream step for one owned channel. | Static; runs. |
+| `$8654` | `sfx_release` | Gives a channel back to the music. | Static. |
+| `$8139`/`$8192` | `sfx_stop_all`/`music_stop` | Handlers for ids `$FE`/`$FF`. | Static; `$FF` runs. |
+| `$8228` | `channel_mute` | Silences one APU channel. | Static. |
+| `$88D9` | `load_instrument` | Copies instrument bytes into the channel record. | Static. |
+
+Fixed bank: `$F754` `sound_request` queues A in the ring when the slot is free (dropped otherwise); `$F752` also records the music id in `$C5`. See [audio.md](audio.md) for the full catalogue of 56 ids.
 
 ## Why static discovery needs help
 
