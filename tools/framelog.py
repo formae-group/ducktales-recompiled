@@ -2,6 +2,7 @@
 
     py -3 -I tools/framelog.py LOG ram ADDR[,ADDR...] [--first N --last N]
     py -3 -I tools/framelog.py LOG changes A:B C:D   bytes that change in frames A..B but not C..D
+    py -3 -I tools/framelog.py LOG events --max N      every change of bytes that change at most N times
 """
 import argparse
 import struct
@@ -42,7 +43,21 @@ def main():
     c = sub.add_parser('changes')
     c.add_argument('active', type=parse_range)
     c.add_argument('quiet', type=parse_range)
+    e = sub.add_parser('events')
+    e.add_argument('--max', type=int, default=4)
     a = ap.parse_args()
+    if a.cmd == 'events':
+        prev, changes = None, {}
+        for frame, ram, _, _ in frames(a.log):
+            if prev is not None:
+                for i, (old, new) in enumerate(zip(prev, ram)):
+                    if old != new:
+                        changes.setdefault(i, []).append((frame, old, new))
+            prev = ram
+        for i in sorted(changes):
+            if len(changes[i]) <= a.max:
+                print('%04X ' % i + ' '.join('%d:%02X>%02X' % c for c in changes[i]))
+        return
     if a.cmd == 'ram':
         addrs = [int(x, 16) for x in a.addrs.split(',')]
         print('frame  ' + ' '.join('%04X' % x for x in addrs))

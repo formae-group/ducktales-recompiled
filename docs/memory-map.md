@@ -20,6 +20,7 @@ decoded with `tools/framelog.py`.
 | `$98` | When non-zero the NMI skips sprite DMA | verified | NMI `$C034`. |
 | `$C7`, `$C8-$CF` | Sound request ring: read index and 8 entries, `$88` = empty | verified | NMI `$C110-$C127`. |
 | `$E7` | Bank currently selected at `$8000` | verified | `bank_select`; the NMI restores it before `RTI`. |
+| `$F9` | Difficulty: 0 Easy, 1 Normal, 2 Difficult | verified | RAM at frame 1800 after selecting each difficulty differs exactly this way; the damage routine at `$EB5E` applies only every other hit when it is 0. |
 | `$E8` | When non-zero the NMI skips the PPU update block | verified | NMI `$C01E`. |
 | `$EA` | Sprite-0 split enabled (HUD) | hypothesis | NMI writes sprite 0 and waits for the sprite-0 hit when set. |
 | `$F0/$F2/$F3` | Scroll Y, scroll X and nametable bit used after the split | hypothesis | Written to `$2005`/`$2000` after the sprite-0 wait. |
@@ -44,3 +45,8 @@ column is the object slot (0-15). Slot 0 is Scrooge.
 |---|---|---|---|
 | `$0200-$02FF` | OAM shadow, sent by sprite DMA every NMI | verified | NMI writes `$02` to `$4014`. |
 | `$0300-$031F` | Palette buffer | verified | NMI palette upload. |
+| `$0320-$032A` | HUD money update packet: PPU address `$2043`, length 7, then the tiles | verified | Dumps of the Amazon route. |
+| `$0324-$0329` | Money, six decimal digits stored as tile ids (0-9, `$24` = suppressed leading zero), tens digit last; the HUD shows a fixed trailing 0 | verified | Collecting gems turns `$0327` 2, 4, 6 while the HUD shows 2000, 4000, 6000; the writer is the digit adder in bank 6 at `$8BBB`. |
+| `$0340-$0367` | HUD sprite records, 4 bytes each (Y, tile, attribute, X); Y = `$FF` ends a group | verified | Dumps of the Moon route. |
+| `$0340+4i` | HP dots: attribute (`+2`) 0 = full, 1 = lost; dots end at the first record with Y = `$FF` | verified | The damage routine at `$EB6A` marks the last full dot; all reset to 0 on respawn; three marked dots precede each death in the Moon route. |
+| `$0361` | Extra lives, also the tile of the HUD "P.n" digit (0-9) | verified | 2, 1, 0 across the Moon route deaths; 2 on a new game; bank 6 `$8BB0` increments it up to 9. |
