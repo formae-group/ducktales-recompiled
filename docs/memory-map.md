@@ -13,7 +13,12 @@ decoded with `tools/framelog.py`.
 | `$16` | Controller 1, buttons held | verified | `$01` while Right is held, `$02` Left, `$80` A, `$40` B, `$C4` A+B+Down (`re_amazon_moves`). |
 | `$18` | Palette upload request; the NMI copies `$0300-$031F` to the PPU when it is set | verified | NMI code at `$C04E-$C078`. |
 | `$20/$21`, `$2A`, `$2B` | Map grid pointer, row count, row stride | verified | Loaded by `$C7B0` ([levels.md](levels.md)). |
+| `$22/$23` | Pointer to the current screen's data (bank 4, `$8000` + id*72) | verified | `$CE2C`, `$CDAF`. |
+| `$24` | Map index of the screen being streamed | verified | `$C830`; nametable check. |
 | `$25` | Previous frame's `$F2` | verified | `$DBE4`. |
+| `$26` | Stream position: bits 0-2 block row, bits 3-5 block column | verified | `$CCBD`, `$C883`. |
+| `$27`/`$28` | Attribute / collision byte of the block being built | verified | `$CCFE-$CD22`. |
+| `$29`/`$38` | Stream direction last used / requested | hypothesis | `$C7D3`, `$C7FB`. |
 | `$2D` | Camera screen index = row x 8 + page | verified | Five intro routes. |
 | `$39` | Scrooge's mode: 0 ground, 1 air, 2 pogo, 3 climb, 4 cane, 6 knockback, `$0D` death | verified | Jump table at `$E387` ([player.md](player.md)). |
 | `$3E`/`$3F` | Push counter (16 frames) / direction held when pushing started | verified | `$E458`, `$E45C`. |
@@ -33,6 +38,9 @@ decoded with `tools/framelog.py`.
 | `$B0` | Frames per HUD time tick (60) | verified | `$E2AA`. |
 | `$E6` | Pause | verified (static) | `$DB46`. |
 | `$FB` | Bit 7 = boss fight | verified | Trigger poke runs. |
+| `$50` | Row sprite-CHR stream state (negative = done) | verified | `$C42C`. |
+| `$95` | Sprite-builder frame counter (parity flips slot order) | verified | Bank 5 `$8069`; OAM check. |
+| `$96`/`$97` | Slot being drawn / next OAM offset | verified | Bank 5 builder. |
 | `$90` | Scheduler: reset to `$FF` by the NMI, cleared at the start of a pass | verified | NMI `$C0AE`, scheduler `$FF38`. |
 | `$91` | Running task slot | verified | Written by the scheduler, read by `task_yield`/`task_exit`. |
 | `$92` | Frame counter, incremented by every NMI | verified | NMI `$C0AC`. |
@@ -45,12 +53,16 @@ decoded with `tools/framelog.py`.
 | `$EF` | Gravity for `$F2B5` (`$33`, reloaded every frame at `$E354`); also used as scratch | verified | Trace. |
 | `$F9` | Difficulty: 0 Easy, 1 Normal, 2 Difficult | verified | RAM at frame 1800 after selecting each difficulty differs exactly this way; the damage routine at `$EB5E` applies only every other hit when it is 0. |
 | `$E8` | When non-zero the NMI skips the PPU update block | verified | NMI `$C01E`. |
-| `$EA` | Sprite-0 split enabled (HUD) | hypothesis | NMI writes sprite 0 and waits for the sprite-0 hit when set. |
-| `$F0` | Scroll Y written after the HUD split | hypothesis | Written to `$2005` after the sprite-0 wait. |
+| `$EA` | Sprite-0 HUD split enabled (`$40` in play) | verified | `$D840`, NMI ([rendering.md](rendering.md)). |
+| `$E9`/`$ED`/`$EE` | Mid-frame `$2006` address for the vertical row scroll | hypothesis | `$C976`, NMI `$C0DE`. |
+| `$F7` | PRG bank holding block and metatile tables (from `$DA10` + `$F6`) | verified | `$D9DA`; four land logs. |
+| `$F8` | Turns the background off below the split | verified (code) | NMI `$C0EF`; use unknown. |
+| `$FA` | Sprite-0 Y (`$2C`) | verified | `$D83A`, OAM check. |
+| `$F0` | Playfield scroll Y written after the split (0 in play) | verified (code) | NMI `$C0FD`. |
 | `$F1` | Map row (0 = top) | verified | Land tables, warp poke runs, `$E8B6` ([levels.md](levels.md)). |
 | `$F2`/`$F3` | Camera X low byte / page; bit 0 of `$F3` also selects the nametable after the split | verified | `$0650 = ($0730:$0720) - ($F3:$F2)` on 5,201 of 5,250 gameplay frames (exceptions are transitions). |
 | `$F6` | Current land 0-4 in Land Select order; 5 while Land Select loads and during the boss scroll; 9 in the ending | verified | Five intro routes; writers `$D746`, `$DB9D`, `$E1C6`. |
-| `$FC/$FD` | Scroll Y and X written at the top of the frame | hypothesis | NMI `$C07E-$C085`. |
+| `$FC/$FD` | Top-of-frame scroll Y and X (0 in play) | verified | NMI `$C07E-$C085`; logs. |
 | `$FF` | PPUCTRL shadow | verified | Every `$2000` write in the NMI derives from it. |
 
 ## Object tables (`$0600-$06FF`)
@@ -76,11 +88,16 @@ column is the object slot (0-15). Slot 0 is Scrooge.
 
 | Range | Meaning | Status | Evidence |
 |---|---|---|---|
+| `$0100-$011F` | Master palette (fade source) | verified | `$C28F`, `$D9FD`. |
 | `$0120-$013F` | Consumed-object bits of the current land, one per object record | verified | Bank 6 `$AF2B`, `$F7F0`, bank 5 `$B760`. |
 | `$0151/$0155/$0159` | HUD time digits | verified | `$E2AE`; change every 60 frames. |
 | `$0200-$02FF` | OAM shadow, sent by sprite DMA every NMI | verified | NMI writes `$02` to `$4014`. |
 | `$0300-$031F` | Palette buffer | verified | NMI palette upload. |
-| `$0580-` | Background collision class map, 2 bits per 16x16 cell (1 solid, 2 climbable, 3 special) | verified | `$D3B7`; probe tests at `$D120`. |
+| `$03F0-$03FF` | 4x4 tile buffer of the block being built | verified | `$CD7E`. |
+| `$0400-$043F` | VRAM update queue (address high, low, count-1, data; bit 7 of the high byte ends it); `$19` = pending | verified | `$C139`. |
+| `$0440-$047F` | Tile-edit queue; `$5C` = write offset, `$1A` = pending | verified | `$C15E`, `$F574`. |
+| `$0500-$057F` | Attribute-table copies of nametables 0 and 1 | verified | `$C93D`. |
+| `$0580-$05FF` | Collision class copy, 2 bits per 16x16 cell (1 solid, 2 climbable, 3 special), same layout | verified | `$CDAB`, `$D3B7`; probes at `$D120`. |
 | `$0320-$032A` | HUD money update packet: PPU address `$2043`, length 7, then the tiles | verified | Dumps of the Amazon route. |
 | `$0324-$0329` | Money, six decimal digits stored as tile ids (0-9, `$24` = suppressed leading zero), tens digit last; the HUD shows a fixed trailing 0 | verified | Collecting gems turns `$0327` 2, 4, 6 while the HUD shows 2000, 4000, 6000; the writer is the digit adder in bank 6 at `$8BBB`. |
 | `$0334-$033A` | TOTAL money digits | verified | `land_done` poke run. |

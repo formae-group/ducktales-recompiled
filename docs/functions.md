@@ -20,6 +20,29 @@ Addresses are CPU addresses; `bank N` is the 16 KiB PRG bank at `$8000` (bank 7 
 | `$C1AB` | `read_controllers` | Strobes `$4016` and shifts 8 bits from each port. | Static reading; RAM correlation in [memory-map.md](memory-map.md). |
 | `$D4E6` | `main_task` | Entry point of the first task. Static discovery cannot reach it (it is only reached through `JMP ($0093)`), so it is listed in `config/game.toml`. | Static reading of `reset`; first interpreter miss in the unseeded build. |
 
+### Rendering (details in [rendering.md](rendering.md))
+
+| Address | Name | Behaviour |
+|---|---|---|
+| `$C139`/`$C15E` | `vram_queue`/`tile_edit_queue` | Upload the `$0400`/`$0440` queues in the NMI. |
+| `$C203` | `nt_fill` | Clear a nametable and its attributes while blanked. |
+| `$C267` | `oam_clear` | Park OAM entries off screen. |
+| `$C279`/`$C282` | `fade_in`/`fade_out` | Step the palette from `$0100`. |
+| `$C301` | `chr_load` | Upload a CHR list while blanked. |
+| `$C42C` | `row_chr_stream` | Stream the current row's sprite CHR and sprite palette 3. |
+| `$C71D`/`$C78F` | `draw_start_screens`/`draw_screen` | Initial nametable draw. |
+| `$C7C5` | `scroll_stream` | Camera movement to block steps. |
+| `$C830` | `stream_block` | Queue one 32x32 block and its attribute byte. |
+| `$C976` | `row_scroll` | Vertical row transition (static reading only). |
+| `$CCBD` | `decode_block` | Block to tiles, attribute and collision. |
+| `$CE2C` | `screen_ptr` | Screen id to `$22/$23`. |
+| `$ED05` | `message_box` | Message box and its CHR tile swap. |
+| `$EFE2` | `camera_update` | Follow Scrooge, clamp, stream. |
+| `$F574` | `tile_edit` | Replace a metatile at an object's position. |
+| `$F76D` | `scene_palette` | Load scene palettes. |
+| bank 5 `$8000` | `build_oam` | Sprite builder (HUD groups, then slots, order flipped every frame). |
+| bank 5 `$BAB0` | `draw_strings` | Direct text and HUD-frame drawing. |
+
 ### Game flow (details in [game-state.md](game-state.md), [levels.md](levels.md))
 
 | Address | Name | Behaviour |
@@ -53,6 +76,7 @@ Evidence for each row is in the linked documents (traces, poke runs, static read
 | Address | Name | Behaviour | Evidence |
 |---|---|---|---|
 | `$D7EA` | `player_land_init` | Land-entry setup of Scrooge: start Y, jump take-off velocity (`$0790/$07A0`), walking speed. | Trace of land entry. |
+| `$E3EC` | `jump_start` | On a new A press copies `$0790/$07A0` into slot 0's vertical velocity and sets `$39` = 1. The instruction after it (`$E3FE`) is the jump-scale hook site. | Trace of frame 1780; reference search over the ROM. |
 | `$E354` | `player_update` | Per-frame entry: gravity into `$EF`, timers, then dispatch on mode `$39` through the table at `$E387`. | Code; every route passes through it. |
 | `$F2A1` | `apply_y_velocity` | Y -= vertical velocity (X = slot). | Code and trace. |
 | `$F2B5` | `apply_gravity` | Vertical velocity -= `$EF` (X = slot). | Code and trace. |

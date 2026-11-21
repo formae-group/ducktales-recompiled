@@ -198,3 +198,16 @@ Full CPU RAM, stack page included, differs on most frames at every alignment (fo
 - The picture, the APU, CHR RAM and cartridge state are not compared. The Lua script records
   CPU RAM, OAM, palette and (optionally) CIRAM. The picture would need Mesen's ARGB output
   mapped back to palette indices.
+
+## Interpretation (lead's note)
+
+Every divergence above comes from a `$2002` read or an NMI landing within a cycle or two of the
+VBlank flag being set. The NESdev wiki's [PPU frame timing](https://www.nesdev.org/wiki/PPU_frame_timing)
+page describes this race: a read just before the flag is set returns it clear and suppresses that
+frame's flag and NMI, while a read on the setting clock or just after returns it set. Which case a
+given read hits depends on the CPU/PPU clock alignment, which a real console chooses at random at
+power-on. So the two emulators can disagree here without either being wrong: each models one
+alignment's outcome. This explains the class of divergence but has not been confirmed for these
+exact reads, and it is not a hardware measurement. Hardware-correct behaviour is left
+unconfirmed. Recompiled and interpreted runs still match the TriCNES oracle on every frame, so the
+divergences are not recompilation errors.

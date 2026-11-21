@@ -58,8 +58,8 @@ frames). Vertical movement between rows is a whole-screen scroll, not a camera c
 - the land's 16 background palette bytes into `$0300` (copy at `$0100`), followed by 16
   sprite palette bytes shared by every land at `$0310` (copy at `$0110`).
 
-Then it loads graphics (`$C301` with X = land), streams the first screens (`$C42C` until `$50` goes
-negative), points the object spawner at the land's records (bank 6 `$AE20`: ten bytes `$60-$69`
+Then it loads graphics (`$C301` with X = land), streams the current row's sprite CHR (`$C42C` until `$50`
+goes negative; see [rendering.md](rendering.md)), points the object spawner at the land's records (bank 6 `$AE20`: ten bytes `$60-$69`
 = five pointers) and finds the first record for the start row (bank 6 `$AE60`), then sets the
 HUD, the start time and the consumed-object bits (bank 5 `$B760`).
 
@@ -151,8 +151,8 @@ py -3 -I tools/world_state.py captures/w3.bin --changes
 
 ## Not yet known
 
-- The screen id format: what a screen id indexes (metatile/column data, bank) and how
-  `$C830`/`$C42C` turn it into nametable columns and collision.
+- The screen id format is now documented in [rendering.md](rendering.md) (`$CE2C`, `$C830`,
+  `$CCBD`).
 - A route that changes rows by play, to verify the vertical transition and the odd-page rule.
 - Which in-game objects are warps 0-6 and which carry each entry.
 - Horizontal limits of a row and how the camera clamps.
