@@ -32,6 +32,15 @@ host menu; Tab fast-forwards; F8/F9 save and load a state. `-DNESRECOMP_DEV_UI=O
 developer keys (F2 switches between recompiled code and the interpreter) and shows native
 coverage in the title bar.
 
+## Experimental options
+
+All off by default; the original game is unchanged unless you set them.
+
+- `[Game] JumpScale` in `config.ini` (or `--jump-scale N`): Scrooge's jump take-off velocity in
+  percent (25-400, 100 = original). See [docs/architecture.md](docs/architecture.md).
+- `-DDUCKTALES_DEV_DIAGNOSTICS=ON`: developer build with a typed state log
+  (`--dt-state-log -`) and TCP commands; never used for distribution.
+
 ## Verification build
 
 ```powershell
@@ -53,7 +62,9 @@ machine at four CPU/PPU alignments, and must match on every frame. See
 | `config/ducktales.seeds` | Bank-qualified entry points found by route runs (addresses only) |
 | `tests/routes/` | Deterministic input schedules (`<frame> <buttons>`) |
 | `tests/verify_routes.py` | Differential regression test |
-| `tools/` | Investigation helpers: `disasm6502.py`, `framelog.py`, `contact_sheet.py` |
+| `src/game/` | Typed game state, revision-specific symbols, behaviour hooks |
+| `src/host/` | Integration with NESRecomp's host (settings, options, dev diagnostics) |
+| `tools/` | Investigation helpers (disassembler, frame logs, access tracer, map/OAM checks, RAM pokes in save states, Mesen2 replay) |
 | `docs/` | ROM identity, reverse-engineering notes, validation, licensing |
 
 ## Refreshing seeds
