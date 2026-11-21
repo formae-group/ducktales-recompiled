@@ -1,5 +1,5 @@
-// formae_ui.cpp - the Formae look, the in-game menu and the first-run ROM
-// screen, drawn with Dear ImGui over SDL_Renderer (formae_ui.h).
+// app_ui.cpp - the look, the in-game menu and the first-run ROM
+// screen, drawn with Dear ImGui over SDL_Renderer (app_ui.h).
 //
 // The menu is a modal loop: it runs inside the host's event callback, so no
 // machine frame runs while it is open (the game is paused by construction)
@@ -16,9 +16,9 @@
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_sdlrenderer2.h"
 
-#include "formae_app.h"
-#include "formae_rom.h"
-#include "formae_ui.h"
+#include "app_settings.h"
+#include "app_rom.h"
+#include "app_ui.h"
 #include "game/enhancements.h"
 #include "host/ducktales_host.h"
 
@@ -313,7 +313,7 @@ void enh_change(DtEnh e, int dir)
     }
     if (v == dt_enh_get(e) || !dt_enh_set(e, v)) return;
     ducktales_host_set_saved_value(e, v);
-    formae_settings_changed();
+    app_settings_changed();
 }
 
 std::string enh_value(DtEnh e)
@@ -353,9 +353,9 @@ void page_reset(Menu &m, Layout &L, const Fonts &F)
 void page_settings(Menu &m, Layout &L, const Fonts &F, SDL_Window *win)
 {
     (void)m;
-    FormaeDisplay d;
-    formae_display_get(&d);
-    FormaeDisplay was = d;
+    AppDisplay d;
+    app_display_get(&d);
+    AppDisplay was = d;
     static const char *MODES[] = { "Windowed", "Borderless full screen", "Exclusive full screen" };
     RowResult r = row(L, F, "Display", MODES[d.fullscreen < 0 || d.fullscreen > 2 ? 0 : d.fullscreen]);
     if (r == ROW_DEC) d.fullscreen = (d.fullscreen + 2) % 3;
@@ -374,7 +374,7 @@ void page_settings(Menu &m, Layout &L, const Fonts &F, SDL_Window *win)
     r = row(L, F, "Volume", vol);
     if (r == ROW_DEC) d.volume = d.volume >= 5 ? d.volume - 5 : 0;
     if (r == ROW_INC || r == ROW_ACTIVATE) d.volume = d.volume <= 95 ? d.volume + 5 : 100;
-    if (std::memcmp(&d, &was, sizeof d)) formae_display_set(win, &d);
+    if (std::memcmp(&d, &was, sizeof d)) app_display_set(win, &d);
 }
 
 void page_controls(Menu &m, Layout &L, const Fonts &F)
@@ -385,16 +385,16 @@ void page_controls(Menu &m, Layout &L, const Fonts &F)
     text_at(dl, F.small, L.x + label_w + L.pad, head.y, TEXT_DIM, "Keyboard");
     text_at(dl, F.small, L.x + label_w + cell_w + L.pad, head.y, TEXT_DIM, "Controller");
     ImGui::Dummy(ImVec2(L.width, F.small->FontSize * 1.4f));
-    for (int b = 0; b < FORMAE_BIND_COUNT; b++) {
+    for (int b = 0; b < APP_BIND_COUNT; b++) {
         ImVec2 p(L.x, ImGui::GetCursorScreenPos().y);
-        text_at(dl, F.body, p.x + L.pad, p.y + (L.row_h - F.body->FontSize) * 0.5f, TEXT, formae_bind_label(b));
+        text_at(dl, F.body, p.x + L.pad, p.y + (L.row_h - F.body->FontSize) * 0.5f, TEXT, app_bind_label(b));
         for (int c = 0; c < 2; c++) {
             Item it = item(L, ImVec2(p.x + label_w + cell_w * c, p.y), ImVec2(cell_w - 4.0f, L.row_h));
             bool capturing = m.capture_row == b && m.capture_pad == (c == 1);
             item_back(dl, it, capturing);
             char text[64];
             if (capturing) std::snprintf(text, sizeof text, "%s", c ? "Press a button" : "Press a key");
-            else formae_bind_text(b, c == 1, text, sizeof text);
+            else app_bind_text(b, c == 1, text, sizeof text);
             text_at(dl, F.body, it.p.x + L.pad, it.p.y + (L.row_h - F.body->FontSize) * 0.5f,
                     capturing ? ACCENT : !std::strcmp(text, "Unbound") ? TEXT_OFF : it.focused ? TEXT : TEXT_DIM, text);
             if ((it.clicked || (it.focused && L.accept)) && m.capture_row < 0) {
@@ -406,7 +406,7 @@ void page_controls(Menu &m, Layout &L, const Fonts &F)
     }
     ImGui::Dummy(ImVec2(L.width, L.row_h * 0.3f));
     if (row(L, F, "Restore defaults") == ROW_ACTIVATE) {
-        formae_bind_defaults();
+        app_bind_defaults();
         say(m, "Default controls restored.");
     }
 }
@@ -427,7 +427,7 @@ void page_enhancements(Menu &m, Layout &L, const Fonts &F)
             if (dt_enh_get((DtEnh)e) == in->stock) continue;
             dt_enh_set((DtEnh)e, in->stock);
             ducktales_host_set_saved_value((DtEnh)e, in->stock);
-            formae_settings_changed();
+            app_settings_changed();
         }
         say(m, "Every enhancement is off.");
     }
@@ -455,21 +455,21 @@ bool menu_event(Menu &m, const SDL_Event &ev)
             SDL_Scancode sc = ev.key.keysym.scancode;
             if (sc == SDL_SCANCODE_ESCAPE) m.capture_row = -1;
             else if (sc == SDL_SCANCODE_DELETE || sc == SDL_SCANCODE_BACKSPACE) {
-                formae_bind_set(m.capture_row, m.capture_pad, 0);
+                app_bind_set(m.capture_row, m.capture_pad, 0);
                 m.capture_row = -1;
             } else if (!m.capture_pad) {
-                say(m, formae_bind_set(m.capture_row, false, sc));
+                say(m, app_bind_set(m.capture_row, false, sc));
                 m.capture_row = -1;
             }
             return true;
         }
         if (m.capture_pad && ev.type == SDL_CONTROLLERBUTTONDOWN) {
-            say(m, formae_bind_set(m.capture_row, true, 1 + ev.cbutton.button));
+            say(m, app_bind_set(m.capture_row, true, 1 + ev.cbutton.button));
             m.capture_row = -1;
             return true;
         }
         if (m.capture_pad && ev.type == SDL_CONTROLLERAXISMOTION && (ev.caxis.value > 20000 || ev.caxis.value < -20000)) {
-            say(m, formae_bind_set(m.capture_row, true, 100 + ev.caxis.axis * 2 + (ev.caxis.value > 0 ? 1 : 0)));
+            say(m, app_bind_set(m.capture_row, true, 100 + ev.caxis.axis * 2 + (ev.caxis.value > 0 ? 1 : 0)));
             m.capture_row = -1;
             return true;
         }
@@ -477,24 +477,24 @@ bool menu_event(Menu &m, const SDL_Event &ev)
                ev.type == SDL_CONTROLLERBUTTONUP || ev.type == SDL_CONTROLLERAXISMOTION;
     }
     if (ev.type == SDL_KEYDOWN && !ev.key.repeat &&
-        (ev.key.keysym.scancode == SDL_SCANCODE_ESCAPE || formae_is_menu_key(ev.key.keysym.scancode))) {
-        if (formae_is_menu_key(ev.key.keysym.scancode) && ev.key.keysym.scancode != SDL_SCANCODE_ESCAPE) m.resume = true;
+        (ev.key.keysym.scancode == SDL_SCANCODE_ESCAPE || app_is_menu_key(ev.key.keysym.scancode))) {
+        if (app_is_menu_key(ev.key.keysym.scancode) && ev.key.keysym.scancode != SDL_SCANCODE_ESCAPE) m.resume = true;
         else back(m);
         return true;
     }
     if (ev.type == SDL_CONTROLLERBUTTONDOWN) {
-        if (formae_is_menu_button(ev.cbutton.button)) { m.resume = true; return true; }
+        if (app_is_menu_button(ev.cbutton.button)) { m.resume = true; return true; }
         if (ev.cbutton.button == SDL_CONTROLLER_BUTTON_B) { back(m); return true; }
     }
     return false;
 }
 
-// FORMAE_UI_SELFTEST=<dir> (QA only): the menu walks its pages and the first
+// DUCKTALES_UI_SELFTEST=<dir> (QA only): the menu walks its pages and the first
 // run screen shows its states by themselves, each written to <dir> as a PNG
 // of what the window draws, so a hidden window can still be looked at.
 const char *selftest_dir()
 {
-    const char *d = std::getenv("FORMAE_UI_SELFTEST");
+    const char *d = std::getenv("DUCKTALES_UI_SELFTEST");
     return d && *d ? d : nullptr;
 }
 
@@ -506,7 +506,7 @@ void selftest_shot(SDL_Renderer *ren, const char *name)
     std::string path = std::string(selftest_dir()) + "/" + name + ".png";
     bool ok = ow > 0 && SDL_RenderReadPixels(ren, nullptr, SDL_PIXELFORMAT_ARGB8888, px.data(), ow * 4) == 0 &&
               cyc_write_png(path.c_str(), px.data(), ow, oh);
-    std::printf("[formae selftest] %s %s (%dx%d)\n", ok ? "wrote" : "could not write", path.c_str(), ow, oh);
+    std::printf("[selftest] %s %s (%dx%d)\n", ok ? "wrote" : "could not write", path.c_str(), ow, oh);
     std::fflush(stdout);
 }
 
@@ -520,7 +520,7 @@ void draw_picture(SDL_Renderer *ren, SDL_Texture *tex, int ow, int oh)
 
 }   // namespace
 
-extern "C" bool formae_menu_run(SDL_Window *win)
+extern "C" bool app_menu_run(SDL_Window *win)
 {
     SDL_Renderer *ren = SDL_GetRenderer(win);
     if (!ren) return false;
@@ -538,7 +538,7 @@ extern "C" bool formae_menu_run(SDL_Window *win)
         SDL_UpdateTexture(pic, nullptr, cyc_frame_argb(), 256 * 4);
         SDL_SetTextureScaleMode(pic, SDL_ScaleModeNearest);
     }
-    std::printf("[formae] menu open\n");
+    std::printf("[ducktales] menu open\n");
     std::fflush(stdout);
     Menu m;
     Uint64 last = SDL_GetTicks64();
@@ -581,7 +581,7 @@ extern "C" bool formae_menu_run(SDL_Window *win)
 
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(ImVec2(panel_w, ds.y));
-        ImGui::Begin("##formae-menu", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+        ImGui::Begin("##menu", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                      ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoScrollWithMouse |
                      ImGuiWindowFlags_NoNav);
         Layout L;
@@ -597,7 +597,7 @@ extern "C" bool formae_menu_run(SDL_Window *win)
             const bool down = !capturing && pressed({ ImGuiKey_DownArrow, ImGuiKey_GamepadDpadDown, ImGuiKey_GamepadLStickDown });
             bool left = !capturing && pressed({ ImGuiKey_LeftArrow, ImGuiKey_GamepadDpadLeft, ImGuiKey_GamepadLStickLeft });
             bool right = !capturing && pressed({ ImGuiKey_RightArrow, ImGuiKey_GamepadDpadRight, ImGuiKey_GamepadLStickRight });
-            const int grid = m.page == PAGE_CONTROLS ? 2 * FORMAE_BIND_COUNT : 0;
+            const int grid = m.page == PAGE_CONTROLS ? 2 * APP_BIND_COUNT : 0;
             if (m.cursor < grid) {
                 if (up && m.cursor >= 2) m.cursor -= 2;
                 if (down) m.cursor = m.cursor + 2 < grid ? m.cursor + 2 : grid;
@@ -617,9 +617,7 @@ extern "C" bool formae_menu_run(SDL_Window *win)
             L.mouse_moved = md.x != 0.0f || md.y != 0.0f;
         }
         ImDrawList *dl = ImGui::GetWindowDrawList();
-        float y = F.base * 2.0f;
-        text_at(dl, F.small, L.x + L.pad, y, ACCENT, "FORMAE");
-        y += F.small->FontSize * 1.3f;
+        float y = F.base * 2.4f;
         text_at(dl, F.title, L.x + L.pad, y, TEXT, "DuckTales");
         y += F.title->FontSize * 1.15f;
         text_at(dl, F.body, L.x + L.pad, y, TEXT_DIM, page_title(m.page));
@@ -666,7 +664,7 @@ extern "C" bool formae_menu_run(SDL_Window *win)
         q.type = SDL_QUIT;
         SDL_PushEvent(&q);
     }
-    std::printf("[formae] menu closed%s\n", m.quit ? " (quit)" : "");
+    std::printf("[ducktales] menu closed%s\n", m.quit ? " (quit)" : "");
     std::fflush(stdout);
     return true;
 }
@@ -717,7 +715,7 @@ bool button(const Fonts &F, const char *label, bool primary, float w, bool focus
 
 }   // namespace
 
-extern "C" int formae_ui_first_run(const char *expected, char *rom_out, size_t cap)
+extern "C" int app_ui_first_run(const char *expected, char *rom_out, size_t cap)
 {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) != 0) return 2;
     const bool selftest = selftest_dir() != nullptr;
@@ -734,7 +732,7 @@ extern "C" int formae_ui_first_run(const char *expected, char *rom_out, size_t c
         return 2;
     }
     char data_dir[1024] = "";
-    formae_data_dir(data_dir, sizeof data_dir);
+    app_data_dir(data_dir, sizeof data_dir);
     std::string error, detail;
     int result = -1;
     bool focus_quit = false;
@@ -753,15 +751,15 @@ extern "C" int formae_ui_first_run(const char *expected, char *rom_out, size_t c
         }
         if (!chosen.empty() && !done_at) {
             char actual[65] = "";
-            FormaeRomStatus s = formae_rom_import(chosen.c_str(), expected, rom_out, cap, actual);
-            if (s == FORMAE_ROM_OK) {
+            AppRomStatus s = app_rom_import(chosen.c_str(), expected, rom_out, cap, actual);
+            if (s == APP_ROM_OK) {
                 error.clear();
                 done_at = SDL_GetTicks64();
             } else {
-                error = formae_rom_status_text(s);
-                detail = s == FORMAE_ROM_MISMATCH ? std::string("SHA-256 of this file: ") + actual + "\nExpected: " + expected : std::string();
+                error = app_rom_status_text(s);
+                detail = s == APP_ROM_MISMATCH ? std::string("SHA-256 of this file: ") + actual + "\nExpected: " + expected : std::string();
             }
-            std::fprintf(stderr, "[formae] %s: %s\n", chosen.c_str(), formae_rom_status_text(s));
+            std::fprintf(stderr, "[ducktales] %s: %s\n", chosen.c_str(), app_rom_status_text(s));
             chosen.clear();
         }
         if (done_at && SDL_GetTicks64() - done_at > 900) result = 0;
@@ -774,14 +772,12 @@ extern "C" int formae_ui_first_run(const char *expected, char *rom_out, size_t c
         ImGui::GetBackgroundDrawList()->AddRectFilled(ImVec2(0, 0), ds, BACKDROP);
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(ds);
-        ImGui::Begin("##formae-first-run", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+        ImGui::Begin("##first-run", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                      ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBackground);
         ImDrawList *dl = ImGui::GetWindowDrawList();
         float col_w = ds.x - F.base * 6.0f;
         if (col_w > F.base * 30.0f) col_w = F.base * 30.0f;
         float x = (ds.x - col_w) * 0.5f, y = ds.y * 0.16f;
-        text_at(dl, F.small, x, y, ACCENT, "FORMAE");
-        y += F.small->FontSize * 1.4f;
         text_at(dl, F.title, x, y, TEXT, "DuckTales");
         y += F.title->FontSize * 1.5f;
         const char *intro = "This port runs on your own copy of the game. Choose your DuckTales (USA) cartridge "
@@ -823,7 +819,7 @@ extern "C" int formae_ui_first_run(const char *expected, char *rom_out, size_t c
             ++selftest_frames;
             if (selftest_frames == 6) {
                 selftest_shot(ren, "first_run_1_welcome");
-                const char *pick = std::getenv("FORMAE_UI_SELFTEST_PICK");
+                const char *pick = std::getenv("DUCKTALES_UI_SELFTEST_PICK");
                 if (pick && *pick) chosen = pick;
                 else result = 1;
             }

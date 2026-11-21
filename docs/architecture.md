@@ -12,7 +12,7 @@ src/game/enhancements.[ch]           the optional enhancements: one table, one h
 src/game/enhancements_sites.h        their code sites (to move into ducktales_symbols.h)
 src/host/ducktales_host.c            cyc_host_extras(): settings, options, per-frame callbacks
 src/host/ducktales_main.c            main() of the window build: ROM choice, then the host
-src/ui/                              the Formae application: first run, menu, live settings
+src/ui/                              the application: first run, menu, live settings
 src/host/ducktales_diagnostics.[ch]  developer diagnostics (DUCKTALES_DEV_DIAGNOSTICS only)
 tests/state_decode_test.c            unit test of the decoder (built with the headless build)
 tests/jump_experiment.py             measures the experiment and checks that it switches off cleanly
@@ -191,7 +191,7 @@ frame 1257. `--start-lives 7` gives 7 lives after the reset. The PPU and APU reg
 reset by the host. That is a difference from hardware, and it is harmless only because the handler
 writes them itself (hypothesis for any state the handler does not write).
 
-## Formae application (window build)
+## Application (window build)
 
 ### Why C++ Dear ImGui
 
@@ -201,8 +201,8 @@ only into builds that link NESRecomp's recomp-ui, and this port does not link it
 no menu and no pause, and its `CycSettings` are private to `cyc_sdl.c`. These options were
 considered:
 
-- Link recomp-ui. It brings NESRecomp's own look and screens, and the application should look like
-  Formae, not like NESRecomp.
+- Link recomp-ui. It brings NESRecomp's own look and screens, and the application should have its own
+  look, not NESRecomp's.
 - Draw with `cyc_overlay`. It draws simple text and boxes over the picture. It has no layout,
   widgets, focus handling or gamepad navigation, so every one of those would have to be written
   here.
@@ -217,9 +217,9 @@ considered:
 
 ```
 src/host/ducktales_main.c   the real main(): chooses the ROM, then calls the host
-src/ui/formae_rom.[ch]      ROM check, import and the data folder (UTF-8 paths, _w* calls)
-src/ui/formae_app.[ch]      config.ini copy, live settings, bindings, menu shortcut
-src/ui/formae_ui.cpp        Dear ImGui: the first-run screen and the menu
+src/ui/app_rom.[ch]      ROM check, import and the data folder (UTF-8 paths, _w* calls)
+src/ui/app_app.[ch]      config.ini copy, live settings, bindings, menu shortcut
+src/ui/app_ui.cpp        Dear ImGui: the first-run screen and the menu
 ```
 
 - For the `ducktales` target only, CMake compiles NESRecomp's `cyc_host.c` with
@@ -233,7 +233,7 @@ src/ui/formae_ui.cpp        Dear ImGui: the first-run screen and the menu
   last game picture, so no machine frame runs while it is open, and the pause is exact. Its pages
   are Resume, Reset, Settings, Controls and Enhancements, plus Quit. Keyboard, mouse and controller
   all work.
-- Settings are applied live through what the window exposes. `formae_app.c` keeps its own copy of
+- Settings are applied live through what the window exposes. `app_settings.c` keeps its own copy of
   `config.ini`, read and written with the host's `cyc_settings_load`/`cyc_settings_save`, so the
   file format stays the host's:
   - `[Display] Fullscreen` and `WindowScale` go through SDL.
@@ -242,7 +242,7 @@ src/ui/formae_ui.cpp        Dear ImGui: the first-run screen and the menu
   - The bindings go through the `input` callback with `cyc_input_eval`.
   - `VSync` is saved and applies at the next launch, because the host reads it only at start.
 - The host also writes `config.ini`, on F11 and at exit, from its own stale copy. Its save calls
-  the `[Game]` writer (`formae_ui_host_saved`). On the next frame, or after the host exits, the
+  the `[Game]` writer (`app_ui_host_saved`). On the next frame, or after the host exits, the
   file is written again from the menu's copy, keeping only the host's fullscreen value. This runs
   only after the player changed something in the menu. The FDS Disk shortcut stays off for a
   cartridge.
@@ -255,8 +255,8 @@ src/ui/formae_ui.cpp        Dear ImGui: the first-run screen and the menu
 The ROM is chosen in this order:
 
 1. A ROM path on the command line, used as given. The host checks it as before.
-2. The copy imported earlier, at `%APPDATA%\Formae\DuckTales\DuckTales (USA).nes` (or in
-   `FORMAE_DATA_DIR`). It is checked against the SHA-256 again at every start.
+2. The copy imported earlier, at `%APPDATA%\DuckTales Recompiled\DuckTales (USA).nes` (or in
+   `DUCKTALES_DATA_DIR`). It is checked against the SHA-256 again at every start.
 3. Otherwise the first-run screen. The player chooses the file, or drops it on the window. The file
    is imported only if its whole SHA-256 matches `DUCKTALES_ROM_SHA256`, which CMake takes from
    the ROM the build was made with. Otherwise the screen shows why it was refused, with the file's
@@ -269,9 +269,9 @@ The data folder path is UTF-8 internally and uses the wide Windows calls. The ho
 
 ### Self-test and checks
 
-`FORMAE_UI_SELFTEST=<folder>` (a Windows path) runs the UI without input. The menu opens by itself
+`DUCKTALES_UI_SELFTEST=<folder>` (a Windows path) runs the UI without input. The menu opens by itself
 at frame 120, visits each page and writes a PNG of each. The first-run screen writes its two
-screens, and `FORMAE_UI_SELFTEST_PICK=<file>` sets the file it picks.
+screens, and `DUCKTALES_UI_SELFTEST_PICK=<file>` sets the file it picks.
 `py -3 -I tests/window_smoke.py --build build/windows` uses this to check:
 
 - a hidden start and exit;
@@ -280,7 +280,7 @@ screens, and `FORMAE_UI_SELFTEST_PICK=<file>` sets the file it picks.
 - `[Game]` persistence;
 - both selftests.
 
-`formae_rom_test` (headless build) checks the ROM import code.
+`app_rom_test` (headless build) checks the ROM import code.
 
 ## Developer diagnostics
 

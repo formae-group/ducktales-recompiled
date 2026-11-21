@@ -1,6 +1,6 @@
 /*
- * formae_app.c - config.ini, live settings, the player's bindings and the
- * menu shortcut for the Formae application (formae_ui.h).
+ * app_settings.c - config.ini, live settings, the player's bindings and the
+ * menu shortcut for the application (app_ui.h).
  *
  * NESRecomp's window keeps its CycSettings private (cyc_sdl.c) and offers no
  * call to change them while it runs, so this file keeps its own copy of the
@@ -20,8 +20,8 @@
  *                               the next launch
  *
  * The host writes config.ini itself (on F11 and when it exits) from its stale
- * copy. Its save calls our [Game] writer (formae_ui_host_saved), and the next
- * frame, or formae_ui_finish after it exits, rewrites the file from this copy,
+ * copy. Its save calls our [Game] writer (app_ui_host_saved), and the next
+ * frame, or app_ui_finish after it exits, rewrites the file from this copy,
  * taking only the full-screen choice from the host's file (F11 is the one
  * setting it changes at run time without recomp-ui). Nothing of this runs
  * until the player changes something in the menu.
@@ -31,8 +31,8 @@
 #endif
 #include <SDL.h>
 
-#include "formae_app.h"
-#include "formae_ui.h"
+#include "app_settings.h"
+#include "app_ui.h"
 
 #include "cyc_input.h"
 #include "cyc_settings.h"
@@ -45,7 +45,7 @@
 static CycSettings s_cfg;         /* config.ini as the player wants it */
 static CycSettings s_launch;      /* as the window started with it */
 static char s_path[1024];
-static FormaeLaunch s_flags;
+static AppLaunch s_flags;
 static bool s_loaded;
 static bool s_unsaved;            /* changed since the last write */
 static bool s_changed;            /* changed since launch: reconcile after the host's saves */
@@ -76,7 +76,7 @@ static void ensure_loaded(void)
     s_launch.bind.shortcut_off |= 1u << CYC_SC_DISK;
 }
 
-void formae_ui_configure(const FormaeLaunch *launch)
+void app_ui_configure(const AppLaunch *launch)
 {
     if (launch) {
         s_flags = *launch;
@@ -89,7 +89,7 @@ void formae_ui_configure(const FormaeLaunch *launch)
 static void save_now(void)
 {
     if (!cyc_settings_save(&s_cfg, s_path, &GAME_WRITER))
-        fprintf(stderr, "[formae] cannot write the settings file %s\n", s_path);
+        fprintf(stderr, "[ducktales] cannot write the settings file %s\n", s_path);
     s_unsaved = false;
 }
 
@@ -104,7 +104,7 @@ static void reconcile(void)
     save_now();
 }
 
-void formae_ui_finish(void)
+void app_ui_finish(void)
 {
     if (s_unsaved || s_host_saved) {
         s_host_saved = true;
@@ -112,15 +112,15 @@ void formae_ui_finish(void)
     }
 }
 
-void formae_ui_host_saved(void) { s_host_saved = true; }
+void app_ui_host_saved(void) { s_host_saved = true; }
 
-void formae_settings_changed(void)
+void app_settings_changed(void)
 {
     s_unsaved = true;
     s_changed = true;
 }
 
-void formae_settings_commit(void)
+void app_settings_commit(void)
 {
     if (s_unsaved) save_now();
 }
@@ -148,7 +148,7 @@ static void apply_integer(SDL_Window *win)
     if (SDL_RenderGetIntegerScale(ren) != want) SDL_RenderSetIntegerScale(ren, want);
 }
 
-void formae_display_get(FormaeDisplay *out)
+void app_display_get(AppDisplay *out)
 {
     ensure_loaded();
     out->fullscreen = s_cfg.fullscreen;
@@ -158,7 +158,7 @@ void formae_display_get(FormaeDisplay *out)
     out->volume = s_cfg.volume;
 }
 
-void formae_display_set(SDL_Window *win, const FormaeDisplay *d)
+void app_display_set(SDL_Window *win, const AppDisplay *d)
 {
     ensure_loaded();
     bool mode = d->fullscreen != s_cfg.fullscreen, size = d->window_scale != s_cfg.window_scale;
@@ -167,7 +167,7 @@ void formae_display_set(SDL_Window *win, const FormaeDisplay *d)
     s_cfg.integer_scale = d->integer_scale != 0;
     s_cfg.vsync = d->vsync != 0;
     s_cfg.volume = d->volume < 0 ? 0 : d->volume > 100 ? 100 : d->volume;
-    formae_settings_changed();
+    app_settings_changed();
     if (!win) return;
     if (mode) {
         Uint32 fs = s_cfg.fullscreen == 1 ? SDL_WINDOW_FULLSCREEN_DESKTOP : s_cfg.fullscreen == 2 ? SDL_WINDOW_FULLSCREEN : 0;
@@ -188,22 +188,22 @@ void formae_display_set(SDL_Window *win, const FormaeDisplay *d)
     apply_integer(win);
 }
 
-bool formae_vsync_pending(void) { return s_cfg.vsync != s_launch.vsync; }
-bool formae_volume_pending(void) { return s_cfg.volume != s_launch.volume && s_launch.volume == 0; }
+bool app_vsync_pending(void) { return s_cfg.vsync != s_launch.vsync; }
+bool app_volume_pending(void) { return s_cfg.volume != s_launch.volume && s_launch.volume == 0; }
 
-void formae_ui_frame_begin(void)
+void app_ui_frame_begin(void)
 {
-    /* FORMAE_UI_SELFTEST (formae_ui.cpp): open the menu once, by itself. */
+    /* DUCKTALES_UI_SELFTEST (app_ui.cpp): open the menu once, by itself. */
     static long frames;
-    if (++frames == 120 && getenv("FORMAE_UI_SELFTEST")) {
+    if (++frames == 120 && getenv("DUCKTALES_UI_SELFTEST")) {
         SDL_Window *win = find_window();
-        if (win && formae_menu_run(win)) formae_menu_closed();
+        if (win && app_menu_run(win)) app_menu_closed();
     }
     if (s_host_saved) reconcile();
     if (s_changed && s_cfg.integer_scale != s_launch.integer_scale) apply_integer(find_window());
 }
 
-void formae_ui_audio(int16_t *samples, size_t count)
+void app_ui_audio(int16_t *samples, size_t count)
 {
     if (s_cfg.volume == s_launch.volume || s_launch.volume <= 0) return;
     const int num = s_cfg.volume, den = s_launch.volume;
@@ -250,7 +250,7 @@ static void eval(const CycBindings *b, CycInputState *st)
     cyc_input_eval(b, &f, st);
 }
 
-void formae_ui_input(uint8_t buttons[2])
+void app_ui_input(uint8_t buttons[2])
 {
     if (s_remap && !s_flags.scripted_input) {
         CycInputState st;
@@ -264,24 +264,24 @@ void formae_ui_input(uint8_t buttons[2])
     }
 }
 
-void formae_menu_closed(void) { s_hold = true; }
+void app_menu_closed(void) { s_hold = true; }
 
 static void update_remap(void)
 {
     s_remap = memcmp(s_cfg.bind.button, s_launch.bind.button, sizeof s_cfg.bind.button) != 0;
 }
 
-bool formae_is_menu_key(int scancode)
+bool app_is_menu_key(int scancode)
 {
     return scancode > 0 && scancode == s_cfg.bind.shortcut[CYC_SC_MENU].key;
 }
 
-bool formae_is_menu_button(int sdl_button)
+bool app_is_menu_button(int sdl_button)
 {
     return s_cfg.bind.shortcut[CYC_SC_MENU].pad == CYC_PAD_BUTTON(sdl_button);
 }
 
-void formae_ui_event(const void *event)
+void app_ui_event(const void *event)
 {
     const SDL_Event *ev = (const SDL_Event *)event;
     if (s_flags.hidden) return;
@@ -290,14 +290,14 @@ void formae_ui_event(const void *event)
         if (s_pad_count >= 0) open_pads();
         return;
     }
-    bool open = (ev->type == SDL_KEYDOWN && !ev->key.repeat && formae_is_menu_key(ev->key.keysym.scancode)) ||
-                (ev->type == SDL_CONTROLLERBUTTONDOWN && formae_is_menu_button(ev->cbutton.button));
+    bool open = (ev->type == SDL_KEYDOWN && !ev->key.repeat && app_is_menu_key(ev->key.keysym.scancode)) ||
+                (ev->type == SDL_CONTROLLERBUTTONDOWN && app_is_menu_button(ev->cbutton.button));
     if (!open) return;
     SDL_Window *win = ev->type == SDL_KEYDOWN ? SDL_GetWindowFromID(ev->key.windowID) : NULL;
     if (!win || !SDL_GetRenderer(win)) win = find_window();
-    if (win && formae_menu_run(win)) {
-        formae_settings_commit();
-        formae_menu_closed();
+    if (win && app_menu_run(win)) {
+        app_settings_commit();
+        app_menu_closed();
     }
 }
 
@@ -305,15 +305,15 @@ void formae_ui_event(const void *event)
 
 static CycBinding *row_binding(int row)
 {
-    return row == FORMAE_BIND_MENU ? &s_cfg.bind.shortcut[CYC_SC_MENU] : &s_cfg.bind.button[0][row];
+    return row == APP_BIND_MENU ? &s_cfg.bind.shortcut[CYC_SC_MENU] : &s_cfg.bind.button[0][row];
 }
 
-const char *formae_bind_label(int row)
+const char *app_bind_label(int row)
 {
-    return row == FORMAE_BIND_MENU ? "Menu" : cyc_button_label(row);
+    return row == APP_BIND_MENU ? "Menu" : cyc_button_label(row);
 }
 
-void formae_bind_text(int row, bool pad, char *out, size_t cap)
+void app_bind_text(int row, bool pad, char *out, size_t cap)
 {
     ensure_loaded();
     const CycBinding *b = row_binding(row);
@@ -327,11 +327,11 @@ void formae_bind_text(int row, bool pad, char *out, size_t cap)
     cyc_binding_hint(&only, out, cap);
 }
 
-const char *formae_bind_set(int row, bool pad, int value)
+const char *app_bind_set(int row, bool pad, int value)
 {
     static char why[160];
     ensure_loaded();
-    if (row < 0 || row >= FORMAE_BIND_COUNT) return "No such control.";
+    if (row < 0 || row >= APP_BIND_COUNT) return "No such control.";
     CycBinding *b = row_binding(row);
     int *slot = pad ? &b->pad : &b->key;
     if (value) {
@@ -347,7 +347,7 @@ const char *formae_bind_set(int row, bool pad, int value)
                 return why;
             }
         }
-        for (int other = 0; other < FORMAE_BIND_COUNT; other++) {
+        for (int other = 0; other < APP_BIND_COUNT; other++) {
             if (other == row) continue;
             CycBinding *ob = row_binding(other);
             int *oslot = pad ? &ob->pad : &ob->key;
@@ -356,11 +356,11 @@ const char *formae_bind_set(int row, bool pad, int value)
     }
     *slot = value;
     update_remap();
-    formae_settings_changed();
+    app_settings_changed();
     return NULL;
 }
 
-void formae_bind_defaults(void)
+void app_bind_defaults(void)
 {
     ensure_loaded();
     CycBindings def;
@@ -368,5 +368,5 @@ void formae_bind_defaults(void)
     memcpy(s_cfg.bind.button[0], def.button[0], sizeof def.button[0]);
     s_cfg.bind.shortcut[CYC_SC_MENU] = def.shortcut[CYC_SC_MENU];
     update_remap();
-    formae_settings_changed();
+    app_settings_changed();
 }

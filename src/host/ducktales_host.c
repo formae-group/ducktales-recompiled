@@ -7,8 +7,8 @@
  *   enhancements      game/enhancements.h: config.ini [Game] keys (window)
  *                     and one command-line option each (both); every one is
  *                     off by default
- *   Formae UI         window builds (DUCKTALES_WINDOW): the in-game menu,
- *                     live settings and bindings (ui/formae_ui.h) through the
+ *   Application UI    window builds (DUCKTALES_WINDOW): the in-game menu,
+ *                     live settings and bindings (ui/app_ui.h) through the
  *                     event, input, audio_mix and frame_begin callbacks
  *   diagnostics       DUCKTALES_DEV_DIAGNOSTICS builds only
  *                     (host/ducktales_diagnostics.h)
@@ -22,7 +22,7 @@
 #include "host/ducktales_diagnostics.h"
 #include "host/ducktales_host.h"
 #if DUCKTALES_WINDOW
-#include "ui/formae_ui.h"
+#include "ui/app_ui.h"
 #endif
 
 #include <stdlib.h>
@@ -89,7 +89,7 @@ static void save_settings(void *ctx, FILE *f)
     (void)ctx;
     ducktales_host_write_game_settings(f);
 #if DUCKTALES_WINDOW
-    formae_ui_host_saved();
+    app_ui_host_saved();
 #endif
 }
 
@@ -133,7 +133,7 @@ static void frame_begin(void *ctx)
 {
     (void)ctx;
 #if DUCKTALES_WINDOW
-    formae_ui_frame_begin();
+    app_ui_frame_begin();
 #endif
     dt_diag_frame_begin();
 }
@@ -154,20 +154,20 @@ static void tcp_setup(void *ctx)
 static void input(void *ctx, uint8_t buttons[2])
 {
     (void)ctx;
-    formae_ui_input(buttons);
+    app_ui_input(buttons);
 }
 
 static void event(void *ctx, const void *ev, int player)
 {
     (void)ctx;
     (void)player;
-    formae_ui_event(ev);
+    app_ui_event(ev);
 }
 
 static void audio_mix(void *ctx, int16_t *samples, size_t count)
 {
     (void)ctx;
-    formae_ui_audio(samples, count);
+    app_ui_audio(samples, count);
 }
 #endif
 

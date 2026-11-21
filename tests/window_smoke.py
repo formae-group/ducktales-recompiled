@@ -1,8 +1,8 @@
-"""Smoke test of the window build (Formae application, docs/architecture.md).
+"""Smoke test of the window build (application, docs/architecture.md).
 
 Runs build/windows/Release/ducktales.exe hidden (--hidden --exit-after N), so
 nothing appears on screen, with a scratch config.ini (--config) and data
-folder (FORMAE_DATA_DIR):
+folder (DUCKTALES_DATA_DIR):
 
   1. the game starts and exits cleanly with a ROM on the command line;
   2. without a ROM and nothing imported, a hidden start refuses with a message;
@@ -11,7 +11,7 @@ folder (FORMAE_DATA_DIR):
      into the data folder;
   4. without a ROM, the imported copy starts the game directly;
   5. enhancement settings in config.ini [Game] survive a run;
-  6. FORMAE_UI_SELFTEST: the in-game menu opens by itself at frame 120, walks
+  6. DUCKTALES_UI_SELFTEST: the in-game menu opens by itself at frame 120, walks
      its pages and closes, and the first-run screen shows a refused ROM; each
      state is written as a PNG (into --shots, default a temporary folder) and
      the game still reaches its exit frame.
@@ -52,8 +52,8 @@ def main():
     with tempfile.TemporaryDirectory() as t:
         tmp = Path(t)
         data = tmp / 'data'
-        env = dict(os.environ, FORMAE_DATA_DIR=str(data))
-        env.pop('FORMAE_UI_SELFTEST', None)
+        env = dict(os.environ, DUCKTALES_DATA_DIR=str(data))
+        env.pop('DUCKTALES_UI_SELFTEST', None)
 
         def run(*argv, extra_env=None, timeout=180):
             e = dict(env, **(extra_env or {}))
@@ -98,9 +98,9 @@ def main():
         for old in shots.glob('*.png'):
             old.unlink()
         code, out = run(args.rom, '--hidden', '--exit-after', '400', '--config', str(tmp / 'e.ini'),
-                        extra_env={'FORMAE_UI_SELFTEST': str(shots)})
+                        extra_env={'DUCKTALES_UI_SELFTEST': str(shots)})
         menu = sorted(p.name for p in shots.glob('menu_*.png'))
-        check(code == 0 and len(menu) == 5 and '[formae] menu closed' in out,
+        check(code == 0 and len(menu) == 5 and '[ducktales] menu closed' in out,
               f'the menu opens, draws its 5 pages ({", ".join(menu)}) and closes; the run still ends', out)
         empty = tmp / 'empty-data'
         bad = tmp / 'bad.nes'
@@ -111,8 +111,8 @@ def main():
             f.seek(40000)
             f.write(bytes([b[0] ^ 1]))
         code, out = run('--config', str(tmp / 'f.ini'), '--exit-after', '120',
-                        extra_env={'FORMAE_UI_SELFTEST': str(shots), 'FORMAE_UI_SELFTEST_PICK': str(bad),
-                                   'FORMAE_DATA_DIR': str(empty)})
+                        extra_env={'DUCKTALES_UI_SELFTEST': str(shots), 'DUCKTALES_UI_SELFTEST_PICK': str(bad),
+                                   'DUCKTALES_DATA_DIR': str(empty)})
         first = sorted(p.name for p in shots.glob('first_run_*.png'))
         check(code == 0 and len(first) == 2 and 'not an unmodified' in out and not (empty / 'DuckTales (USA).nes').exists(),
               f'the first-run screen draws and refuses a modified ROM ({", ".join(first)})', out)

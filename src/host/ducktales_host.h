@@ -1,6 +1,6 @@
 /*
  * ducktales_host.h - what the systems layer (ducktales_host.c) shares with
- * the Formae UI and the program entry: the enhancements as config.ini keeps
+ * the application UI and the program entry: the enhancements as config.ini keeps
  * them, apart from the live values (game/enhancements.h), which a
  * command-line option may override for one run.
  */

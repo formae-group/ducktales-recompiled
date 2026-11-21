@@ -1,24 +1,24 @@
 /*
- * ducktales_main.c - the program entry of the window build (Formae).
+ * ducktales_main.c - the program entry of the window build.
  *
  * NESRecomp's own main (runner/cyc/cyc_host.c) is compiled as
  * ducktales_host_main for this target (CMakeLists.txt), so this runs first:
  *
  *   1. A ROM on the command line (any argument that is an iNES file) is used
  *      as given: developer and test runs behave exactly as before.
- *   2. Otherwise the copy imported on an earlier run (ui/formae_rom.h) is
+ *   2. Otherwise the copy imported on an earlier run (ui/app_rom.h) is
  *      appended, after checking its SHA-256 again, and the game starts
  *      directly.
- *   3. Otherwise the Formae first-run screen asks for the ROM, verifies it,
+ *   3. Otherwise the first-run screen asks for the ROM, verifies it,
  *      imports it and starts the game with it.
  *
  * --import-rom FILE verifies and imports without a window (exit 0 or 1), for
- * scripts and tests; FORMAE_DATA_DIR overrides the data folder. Everything
- * else goes to NESRecomp's host untouched, and the Formae UI is told which
- * window flags were given (ui/formae_ui.h).
+ * scripts and tests; DUCKTALES_DATA_DIR overrides the data folder. Everything
+ * else goes to NESRecomp's host untouched, and the application UI is told which
+ * window flags were given (ui/app_ui.h).
  */
-#include "ui/formae_rom.h"
-#include "ui/formae_ui.h"
+#include "ui/app_rom.h"
+#include "ui/app_ui.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -80,7 +80,7 @@ int main(int argc, char **argv)
     char **args = (char **)calloc((size_t)argc + 2, sizeof *args);
     if (!args) return 2;
     int n = 0;
-    FormaeLaunch launch = { 0 };
+    AppLaunch launch = { 0 };
     const char *import = NULL;
     int rom_given = 0, headless = 0;
     for (int i = 0; i < argc; i++) {
@@ -99,26 +99,26 @@ int main(int argc, char **argv)
 
     if (import) {
         char stored[1100], actual[65] = "";
-        FormaeRomStatus s = formae_rom_import(import, DUCKTALES_ROM_SHA256, stored, sizeof stored, actual);
-        if (s == FORMAE_ROM_OK) {
+        AppRomStatus s = app_rom_import(import, DUCKTALES_ROM_SHA256, stored, sizeof stored, actual);
+        if (s == APP_ROM_OK) {
             printf("Imported %s\n  to %s\n", import, stored);
             return 0;
         }
-        fprintf(stderr, "%s: %s\n", import, formae_rom_status_text(s));
-        if (s == FORMAE_ROM_MISMATCH) fprintf(stderr, "  SHA-256 %s\n  expected %s\n", actual, DUCKTALES_ROM_SHA256);
+        fprintf(stderr, "%s: %s\n", import, app_rom_status_text(s));
+        if (s == APP_ROM_MISMATCH) fprintf(stderr, "  SHA-256 %s\n  expected %s\n", actual, DUCKTALES_ROM_SHA256);
         return 1;
     }
 
     static char rom[1100], rom_for_host[1100];
     if (!rom_given && !headless) {
-        if (formae_rom_stored_valid(DUCKTALES_ROM_SHA256, rom, sizeof rom)) {
+        if (app_rom_stored_valid(DUCKTALES_ROM_SHA256, rom, sizeof rom)) {
             /* the imported copy */
         } else if (launch.hidden) {
             fprintf(stderr, "No DuckTales (USA) ROM is set up yet. Start the game without --hidden to choose it, "
                             "pass the ROM's path, or use --import-rom FILE.\n");
             return 2;
         } else {
-            int r = formae_ui_first_run(DUCKTALES_ROM_SHA256, rom, sizeof rom);
+            int r = app_ui_first_run(DUCKTALES_ROM_SHA256, rom, sizeof rom);
             if (r == 1) return 0;
             if (r != 0) {
                 fprintf(stderr, "The first-run screen could not open a window. Pass the ROM's path, or use "
@@ -130,9 +130,9 @@ int main(int argc, char **argv)
         args[n++] = rom_for_host;
     }
     args[n] = NULL;
-    formae_ui_configure(&launch);
+    app_ui_configure(&launch);
     int result = ducktales_host_main(n, args);
-    formae_ui_finish();
+    app_ui_finish();
     free(args);
     return result;
 }

@@ -28,7 +28,7 @@ set(_ducktales_extras
     "${CMAKE_SOURCE_DIR}/src/game/ducktales_jump.c"
     "${CMAKE_SOURCE_DIR}/src/game/enhancements.c"
     "${CMAKE_SOURCE_DIR}/src/host/ducktales_host.c")
-# The Formae application (docs/architecture.md "Formae application"): the
+# The application (docs/architecture.md "Application"): the
 # program entry with the first-run ROM import, the in-game menu and live
 # settings, drawn with Dear ImGui (external/imgui) over the host's
 # SDL_Renderer. Window builds only; the headless host never links it.
@@ -39,9 +39,9 @@ if(NOT DUCKTALES_HEADLESS)
     endif()
     list(APPEND _ducktales_extras
         "${CMAKE_SOURCE_DIR}/src/host/ducktales_main.c"
-        "${CMAKE_SOURCE_DIR}/src/ui/formae_app.c"
-        "${CMAKE_SOURCE_DIR}/src/ui/formae_rom.c"
-        "${CMAKE_SOURCE_DIR}/src/ui/formae_ui.cpp"
+        "${CMAKE_SOURCE_DIR}/src/ui/app_settings.c"
+        "${CMAKE_SOURCE_DIR}/src/ui/app_rom.c"
+        "${CMAKE_SOURCE_DIR}/src/ui/app_ui.cpp"
         "${IMGUI_ROOT}/imgui.cpp"
         "${IMGUI_ROOT}/imgui_draw.cpp"
         "${IMGUI_ROOT}/imgui_tables.cpp"
@@ -66,7 +66,7 @@ if(NOT DUCKTALES_HEADLESS)
     target_compile_features(ducktales PRIVATE cxx_std_17)
     target_compile_definitions(ducktales PRIVATE DUCKTALES_WINDOW=1
         "DUCKTALES_ROM_SHA256=\"${_ducktales_rom_sha256}\"" IMGUI_DISABLE_OBSOLETE_FUNCTIONS)
-    # The Formae entry (src/host/ducktales_main.c) runs before NESRecomp's
+    # The program entry (src/host/ducktales_main.c) runs before NESRecomp's
     # own main, which is compiled under another name for this target only;
     # NESRecomp's sources stay unmodified.
     set_property(SOURCE "${NESRECOMP_ROOT}/runner/cyc/cyc_host.c" APPEND PROPERTY COMPILE_DEFINITIONS
@@ -86,11 +86,11 @@ if(DUCKTALES_HEADLESS)
         "${CMAKE_SOURCE_DIR}/src/game/ducktales_state.c")
     target_include_directories(ducktales_state_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
     # Unit test of the ROM identity check and import (no window).
-    add_executable(formae_rom_test
-        "${CMAKE_SOURCE_DIR}/tests/formae_rom_test.c"
-        "${CMAKE_SOURCE_DIR}/src/ui/formae_rom.c")
-    target_include_directories(formae_rom_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
-    target_compile_definitions(formae_rom_test PRIVATE _CRT_SECURE_NO_WARNINGS)
+    add_executable(app_rom_test
+        "${CMAKE_SOURCE_DIR}/tests/app_rom_test.c"
+        "${CMAKE_SOURCE_DIR}/src/ui/app_rom.c")
+    target_include_directories(app_rom_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
+    target_compile_definitions(app_rom_test PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
 
 if(DUCKTALES_ORACLE)
