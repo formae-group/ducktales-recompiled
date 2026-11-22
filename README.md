@@ -13,8 +13,10 @@ host run around it. The repository contains no game data.
   up; the console's 8-sprites-per-line and 64-sprite limits only apply to the machine underneath. On by
   default; switch it off for the original look.
 - **Settings menu.** Display mode, window size, integer scaling, pixel filter, pixel aspect,
-  overscan crop, HUD split line, frame pacing, volume, sprite flicker and key and controller
-  bindings, saved to `config.ini`.
+  overscan crop, HUD split line, frame pacing, volume, sprite flicker, No slowdown and key and
+  controller bindings, saved to `config.ini`.
+- **No slowdown.** The game gets extra CPU time per frame, so the console's lag frames disappear
+  without changing the game's logic. On by default.
 - **Steady presentation.** Direct3D 11, DPI aware, and frame pacing chosen for the display's
   refresh rate ([docs/presentation.md](docs/presentation.md)).
 - **Optional enhancements.** Jump height, no damage, infinite time, infinite lives and starting

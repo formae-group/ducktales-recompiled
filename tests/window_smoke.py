@@ -10,7 +10,8 @@ folder (DUCKTALES_DATA_DIR):
      copy) and a non-ROM file with a clear message, and imports the real one
      into the data folder;
   4. without a ROM, the imported copy starts the game directly;
-  5. enhancement and sprite settings in config.ini [Game] survive a run;
+  5. enhancement, sprite and NoSlowdown settings in config.ini [Game] survive a
+     run (step 1 also checks that No slowdown is on by default);
   6. presentation: the [Game] keys survive a run, FramePacing sets the host's
      [Display] VSync before it starts, and --present-out shows the picture
      at the size the overscan crop, the pixel aspect and the window scale
@@ -67,6 +68,9 @@ def main():
 
         code, out = run(args.rom, '--hidden', '--exit-after', '300', '--config', str(tmp / 'a.ini'))
         check(code == 0, 'starts with a ROM argument and exits after 300 frames', out)
+        check('[ducktales] No slowdown: 128 extra scanlines per frame' in out
+              and 'NoSlowdown = on' in (tmp / 'a.ini').read_text(),
+              'No slowdown is on by default (128 extra scanlines) and saved as NoSlowdown = on', out)
 
         code, out = run('--hidden', '--exit-after', '60', '--config', str(tmp / 'b.ini'))
         check(code == 2 and 'No DuckTales (USA) ROM is set up yet' in out, 'hidden start without a ROM refuses clearly', out)
@@ -92,11 +96,12 @@ def main():
         check(code == 0, 'without a ROM argument the imported copy starts the game', out)
 
         ini = tmp / 'd.ini'
-        ini.write_text('[Game]\nNoDamage = on\nStartLives = 5\nJumpScale = 150\nNoSpriteFlicker = off\n')
+        ini.write_text('[Game]\nNoDamage = on\nStartLives = 5\nJumpScale = 150\nNoSpriteFlicker = off\nNoSlowdown = off\n')
         code, out = run(args.rom, '--hidden', '--exit-after', '120', '--config', str(ini))
         text = ini.read_text()
         check(code == 0 and 'NoDamage = on' in text and 'StartLives = 5' in text and 'JumpScale = 150' in text
-              and 'InfiniteLives = off' in text and 'NoSpriteFlicker = off' in text,
+              and 'InfiniteLives = off' in text and 'NoSpriteFlicker = off' in text
+              and 'NoSlowdown = off' in text and 'No slowdown:' not in out,
               'enhancement and sprite settings survive a run in config.ini [Game]', text)
 
         def png_size(path):

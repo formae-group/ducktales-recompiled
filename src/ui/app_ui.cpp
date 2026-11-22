@@ -395,6 +395,11 @@ void page_settings(Menu &m, Layout &L, const Fonts &F, SDL_Window *win)
         ducktales_host_set_saved_sprites(dt_sprites_get());
         app_settings_changed();
     }
+    bool smooth = ducktales_host_no_slowdown();
+    if (row(L, F, "No slowdown", smooth ? "On" : "Off") != ROW_NONE) {
+        ducktales_host_set_no_slowdown(!smooth);
+        app_settings_changed();
+    }
 }
 
 void page_controls(Menu &m, Layout &L, const Fonts &F)

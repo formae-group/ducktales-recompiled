@@ -64,6 +64,13 @@ frame 1230 equals the headless presented picture with the feature on and the mac
 off. With the feature linked and on by default, `tests/verify_routes.py --build build/headless` passes all
 twelve routes at all four alignments with 100.0% native cycles (2026-11-22).
 
+## Native runtime
+
+`tests/native_routes.py` holds the native-runtime prototype (`ducktales_native`, faithful lag mode)
+to the recompiled build: CPU RAM, cycles and registers equal on every frame of every route above
+(82,621 frames). `tests/lag_modes.py` measures lag on the full_* routes and compares the
+no-slowdown mode per logic step. Details: [native-runtime.md](native-runtime.md).
+
 ## Not verified
 
 - A complete playthrough of any land on Easy or Difficult, secret treasures, the Transylvania return, the

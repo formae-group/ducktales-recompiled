@@ -10,6 +10,8 @@
  *   sprites           host/ducktales_sprites.h: the presented picture without
  *                     sprite flicker or dropout ([Game] NoSpriteFlicker,
  *                     --no-sprite-flicker); on by default, presentation only
+ *   No slowdown       config.ini [Game] NoSlowdown (window, default on):
+ *                     the cycle host's extra scanlines (ducktales_host.h)
  *   Application UI    window builds (DUCKTALES_WINDOW): the in-game menu,
  *                     live settings and bindings (ui/app_ui.h) through the
  *                     event, input, audio_mix and frame_begin callbacks
@@ -24,12 +26,14 @@
  * A command-line value applies to that run only; config.ini keeps what the
  * player saved (ducktales_host_saved_value).
  */
+#include "cyc_core.h"
 #include "cyc_host_extras.h"
 
 #include "game/enhancements.h"
 #include "host/ducktales_diagnostics.h"
 #include "host/ducktales_host.h"
 #include "host/ducktales_sprites.h"
+#include "host/ducktales_ramhash.h"
 #if DUCKTALES_WINDOW
 #include "ui/app_present.h"
 #include "ui/app_ui.h"
@@ -41,6 +45,20 @@
 static int s_saved[DT_ENH_COUNT];
 static bool s_saved_ready;
 static bool s_saved_sprites = DT_SPRITES_DEFAULT;
+#if DUCKTALES_WINDOW
+static bool s_no_slowdown = true;
+#else
+static bool s_no_slowdown = false;
+#endif
+
+bool ducktales_host_no_slowdown(void) { return s_no_slowdown; }
+
+void ducktales_host_set_no_slowdown(bool on)
+{
+    s_no_slowdown = on;
+    if (!cyc_set_extra_scanlines(on ? DT_NO_SLOWDOWN_LINES : 0))
+        fprintf(stderr, "[ducktales] No slowdown: the cycle host refused %u extra scanlines\n", DT_NO_SLOWDOWN_LINES);
+}
 
 static void saved_init(void)
 {
@@ -79,6 +97,14 @@ void ducktales_host_load_game_setting(const char *key, const char *value)
         dt_sprites_set(on);
         return;
     }
+    if (!strcmp(key, "NoSlowdown")) {
+        static const char *ON[] = { "on", "1", "true", "yes" }, *OFF[] = { "off", "0", "false", "no" };
+        for (int i = 0; i < 4; i++) {
+            if (!strcmp(value, ON[i])) s_no_slowdown = true;
+            if (!strcmp(value, OFF[i])) s_no_slowdown = false;
+        }
+        return;
+    }
     for (int e = 0; e < DT_ENH_COUNT; e++) {
         const DtEnhInfo *in = dt_enh_info((DtEnh)e);
         if (strcmp(key, in->key)) continue;
@@ -106,6 +132,7 @@ void ducktales_host_write_game_settings(FILE *f)
         fprintf(f, "%s = %s\n", dt_enh_info((DtEnh)e)->key, dt_enh_format((DtEnh)e, s_saved[e], v, sizeof v));
     }
     fprintf(f, "%s = %s\n", DT_SPRITES_KEY, s_saved_sprites ? "on" : "off");
+    fprintf(f, "NoSlowdown = %s\n", s_no_slowdown ? "on" : "off");
 #if DUCKTALES_WINDOW
     app_present_write(f);
 #endif
@@ -127,7 +154,7 @@ static void save_settings(void *ctx, FILE *f)
 }
 
 /* One option per enhancement, the sprites one, then the developer ones. */
-static const CycHostOption DIAG_OPTIONS[] = { DT_DIAG_OPTIONS { NULL, false, NULL } };
+static const CycHostOption DIAG_OPTIONS[] = { DT_RAMHASH_OPTIONS DT_DIAG_OPTIONS { NULL, false, NULL } };
 static CycHostOption s_options[DT_ENH_COUNT + 1 + sizeof DIAG_OPTIONS / sizeof DIAG_OPTIONS[0]];
 static char s_option_help[DT_ENH_COUNT][160];
 
@@ -161,6 +188,8 @@ static bool option(void *ctx, const char *name, const char *value)
         dt_sprites_set(on);
         return true;
     }
+    if (!strcmp(name, "--ram-hash-out")) return dt_ramhash_open(value);
+    if (!strcmp(name, "--lag-log")) return dt_laglog_open(value);
     return dt_diag_option(name, value);
 }
 
@@ -168,6 +197,12 @@ static void power_on(void *ctx)
 {
     (void)ctx;
     dt_sprites_forget();
+    if (s_no_slowdown) {
+        ducktales_host_set_no_slowdown(true);
+        printf("[ducktales] No slowdown: %u extra scanlines per frame\n", cyc_extra_scanlines());
+        fflush(stdout);
+    }
+    dt_ramhash_power_on();
     dt_diag_power_on();
 }
 
@@ -184,6 +219,7 @@ static void frame_end(void *ctx)
 {
     (void)ctx;
     dt_sprites_frame_end();
+    dt_ramhash_frame_end();
     dt_diag_frame_end();
 }
 

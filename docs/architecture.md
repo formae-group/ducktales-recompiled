@@ -265,6 +265,9 @@ src/ui/app_ui.cpp        Dear ImGui: the first-run screen and the menu
     at start.
   - Pixels, pixel aspect, overscan crop and the HUD split line act on the picture the window
     shows (`CycHostExtras.present`), never on the machine: [presentation.md](presentation.md).
+  - `[Game] NoSlowdown` (the No slowdown row, on by default) sets the cycle host's extra
+    scanlines between frames (`ducktales_host_set_no_slowdown`); see
+    [native-runtime.md](native-runtime.md#the-same-thing-on-the-cycle-host-without-changing-nesrecomp).
 - The host also writes `config.ini`, on F11 and at exit, from its own stale copy. Its save calls
   the `[Game]` writer (`app_ui_host_saved`). On the next frame, or after the host exits, the
   file is written again from the menu's copy, keeping only the host's fullscreen value. This runs
