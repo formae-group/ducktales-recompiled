@@ -7,6 +7,8 @@
  *   enhancements      game/enhancements.h: config.ini [Game] keys (window)
  *                     and one command-line option each (both); every one is
  *                     off by default
+ *   No slowdown       config.ini [Game] NoSlowdown (window, default on):
+ *                     the cycle host's extra scanlines (ducktales_host.h)
  *   Application UI    window builds (DUCKTALES_WINDOW): the in-game menu,
  *                     live settings and bindings (ui/app_ui.h) through the
  *                     event, input, audio_mix and frame_begin callbacks
@@ -16,6 +18,7 @@
  * A command-line value applies to that run only; config.ini keeps what the
  * player saved (ducktales_host_saved_value).
  */
+#include "cyc_core.h"
 #include "cyc_host_extras.h"
 
 #include "game/enhancements.h"
@@ -31,6 +34,20 @@
 
 static int s_saved[DT_ENH_COUNT];
 static bool s_saved_ready;
+#if DUCKTALES_WINDOW
+static bool s_no_slowdown = true;
+#else
+static bool s_no_slowdown = false;
+#endif
+
+bool ducktales_host_no_slowdown(void) { return s_no_slowdown; }
+
+void ducktales_host_set_no_slowdown(bool on)
+{
+    s_no_slowdown = on;
+    if (!cyc_set_extra_scanlines(on ? DT_NO_SLOWDOWN_LINES : 0))
+        fprintf(stderr, "[ducktales] No slowdown: the cycle host refused %u extra scanlines\n", DT_NO_SLOWDOWN_LINES);
+}
 
 static void saved_init(void)
 {
@@ -54,6 +71,14 @@ void ducktales_host_set_saved_value(DtEnh e, int value)
 void ducktales_host_load_game_setting(const char *key, const char *value)
 {
     saved_init();
+    if (!strcmp(key, "NoSlowdown")) {
+        static const char *ON[] = { "on", "1", "true", "yes" }, *OFF[] = { "off", "0", "false", "no" };
+        for (int i = 0; i < 4; i++) {
+            if (!strcmp(value, ON[i])) s_no_slowdown = true;
+            if (!strcmp(value, OFF[i])) s_no_slowdown = false;
+        }
+        return;
+    }
     for (int e = 0; e < DT_ENH_COUNT; e++) {
         const DtEnhInfo *in = dt_enh_info((DtEnh)e);
         if (strcmp(key, in->key)) continue;
@@ -77,6 +102,7 @@ void ducktales_host_write_game_settings(FILE *f)
         char v[16];
         fprintf(f, "%s = %s\n", dt_enh_info((DtEnh)e)->key, dt_enh_format((DtEnh)e, s_saved[e], v, sizeof v));
     }
+    fprintf(f, "NoSlowdown = %s\n", s_no_slowdown ? "on" : "off");
 }
 
 static void load_setting(void *ctx, const char *key, const char *value)
@@ -122,12 +148,18 @@ static bool option(void *ctx, const char *name, const char *value)
         return dt_enh_parse((DtEnh)e, value, &v) && dt_enh_set((DtEnh)e, v);
     }
     if (!strcmp(name, "--ram-hash-out")) return dt_ramhash_open(value);
+    if (!strcmp(name, "--lag-log")) return dt_laglog_open(value);
     return dt_diag_option(name, value);
 }
 
 static void power_on(void *ctx)
 {
     (void)ctx;
+    if (s_no_slowdown) {
+        ducktales_host_set_no_slowdown(true);
+        printf("[ducktales] No slowdown: %u extra scanlines per frame\n", cyc_extra_scanlines());
+        fflush(stdout);
+    }
     dt_ramhash_power_on();
     dt_diag_power_on();
 }

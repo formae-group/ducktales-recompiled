@@ -375,6 +375,11 @@ void page_settings(Menu &m, Layout &L, const Fonts &F, SDL_Window *win)
     if (r == ROW_DEC) d.volume = d.volume >= 5 ? d.volume - 5 : 0;
     if (r == ROW_INC || r == ROW_ACTIVATE) d.volume = d.volume <= 95 ? d.volume + 5 : 100;
     if (std::memcmp(&d, &was, sizeof d)) app_display_set(win, &d);
+    bool smooth = ducktales_host_no_slowdown();
+    if (row(L, F, "No slowdown", smooth ? "On" : "Off") != ROW_NONE) {
+        ducktales_host_set_no_slowdown(!smooth);
+        app_settings_changed();
+    }
 }
 
 void page_controls(Menu &m, Layout &L, const Fonts &F)
