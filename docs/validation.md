@@ -77,6 +77,26 @@ from the imported copy hidden for 300 frames, writes `config.ini` next to itself
 self-test draws all 14 pages. `tests/window_smoke.py --build build/windows` also passes all 16 checks
 on the `/MT` build.
 
+## Menu on formae-ui (automated)
+
+The menu moved to formae-ui 0.1.0 (`external/formae-ui`) with no visible change (2026-11-22). The
+window build of main (`64ef62e`'s tree) and of this change were each configured with `git describe`
+unavailable, so the About page shows the same version (`unknown`) and date in both, and run with
+`DUCKTALES_UI_SELFTEST` at fixed paths (the menu run and the first-run run with a modified ROM).
+Decoded RGB of the 16 PNGs, compared pixel by pixel over 5 runs before and 6 runs after:
+
+- 15 PNGs are identical in every run of both builds: the 14 menu pages other than the Reset
+  confirmation (the 768x720 window, 1280x720 and both 3840x2160 off-screen pages included) and both
+  first-run screens.
+- `menu_13_reset` varies from run to run in the unmodified build as well (up to 6 levels per
+  channel, uniformly over the picture): the shot is taken during ImGui's modal dim fade-in, whose
+  progress depends on frame timing. One run before and two runs after are identical to each other on
+  all 16 PNGs.
+
+With the change, `tests/window_smoke.py --build build/windows` passes all 16 checks and
+`tests/package_test.py --build build/windows` all 12; the package now also carries
+`licenses/formae-ui-LICENSE.txt`.
+
 ## Native runtime
 
 `tests/native_routes.py` holds the native-runtime prototype (`ducktales_native`, faithful lag mode)

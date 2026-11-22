@@ -39,7 +39,8 @@ ROOT = Path(__file__).resolve().parents[1]
 ROM_SHA256 = '97d472f7b2c1088448d1644155b2650a546bad887b3cba571e16d7986824c169'
 FILES = ['ducktales.exe', 'SDL2.dll', 'README.txt', 'LICENSE.txt',
          'licenses/NESRecomp-LICENSE.txt', 'licenses/NESRecomp-PERMISSIONS.md', 'licenses/emu2413-LICENSE.txt',
-         'licenses/SDL2-COPYING.txt', 'licenses/SDL2-README-SDL.txt', 'licenses/imgui-LICENSE.txt']
+         'licenses/SDL2-COPYING.txt', 'licenses/SDL2-README-SDL.txt', 'licenses/imgui-LICENSE.txt',
+         'licenses/formae-ui-LICENSE.txt']
 RUNTIME_DLL = re.compile(r'^(vcruntime|msvcp|concrt|vccorlib|ucrtbase|api-ms-win-crt-)', re.I)
 
 

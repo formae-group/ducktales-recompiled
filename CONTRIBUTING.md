@@ -15,6 +15,9 @@ cmake -S . -B build/headless-dev -G "Visual Studio 17 2022" -A x64 -DDUCKTALES_H
 cmake --build build/<tree> --config Release --parallel
 ```
 
+A clone made before formae-ui became a submodule gets it with
+`git submodule update --init external/formae-ui`.
+
 `build/windows` is the game as players run it, `build/headless` adds the TriCNES reference machine for
 differential tests, and `build/headless-dev` adds the typed state log and scheduled state changes the
 enhancement and sprite tests use.
@@ -29,6 +32,10 @@ enhancement and sprite tests use.
 - **Original behaviour by default.** Every gameplay change is an enhancement that is off by default.
   When it is off, the original code runs unchanged. Presentation options may change what the window
   shows, but never the machine state, the machine picture or any verified hash.
+- **The menu library is shared.** `external/formae-ui` is a pinned submodule, used by Formae's other
+  ports too. `app_ui.cpp` keeps only DuckTales' pages, settings and texts; a change to the look,
+  a widget or the navigation goes to [formae-ui](https://gitlab.com/formae/formae-ui) first, then the
+  submodule is moved to its new tag.
 - **Windows only.** The supported target is Windows x64 with Visual Studio 2022.
 
 ## Where code goes
@@ -38,6 +45,7 @@ enhancement and sprite tests use.
 | `src/game/` | Revision-specific symbols, typed game state, enhancement sites and hooks (C) |
 | `src/host/` | Host integration: options, sprite compositor, diagnostics, entry point (C) |
 | `src/ui/` | Menu, ROM import, settings and presentation; `app_ui.cpp` is the only C++ file |
+| `external/formae-ui` | The menu library (look, shell, widgets, About and first-run layouts); its own repository |
 | `src/native/` | Native runtime prototype (`DUCKTALES_NATIVE`) |
 | `config/` | Recompiler configuration (`game.toml`) and the recorded entry points (`ducktales.seeds`) |
 | `tests/` | Differential, presentation, enhancement and window tests; `tests/routes/` holds input schedules |
