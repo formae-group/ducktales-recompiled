@@ -120,7 +120,7 @@ void ducktales_host_load_game_setting(const char *key, const char *value)
         return;
     }
 #if DUCKTALES_WINDOW
-    app_present_load(key, value);
+    if (!app_present_load(key, value)) app_ui_load_game_setting(key, value);
 #endif
 }
 
@@ -135,6 +135,7 @@ void ducktales_host_write_game_settings(FILE *f)
     fprintf(f, "NoSlowdown = %s\n", s_no_slowdown ? "on" : "off");
 #if DUCKTALES_WINDOW
     app_present_write(f);
+    app_ui_write_game_settings(f);
 #endif
 }
 
