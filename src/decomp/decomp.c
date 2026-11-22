@@ -119,10 +119,14 @@ static void run_c(const DecompRoutine *rt, const CycModRegs *in, Regs *out)
 }
 
 /* Offsets in page 1 below entry S + 3 are dead once the routine has returned
- * (its return address included). */
+ * (its return address included), down to the stack's floor: below it page 1
+ * holds data (the master palette $0100-$011F, the consumed-record bits
+ * $0120-$013F and the HUD time group $0140-$015F). */
+#define STACK_FLOOR 0x60
+
 static bool live(uint16_t a, uint8_t entry_s)
 {
-    return (a & 0xFF00) != 0x0100 || (a & 0xFF) >= entry_s + 3u;
+    return (a & 0xFF00) != 0x0100 || (a & 0xFF) < STACK_FLOOR || (a & 0xFF) >= entry_s + 3u;
 }
 
 /* The original routine alone on the machine's state: its RAM into s_orig,
