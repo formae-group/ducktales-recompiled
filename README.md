@@ -118,7 +118,9 @@ py -3 -I tests/verify_routes.py --build build/headless
 
 Each input route in `tests/routes/` runs recompiled, interpreter-only and on the TriCNES
 reference machine at four CPU/PPU alignments, and the runs must agree on every frame. Details are in
-[docs/validation.md](docs/validation.md).
+[docs/validation.md](docs/validation.md). The oracle's results are cached in
+`build/verify-cache/` and reused while the oracle, the ROM and the route are unchanged; `--no-cache` runs
+it again.
 
 `py -3 -I tests/sprites_test.py --build build/headless --dev-build build/headless-dev` checks the sprite
 presentation against the machine's picture.
