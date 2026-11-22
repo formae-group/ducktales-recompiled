@@ -2,7 +2,9 @@
  * ducktales_host.c - the port's systems layer on the NESRecomp cycle host
  * (cyc_host_extras.h). Both the window and the headless host use it; NESRecomp
  * links exactly one cyc_host_extras(), so everything the port adds to the
- * host goes through this file.
+ * host goes through this file. The settings themselves (config.ini [Game],
+ * the enhancement and sprite options) are in ducktales_settings.c, which the
+ * native player shares.
  *
  *   enhancements      game/enhancements.h: config.ini [Game] keys (window)
  *                     and one command-line option each (both); every one is
@@ -45,101 +47,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-static int s_saved[DT_ENH_COUNT];
-static bool s_saved_ready;
-static bool s_saved_sprites = DT_SPRITES_DEFAULT;
-#if DUCKTALES_WINDOW
-static bool s_no_slowdown = true;
-#else
-static bool s_no_slowdown = false;
-#endif
-
-bool ducktales_host_no_slowdown(void) { return s_no_slowdown; }
-
-void ducktales_host_set_no_slowdown(bool on)
+/* No slowdown on this runtime: NESRecomp's extra scanlines (ducktales_host.h). */
+void ducktales_host_apply_no_slowdown(bool on)
 {
-    s_no_slowdown = on;
     if (!cyc_set_extra_scanlines(on ? DT_NO_SLOWDOWN_LINES : 0))
         fprintf(stderr, "[ducktales] No slowdown: the cycle host refused %u extra scanlines\n", DT_NO_SLOWDOWN_LINES);
-}
-
-static void saved_init(void)
-{
-    if (s_saved_ready) return;
-    for (int e = 0; e < DT_ENH_COUNT; e++) s_saved[e] = dt_enh_info((DtEnh)e)->stock;
-    s_saved_ready = true;
-}
-
-int ducktales_host_saved_value(DtEnh e)
-{
-    saved_init();
-    return s_saved[e];
-}
-
-void ducktales_host_set_saved_value(DtEnh e, int value)
-{
-    saved_init();
-    s_saved[e] = value;
-}
-
-bool ducktales_host_saved_sprites(void) { return s_saved_sprites; }
-
-void ducktales_host_set_saved_sprites(bool on) { s_saved_sprites = on; }
-
-void ducktales_host_load_game_setting(const char *key, const char *value)
-{
-    saved_init();
-    if (!strcmp(key, DT_SPRITES_KEY)) {
-        bool on;
-        if (!dt_sprites_parse(value, &on)) {
-            fprintf(stderr, "[ducktales] config.ini [Game] %s = %s: expected on or off; using %s\n", key, value,
-                    DT_SPRITES_DEFAULT ? "on" : "off");
-            on = DT_SPRITES_DEFAULT;
-        }
-        s_saved_sprites = on;
-        dt_sprites_set(on);
-        return;
-    }
-    if (!strcmp(key, "NoSlowdown")) {
-        static const char *ON[] = { "on", "1", "true", "yes" }, *OFF[] = { "off", "0", "false", "no" };
-        for (int i = 0; i < 4; i++) {
-            if (!strcmp(value, ON[i])) s_no_slowdown = true;
-            if (!strcmp(value, OFF[i])) s_no_slowdown = false;
-        }
-        return;
-    }
-    for (int e = 0; e < DT_ENH_COUNT; e++) {
-        const DtEnhInfo *in = dt_enh_info((DtEnh)e);
-        if (strcmp(key, in->key)) continue;
-        int v;
-        if (!dt_enh_parse((DtEnh)e, value, &v)) {
-            char stock[16];
-            fprintf(stderr, "[ducktales] config.ini [Game] %s = %s: expected %d-%d; using %s\n", key, value, in->min,
-                    in->max, dt_enh_format((DtEnh)e, in->stock, stock, sizeof stock));
-            v = in->stock;
-        }
-        s_saved[e] = v;
-        dt_enh_set((DtEnh)e, v);
-        return;
-    }
-#if DUCKTALES_WINDOW
-    if (!app_present_load(key, value)) app_ui_load_game_setting(key, value);
-#endif
-}
-
-void ducktales_host_write_game_settings(FILE *f)
-{
-    saved_init();
-    for (int e = 0; e < DT_ENH_COUNT; e++) {
-        char v[16];
-        fprintf(f, "%s = %s\n", dt_enh_info((DtEnh)e)->key, dt_enh_format((DtEnh)e, s_saved[e], v, sizeof v));
-    }
-    fprintf(f, "%s = %s\n", DT_SPRITES_KEY, s_saved_sprites ? "on" : "off");
-    fprintf(f, "NoSlowdown = %s\n", s_no_slowdown ? "on" : "off");
-#if DUCKTALES_WINDOW
-    app_present_write(f);
-    app_ui_write_game_settings(f);
-#endif
 }
 
 static void load_setting(void *ctx, const char *key, const char *value)
@@ -181,17 +93,8 @@ static size_t options_init(void)
 static bool option(void *ctx, const char *name, const char *value)
 {
     (void)ctx;
-    for (int e = 0; e < DT_ENH_COUNT; e++) {
-        if (strcmp(name, dt_enh_info((DtEnh)e)->option)) continue;
-        int v;
-        return dt_enh_parse((DtEnh)e, value, &v) && dt_enh_set((DtEnh)e, v);
-    }
-    if (!strcmp(name, DT_SPRITES_OPTION)) {
-        bool on;
-        if (!dt_sprites_parse(value, &on)) return false;
-        dt_sprites_set(on);
-        return true;
-    }
+    bool ok;
+    if (ducktales_host_game_option(name, value, &ok)) return ok;
     if (!strcmp(name, "--ram-hash-out")) return dt_ramhash_open(value);
     if (!strcmp(name, "--lag-log")) return dt_laglog_open(value);
     return dt_diag_option(name, value) || nv_check_option(name, value);
@@ -201,7 +104,7 @@ static void power_on(void *ctx)
 {
     (void)ctx;
     dt_sprites_forget();
-    if (s_no_slowdown) {
+    if (ducktales_host_no_slowdown()) {
         ducktales_host_set_no_slowdown(true);
         printf("[ducktales] No slowdown: %u extra scanlines per frame\n", cyc_extra_scanlines());
         fflush(stdout);
