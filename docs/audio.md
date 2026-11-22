@@ -14,6 +14,7 @@ Tools (they read your ROM locally; their output is never committed):
   loop checks (`--loop`).
 - `tools/audio_requests.py ROUTE`: every request a route makes; with `--callers`, the code
   that made it.
+- `tests/audio_compare.py`: the native synth (below) against the cycle host's APU on the routes.
 
 ## Request path
 
@@ -221,6 +222,52 @@ Not used. The only `$4015` write in the ROM stores `$0F` (DMC disabled) and no i
 writes `$4010-$4013` (`audio_driver.py apu`; the one other hit, a `$4003` store pattern at
 `$96F6`, is inside song data). NESRecomp's APU statistics report `dmc_playing=0`.
 
+## Native synth
+
+`src/native/native_audio.c` is the sound of the native runtime ([native-runtime.md](native-runtime.md)),
+which has no APU. The recompiled driver keeps running as game logic and writes the APU registers
+as it always did; the native bus records those writes per frame with their CPU cycle
+(`NativeFrame.apu_writes`), and the synth turns one frame's writes into that frame's samples:
+
+```c
+native_audio_reset(48000);                                   /* at power-on */
+size_t n = native_audio_frame(native_last_frame(), pcm, NATIVE_AUDIO_MAX_FRAME_SAMPLES);
+```
+
+It is a port's synth, not an APU: nothing is stepped per CPU cycle. Between two events (a register
+write at its cycle offset, or a frame-sequencer clock) every channel's parameters are fixed, so its
+contribution to a sample is the integral of a periodic step sequence over the sample's span of CPU
+time, taken in closed form:
+
+| Channel | What the synth keeps | Rendered as |
+|---|---|---|
+| Pulse 1/2 | duty, volume or envelope, 11-bit period, step, time to the timer's next expiry, sweep | 8-step duty sequence, one step per 2 x (period + 1) cycles; silent below period 8 or on a sweep overflow |
+| Triangle | period, step, time to the next expiry, linear and length counters | 32-step sequence, one step per period + 1 cycles while both counters are non-zero; below period 2 it keeps stepping while the output holds (the driver's rests write period 0) |
+| Noise | mode, period, 15-bit LFSR, envelope | one LFSR shift per table period (the only loop, never per cycle) |
+| DMC | the `$4011` level | constant; the driver never starts a sample ([DMC](#dmc)) |
+
+The frame sequencer (4- or 5-step, NTSC cycle positions) clocks envelopes, the linear counter,
+length counters and sweeps and carries over from frame to frame. Register side effects follow the
+2A03: `$4003`/`$4007` restart the duty sequence and the envelope without resetting the timer,
+`$400B` sets the linear counter's reload flag, `$400F` restarts the noise envelope, `$4015` clears
+disabled length counters, `$4017` restarts the sequencer. A period change takes effect at the
+timer's next expiry, as on the console, so pulse waveforms stay sample-locked to the APU's. The
+mix is the console's nonlinear mixer and the NES output stage (90 Hz and 440 Hz high-pass, 14 kHz
+low-pass), as in NESRecomp's APU.
+
+A frame the no-slowdown mode stretched (`held_cycles`) is played in `cycles - held_cycles`, its
+write offsets scaled to match, since it is still shown for one 60 Hz period; every other frame is
+played at its own length, so the sample count follows the machine exactly (the native and APU
+WAVs of a route have the same length).
+
+What cannot match sample for sample, and why the comparison uses phase-free measures: the triangle
+steps once per CPU cycle during a rest (period 0), so where it stops when the next quarter-frame
+clock clears its linear counter depends on single cycles of write timing, and the noise LFSR's
+phase likewise. Two recordings of the APU itself at different CPU/PPU alignments differ the same
+way. Results: [validation.md](validation.md#native-synth).
+
+`ducktales_native --wav-out FILE` writes the synth's output (48 kHz mono) for a route.
+
 ## Catalogue
 
 "Length" comes from the simulator and was confirmed with `audio_record.py`: for effects, the
@@ -321,6 +368,8 @@ py -3 -I tools/audio_requests.py tests/routes/transylvania_intro.txt --frames 51
 are deleted after reading.
 
 ## Not yet known
+
+- Launchpad ride music (`$0B`) through the native synth: no route reaches it.
 
 - Which enemies and objects stand behind most bank 6 call sites; the table gives their addresses
   and, where a route reached them, their object types.
