@@ -136,19 +136,6 @@ interpreter; to compile it natively, append the route's misses and rebuild:
 build\headless\Release\ducktales.exe "roms\DuckTales (USA).nes" --input tests\routes\NEW.txt --frames N --miss-log config\ducktales.seeds
 ``
 
-## Repository layout
-
-| Path | Contents |
-|---|---|
-| `src/game/` | Typed game state, revision-specific symbols, enhancement hooks |
-| `src/host/` | Integration with NESRecomp's host: entry point, settings, options, diagnostics |
-| `src/ui/` | First run and ROM import, menu, live settings |
-| `config/` | Recompiler configuration and entry-point seeds for this ROM |
-| `tests/` | Input routes, differential regression, window and enhancement tests |
-| `tools/` | Reverse-engineering helpers (disassembler, frame logs, access tracer, Mesen2 replay) |
-| `docs/` | ROM identity, reverse-engineering notes, architecture, validation, licensing |
-| `external/` | NESRecomp and Dear ImGui as pinned, unmodified submodules |
-
 ## License
 
 The code in this repository is MIT licensed ([LICENSE](LICENSE)). NESRecomp is licensed under
