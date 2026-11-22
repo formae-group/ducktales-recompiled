@@ -100,6 +100,7 @@
 #define DT_ROW_VY                0x07C0  /* vertical velocity, whole pixels, signed, up positive (verified) */
 #define DT_ROW_HITBOX            0x07D0  /* hitbox entry: bit 7 solid, bits 4-6 harmful (verified) */
 #define DT_ROW_DIR               0x07E0  /* per-object direction (code) */
+#define DT_ROW_RECORD            0x07F0  /* land record of the slot, $FF none (verified, levels.md) */
 
 /* Scrooge's jump take-off velocity (8.8, up positive). Stored by the land
  * set-up code in the fixed bank and copied into slot 0's velocity when a
@@ -199,6 +200,29 @@
 #define DT_CODE_APPLY_GRAVITY    0xF2B5  /* vertical velocity -= gravity (X = slot) */
 #define DT_CODE_MUSIC_REQUEST    0xF752  /* remember the music id in $C5, then queue it */
 #define DT_CODE_SOUND_REQUEST    0xF754  /* queue a sound id in the request ring */
+
+/* ---- object system (bank 6, docs/decompilation.md "Objects") ----
+ * The frame loop maps bank 6 and calls DT_CODE_OBJ_UPDATE at $DB78, its only
+ * caller (code). */
+#define DT_OBJ_BANK              6
+#define DT_ADDR_OBJ_CURSOR       0x004A  /* slot whose handler runs (code) */
+#define DT_CODE_OBJ_UPDATE       0x8000  /* run the handler of every live slot 1-15 (code) */
+#define DT_CODE_OBJ_HANDLER_LO   0x802C  /* handler address by kind ($0710), low bytes, 67 entries (code) */
+#define DT_CODE_OBJ_HANDLER_HI   0x806F  /* high bytes */
+#define DT_ADDR_CONTACT_SLOT     0x0012  /* block slot a horizontal block test found, 0 none (code) */
+#define DT_ADDR_HELD_SLOT        0x004F  /* slot | $80 of a marked object, reset to $3C when it despawns (code; meaning unknown) */
+#define DT_ADDR_CONSUMED         0x0120  /* consumed-record bits of the land (verified, game-state.md) */
+#define DT_CODE_OBJ_WALK_LEFT    0xF13B  /* move left with wall probes and blocks (code) */
+#define DT_CODE_OBJ_FALL         0xF1BE  /* gravity, move down, land on tiles or blocks (code) */
+#define DT_CODE_OBJ_RISE         0xF1F9  /* move up, gravity, bump on tiles or blocks (code) */
+#define DT_CODE_SPEED_TABLE      0xF330  /* 8.8 speeds by index, read by $F312 (code) */
+#define DT_CODE_OBJ_TOUCH_SCROOGE 0xF436 /* contact between a slot and Scrooge; knock-back (code) */
+#define DT_CODE_HITBOX_HEIGHT    0xF498  /* half-height by hitbox entry (code) */
+#define DT_CODE_HITBOX_WIDTH     0xF4B8  /* half-width by hitbox entry (code) */
+#define DT_CODE_OBJ_FACE_SCROOGE 0xF6BD  /* $07E0 = direction towards Scrooge (code) */
+#define DT_CODE_OBJ_FIND_FREE    0xF7BE  /* highest free slot 15..1 (code) */
+#define DT_CODE_OBJ_DISTANCE_X   0xF7DA  /* |Scrooge's world X - the slot's|, low byte (code) */
+#define DT_CODE_OBJ_MARK_CONSUMED 0xF7F0 /* set the slot's record bit in $0120 (verified, game-state.md) */
 
 /* ---- hook sites of the event system (src/game/events.c) ----
  * config/game.toml declares each with a length/crc32 content key, so another

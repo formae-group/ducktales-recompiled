@@ -48,7 +48,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_ROUTINES 64
+#define MAX_ROUTINES 192
 
 typedef struct {
     uint64_t calls, compared, original;
@@ -74,6 +74,11 @@ static void fail(const char *what, uint16_t routine)
 
 Regs Decomp_Call(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
 {
+    return Decomp_CallP(routine, a, x, y, s_entry_p);
+}
+
+Regs Decomp_CallP(uint16_t routine, uint8_t a, uint8_t x, uint8_t y, uint8_t p)
+{
     if (!s_scope) {
         if (!cyc_mod_isolate_begin()) fail("cannot open an isolated scope", routine);
         s_scope = true;
@@ -81,7 +86,7 @@ Regs Decomp_Call(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
     const uint8_t *ram = cyc_cpu_ram();
     for (uint16_t i = 0; i < GAME_RAM_SIZE; i++)
         if (ram[i] != s_image[i]) cyc_mod_poke(i, s_image[i]);
-    CycModRegs r = { a, x, y, s_entry_s, s_entry_p, 0 };
+    CycModRegs r = { a, x, y, s_entry_s, p, 0 };
     if (!cyc_mod_call(routine, &r)) fail("an original routine called from C did not return", routine);
     memcpy(s_image, cyc_cpu_ram(), GAME_RAM_SIZE);
     return (Regs){ r.a, r.x, r.y, r.p };
@@ -178,6 +183,7 @@ static void check(int i, const CycModRegs *in)
     if ((rt->out & OUT_X) && orig.x != c.x) same = false;
     if ((rt->out & OUT_Y) && orig.y != c.y) same = false;
     if ((rt->out & OUT_P) && ((orig.p ^ c.p) & (P_N | P_V | P_Z | P_C))) same = false;
+    if ((rt->out & OUT_C) && ((orig.p ^ c.p) & P_C)) same = false;
     if (!same) report(rt, in, &orig, &c);
     s_stats[i].compared++;
 }
@@ -209,6 +215,7 @@ static int on_entry(uint16_t addr)
 {
     for (int i = 0; i < s_count; i++) {
         if (s_routine[i]->addr != addr) continue;
+        if (addr < 0xC000 && cyc_cpu_ram()[DT_ADDR_BANK] != s_routine[i]->bank) continue;
         CycModRegs in;
         cyc_mod_regs(&in);
         if (s_mode == DECOMP_CHECK) {
@@ -233,6 +240,8 @@ NES_MOD_CONSTRUCTOR(dt_register_decomp_sites)
     add_table(gMotionRoutines, gMotionRoutineCount);
     add_table(gSoundRoutines, gSoundRoutineCount);
     add_table(gPlayerRoutines, gPlayerRoutineCount);
+    add_table(gObjCommonRoutines, gObjCommonRoutineCount);
+    add_table(gObjectRoutines, gObjectRoutineCount);
 }
 
 static void report_stats(void)

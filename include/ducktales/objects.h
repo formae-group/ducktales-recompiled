@@ -21,6 +21,22 @@ extern "C" {
 
 #define OBJ_SLOTS DT_OBJ_SLOTS
 
+/* $0700 status bits (docs/rendering.md, docs/decompilation.md "Objects"). */
+#define OBJ_STATUS_LIVE   0x80   /* the slot is updated and drawn (verified) */
+#define OBJ_STATUS_WORLD  0x20   /* X is a world position (verified) */
+#define OBJ_STATUS_HIDDEN 0x10   /* not drawn (verified) */
+
+/* Object kinds ($0710), the index of the handler table. */
+#define OBJ_KIND_NONE     0x00   /* the handler is a bare RTS (code) */
+
+/* $0600 flags. */
+#define OBJ_FLAG_ON_SCREEN    0x80   /* set by the sprite builder; contact tests skip slots without it (code) */
+#define OBJ_FLAG_FACING_RIGHT 0x40   /* (verified) */
+
+/* $07E0 direction of the walking kinds: bit 0 right (code). */
+#define OBJ_DIR_RIGHT     1
+#define OBJ_DIR_LEFT      2
+
 typedef struct ObjectTable {
     uint8_t flags[OBJ_SLOTS];       /* $0600 bit 6 facing right (verified); bit 2 set by special tiles (code) */
     uint8_t animFrame[OBJ_SLOTS];   /* $0610 animation frame of the action (hypothesis) */
@@ -53,7 +69,7 @@ typedef struct ObjectTable {
     uint8_t vy[OBJ_SLOTS];          /* $07C0 vertical velocity, signed, up positive (verified) */
     uint8_t hitbox[OBJ_SLOTS];      /* $07D0 hitbox entry (verified) */
     uint8_t dir[OBJ_SLOTS];         /* $07E0 direction (code) */
-    uint8_t unk_07F0[OBJ_SLOTS];
+    uint8_t record[OBJ_SLOTS];      /* $07F0 land record the slot was spawned from, $FF none (verified, levels.md) */
 } ObjectTable;
 
 #define OBJ_ROW_CHECK(field, addr) typedef char obj_row_check_##field[offsetof(ObjectTable, field) == (addr) - DT_OBJ_BASE ? 1 : -1]
@@ -81,6 +97,7 @@ OBJ_ROW_CHECK(vyFrac, DT_ROW_VY_FRAC);
 OBJ_ROW_CHECK(vy, DT_ROW_VY);
 OBJ_ROW_CHECK(hitbox, DT_ROW_HITBOX);
 OBJ_ROW_CHECK(dir, DT_ROW_DIR);
+OBJ_ROW_CHECK(record, DT_ROW_RECORD);
 typedef char obj_table_size_check[sizeof(ObjectTable) == 0x200 ? 1 : -1];
 
 #define gObjects ((ObjectTable *)(gRam + DT_OBJ_BASE))
