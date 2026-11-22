@@ -18,6 +18,7 @@ src/native/native_bus.c       NESRecomp's hw.h for the generated code: RAM, UNRO
                               sprite DMA, APU write capture, cycle count, scheduler watch
 src/native/native_video.c     PPU registers and memories, VBlank/NMI/$2002/sprite-0 timing
 src/native/native_state.h     the interface for a renderer and a synth
+src/native/native_audio.c     the synth: a frame's APU writes in, its samples out (audio.md)
 src/native/native_hash.h      the per-frame state line both builds write (--ram-hash-out)
 src/native/native_main.c      ducktales_native: input routes, logs, dumps
 src/host/ducktales_ramhash.c  --ram-hash-out and --lag-log for the cycle host (headless only)
@@ -203,8 +204,10 @@ The runtime hands out, per machine frame (VBlank to VBlank):
 
 A renderer draws frame N from `start`, applying `ppu_writes[]` in order; one that only wants the HUD
 split uses `split_line`. A synth plays `apu_writes[]` at their cycle offsets (1,789,773 Hz); when the
-no-slowdown mode has stretched a frame it scales the offsets by 29781 / `cycles`, since every frame
-is still presented for one 60 Hz period. Nothing in the interface is read back by the game, so a
+no-slowdown mode has stretched a frame it plays it in `cycles - held_cycles` and scales the offsets
+to match, since every frame is still presented for one 60 Hz period. The synth exists:
+`native_audio_frame()` in `src/native/native_audio.h` ([audio.md](audio.md#native-synth)), and
+`ducktales_native --wav-out FILE` records it. Nothing in the interface is read back by the game, so a
 renderer or synth cannot change the machine.
 
 ## Lag
@@ -385,7 +388,8 @@ only the stretch it still follows is comparable. Differences from the native no-
 
 ## Next steps
 
-1. A renderer (sprite compositor and HUD, agent 11) and a synth reading `native_state.h`.
+1. A renderer (sprite compositor and HUD, agent 11) reading `native_state.h`. The synth is done
+   (`native_audio.c`); the window front end queues its samples once per frame.
 2. A window front end (agent 12's presentation) over `native_run_frame()`, with the no-slowdown
    mode, the enhancements' hook sites (they are `cyc_hooks_armed` sites in the same generated code,
    so `src/game/enhancements.c` can register the same callbacks) and save states (CPU RAM, the
@@ -395,8 +399,9 @@ only the stretch it still follows is comparable. Differences from the native no-
 
 ## Not verified
 
-- No picture or sound is produced by the native runtime yet; the interface is checked only by
-  the logs (`--split-log`).
+- No picture is produced by the native runtime yet; the renderer interface is checked only by the
+  logs (`--split-log`). Sound is produced (`--wav-out`) and compared with the cycle host's APU by
+  `tests/audio_compare.py`, but nobody has listened to it in a window.
 - Real-time pacing and audio of the No slowdown setting in the window (144 Hz monitor, by ear):
   needs a person at the screen. The window build was only run hidden (`tests/window_smoke.py`).
 - Lag outside the five full_* routes (other screens, Easy/Difficult, more enemies on screen).
