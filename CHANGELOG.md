@@ -37,6 +37,9 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Changed
 
+- The menu and the first-run screen are drawn by [formae-ui](https://gitlab.com/formae/formae-ui)
+  0.1.0 (`external/formae-ui`), Formae's menu library extracted from them for the next ports. Their
+  look and behaviour are unchanged: the 16 self-test PNGs are pixel-identical.
 - The application icon is now original artwork, a treasure chest.
 - The window build links the static MSVC runtime, so players need no Visual C++ redistributable.
 - The README was rewritten as a technical overview with the supported ROM's hashes.

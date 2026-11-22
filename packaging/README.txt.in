@@ -46,8 +46,9 @@ Licences
 DuckTales Recompiled's own code is MIT licensed (LICENSE.txt). It is built on
 NESRecomp, licensed under PolyForm Noncommercial 1.0.0 with the additional
 permissions in licenses/NESRecomp-PERMISSIONS.md: this package must be free of
-charge to obtain and play, and may not be sold. It also contains Dear ImGui
-(MIT), SDL2 (zlib) and emu2413 (MIT). Each licence text is in licenses/.
+charge to obtain and play, and may not be sold. It also contains formae-ui
+(MIT), Dear ImGui (MIT), SDL2 (zlib) and emu2413 (MIT). Each licence text is in
+licenses/.
 
 DuckTales is a trademark of Disney. This project is not affiliated with Disney
 or Capcom and distributes no part of the game.
