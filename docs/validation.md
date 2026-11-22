@@ -37,11 +37,13 @@ counted as interpretation.
 | `full_transylvania` | 7,120 | Normal, Transylvania from power-on to the LAND CLEAR tally: rope to row 5, rope to row 4, fake wall under the mirror, right mirror to row 3 page 7, Magica DeSpell (5 hits), treasure chest, $1,041,000; no lives lost | 100.0% | all frames, 4 alignments |
 | `full_african_mines` | 13,520 | `full_transylvania`, then African Mines: Louie sends Scrooge to Transylvania, the start mirror leads to the Skeleton Key chest (`$A3` bit 1), the left mirror returns to Land Select; African Mines with the key, chain to row 1, pogo over the abyss, chain to row 2, King Terra-Firmie (5 hits), treasure chest, $2,095,000 total; no lives lost | 100.0% | all frames, 4 alignments |
 
+| `full_moon` | 11,000 | Normal, The Moon from power-on to the LAND CLEAR tally: ship climb to the key item chest (`$A3` bit 2), the door and the NPC (`$A1`), one deliberate death near frame 5820 with respawn at the land start, Gizmoduck's pillar, the shaft to row 5, boss (5 hits in 4 pogos), treasure chest, $1,064,000 | 100.0% | all frames, 4 alignments |
+
 Before seeding, the first title/Land Select/Amazon route ran 65.5% native (378 compiled
 instructions); after seeding 9,053 instructions are compiled. Before `full_amazon` was seeded it started 731
 ROM instructions on the interpreter that no earlier route reached (the later Amazon screens, the boss
 and the clear tally); its misses were added to `config/ducktales.seeds` and the build regenerated.
-`full_transylvania` then added 404 new addresses and `full_african_mines` 526 (merged as a plain union of
+`full_transylvania` then added 404 new addresses, `full_african_mines` 526 and `full_moon` 480 (merged as a plain union of
 lines).
 
 The windowed SDL2 build also ran 600 frames hidden (`--hidden --exit-after 600`) with audio
@@ -49,7 +51,7 @@ enabled and exited cleanly.
 
 ## Not verified
 
-- A complete playthrough of any land other than The Amazon, The Himalayas, Transylvania and African Mines on Normal, any other boss, secret treasures, the Transylvania return, the
+- A complete playthrough of any land on Easy or Difficult, secret treasures, the Transylvania return, the
   ending and the three endings' conditions.
 - Difficult mode (the "difficult" route was found to select Easy and was renamed).
 - Comparison with Mesen2 (not installed on this machine yet); the TriCNES oracle is the only
