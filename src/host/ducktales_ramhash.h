@@ -11,6 +11,7 @@
 static inline bool dt_ramhash_open(const char *path) { (void)path; return false; }
 static inline bool dt_laglog_open(const char *path) { (void)path; return false; }
 static inline void dt_ramhash_power_on(void) {}
+static inline void dt_ramhash_state_loaded(void) {}
 static inline void dt_ramhash_frame_end(void) {}
 #else
 #define DT_RAMHASH_OPTIONS \
@@ -19,5 +20,6 @@ static inline void dt_ramhash_frame_end(void) {}
 bool dt_ramhash_open(const char *path);
 bool dt_laglog_open(const char *path);
 void dt_ramhash_power_on(void);
+void dt_ramhash_state_loaded(void);
 void dt_ramhash_frame_end(void);
 #endif

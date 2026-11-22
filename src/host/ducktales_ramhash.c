@@ -5,7 +5,9 @@
  *   --ram-hash-out FILE  one native_hash.h line per frame (CPU RAM, PPU
  *                        memories, cycles, registers), the reference the
  *                        native runtime's own --ram-hash-out is compared with
- *                        (tools/native_compare.py)
+ *                        (tools/native_compare.py). After --load-state the
+ *                        frame numbers continue the saved run's, as
+ *                        --hash-out's do (tests/quick_verify.py --from-state)
  *   --lag-log FILE       one line per frame, as VBlank ends it:
  *                        <frame> nmi= pic= lag= land= row= screen= pc=
  *                        lag=1 when the game task is still running: the
@@ -16,6 +18,7 @@
 #include "host/ducktales_ramhash.h"
 
 #include "cyc_core.h"
+#include "cyc_ring.h"
 #include "native/native_hash.h"
 
 static FILE *s_file, *s_lag;
@@ -35,6 +38,11 @@ bool dt_laglog_open(const char *path) { return (s_lag = open_out(s_lag, "--lag-l
 void dt_ramhash_power_on(void)
 {
     s_frame = 0;
+}
+
+void dt_ramhash_state_loaded(void)
+{
+    s_frame = (long)cyc_ring_frame;
 }
 
 void dt_ramhash_frame_end(void)

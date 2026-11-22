@@ -228,6 +228,7 @@ static void state_loaded(void *ctx)
 {
     (void)ctx;
     dt_sprites_forget();
+    dt_ramhash_state_loaded();
 }
 
 static void tcp_setup(void *ctx)
