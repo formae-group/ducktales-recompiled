@@ -243,6 +243,7 @@ considered:
 src/host/ducktales_main.c   the real main(): chooses the ROM, then calls the host
 src/ui/app_rom.[ch]      ROM check, import and the data folder (UTF-8 paths, _w* calls)
 src/ui/app_app.[ch]      config.ini copy, live settings, bindings, menu shortcut
+src/ui/app_present.[ch]  the picture the window shows: HUD split, overscan, scaling, aspect, pacing
 src/ui/app_ui.cpp        Dear ImGui: the first-run screen and the menu
 ```
 
@@ -264,7 +265,14 @@ src/ui/app_ui.cpp        Dear ImGui: the first-run screen and the menu
   - `IntegerScale` is applied again every frame, because the host resets it on a resize or F11.
   - `[Audio] Volume` is applied in `audio_mix` as the ratio to the starting volume.
   - The bindings go through the `input` callback with `cyc_input_eval`.
-  - `VSync` is saved and applies at the next launch, because the host reads it only at start.
+  - `[Game] FramePacing` applies at the next launch: before the host reads `config.ini`,
+    `app_ui_configure` writes the `[Display] VSync` it asks for, because the host reads VSync only
+    at start.
+  - Pixels, pixel aspect, overscan crop and the HUD split line act on the picture the window
+    shows (`CycHostExtras.present`), never on the machine: [presentation.md](presentation.md).
+  - `[Game] NoSlowdown` (the No slowdown row, on by default) sets the cycle host's extra
+    scanlines between frames (`ducktales_host_set_no_slowdown`); see
+    [native-runtime.md](native-runtime.md#the-same-thing-on-the-cycle-host-without-changing-nesrecomp).
 - The host also writes `config.ini`, on F11 and at exit, from its own stale copy. Its save calls
   the `[Game]` writer (`app_ui_host_saved`). On the next frame, or after the host exits, the
   file is written again from the menu's copy, keeping only the host's fullscreen value. This runs

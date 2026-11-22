@@ -64,6 +64,13 @@ frame 1230 equals the headless presented picture with the feature on and the mac
 off. With the feature linked and on by default, `tests/verify_routes.py --build build/headless` passes all
 twelve routes at all four alignments with 100.0% native cycles (2026-11-22).
 
+## Native runtime
+
+`tests/native_routes.py` holds the native-runtime prototype (`ducktales_native`, faithful lag mode)
+to the recompiled build: CPU RAM, cycles and registers equal on every frame of every route above
+(82,621 frames). `tests/lag_modes.py` measures lag on the full_* routes and compares the
+no-slowdown mode per logic step. Details: [native-runtime.md](native-runtime.md).
+
 ## Not verified
 
 - A complete playthrough of any land on Easy or Difficult, secret treasures, the Transylvania return, the
@@ -71,5 +78,6 @@ twelve routes at all four alignments with 100.0% native cycles (2026-11-22).
 - Difficult mode (the "difficult" route was found to select Easy and was renamed).
 - Comparison with Mesen2 (not installed on this machine yet); the TriCNES oracle is the only
   independent reference so far.
-- Window presentation on the 144 Hz monitor, gamepads, audio quality by ear, fullscreen, and the
-  sprite presentation by eye in play: needs a person at the machine.
+- Window presentation as a person sees it on the 144 Hz monitor, gamepads, audio quality by ear,
+  fullscreen, and the sprite presentation by eye in play: needs a person at the machine. The
+  application-side pacing, DPI and picture measurements are in [presentation.md](presentation.md).

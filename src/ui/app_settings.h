@@ -5,6 +5,7 @@
 #pragma once
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -17,14 +18,21 @@ typedef struct {
     int fullscreen;     /* 0 windowed, 1 borderless, 2 exclusive */
     int window_scale;   /* 1..8 */
     int integer_scale;  /* bool */
-    int vsync;          /* bool; applies at the next launch */
+    int pixels;         /* AppPixels (app_present.h) */
+    int aspect;         /* AppAspect */
+    int overscan;       /* AppOverscan */
+    int clean_split;    /* bool */
+    int pacing;         /* AppPacing; applies at the next launch */
     int volume;         /* 0..100 */
 } AppDisplay;
 
 void app_display_get(AppDisplay *out);
 /* Applies what can be applied live and remembers the rest for the next launch. */
 void app_display_set(SDL_Window *win, const AppDisplay *d);
-bool app_vsync_pending(void);    /* VSync differs from what the window started with */
+bool app_vsync_pending(void);    /* the pacing's VSync differs from what the window started with */
+/* What the window shows for a drawable of out_w x out_h, for the menu's
+ * background; *exact: drawn 1:1 (app_present.h). */
+const uint32_t *app_ui_picture(int out_w, int out_h, int *w, int *h, bool *exact);
 bool app_volume_pending(void);   /* volume needs a restart (the window started at 0) */
 
 /* ---- player 1's buttons and the menu shortcut ([Keyboard.*] / [Gamepad.*]) ---- */
