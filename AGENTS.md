@@ -11,7 +11,9 @@ settings, presentation and enhancements. The goal is a polished PC port, not an 
 
 ## Hard rules
 
-- Never modify `external/nesrecomp` or `external/imgui`. Use NESRecomp's public extension points only.
+- Never modify `external/nesrecomp`, `external/imgui` or `external/formae-ui`. Use NESRecomp's public
+  extension points only; menu look and widget changes go to the formae-ui repository, then the
+  submodule moves to its new tag.
 - Never commit the ROM, generated C, `build*/`, `captures/`, frame logs, screenshots, recordings,
   WAVs or `config.ini`.
 - With every option at its original setting the machine must behave exactly as the console:
