@@ -2,6 +2,8 @@
  * app_ui.h - the application around the game (window builds only,
  * DUCKTALES_WINDOW). docs/architecture.md "Application".
  *
+ *   app_present.c    the picture the window shows: HUD split, overscan,
+ *                  scaling, pixel aspect; frame pacing
  *   app_settings.c   config.ini model, live display / volume / bindings, the
  *                  menu shortcut, and the reconciliation with the host's own
  *                  saves (NESRecomp's settings are private to its window)
@@ -43,6 +45,8 @@ void app_ui_input(uint8_t buttons[2]);
 void app_ui_audio(int16_t *samples, size_t count);
 void app_ui_frame_begin(void);
 void app_ui_host_saved(void);
+/* CycHostExtras.present: the picture the window shows (ui/app_present.h). */
+const uint32_t *app_ui_present(int *width, int *height);
 
 #ifdef __cplusplus
 }

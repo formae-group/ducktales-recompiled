@@ -40,6 +40,7 @@ if(NOT DUCKTALES_HEADLESS)
     list(APPEND _ducktales_extras
         "${CMAKE_SOURCE_DIR}/src/host/ducktales_main.c"
         "${CMAKE_SOURCE_DIR}/src/ui/app_settings.c"
+        "${CMAKE_SOURCE_DIR}/src/ui/app_present.c"
         "${CMAKE_SOURCE_DIR}/src/ui/app_rom.c"
         "${CMAKE_SOURCE_DIR}/src/ui/app_ui.cpp"
         "${IMGUI_ROOT}/imgui.cpp"

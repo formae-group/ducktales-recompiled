@@ -9,8 +9,11 @@ host run around it. The repository contains no game data.
 
 - **Native code, verified frame by frame.** Every test route runs recompiled, interpreted and on a
   reference machine, and the three must match on every frame (see [Verification](#verification)).
-- **Settings menu.** Display mode, window size, integer scaling, VSync, volume and key and
-  controller bindings, all applied live and saved to `config.ini`.
+- **Settings menu.** Display mode, window size, integer scaling, pixel filter, pixel aspect,
+  overscan crop, HUD split line, frame pacing, volume and key and controller bindings, saved to
+  `config.ini`.
+- **Steady presentation.** Direct3D 11, DPI aware, and frame pacing chosen for the display's
+  refresh rate ([docs/presentation.md](docs/presentation.md)).
 - **Optional enhancements.** Jump height, no damage, infinite time, infinite lives and starting
   lives. All are off by default, and while one is off the original code runs unchanged.
 - **Keyboard, mouse and controller** support with no setup.
@@ -76,8 +79,26 @@ as is, and the `DUCKTALES_DATA_DIR` environment variable moves the data folder.
 
 Escape or RB pauses the game and opens the menu: Resume, Reset, Settings, Controls, Enhancements
 and Quit. It works with the keyboard, the mouse and a controller. To rebind, choose a cell on the
-Controls page and press the new key or button; Escape cancels and Delete clears the binding. VSync
-changes take effect at the next start.
+Controls page and press the new key or button; Escape cancels and Delete clears the binding.
+
+The Settings page:
+
+| Row | Values | `config.ini` |
+|---|---|---|
+| Display | Windowed, Borderless full screen, Exclusive full screen | `[Display] Fullscreen` |
+| Window size | 1x to 8x | `[Display] WindowScale` |
+| Integer scaling | On, Off | `[Display] IntegerScale` |
+| Pixels | Nearest, Sharp (crisp at any size), Smooth (bilinear) | `[Game] Pixels = nearest\|sharp\|smooth` |
+| Pixel aspect | Square, 8:7 (as a television showed it) | `[Game] PixelAspect = square\|8:7` |
+| Crop overscan | Off, Top and bottom (256x224), All edges (240x224) | `[Game] Overscan = off\|top-bottom\|all` |
+| HUD split line | Clean, Original | `[Game] HudSplit = clean\|original` |
+| Frame pacing | Auto, VSync, Steady | `[Game] FramePacing = auto\|vsync\|steady` |
+| Volume | 0% to 100% | `[Audio] Volume` |
+
+Frame pacing applies at the next start. Auto uses VSync on a display of up to 70 Hz and the
+steady hold (VSync off, no tearing) on faster ones. The defaults and the measurements behind them
+are in [docs/presentation.md](docs/presentation.md); none of these settings changes the game
+itself.
 
 All settings are saved in `config.ini` next to the executable, in NESRecomp's format
 (`--config FILE` selects another file).

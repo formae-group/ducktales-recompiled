@@ -56,5 +56,6 @@ enabled and exited cleanly.
 - Difficult mode (the "difficult" route was found to select Easy and was renamed).
 - Comparison with Mesen2 (not installed on this machine yet); the TriCNES oracle is the only
   independent reference so far.
-- Window presentation on the 144 Hz monitor, gamepads, audio quality by ear, fullscreen: needs a
-  person at the machine.
+- Window presentation as a person sees it on the 144 Hz monitor, gamepads, audio quality by ear,
+  fullscreen: needs a person at the machine. The application-side pacing, DPI and picture
+  measurements are in [presentation.md](presentation.md).

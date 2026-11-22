@@ -11,7 +11,11 @@ folder (DUCKTALES_DATA_DIR):
      into the data folder;
   4. without a ROM, the imported copy starts the game directly;
   5. enhancement settings in config.ini [Game] survive a run;
-  6. DUCKTALES_UI_SELFTEST: the in-game menu opens by itself at frame 120, walks
+  6. presentation: the [Game] keys survive a run, FramePacing sets the host's
+     [Display] VSync before it starts, and --present-out shows the picture
+     at the size the overscan crop, the pixel aspect and the window scale
+     give (docs/presentation.md);
+  7. DUCKTALES_UI_SELFTEST: the in-game menu opens by itself at frame 120, walks
      its pages and closes, and the first-run screen shows a refused ROM; each
      state is written as a PNG (into --shots, default a temporary folder) and
      the game still reaches its exit frame.
@@ -24,6 +28,7 @@ the menu, the file dialog, full-screen switching and VSync are not exercised.
 import argparse
 import os
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -92,6 +97,27 @@ def main():
         text = ini.read_text()
         check(code == 0 and 'NoDamage = on' in text and 'StartLives = 5' in text and 'JumpScale = 150' in text
               and 'InfiniteLives = off' in text, 'enhancement settings survive a run in config.ini [Game]', text)
+
+        def png_size(path):
+            with open(path, 'rb') as f:
+                head = f.read(24)
+            return struct.unpack('>II', head[16:24])
+
+        for name, game, display, vsync, size in (
+                ('steady', 'FramePacing = steady\nOverscan = all\nPixelAspect = 8:7\nPixels = sharp\n', 'VSync = 1\n', 0,
+                 (2 * round(240 * 8 / 7), 2 * 224)),
+                ('vsync', 'FramePacing = vsync\nOverscan = top-bottom\nHudSplit = original\n', 'VSync = 0\n', 1, (512, 448))):
+            ini = tmp / f'p_{name}.ini'
+            ini.write_text(f'[Display]\nWindowScale = 2\nIntegerScale = 1\n{display}[Game]\n{game}')
+            out = tmp / f'p_{name}.png'
+            code, log = run(args.rom, '--hidden', '--exit-after', '61', '--config', str(ini), '--present-out', str(out),
+                            '--present-every', '60')
+            text = ini.read_text()
+            pics = sorted(tmp.glob(f'p_{name}_*.png'))
+            got = png_size(pics[-1]) if pics else None
+            keys = all(line in text for line in game.strip().split('\n'))
+            check(code == 0 and keys and f'VSync = {vsync}' in text and got == size,
+                  f'presentation {name}: keys kept, VSync = {vsync}, picture {size[0]}x{size[1]} (got {got})', log + text)
 
         shots = Path(args.shots).resolve() if args.shots else tmp / 'shots'
         shots.mkdir(parents=True, exist_ok=True)
