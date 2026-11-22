@@ -180,6 +180,27 @@ RAM-identical in replace mode.
 | `Player_Mode12` | `$EC2D` | checked (pokes only) | 0 | mode12, mode12-page7 | no vertical direction with Y below `$18` |
 | `Player_Death` | `$EC9B` | checked | 8 | hurt-last-dot | none |
 | `Player_Mode14` | `$ECFF` | checked | 1 | - | none |
+| `Nmi_Handler` | `$C000` | claimed (decomp/system) | - | - | - |
+| `Ppu_NmiOff` | `$C183` | claimed (decomp/system) | - | - | - |
+| `Ppu_NmiOn` | `$C18D` | claimed (decomp/system) | - | - | - |
+| `Ppu_Blank` | `$C197` | claimed (decomp/system) | - | - | - |
+| `Ppu_Unblank` | `$C1A1` | claimed (decomp/system) | - | - | - |
+| `Input_ReadControllers` | `$C1AB` | claimed (decomp/system) | - | - | - |
+| `Ppu_FillNametable` | `$C203` | claimed (decomp/system) | - | - | - |
+| `Mem_FillPages` | `$C24F` | claimed (decomp/system) | - | - | - |
+| `Oam_Clear` | `$C267` | claimed (decomp/system) | - | - | - |
+| `Palette_FadeIn` | `$C279` | claimed (decomp/system) | - | - | - |
+| `Palette_FadeOut` | `$C282` | claimed (decomp/system) | - | - | - |
+| `Random_Next` | `$C2E6` | claimed (decomp/system) | - | - | - |
+| `Chr_LoadList` | `$C301` | claimed (decomp/system) | - | - | - |
+| `Chr_StreamRow` | `$C42C` | claimed (decomp/system) | - | - | - |
+| `Palette_LoadScene` | `$F76D` | claimed (decomp/system) | - | - | - |
+| `Bank_Select` | `$FFDE` | claimed (decomp/system) | - | - | - |
+| `Bank_SelectTemp` | `$FFE0` | claimed (decomp/system) | - | - | - |
+| `Oam_Build` | bank 5 `$8000` | claimed (decomp/system) | - | - | - |
+| `Text_DrawStrings` | bank 5 `$BAB0` | claimed (decomp/system) | - | - | - |
+| `Sound_Update` | bank 3 `$8000` | claimed (decomp/system) | - | - | - |
+| `Sound_Play` | bank 3 `$8003` | claimed (decomp/system) | - | - | - |
 
 Not decompiled yet, and still run as the original from the C:
 
