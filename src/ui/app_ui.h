@@ -7,8 +7,9 @@
  *   app_settings.c   config.ini model, live display / volume / bindings, the
  *                  menu shortcut, and the reconciliation with the host's own
  *                  saves (NESRecomp's settings are private to its window)
- *   app_ui.cpp  Dear ImGui: the look, the in-game menu (a modal
- *                  pause loop) and the first-run ROM screen
+ *   app_ui.cpp  the in-game menu (a modal pause loop) and the
+ *                  first-run ROM screen on formae-ui (external/formae-ui)
+ *                  and Dear ImGui
  *   app_rom.c   ROM identity, data folder and import
  *
  * The host reaches this through ducktales_host.c's extras callbacks; the

@@ -149,7 +149,8 @@ Each enhancement hooks a single, documented site in the original code, guarded b
    mapper, input, audio output and the SDL2 window. Code that no seed covers runs on the interpreter
    and is reported, so it can be added to the seeds.
 3. **Port layer.** `src/game` (typed game state, revision-specific symbols, enhancement hooks),
-   `src/host` (settings, options, the sprite compositor, diagnostics) and `src/ui` (Dear ImGui menu,
+   `src/host` (settings, options, the sprite compositor, diagnostics) and `src/ui` (the menu, built with
+   [formae-ui](https://gitlab.com/formae/formae-ui) on Dear ImGui,
    ROM import, presentation) attach to the host through its public extension points. The NESRecomp
    submodule is never modified.
 4. **Presentation.** The window shows a picture composed from the machine's output: all sprites
@@ -210,7 +211,8 @@ build\headless\Release\ducktales.exe "roms\DuckTales (USA).nes" --input tests\ro
 
 The code in this repository is MIT licensed ([LICENSE](LICENSE)). NESRecomp is licensed under
 PolyForm Noncommercial 1.0.0 with additional permissions, so builds of this port must be distributed
-free of charge. Dear ImGui and SDL2 are used under their own licenses. See
+free of charge. [formae-ui](https://gitlab.com/formae/formae-ui) (MIT, Formae's menu library),
+Dear ImGui and SDL2 are used under their own licenses. See
 [docs/licensing.md](docs/licensing.md).
 
 *DuckTales* is a trademark of Disney. This project is not affiliated with Disney or Capcom and
