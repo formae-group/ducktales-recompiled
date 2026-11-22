@@ -54,8 +54,8 @@ Requirements: Windows x64, Visual Studio 2022 (*Desktop development with C++*), 
 Python 3.11+ and Git.
 
 ```powershell
-git clone --recurse-submodules https://gitlab.com/formae/ducktales.git
-cd ducktales
+git clone --recurse-submodules https://gitlab.com/formae/ducktales-recompiled.git
+cd ducktales-recompiled
 copy "C:\path\to\DuckTales (USA).nes" roms\
 cmake -S . -B build/windows -G "Visual Studio 17 2022" -A x64
 cmake --build build/windows --config Release --parallel
