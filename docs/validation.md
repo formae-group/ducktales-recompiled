@@ -188,6 +188,18 @@ of the same three routes (2,128, 5,092 and 6,200 frames; PPU memories differ on 
 the known one-frame store lag of `$2007` writes). With the synth running (`--wav-out`), the native
 runtime's RAM and cycles equalled the cycle host's on every frame of the ten routes above.
 
+In the player build (`ducktales.exe` on the native runtime, `build/windows`), off screen with
+`--lag faithful --wav-out`, the WAV is byte-identical to `ducktales_native --wav-out` on
+`amazon_intro` (5,092 frames), `full_moon` (11,000) and `full_himalayas` (6,200), so the numbers
+above are the player's. With `--lag none` (No slowdown) `amazon_intro` gives 4,066,839 samples for
+5,092 frames, 61 fewer than 5,092 x 48,000 / 60.0988, the stretched frames being played in their
+normal length. After plugging the synth in: `tests/window_smoke.py --build build/windows` and
+`tests/package_test.py --build build/windows` pass (all checks); `tests/native_routes.py` passes
+`amazon_intro` and `full_moon` (RAM, cycles and registers identical on every frame), and
+`tests/verify_routes.py` passes both at all four alignments with 100.0% native cycles. The synth
+costs about 0.2 ms a frame: `ducktales_native` ran `full_moon` at 1,336 frames a second with
+`--wav-out` and 1,885 without, on the same idle machine.
+
 ## Native renderer (automated)
 
 `tests/native_render_test.py` draws every frame of the five `full_*` routes with the native renderer
