@@ -49,6 +49,13 @@ lines).
 The windowed SDL2 build also ran 600 frames hidden (`--hidden --exit-after 600`) with audio
 enabled and exited cleanly.
 
+## Native runtime
+
+`tests/native_routes.py` holds the native-runtime prototype (`ducktales_native`, faithful lag mode)
+to the recompiled build: CPU RAM, cycles and registers equal on every frame of every route above
+(82,621 frames). `tests/lag_modes.py` measures lag on the full_* routes and compares the
+no-slowdown mode per logic step. Details: [native-runtime.md](native-runtime.md).
+
 ## Not verified
 
 - A complete playthrough of any land on Easy or Difficult, secret treasures, the Transylvania return, the

@@ -9,8 +9,9 @@ host run around it. The repository contains no game data.
 
 - **Native code, verified frame by frame.** Every test route runs recompiled, interpreted and on a
   reference machine, and the three must match on every frame (see [Verification](#verification)).
-- **Settings menu.** Display mode, window size, integer scaling, VSync, volume and key and
-  controller bindings, all applied live and saved to `config.ini`.
+- **Settings menu.** Display mode, window size, integer scaling, VSync, volume, No slowdown (extra
+  CPU time per frame so the console's lag frames disappear; on by default) and key and controller
+  bindings, all applied live and saved to `config.ini`.
 - **Optional enhancements.** Jump height, no damage, infinite time, infinite lives and starting
   lives. All are off by default, and while one is off the original code runs unchanged.
 - **Keyboard, mouse and controller** support with no setup.

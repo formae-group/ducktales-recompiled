@@ -241,6 +241,9 @@ src/ui/app_ui.cpp        Dear ImGui: the first-run screen and the menu
   - `[Audio] Volume` is applied in `audio_mix` as the ratio to the starting volume.
   - The bindings go through the `input` callback with `cyc_input_eval`.
   - `VSync` is saved and applies at the next launch, because the host reads it only at start.
+  - `[Game] NoSlowdown` (the No slowdown row, on by default) sets the cycle host's extra
+    scanlines between frames (`ducktales_host_set_no_slowdown`); see
+    [native-runtime.md](native-runtime.md#the-same-thing-on-the-cycle-host-without-changing-nesrecomp).
 - The host also writes `config.ini`, on F11 and at exit, from its own stale copy. Its save calls
   the `[Game]` writer (`app_ui_host_saved`). On the next frame, or after the host exits, the
   file is written again from the menu's copy, keeping only the host's fullscreen value. This runs
