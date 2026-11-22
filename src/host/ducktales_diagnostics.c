@@ -1,6 +1,7 @@
 #include "host/ducktales_diagnostics.h"
 
 #include "cyc_core.h"
+#include "cyc_render.h"
 #include "cyc_hooks.h"
 #include "cyc_ring.h"
 #if defined(CYC_WITH_SDL)
@@ -10,6 +11,7 @@
 #include "game/ducktales_jump.h"
 #include "game/enhancements.h"
 #include "game/ducktales_state.h"
+#include "host/ducktales_sprites.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,6 +27,7 @@ static struct { unsigned long frame; DtEnh e; int value; } s_enh_at[MAX_JUMP_EVE
 static int s_enh_at_n;
 static unsigned long s_reset_at[MAX_JUMP_EVENTS];
 static int s_reset_at_n;
+static FILE *s_sprite_log;
 
 static void report(void)
 {
@@ -38,8 +41,17 @@ static void report(void)
         fprintf(f, "dt-diag: %s=%s applied=%llu\n", dt_enh_info((DtEnh)e)->key,
                 dt_enh_format((DtEnh)e, dt_enh_get((DtEnh)e), v, sizeof v), (unsigned long long)dt_enh_applied((DtEnh)e));
     }
+    DtSpritesStats sp;
+    dt_sprites_stats(&sp);
+    fprintf(f, "dt-diag: %s=%s composed=%llu reused=%llu fallback=%llu declined=%llu hud_restored=%llu leftover=%llu lines_over_8=%llu beyond_63=%llu\n",
+            DT_SPRITES_KEY, dt_sprites_get() ? "on" : "off", (unsigned long long)sp.composed,
+            (unsigned long long)sp.reused, (unsigned long long)sp.fallback, (unsigned long long)sp.declined, (unsigned long long)sp.hud_restored,
+            (unsigned long long)sp.leftover, (unsigned long long)sp.lines_over_8, (unsigned long long)sp.beyond_63);
     fflush(f);
     if (s_log && s_log != stdout) fclose(s_log);
+    dt_sprites_set_log(NULL);
+    if (s_sprite_log && s_sprite_log != stdout) fclose(s_sprite_log);
+    s_sprite_log = NULL;
     s_log = NULL;
 }
 
@@ -48,6 +60,11 @@ bool dt_diag_option(const char *name, const char *value)
     if (!strcmp(name, "--dt-state-log")) {
         s_log = !strcmp(value, "-") ? stdout : fopen(value, "w");
         return s_log != NULL;
+    }
+    if (!strcmp(name, "--dt-sprite-log")) {
+        s_sprite_log = !strcmp(value, "-") ? stdout : fopen(value, "w");
+        dt_sprites_set_log(s_sprite_log);
+        return s_sprite_log != NULL;
     }
     if (!strcmp(name, "--dt-state-every")) {
         s_every = strtoul(value, NULL, 10);
@@ -104,6 +121,10 @@ void dt_diag_frame_begin(void)
 
 void dt_diag_frame_end(void)
 {
+    if (s_sprite_log) {
+        int w, h;
+        cyc_render_present(&w, &h);
+    }
     if (!s_log) return;
     unsigned long frame = cyc_ring_frame - 1;
     if (frame % s_every) return;

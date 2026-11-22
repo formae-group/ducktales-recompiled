@@ -9,8 +9,11 @@ host run around it. The repository contains no game data.
 
 - **Native code, verified frame by frame.** Every test route runs recompiled, interpreted and on a
   reference machine, and the three must match on every frame (see [Verification](#verification)).
-- **Settings menu.** Display mode, window size, integer scaling, VSync, volume and key and
-  controller bindings, all applied live and saved to `config.ini`.
+- **No sprite flicker.** Every sprite is shown on every frame, in a fixed order, with the HUD always
+  up; the console's 8-sprites-per-line and 64-sprite limits only apply to the machine underneath. On by
+  default; switch it off for the original look.
+- **Settings menu.** Display mode, window size, integer scaling, VSync, volume, sprite flicker and key
+  and controller bindings, all applied live and saved to `config.ini`.
 - **Optional enhancements.** Jump height, no damage, infinite time, infinite lives and starting
   lives. All are off by default, and while one is off the original code runs unchanged.
 - **Keyboard, mouse and controller** support with no setup.
@@ -82,6 +85,15 @@ changes take effect at the next start.
 All settings are saved in `config.ini` next to the executable, in NESRecomp's format
 (`--config FILE` selects another file).
 
+### No sprite flicker
+
+The NES draws at most 8 sprites on a line and 64 in all, and DuckTales alternates their order every
+frame, so crowded screens flicker, objects swap front and back, and the HUD vanishes while Scrooge is at
+the top of the screen. With **No sprite flicker** (Settings page, `[Game] NoSpriteFlicker = on|off`,
+`--no-sprite-flicker on|off`; default on) the window draws every sprite the game wants in a fixed order
+and keeps the HUD up. Only the presented picture changes: the machine, its timing and save states are
+the console's. Damage blinking stays. How it works: [docs/rendering.md](docs/rendering.md#sprites-without-limits-presentation).
+
 ### Enhancements
 
 Set them in the menu, in the `[Game]` section of `config.ini`, or on the command line.
@@ -107,6 +119,9 @@ py -3 -I tests/verify_routes.py --build build/headless
 Each input route in `tests/routes/` runs recompiled, interpreter-only and on the TriCNES
 reference machine at four CPU/PPU alignments, and the runs must agree on every frame. Details are in
 [docs/validation.md](docs/validation.md).
+
+`py -3 -I tests/sprites_test.py --build build/headless --dev-build build/headless-dev` checks the sprite
+presentation against the machine's picture.
 
 `py -3 -I tests/window_smoke.py --build build/windows` checks the window build: start-up, ROM
 import and refusal, and every menu page. Setting `DUCKTALES_UI_SELFTEST=<folder>` makes the

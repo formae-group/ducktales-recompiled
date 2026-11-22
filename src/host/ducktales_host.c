@@ -7,6 +7,9 @@
  *   enhancements      game/enhancements.h: config.ini [Game] keys (window)
  *                     and one command-line option each (both); every one is
  *                     off by default
+ *   sprites           host/ducktales_sprites.h: the presented picture without
+ *                     sprite flicker or dropout ([Game] NoSpriteFlicker,
+ *                     --no-sprite-flicker); on by default, presentation only
  *   Application UI    window builds (DUCKTALES_WINDOW): the in-game menu,
  *                     live settings and bindings (ui/app_ui.h) through the
  *                     event, input, audio_mix and frame_begin callbacks
@@ -21,6 +24,7 @@
 #include "game/enhancements.h"
 #include "host/ducktales_diagnostics.h"
 #include "host/ducktales_host.h"
+#include "host/ducktales_sprites.h"
 #if DUCKTALES_WINDOW
 #include "ui/app_ui.h"
 #endif
@@ -30,6 +34,7 @@
 
 static int s_saved[DT_ENH_COUNT];
 static bool s_saved_ready;
+static bool s_saved_sprites = DT_SPRITES_DEFAULT;
 
 static void saved_init(void)
 {
@@ -50,9 +55,24 @@ void ducktales_host_set_saved_value(DtEnh e, int value)
     s_saved[e] = value;
 }
 
+bool ducktales_host_saved_sprites(void) { return s_saved_sprites; }
+
+void ducktales_host_set_saved_sprites(bool on) { s_saved_sprites = on; }
+
 void ducktales_host_load_game_setting(const char *key, const char *value)
 {
     saved_init();
+    if (!strcmp(key, DT_SPRITES_KEY)) {
+        bool on;
+        if (!dt_sprites_parse(value, &on)) {
+            fprintf(stderr, "[ducktales] config.ini [Game] %s = %s: expected on or off; using %s\n", key, value,
+                    DT_SPRITES_DEFAULT ? "on" : "off");
+            on = DT_SPRITES_DEFAULT;
+        }
+        s_saved_sprites = on;
+        dt_sprites_set(on);
+        return;
+    }
     for (int e = 0; e < DT_ENH_COUNT; e++) {
         const DtEnhInfo *in = dt_enh_info((DtEnh)e);
         if (strcmp(key, in->key)) continue;
@@ -76,6 +96,7 @@ void ducktales_host_write_game_settings(FILE *f)
         char v[16];
         fprintf(f, "%s = %s\n", dt_enh_info((DtEnh)e)->key, dt_enh_format((DtEnh)e, s_saved[e], v, sizeof v));
     }
+    fprintf(f, "%s = %s\n", DT_SPRITES_KEY, s_saved_sprites ? "on" : "off");
 }
 
 static void load_setting(void *ctx, const char *key, const char *value)
@@ -93,9 +114,9 @@ static void save_settings(void *ctx, FILE *f)
 #endif
 }
 
-/* One option per enhancement, then the developer ones. */
+/* One option per enhancement, the sprites one, then the developer ones. */
 static const CycHostOption DIAG_OPTIONS[] = { DT_DIAG_OPTIONS { NULL, false, NULL } };
-static CycHostOption s_options[DT_ENH_COUNT + sizeof DIAG_OPTIONS / sizeof DIAG_OPTIONS[0]];
+static CycHostOption s_options[DT_ENH_COUNT + 1 + sizeof DIAG_OPTIONS / sizeof DIAG_OPTIONS[0]];
 static char s_option_help[DT_ENH_COUNT][160];
 
 static size_t options_init(void)
@@ -108,6 +129,8 @@ static size_t options_init(void)
                  in->kind == DT_ENH_KIND_PERCENT ? "100" : "off");
         s_options[n++] = (CycHostOption){ in->option, true, s_option_help[e] };
     }
+    s_options[n++] = (CycHostOption){ DT_SPRITES_OPTION, true,
+                                      "on|off: present every sprite, without flicker or dropout (default on)" };
     for (size_t i = 0; DIAG_OPTIONS[i].name; i++) s_options[n++] = DIAG_OPTIONS[i];
     return n;
 }
@@ -120,12 +143,19 @@ static bool option(void *ctx, const char *name, const char *value)
         int v;
         return dt_enh_parse((DtEnh)e, value, &v) && dt_enh_set((DtEnh)e, v);
     }
+    if (!strcmp(name, DT_SPRITES_OPTION)) {
+        bool on;
+        if (!dt_sprites_parse(value, &on)) return false;
+        dt_sprites_set(on);
+        return true;
+    }
     return dt_diag_option(name, value);
 }
 
 static void power_on(void *ctx)
 {
     (void)ctx;
+    dt_sprites_forget();
     dt_diag_power_on();
 }
 
@@ -141,7 +171,14 @@ static void frame_begin(void *ctx)
 static void frame_end(void *ctx)
 {
     (void)ctx;
+    dt_sprites_frame_end();
     dt_diag_frame_end();
+}
+
+static void state_loaded(void *ctx)
+{
+    (void)ctx;
+    dt_sprites_forget();
 }
 
 static void tcp_setup(void *ctx)
@@ -177,6 +214,7 @@ static CycHostExtras s_extras = {
     .power_on = power_on,
     .frame_begin = frame_begin,
     .frame_end = frame_end,
+    .state_loaded = state_loaded,
     .option = option,
     .tcp_setup = tcp_setup,
 #if DUCKTALES_WINDOW

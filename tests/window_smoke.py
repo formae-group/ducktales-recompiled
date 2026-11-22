@@ -10,7 +10,7 @@ folder (DUCKTALES_DATA_DIR):
      copy) and a non-ROM file with a clear message, and imports the real one
      into the data folder;
   4. without a ROM, the imported copy starts the game directly;
-  5. enhancement settings in config.ini [Game] survive a run;
+  5. enhancement and sprite settings in config.ini [Game] survive a run;
   6. DUCKTALES_UI_SELFTEST: the in-game menu opens by itself at frame 120, walks
      its pages and closes, and the first-run screen shows a refused ROM; each
      state is written as a PNG (into --shots, default a temporary folder) and
@@ -87,11 +87,12 @@ def main():
         check(code == 0, 'without a ROM argument the imported copy starts the game', out)
 
         ini = tmp / 'd.ini'
-        ini.write_text('[Game]\nNoDamage = on\nStartLives = 5\nJumpScale = 150\n')
+        ini.write_text('[Game]\nNoDamage = on\nStartLives = 5\nJumpScale = 150\nNoSpriteFlicker = off\n')
         code, out = run(args.rom, '--hidden', '--exit-after', '120', '--config', str(ini))
         text = ini.read_text()
         check(code == 0 and 'NoDamage = on' in text and 'StartLives = 5' in text and 'JumpScale = 150' in text
-              and 'InfiniteLives = off' in text, 'enhancement settings survive a run in config.ini [Game]', text)
+              and 'InfiniteLives = off' in text and 'NoSpriteFlicker = off' in text,
+              'enhancement and sprite settings survive a run in config.ini [Game]', text)
 
         shots = Path(args.shots).resolve() if args.shots else tmp / 'shots'
         shots.mkdir(parents=True, exist_ok=True)

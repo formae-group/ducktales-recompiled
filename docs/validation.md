@@ -49,6 +49,21 @@ lines).
 The windowed SDL2 build also ran 600 frames hidden (`--hidden --exit-after 600`) with audio
 enabled and exited cleanly.
 
+## Sprite presentation (automated)
+
+`py -3 -I tests/sprites_test.py --build build/headless --dev-build build/headless-dev` (2026-11-22, all
+checks pass): per-frame hashes are identical with `--no-sprite-flicker` on and off (full_amazon frames
+0-3299); with it off the presented picture equals the machine's picture on every frame of four windows
+(Amazon 1215-1304 vine shaft, Amazon 3200-3229 Gyro's helicopter, Himalayas 4371-4400 boss, Transylvania
+1581-1610); with it on the two differ only inside sprites, are identical on every frame where the console
+loses nothing, every frame with a line over 8 sprites or more than 63 wanted is drawn differently, and
+on the 36 vine-shaft frames where the builder leaves the HUD out every HUD pixel Scrooge does not cover
+is drawn. Outside the test, hashes with the feature on and off were also compared on every frame of all
+five `full_*` routes (identical), and the window build was run hidden on full_amazon: its presented
+frame 1230 equals the headless presented picture with the feature on and the machine's picture with it
+off. With the feature linked and on by default, `tests/verify_routes.py --build build/headless` passes all
+twelve routes at all four alignments with 100.0% native cycles (2026-11-22).
+
 ## Not verified
 
 - A complete playthrough of any land on Easy or Difficult, secret treasures, the Transylvania return, the
@@ -56,5 +71,5 @@ enabled and exited cleanly.
 - Difficult mode (the "difficult" route was found to select Easy and was renamed).
 - Comparison with Mesen2 (not installed on this machine yet); the TriCNES oracle is the only
   independent reference so far.
-- Window presentation on the 144 Hz monitor, gamepads, audio quality by ear, fullscreen: needs a
-  person at the machine.
+- Window presentation on the 144 Hz monitor, gamepads, audio quality by ear, fullscreen, and the
+  sprite presentation by eye in play: needs a person at the machine.

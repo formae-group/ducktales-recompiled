@@ -11,11 +11,13 @@ src/game/ducktales_jump.[ch]         jump-height experiment: one hook site, off 
 src/game/enhancements.[ch]           the optional enhancements: one table, one hook site each
 src/game/enhancements_sites.h        their code sites (to move into ducktales_symbols.h)
 src/host/ducktales_host.c            cyc_host_extras(): settings, options, per-frame callbacks
+src/host/ducktales_sprites.[ch]      presentation: every sprite, fixed order, HUD kept (on by default)
 src/host/ducktales_main.c            main() of the window build: ROM choice, then the host
 src/ui/                              the application: first run, menu, live settings
 src/host/ducktales_diagnostics.[ch]  developer diagnostics (DUCKTALES_DEV_DIAGNOSTICS only)
 tests/state_decode_test.c            unit test of the decoder (built with the headless build)
 tests/jump_experiment.py             measures the experiment and checks that it switches off cleanly
+tests/sprites_test.py                the sprite presentation against the machine's picture
 ```
 
 `CMakeLists.txt` passes the `.c` files to `nesrecomp_add_cycle_game(... HOST_EXTRAS ...)`, so the
@@ -177,6 +179,23 @@ deaths of the route cost 3 of the 7 lives, and stock had a game over and a new g
 With every enhancement off, `tests/verify_routes.py --build build/headless` passes all seven
 routes, as before.
 
+### Sprite presentation (`src/host/ducktales_sprites.c`)
+
+Not an enhancement: nothing in the machine changes, so it has no hook site and is not in the table.
+It is a `cyc_render.h` stock-width compositor that paints the picture the window presents (and
+headless `--present-out`), from the exact background capture and a sprite list rebuilt from the RAM the
+frame's OAM was built from, without the per-line or OAM limits and in a fixed order; the HUD stays up
+while Scrooge is in the top band. The design and its evidence are in
+[rendering.md](rendering.md#sprites-without-limits-presentation). The host saves it as `[Game]
+NoSpriteFlicker` (`ducktales_host_saved_sprites`), `--no-sprite-flicker on|off` overrides it for one run,
+and the menu's Settings page switches it live; on by default. `frame_end` saves the RAM of the last two
+frames, `power_on` and `state_loaded` forget them. Off turns the background capture and stock
+compositing off, so the window presents the machine's own picture. With the feature on and off the
+per-frame hashes of all five `full_*` routes are identical, and `tests/sprites_test.py` checks the
+pictures. In a `DUCKTALES_DEV_DIAGNOSTICS` build, `--dt-sprite-log FILE` composes every frame and logs
+how (rebuilt, kept, fallback) with the sprites drawn, lines over 8 and HUD restored; the exit report
+gives the totals. The menu's dimmed background is the presented picture.
+
 ### Reset
 
 The menu's Reset calls `dt_soft_reset()` between frames. Raising the CPU's reset line
@@ -295,6 +314,8 @@ it the host links empty inline stubs and lists none of these options.
 - `--dt-enh-at FRAME:KEY=VALUE` (repeatable) changes an enhancement before that frame, for example
   `--dt-enh-at 1000:NoDamage=off`. `--dt-reset-at FRAME` presses Reset before that frame.
 - At exit the log reports, for each enhancement, its value and how many times it changed the game.
+- `--dt-sprite-log FILE|-` composes the presented picture every frame and writes one line per frame from
+  the sprite compositor; at exit the log reports its totals.
 - In the window, with `--tcp PORT`: `dt_state` returns the typed state as JSON, and `dt_jump_scale`
   returns the scale or sets it with `{"value":N}`.
 
