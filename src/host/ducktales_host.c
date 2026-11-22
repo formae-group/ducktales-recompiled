@@ -243,6 +243,7 @@ static void frame_end(void *ctx)
     dt_sprites_frame_end();
     dt_ramhash_frame_end();
     dt_diag_frame_end();
+    Decomp_FrameEnd();
 }
 
 static void state_loaded(void *ctx)

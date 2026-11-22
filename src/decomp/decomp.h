@@ -3,9 +3,10 @@
  * (docs/decompilation.md).
  *
  * A decompiled routine is C over the typed game API (include/ducktales/). It
- * runs at a [[mod_function_hook]] site at the routine's entry, in a RAM
- * transaction on a private image of CPU RAM. src/decomp/decomp.c runs it in
- * one of three modes (--decomp, or DUCKTALES_DECOMP when the option is not
+ * runs in a RAM transaction on a private image of CPU RAM, from a
+ * [[mod_function_hook]] site at its entry when original code calls it, or as
+ * a plain C call from another decompiled routine. src/decomp/decomp.c runs it
+ * in one of three modes (--decomp, or DUCKTALES_DECOMP when the option is not
  * given):
  *
  *   off      no site is enabled: the recompiled code runs (the default)
@@ -48,7 +49,7 @@ typedef struct Regs { uint8_t a, x, y, p; } Regs;
 
 typedef struct DecompRoutine {
     uint16_t addr;
-    const char *site_id;
+    const char *site_id;    /* the site where original code calls it; NULL when only C does */
     const char *name;
     void (*run)(Regs *r);   /* in: the registers at entry; out: at its RTS */
     uint8_t out;
@@ -60,6 +61,10 @@ bool Decomp_SetMode(DecompMode mode);
 DecompMode Decomp_Mode(void);
 bool Decomp_ParseMode(const char *text, DecompMode *out);
 
+/* The first statement of every routine's C, with the registers the original
+ * gets (those the C does not model as 0). In check mode a call from another
+ * routine's C is checked here as a site checks it. */
+void Decomp_Enter(uint16_t routine, uint8_t a, uint8_t x, uint8_t y);
 /* Run an original routine that is not decompiled yet, with these registers;
  * returns the registers it returned with. */
 Regs Decomp_Call(uint16_t routine, uint8_t a, uint8_t x, uint8_t y);
@@ -67,6 +72,10 @@ Regs Decomp_Call(uint16_t routine, uint8_t a, uint8_t x, uint8_t y);
  * the original runs from its entry. The C must return without doing anything
  * else. */
 void Decomp_RunOriginal(void);
+/* The host's frame end (replace mode gives a call that would still run at
+ * the frame end to the original routine, so the RAM at every frame end is
+ * the console's). */
+void Decomp_FrameEnd(void);
 /* Raise an event from decompiled code that replaces the code its site is
  * in (replace mode only: in check mode the original runs without hooks). */
 int Decomp_RaiseEvent(int event);
