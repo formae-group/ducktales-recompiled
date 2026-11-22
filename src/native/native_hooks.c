@@ -14,11 +14,14 @@
  *              key (length and CRC-32 of the bytes at its address) holds; a
  *              callback that returns nonzero handled the routine, which then
  *              returns as its RTS would, without bus cycles
+ *   isolated   the native runtime makes no isolated calls, so
+ *              cyc_mod_isolated() is always false here
  */
 #include "native/native_runtime.h"
 
 #include "cpu6502.h"
 #include "cyc_hooks.h"
+#include "cyc_mod.h"
 #include "cyc_recomp.h"
 #include "mod_function_hooks.h"
 #include "common/nes_cart.h"
@@ -117,4 +120,9 @@ void native_hooks_fire(uint16_t pc)
             if (cpu.pc != pc) return;
         }
     }
+}
+
+bool cyc_mod_isolated(void)
+{
+    return false;
 }
