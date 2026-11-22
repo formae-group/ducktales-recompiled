@@ -3,6 +3,7 @@
 #include "cyc_core.h"
 #include "cyc_render.h"
 #include "cyc_hooks.h"
+#include "cyc_mod.h"
 #include "cyc_ring.h"
 #if defined(CYC_WITH_SDL)
 #include "cyc_tcp.h"
@@ -22,6 +23,7 @@
 #include <string.h>
 
 #define MAX_JUMP_EVENTS 32
+#define MAX_POKES 64
 
 static FILE *s_log;
 static unsigned long s_every = 1;
@@ -32,6 +34,8 @@ static int s_enh_at_n;
 static unsigned long s_reset_at[MAX_JUMP_EVENTS];
 static int s_reset_at_n;
 static FILE *s_sprite_log;
+static struct { unsigned long frame; uint16_t addr; uint8_t value; } s_poke_at[MAX_POKES];
+static int s_poke_at_n;
 static FILE *s_events_log, *s_ram_log;
 
 static EventResult log_event(EventId id, void *user)
@@ -122,6 +126,17 @@ bool dt_diag_option(const char *name, const char *value)
         s_ram_log = fopen(value, "wb");
         return s_ram_log != NULL;
     }
+    if (!strcmp(name, "--dt-poke-at")) {
+        unsigned long frame;
+        unsigned addr, v;
+        if (s_poke_at_n >= MAX_POKES || sscanf(value, "%lu:%x=%x", &frame, &addr, &v) != 3 || addr >= 0x800 || v > 0xFF)
+            return false;
+        s_poke_at[s_poke_at_n].frame = frame;
+        s_poke_at[s_poke_at_n].addr = (uint16_t)addr;
+        s_poke_at[s_poke_at_n].value = (uint8_t)v;
+        s_poke_at_n++;
+        return true;
+    }
     if (!strcmp(name, "--dt-reset-at")) {
         if (s_reset_at_n >= MAX_JUMP_EVENTS) return false;
         s_reset_at[s_reset_at_n++] = strtoul(value, NULL, 10);
@@ -144,6 +159,8 @@ void dt_diag_frame_begin(void)
         if (s_enh_at[i].frame == cyc_ring_frame) dt_enh_set(s_enh_at[i].e, s_enh_at[i].value);
     for (int i = 0; i < s_reset_at_n; i++)
         if (s_reset_at[i] == cyc_ring_frame) dt_soft_reset();
+    for (int i = 0; i < s_poke_at_n; i++)
+        if (s_poke_at[i].frame == cyc_ring_frame) cyc_mod_poke(s_poke_at[i].addr, s_poke_at[i].value);
 }
 
 void dt_diag_frame_end(void)

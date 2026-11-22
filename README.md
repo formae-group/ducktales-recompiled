@@ -17,6 +17,10 @@ host run around it. The repository contains no game data.
 - **Optional enhancements.** Jump height, no damage, infinite time, infinite lives and starting
   lives. All are off by default, and while one is off the original code runs unchanged.
 - **Keyboard, mouse and controller** support with no setup.
+- **A start on decompilation.** A typed C API over the game's RAM, game events for mods, and
+  Scrooge's per-frame routines decompiled to C, checked against the original on every call
+  (`--decomp check`) and able to run in its place (`--decomp replace`). Off by default; see
+  [docs/decompilation.md](docs/decompilation.md).
 
 ## Requirements
 
@@ -128,6 +132,10 @@ presentation against the machine's picture.
 `py -3 -I tests/window_smoke.py --build build/windows` checks the window build: start-up, ROM
 import and refusal, and every menu page. Setting `DUCKTALES_UI_SELFTEST=<folder>` makes the
 first-run screen and the menu run on their own and save a PNG of each screen.
+
+`py -3 -I tests/decomp_test.py --build build/headless --dev-build build/headless-dev` checks the
+decompiled routines against the original on every route, and the routes again with the C running
+in their place ([docs/decompilation.md](docs/decompilation.md)).
 
 ### Refreshing seeds
 

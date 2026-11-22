@@ -14,9 +14,16 @@
            to its base $BF) must be equal. The rest of page 1 holds what
            interrupts pushed, which differs because an NMI the original takes
            inside a replaced routine is taken right after it.
+  pokes    (needs --dev-build) states no route reaches, made with
+           --dt-poke-at from a point of re_amazon_moves (POKES below): each
+           case runs in check mode, where the routines it targets must be
+           compared at least once, and stock against replace as above.
+  events   (needs --dev-build) enhancements whose event a decompiled routine
+           raises itself (EVENTS below): check mode, and the same options
+           with --decomp off against --decomp replace as above.
 
     py -3 -I tests/decomp_test.py --build build/headless [--dev-build build/headless-dev]
-           [--routes tests/routes/X.txt ...] [--modes check replace] [--jobs 2]
+           [--routes tests/routes/X.txt ...] [--modes check replace pokes events] [--jobs 2]
 
 DUCKTALES_DECOMP=check py -3 -I tests/verify_routes.py runs the oracle comparison with
 the checks on.
@@ -36,6 +43,31 @@ TASKS = 0x80
 MAIN_TASK_BASE = 0xBF
 LINE = re.compile(r'^decomp: mode=\S+ routine=(\S+) addr=\$([0-9A-F]{4}) calls=(\d+) compared=(\d+) original=(\d+)$', re.M)
 
+POKE_ROUTE = ROOT / 'tests' / 'routes' / 're_amazon_moves.txt'
+POKE_FRAME = 1700   # Scrooge on the ground in the Amazon
+POKE_FRAMES = 220
+# name, {address: value} stored before POKE_FRAME (or {frame: {...}}), routines that must be compared
+POKES = [
+    ('hurt-wait', {0x39: 0x05, 0x7D: 0x20}, ['Player_Hurt']),
+    ('hurt-now', {0x39: 0x05, 0x7D: 0x00}, ['Player_Hurt', 'Player_TakeDamage']),
+    ('hurt-last-dot', {0x39: 0x05, 0x7D: 0x00, 0x346: 0x01, 0x34A: 0x01}, ['Player_Hurt', 'Player_Death']),
+    ('pit-falling', {0x39: 0x08}, ['Player_Pit']),
+    ('pit-death', {0x39: 0x08, 0x640: 0xD8}, ['Player_Pit', 'Player_PitDeath']),
+    ('carried-10', {0x39: 0x0A}, ['Player_Carried']),
+    ('carried-11', {0x39: 0x0B}, ['Player_Carried']),
+    ('mode12', {0x39: 0x0C}, ['Player_Mode12']),
+    ('mode12-page7', {0x39: 0x0C, 0x780: 0x00, 0x730: 0x07}, ['Player_Mode12']),
+    ('invulnerable-held', {0x7D: 0x90, 0x75: 0x80}, ['Player_Update']),
+    ('slippery', {POKE_FRAME + 10 * i: {0x71: 0x01} for i in range(20)}, ['Player_Walk']),
+]
+
+# name, route, options, routines that must be compared
+EVENTS = [
+    ('no-damage', 'moon_intro', ['--no-damage', 'on'], ['Player_Knockback']),
+    ('jump-scale-125', 're_amazon_moves', ['--jump-scale', '125'], ['Player_StartJump']),
+]
+
+
 def route_frames(path):
     last = 0
     for line in path.read_text().splitlines():
@@ -45,7 +77,20 @@ def route_frames(path):
 
 
 def route_case(route):
-    return {'name': route.stem, 'route': route, 'frames': route_frames(route), 'extra': []}
+    return {'name': route.stem, 'route': route, 'frames': route_frames(route), 'extra': [], 'want': []}
+
+
+def poke_case(name, pokes, want):
+    if not all(isinstance(v, dict) for v in pokes.values()):
+        pokes = {POKE_FRAME: pokes}
+    extra = [arg for frame, at in pokes.items() for addr, value in at.items()
+             for arg in ('--dt-poke-at', f'{frame}:{addr:X}={value:02X}')]
+    return {'name': name, 'route': POKE_ROUTE, 'frames': POKE_FRAME + POKE_FRAMES, 'extra': extra, 'want': want}
+
+
+def event_case(name, route, options, want):
+    path = ROOT / 'tests' / 'routes' / f'{route}.txt'
+    return {'name': name, 'route': path, 'frames': route_frames(path), 'extra': options, 'want': want}
 
 
 def run(exe, rom, case, extra):
@@ -57,6 +102,8 @@ def check_case(exe, rom, case):
     p = run(exe, rom, case, ['--decomp', 'check'])
     stats = {(m[0], m[1]): tuple(map(int, m[2:])) for m in LINE.findall(p.stdout)}
     err = [l for l in p.stderr.splitlines() if l.startswith('[decomp]')]
+    compared = {name for (name, _), s in stats.items() if s[1]}
+    err += [f'{name} was not compared' for name in case['want'] if name not in compared]
     return case['name'], p.returncode == 0 and bool(stats) and not err, stats, err
 
 
@@ -128,15 +175,17 @@ def run_replaces(pool, exe, rom, cases, label, failed):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--build', default='build/headless')
-    ap.add_argument('--dev-build', help='a -DDUCKTALES_DEV_DIAGNOSTICS=ON headless build (replace mode)')
+    ap.add_argument('--dev-build', help='a -DDUCKTALES_DEV_DIAGNOSTICS=ON headless build (replace, pokes, events)')
     ap.add_argument('--config', default='Release')
     ap.add_argument('--rom', default=str(ROOT / 'roms' / 'DuckTales (USA).nes'))
     ap.add_argument('--routes', nargs='*')
-    ap.add_argument('--modes', nargs='+', default=['check', 'replace'])
+    ap.add_argument('--modes', nargs='+', default=['check', 'replace', 'pokes', 'events'])
     ap.add_argument('--jobs', type=int, default=2)
     args = ap.parse_args()
     routes = [Path(r) for r in args.routes] if args.routes else sorted((ROOT / 'tests' / 'routes').glob('*.txt'))
     cases = [route_case(r) for r in routes]
+    pokes = [poke_case(*p) for p in POKES]
+    events = [event_case(*e) for e in EVENTS]
     exe = ROOT / args.build / args.config / 'ducktales.exe'
     dev = ROOT / args.dev_build / args.config / 'ducktales.exe' if args.dev_build else None
     failed = []
@@ -145,6 +194,12 @@ def main():
             run_checks(pool, exe, args.rom, cases, 'check', failed)
         if 'replace' in args.modes and dev:
             run_replaces(pool, dev, args.rom, cases, 'replace', failed)
+        if 'pokes' in args.modes and dev:
+            run_checks(pool, dev, args.rom, pokes, 'pokes', failed)
+            run_replaces(pool, dev, args.rom, pokes, 'pokes', failed)
+        if 'events' in args.modes and dev:
+            run_checks(pool, dev, args.rom, events, 'events', failed)
+            run_replaces(pool, dev, args.rom, events, 'events', failed)
     print('all passed' if not failed else 'failed: ' + ', '.join(failed))
     return 1 if failed else 0
 

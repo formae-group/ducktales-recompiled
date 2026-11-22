@@ -155,6 +155,44 @@
  * Routines the decompilation names or calls (docs/functions.md,
  * docs/player.md, docs/decompilation.md). config/game.toml declares a
  * [[mod_function_hook]] with a content key at every one the port hooks. */
+#define DT_CODE_BG_PROBE         0xD120  /* background probes $40.. against the collision map */
+#define DT_CODE_CONTACT_H        0xD202  /* Scrooge-object contact while moving horizontally */
+#define DT_CODE_CONTACT_V        0xD291  /* Scrooge-object contact while moving vertically */
+#define DT_CODE_SNAP_RIGHT       0xD49A  /* snap world X back after a probe hit on the right */
+#define DT_CODE_SNAP_LEFT        0xD4B2  /* snap world X back after a probe hit on the left */
+#define DT_CODE_SNAP_HEAD        0xD4C8  /* push Y down below the tile the head probe hit */
+#define DT_CODE_SNAP_FEET        0xD4D6  /* snap Y onto the tile the feet probe hit */
+#define DT_CODE_SELECT_REFILL    0xE2FE  /* Select on the ground (TOTAL for a lost HP dot; hypothesis) */
+#define DT_CODE_PLAYER_UPDATE    0xE354  /* Scrooge's per-frame entry */
+#define DT_CODE_MODE_LO          0xE396  /* mode handler table, low bytes (17 entries) */
+#define DT_CODE_MODE_HI          0xE3A7  /* mode handler table, high bytes */
+#define DT_CODE_PLAYER_GROUND    0xE3B8  /* mode 0 */
+#define DT_CODE_JUMP_START       0xE3F2  /* copy the take-off velocity, mode 1, air handler */
+#define DT_CODE_PLAYER_WALK      0xE482  /* horizontal speed and movement */
+#define DT_CODE_MOVE_RIGHT       0xE593  /* move right with object and wall tests */
+#define DT_CODE_MOVE_LEFT        0xE5C3  /* move left with object and wall tests */
+#define DT_CODE_PLAYER_AIR       0xE63B  /* mode 1 */
+#define DT_CODE_GRAB_CLIMB       0xE740  /* grab a climbable tile while Up is held */
+#define DT_CODE_PLAYER_POGO      0xE7EA  /* mode 2 */
+#define DT_CODE_PLAYER_CLIMB     0xE806  /* mode 3 */
+#define DT_CODE_PLAYER_CANE      0xE8EB  /* mode 4 */
+#define DT_CODE_PLAYER_FALL      0xE970  /* falling or standing: gravity, move, contacts, probes */
+#define DT_CODE_PLAYER_RISE      0xE9BA  /* rising: jump cut, move, contacts, probes */
+#define DT_CODE_PROBE_VERTICAL   0xEA5E  /* feet or head probes after a vertical move */
+#define DT_CODE_PLAYER_HURT      0xEAB9  /* mode 5 */
+#define DT_CODE_PLAYER_KNOCKBACK 0xEB00  /* mode 6 */
+#define DT_CODE_TAKE_DAMAGE      0xEB5E  /* mark the last full HP dot lost */
+#define DT_CODE_PLAYER_STUCK     0xEB82  /* mode 7 */
+#define DT_CODE_PLAYER_PIT       0xEBA7  /* mode 8 */
+#define DT_CODE_PIT_DEATH        0xEBB4  /* request the respawn that costs a life */
+#define DT_CODE_PLAYER_MODE9     0xEBC9  /* mode 9 */
+#define DT_CODE_PLAYER_CARRIED   0xEBD9  /* modes 10 and 11 */
+#define DT_CODE_PLAYER_MODE12    0xEC2D  /* mode 12 */
+#define DT_CODE_PLAYER_DEATH     0xEC9B  /* mode 13 */
+#define DT_CODE_PLAYER_MODE14    0xECFF  /* mode 14 */
+#define DT_CODE_MOVE_WITH_WALLS  0xF0F8  /* move horizontally with wall probes (code) */
+#define DT_CODE_CLIMB_DOWN       0xF192  /* climbing step down with probes (code) */
+#define DT_CODE_CLIMB_UP         0xF1A8  /* climbing step up with probes (code) */
 #define DT_CODE_MOVE_RIGHT_SPEED 0xF234  /* world X += speed (X = slot) */
 #define DT_CODE_MOVE_LEFT_SPEED  0xF252  /* world X -= speed (X = slot) */
 #define DT_CODE_APPLY_VY         0xF2A1  /* Y -= vertical velocity (X = slot) */

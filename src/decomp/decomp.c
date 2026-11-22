@@ -232,6 +232,7 @@ NES_MOD_CONSTRUCTOR(dt_register_decomp_sites)
 {
     add_table(gMotionRoutines, gMotionRoutineCount);
     add_table(gSoundRoutines, gSoundRoutineCount);
+    add_table(gPlayerRoutines, gPlayerRoutineCount);
 }
 
 static void report_stats(void)

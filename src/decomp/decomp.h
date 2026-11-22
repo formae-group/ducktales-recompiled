@@ -102,3 +102,5 @@ extern const DecompRoutine gMotionRoutines[];
 extern const int gMotionRoutineCount;
 extern const DecompRoutine gSoundRoutines[];
 extern const int gSoundRoutineCount;
+extern const DecompRoutine gPlayerRoutines[];
+extern const int gPlayerRoutineCount;

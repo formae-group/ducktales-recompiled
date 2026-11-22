@@ -322,8 +322,9 @@ it the host links empty inline stubs and lists none of these options.
   and for each game event how many times it was raised.
 - `--dt-events-log FILE|-` registers a handler on every event that changes nothing and writes one
   line per raised event (`frame=1004 event=player-damaged`).
-- `--dt-ram-log FILE` writes CPU RAM (2 KiB) and the CPU's S after every frame, raw, for
-  `tests/decomp_test.py`.
+- `--dt-ram-log FILE` writes CPU RAM (2 KiB) and the CPU's S after every frame, raw, and
+  `--dt-poke-at FRAME:ADDR=VALUE` (hex, repeatable) stores a byte of CPU RAM before that frame.
+  `tests/decomp_test.py` uses both ([decompilation.md](decompilation.md)).
 - `--dt-sprite-log FILE|-` composes the presented picture every frame and writes one line per frame from
   the sprite compositor; at exit the log reports its totals.
 - In the window, with `--tcp PORT`: `dt_state` returns the typed state as JSON, and `dt_jump_scale`

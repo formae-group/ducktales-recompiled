@@ -35,6 +35,7 @@ set(_ducktales_extras
     "${CMAKE_SOURCE_DIR}/src/decomp/decomp.c"
     "${CMAKE_SOURCE_DIR}/src/decomp/motion.c"
     "${CMAKE_SOURCE_DIR}/src/decomp/sound.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/player.c"
     "${CMAKE_SOURCE_DIR}/src/host/ducktales_host.c")
 # The application (docs/architecture.md "Application"): the
 # program entry with the first-run ROM import, the in-game menu and live

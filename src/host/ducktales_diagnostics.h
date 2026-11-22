@@ -12,6 +12,8 @@
  *   --dt-reset-at F       press the console's reset before frame F (repeatable)
  *   --dt-sprite-log FILE  one line per presented picture from the sprite
  *                         compositor (host/ducktales_sprites.h; "-" = stdout)
+ *   --dt-poke-at F:A=V    store V (hex) at CPU RAM address A (hex) before frame
+ *                         F (repeatable), to reach game states no route does
  *   --dt-events-log FILE  one line per game event raised (ducktales/events.h);
  *                         registers a handler that changes nothing
  *   --dt-ram-log FILE     CPU RAM (2 KiB) and the CPU's S after every frame,
@@ -29,6 +31,7 @@
     { "--dt-enh-at", true, "dev: FRAME:KEY=VALUE enhancement change (repeatable)" }, \
     { "--dt-reset-at", true, "dev: FRAME console reset (repeatable)" }, \
     { "--dt-sprite-log", true, "dev: sprite compositor line per presented picture to FILE (- = stdout)" }, \
+    { "--dt-poke-at", true, "dev: FRAME:ADDR=VALUE CPU RAM store, hex (repeatable)" }, \
     { "--dt-events-log", true, "dev: one line per game event to FILE (- = stdout)" }, \
     { "--dt-ram-log", true, "dev: CPU RAM and S after every frame to FILE (raw)" },
 bool dt_diag_option(const char *name, const char *value);
