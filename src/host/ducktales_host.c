@@ -17,6 +17,9 @@
  *   Application UI    window builds (DUCKTALES_WINDOW): the in-game menu,
  *                     live settings and bindings (ui/app_ui.h) through the
  *                     event, input, audio_mix and frame_begin callbacks
+ *   decompilation     --decomp off|check|replace (or DUCKTALES_DECOMP when the
+ *                     option is not given): runs the decompiled routines
+ *                     (src/decomp/decomp.h); off by default
  *   presentation      window builds: the picture the window shows (present,
  *                     ui/app_present.h) and its [Game] keys; present_rate with
  *                     present_from_snapshot and no present_phase turns on the
@@ -33,6 +36,7 @@
 #include "cyc_core.h"
 #include "cyc_host_extras.h"
 
+#include "decomp/decomp.h"
 #include "game/enhancements.h"
 #include "host/ducktales_diagnostics.h"
 #include "host/ducktales_host.h"
@@ -69,9 +73,11 @@ static void save_settings(void *ctx, FILE *f)
 #endif
 }
 
-/* One option per enhancement, the sprites one, then the developer ones. */
+/* One option per enhancement, the sprites one, the decompilation's, then the
+ * developer ones. */
 static const CycHostOption DIAG_OPTIONS[] = { DT_RAMHASH_OPTIONS DT_DIAG_OPTIONS NV_CHECK_OPTIONS { NULL, false, NULL } };
-static CycHostOption s_options[DT_ENH_COUNT + 1 + sizeof DIAG_OPTIONS / sizeof DIAG_OPTIONS[0]];
+static CycHostOption s_options[DT_ENH_COUNT + 2 + sizeof DIAG_OPTIONS / sizeof DIAG_OPTIONS[0]];
+static bool s_decomp_option;
 static char s_option_help[DT_ENH_COUNT][160];
 
 static size_t options_init(void)
@@ -86,6 +92,8 @@ static size_t options_init(void)
     }
     s_options[n++] = (CycHostOption){ DT_SPRITES_OPTION, true,
                                       "on|off: present every sprite, without flicker or dropout (default on)" };
+    s_options[n++] = (CycHostOption){ "--decomp", true,
+        "off|check|replace: run the decompiled routines (check: compare with the original on every call; default off)" };
     for (size_t i = 0; DIAG_OPTIONS[i].name; i++) s_options[n++] = DIAG_OPTIONS[i];
     return n;
 }
@@ -93,6 +101,11 @@ static size_t options_init(void)
 static bool option(void *ctx, const char *name, const char *value)
 {
     (void)ctx;
+    if (!strcmp(name, "--decomp")) {
+        DecompMode mode;
+        s_decomp_option = true;
+        return Decomp_ParseMode(value, &mode) && Decomp_SetMode(mode);
+    }
     bool ok;
     if (ducktales_host_game_option(name, value, &ok)) return ok;
     if (!strcmp(name, "--ram-hash-out")) return dt_ramhash_open(value);
@@ -104,6 +117,15 @@ static void power_on(void *ctx)
 {
     (void)ctx;
     dt_sprites_forget();
+    DecompMode mode;
+    const char *env = getenv("DUCKTALES_DECOMP");
+    if (!s_decomp_option && env && *env) {
+        if (!Decomp_ParseMode(env, &mode)) {
+            fprintf(stderr, "[ducktales] DUCKTALES_DECOMP=%s: expected off, check or replace\n", env);
+            exit(2);
+        }
+        Decomp_SetMode(mode);
+    }
     if (ducktales_host_no_slowdown()) {
         ducktales_host_set_no_slowdown(true);
         printf("[ducktales] No slowdown: %u extra scanlines per frame\n", cyc_extra_scanlines());
