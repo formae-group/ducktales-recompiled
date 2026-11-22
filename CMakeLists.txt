@@ -16,6 +16,12 @@ if(NOT EXISTS "${DUCKTALES_ROM}")
     message(FATAL_ERROR "ROM not found: ${DUCKTALES_ROM}\nCopy DuckTales (USA).nes into roms/ or pass -DDUCKTALES_ROM=<path>.")
 endif()
 
+# Players need no Visual C++ redistributable: the window build links the static
+# MSVC runtime (/MT). Verification builds keep CMake's default.
+if(MSVC AND NOT DUCKTALES_HEADLESS)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 include("${NESRECOMP_ROOT}/runner/cyc/project.cmake")
 
 set(_ducktales_options PLAYERS 1)
@@ -158,4 +164,27 @@ endif()
 if(DUCKTALES_ORACLE)
     set(NESRECOMP_CYC_DIR "${NESRECOMP_ROOT}/runner/cyc")
     nesrecomp_cyc_add_oracle(ducktales_oracle)
+endif()
+
+# The release package (CONTRIBUTING.md "Releasing"): `cpack -C Release` in
+# build/windows writes DuckTalesRecompiled-<version>-win64.zip with the
+# executable, SDL2, the player README and every licence the binaries carry
+# (docs/licensing.md). No ROM, generated source or test tool is installed.
+if(NOT DUCKTALES_HEADLESS)
+    configure_file("${CMAKE_SOURCE_DIR}/packaging/README.txt.in" "${CMAKE_BINARY_DIR}/package/README.txt" @ONLY NEWLINE_STYLE CRLF)
+    install(TARGETS ducktales RUNTIME DESTINATION .)
+    install(FILES "$<TARGET_FILE:SDL2::SDL2>" "${CMAKE_BINARY_DIR}/package/README.txt" DESTINATION .)
+    install(FILES "${CMAKE_SOURCE_DIR}/LICENSE" DESTINATION . RENAME LICENSE.txt)
+    install(FILES "${NESRECOMP_ROOT}/LICENSE" DESTINATION licenses RENAME NESRecomp-LICENSE.txt)
+    install(FILES "${NESRECOMP_ROOT}/PERMISSIONS.md" DESTINATION licenses RENAME NESRecomp-PERMISSIONS.md)
+    install(FILES "${NESRECOMP_ROOT}/runner/cyc/vendor/emu2413/LICENSE" DESTINATION licenses RENAME emu2413-LICENSE.txt)
+    install(FILES "${NESRECOMP_ROOT}/runner/external/SDL2/COPYING.txt" DESTINATION licenses RENAME SDL2-COPYING.txt)
+    install(FILES "${NESRECOMP_ROOT}/runner/external/SDL2/README-SDL.txt" DESTINATION licenses RENAME SDL2-README-SDL.txt)
+    install(FILES "${IMGUI_ROOT}/LICENSE.txt" DESTINATION licenses RENAME imgui-LICENSE.txt)
+    set(CPACK_GENERATOR ZIP)
+    set(CPACK_PACKAGE_NAME DuckTalesRecompiled)
+    set(CPACK_PACKAGE_VERSION "${_ducktales_version}")
+    set(CPACK_PACKAGE_FILE_NAME "DuckTalesRecompiled-${_ducktales_version}-win64")
+    set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY ON)
+    include(CPack)
 endif()

@@ -101,6 +101,33 @@ not verify in its *Not verified* section.
 - A merge request is accepted when its checks pass and the change keeps the original behaviour at
   default settings.
 
+## Releasing
+
+A release is a ZIP for players built from a clean checkout of a tagged commit on `main`. Its version
+is `git describe --tags --always --dirty` when CMake configures (the same string the About page
+shows), so a package built from an untagged or modified tree says so in its name.
+
+1. Run the checks in [Verification](#verification) on the release commit, then tag it:
+   `git tag -a v1.0.0 -m "DuckTales Recompiled 1.0.0"`.
+2. Configure the window build again so it reads the new version, then build and test the package:
+
+   ```powershell
+   cmake -S . -B build/windows -G "Visual Studio 17 2022" -A x64
+   cmake --build build/windows --config Release --parallel
+   py -3 -I tests/window_smoke.py --build build/windows
+   py -3 -I tests/package_test.py --build build/windows
+   ```
+
+3. Write the package: `cmake --build build/windows --config Release --target PACKAGE`. It is
+   `build\windows\DuckTalesRecompiled-v1.0.0-win64.zip`.
+4. Publish the ZIP free of charge (NESRecomp's licence, see below) and push the tag.
+
+The package holds `ducktales.exe` (static MSVC runtime, so players need no Visual C++
+redistributable), `SDL2.dll`, the player `README.txt` (from `packaging/README.txt.in`),
+`LICENSE.txt` and the third-party licences under `licenses/`; the install rules at the end of
+`CMakeLists.txt` list them and [docs/licensing.md](docs/licensing.md) says why each is there. It
+never contains the ROM, generated sources or test tools; `tests/package_test.py` checks the file list.
+
 ## Licensing
 
 Contributions are accepted under the MIT license in [LICENSE](LICENSE). Builds link NESRecomp, which

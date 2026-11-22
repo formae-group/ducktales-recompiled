@@ -54,6 +54,7 @@ Configure with `-G "Visual Studio 17 2022" -A x64` and build with
 | Sprite presentation | `py -3 -I tests/sprites_test.py --build build/headless --dev-build build/headless-dev` |
 | Menu, settings, window | `py -3 -I tests/window_smoke.py --build build/windows` |
 | ROM identity and import | `build/headless/Release/app_rom_test.exe` |
+| Release package, install rules | `py -3 -I tests/package_test.py --build build/windows` |
 
 The full `verify_routes.py` run takes most of an hour; iterate with `--routes <name> ...` and run the
 full set once at the end. Oracle results are cached in `build/verify-cache/`.

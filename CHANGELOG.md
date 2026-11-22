@@ -24,6 +24,9 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   steady), nearest, sharp and smooth scaling, 8:7 pixel aspect, overscan crop and a clean HUD split
   line.
 - Application icon in the executable and the window title bar.
+- Release package: CPack writes `DuckTalesRecompiled-<version>-win64.zip` with the executable,
+  SDL2, a player README (ROM import, SHA-256, controls) and every third-party licence, checked by
+  `tests/package_test.py`; releasing steps in CONTRIBUTING.md.
 - Native runtime prototype without the cycle-level host (`DUCKTALES_NATIVE`).
 - Differential verification against the TriCNES reference machine on 12 routes, including all five
   lands played to their LAND CLEAR screens, at four CPU/PPU alignments, with the oracle's results
@@ -34,6 +37,7 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Changed
 
+- The window build links the static MSVC runtime, so players need no Visual C++ redistributable.
 - The README was rewritten as a technical overview with the supported ROM's hashes.
 - The pause menu no longer shows help and hint text.
 

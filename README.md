@@ -63,7 +63,9 @@ cmake --build build/windows --config Release --parallel
 
 The executable is written to `build\windows\Release\ducktales.exe`. Code generation runs at configure
 time and again whenever the ROM, `config/` or the recompiler changes; the generated sources live under
-`build/*/cycle-ducktales/` and are never committed.
+`build/*/cycle-ducktales/` and are never committed. The window build links the static MSVC runtime,
+and `cmake --build build/windows --config Release --target PACKAGE` writes the player package
+`DuckTalesRecompiled-<version>-win64.zip` (see [CONTRIBUTING.md](CONTRIBUTING.md#releasing)).
 
 | CMake option | Effect |
 |---|---|
@@ -183,6 +185,7 @@ the CPU registers, and must be identical on every frame. The oracle's hashes are
 | `tests/sprites_test.py` | Sprite presentation versus the machine picture |
 | `tests/enhancements_test.py` | Each enhancement's effect, and identity with the original when off |
 | `tests/window_smoke.py` | Start-up, ROM import and refusal, settings persistence, every menu tab and category |
+| `tests/package_test.py` | The release ZIP's contents, and the game starting from it unpacked |
 
 New routes can reach code no route has executed; append its interpreter misses to the seeds and
 rebuild:

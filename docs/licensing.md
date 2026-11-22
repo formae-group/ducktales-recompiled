@@ -11,9 +11,29 @@ distributed builds.
 | TriCNES-derived reference core | `external/nesrecomp/runner/cyc/tric_core.cpp` | MIT (`runner/cyc/LICENSE.TriCNES`) | Test-only oracle; keep the notice if it is ever distributed. |
 | SDL2 (Windows binary bundled by NESRecomp) | `external/nesrecomp/runner/external/SDL2` | zlib | Ship its licence with any package. |
 | Dear ImGui | `external/imgui` (submodule, pinned) | MIT | Used by the in-game menu; keep its notice in packages. |
-| MSVC runtime DLLs copied next to the executable | build output | Microsoft Visual C++ redistributable terms | Redistributable as part of an application. |
+| emu2413 (Mitsutaka Okazaki) | `external/nesrecomp/runner/cyc/vendor/emu2413` | MIT | Compiled into every cycle-host executable (NESRecomp's VRC7 sound), so its notice ships in packages. |
+| stb_image | `external/nesrecomp/runner/src/stb_image.h` | Public domain or MIT, at the user's choice | Decodes the About page logo; taken under the public-domain option, so no notice is required. |
+| MSVC runtime | static in the window build (`/MT`); NESRecomp still copies the DLLs next to the executable in the build tree | Microsoft Visual C++ terms | The release package ships no runtime DLL and needs no redistributable. |
 | Other submodules of NESRecomp (`lib/recomp-net`, `lib/retcomm-rbengine`) | not checked out | not audited | Not needed by this port; audit before enabling netplay. |
 | denisfox3554/Nesrecomp (MinGW fork) | not used | MIT as stated in the repository | Not a dependency. Its README credits NESRecomp, but its code is an independent, much smaller reimplementation, so the MIT grant does not relicense upstream code. |
+
+## Release package
+
+The `PACKAGE` target of `build/windows` (CPack; see CONTRIBUTING.md "Releasing") writes
+`DuckTalesRecompiled-<version>-win64.zip`. Besides `ducktales.exe`, `SDL2.dll` and the player
+`README.txt` it carries:
+
+| File | Source | Why |
+|---|---|---|
+| `LICENSE.txt` | `LICENSE` | The port's own MIT licence |
+| `licenses/NESRecomp-LICENSE.txt` | `external/nesrecomp/LICENSE` | PolyForm Noncommercial 1.0.0 requires the licence text with every copy |
+| `licenses/NESRecomp-PERMISSIONS.md` | `external/nesrecomp/PERMISSIONS.md` | Its additional permissions travel with it. NESRecomp provides no `Required Notice:` lines (only the licence's own example) |
+| `licenses/imgui-LICENSE.txt` | `external/imgui/LICENSE.txt` | MIT notice |
+| `licenses/SDL2-COPYING.txt`, `licenses/SDL2-README-SDL.txt` | `external/nesrecomp/runner/external/SDL2` | zlib licence; SDL asks for its README to accompany the DLL |
+| `licenses/emu2413-LICENSE.txt` | `external/nesrecomp/runner/cyc/vendor/emu2413/LICENSE` | MIT notice |
+
+The player README repeats that the package must be free of charge. The TriCNES notice is not
+included because the oracle is never packaged.
 
 ## Game material
 
