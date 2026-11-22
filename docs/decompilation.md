@@ -181,6 +181,13 @@ RAM-identical in replace mode.
 | `Player_Death` | `$EC9B` | checked | 8 | hurt-last-dot | none |
 | `Player_Mode14` | `$ECFF` | checked | 1 | - | none |
 
+**Claimed, in progress** (branch `decomp/flow`, `src/decomp/flow.c`): the game flow of the main task in the fixed
+bank, `$D4E6-$E353` and the boss trigger `$CF93-$D04C`: title and difficulty select (`$D4E6`), Land Select and the
+banking of money (`$D630`, `$D8D9`), land load (`$D79B`) and the per-land tables (`$D9CA`), the frame loop (`$DB36`)
+with pause and the boss checkpoint (`$DC04`), death and warps (`$DC3E`, `$DD23`, `$DD4E`), the HUD refreshes
+(`$DE6C`, `$DEA3`), game over (`$DEB9`), land exit and scenes (`$DF08`, `$DF27`), the ending (`$E054`, `$E1AF`) and
+the HUD timer `timer_tick` (`$E28C`).
+
 Not decompiled yet, and still run as the original from the C:
 
 - Through `Decomp_Call`: the background probe `$D120` and its snaps `$D49A`/`$D4B2`/`$D4C8`/`$D4D6`,
