@@ -92,24 +92,37 @@ for later launches. Headless import: `ducktales.exe --import-rom <path>` (exit c
 
 Settings are saved to `config.ini` next to the executable (`--config FILE` selects another file).
 
-### Settings
+### Menu
 
-| Setting | Values | Key |
-|---|---|---|
-| Display | Windowed, borderless, exclusive fullscreen | `[Display] Fullscreen` |
-| Window size | 1x to 8x | `[Display] WindowScale` |
-| Integer scaling | On, off | `[Display] IntegerScale` |
-| Pixels | Nearest, sharp, smooth | `[Game] Pixels` |
-| Pixel aspect | Square, 8:7 | `[Game] PixelAspect` |
-| Overscan crop | Off, top-bottom, all | `[Game] Overscan` |
-| HUD split line | Clean, original | `[Game] HudSplit` |
-| Frame pacing | Auto, VSync, steady | `[Game] FramePacing` |
-| No sprite flicker | On (default), off | `[Game] NoSpriteFlicker` |
-| No slowdown | On (default), off | `[Game] NoSlowdown` |
-| Volume | 0% to 100% | `[Audio] Volume` |
+Escape or RB pauses the game and opens the menu; Escape, B, RB or the Resume button closes it. The bar
+at the top holds the **Settings**, **Enhancements** and **About** tabs, and Reset, Quit (each asks
+first) and Resume on the right. Each tab lists its categories on the left and the chosen one's page
+on the right. Everything works with the mouse, the keyboard (arrows, Tab, Enter, Space) and a
+controller (D-pad, A, B); changes apply at once and are saved to `config.ini`. On the Controls page,
+choose a cell and press the new key or button: Escape cancels and Delete clears.
+
+| Tab, category | Setting | Values | Key |
+|---|---|---|---|
+| Settings, General | Menu background opacity | 0% to 100% (80%) | `[Game] MenuOpacity` |
+| | Controller navigation | On (default), off | `[Game] MenuControllerNav` |
+| Settings, Graphics | Display mode | Windowed, borderless, exclusive fullscreen | `[Display] Fullscreen` |
+| | Window size | 1x to 8x | `[Display] WindowScale` |
+| | Integer scaling | On, off | `[Display] IntegerScale` |
+| | Pixels | Nearest, sharp, smooth | `[Game] Pixels` |
+| | Pixel aspect | Square, 8:7 | `[Game] PixelAspect` |
+| | Crop overscan | Off, top and bottom, all edges | `[Game] Overscan` |
+| | HUD split line | Clean, original | `[Game] HudSplit` |
+| | Frame pacing | Auto, VSync, steady | `[Game] FramePacing` |
+| | No sprite flicker | On (default), off | `[Game] NoSpriteFlicker` |
+| Settings, Audio | Master volume | 0% to 100% | `[Audio] Volume` |
+| Settings, Controls | Player 1 keyboard and controller bindings, Menu shortcut | | `[Keyboard.*]`, `[Gamepad.*]` |
+| Settings, Gameplay | No slowdown | On (default), off | `[Game] NoSlowdown` |
+| Enhancements, Gameplay | The enhancements below | | `[Game]` |
+| Enhancements, Restore defaults | Restore the original game | | |
 
 Frame pacing applies at the next launch: *Auto* uses VSync on displays up to 70 Hz and a steady
-present hold above that. Measurements are in [docs/presentation.md](docs/presentation.md).
+present hold above that. Measurements are in [docs/presentation.md](docs/presentation.md). The About
+tab shows the version, the build date and the credits.
 
 ### Enhancements
 
@@ -169,7 +182,7 @@ the CPU registers, and must be identical on every frame. The oracle's hashes are
 | `tests/verify_routes.py` | Recompiled, interpreter and oracle equality on every route |
 | `tests/sprites_test.py` | Sprite presentation versus the machine picture |
 | `tests/enhancements_test.py` | Each enhancement's effect, and identity with the original when off |
-| `tests/window_smoke.py` | Start-up, ROM import and refusal, settings persistence, every menu page |
+| `tests/window_smoke.py` | Start-up, ROM import and refusal, settings persistence, every menu tab and category |
 
 New routes can reach code no route has executed; append its interpreter misses to the seeds and
 rebuild:
