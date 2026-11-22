@@ -115,6 +115,7 @@ if(DUCKTALES_NATIVE)
         "${CMAKE_SOURCE_DIR}/src/native/native_main.c"
         "${CMAKE_SOURCE_DIR}/src/native/native_bus.c"
         "${CMAKE_SOURCE_DIR}/src/native/native_video.c"
+        "${CMAKE_SOURCE_DIR}/src/native/native_audio.c"
         "${_nes_cyc}/cpu6502.c"
         "${_nes_cyc}/cpu6502_interp.c"
         ${CYC_PROJECT_SOURCES})
