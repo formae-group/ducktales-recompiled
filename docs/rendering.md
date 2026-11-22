@@ -23,6 +23,8 @@ them with what the PPU and RAM actually hold (commands under [Reproducing](#repr
   alternates every frame (flicker) and there is no other budget than the 63 OAM entries. The window
   removes the flicker, the dropout and the HUD cut in presentation only (see
   [Sprites without limits](#sprites-without-limits-presentation)).
+- `src/native/native_render.[ch]` is that renderer for the 256x240 picture, proven against the PPU
+  frame by frame (see [Native renderer](#native-renderer)).
 
 ## Frame structure (NMI `$C000`)
 
@@ -223,6 +225,25 @@ records Scrooge does not cover.
 Known limits: colors use the emphasis of the picture's last line (`cyc_render_color`), which DuckTales
 never changes mid-frame (hypothesis); a sprite whose priority quirk relies on the 8-per-line limit to
 hide another (not seen in DuckTales) would show.
+
+## Native renderer
+
+`src/native/native_render.[ch]` draws the 256x240 picture with no PPU from the frame's video state:
+CHR RAM, the two nametables, palette RAM, OAM, and the frame's scroll/control segments (here the HUD
+and the playfield below the sprite-0 split). It follows the 2C02's composition rules: fine scroll,
+attributes, 8x8/8x16 sprites, flips, behind-background priority, the left-column clips, greyscale and
+emphasis. It can also draw any sprite list with no per-line limit, the rule of
+[Sprites without limits](#sprites-without-limits-presentation). Its own document is
+[native-render.md](native-render.md).
+
+| Check | Result | Status |
+|---|---|---|
+| Every frame of the five `full_*` routes (47,440 frames), drawn from the PPU's memories and line records (`--native-render-check`, `tests/native_render_test.py`) | equal to `cyc_frame_index()` and `cyc_frame_argb()` on every pixel of every line except the split line | verified |
+| The split line | the split's `$2005` write lands mid-line, 64-84 pixels after the natively computed sprite-0 hit (the 7-cycle `$2002` polling loop); with that column placed 21,025 of 21,140 differing split lines are exact | verified |
+| Row transitions (`$E9`) | 115 frames keep 100-150 differing pixels on that one line: the `$2006` write lands inside a tile fetch | explained, not modelled |
+
+The renderer is not used for presentation yet. Nothing it does reaches the machine, so the machine's
+picture and hashes do not depend on it.
 
 ## Reproducing
 
