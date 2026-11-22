@@ -12,8 +12,9 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   no route has reached.
 - ROM identity check by SHA-256, first-run import by file dialog or drag and drop, and a data folder
   in `%APPDATA%\DuckTales Recompiled` (`DUCKTALES_DATA_DIR` overrides it).
-- Dear ImGui menu with settings, rebindable keyboard and controller input, and a pause screen opened
-  with Escape.
+- Dear ImGui menu in the style of Ship of Harkinian, opened with Escape: Settings (General, Graphics,
+  Audio, Controls, Gameplay), Enhancements and About tabs with a category sidebar, rebindable
+  keyboard and controller input, menu background opacity and controller navigation.
 - Enhancements, all off by default: jump height, no damage, infinite time, infinite lives and extra
   lives at start. Each hooks a single site guarded by a content key.
 - No sprite flicker: every sprite is shown on every frame without the 8-per-line and 64-sprite
