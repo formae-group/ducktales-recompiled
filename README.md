@@ -9,10 +9,11 @@ A native Windows port of *DuckTales* (NES, Capcom, 1989), built by static recomp
 </div>
 
 DuckTales Recompiled translates the game's 6502 program into C at build time and compiles it into a
-native executable. The game logic runs as native code; the cartridge hardware it talks to (PPU, APU,
-UxROM mapper, controllers) is supplied by the [NESRecomp](https://github.com/mstan/nesrecomp) runtime,
-and a port layer adds the menu, settings, presentation and enhancements on top. Every build is checked
-frame by frame against an independent reference machine.
+native executable. The game logic runs as native code on a small native runtime that gives it the
+bus it talks to and draws its picture from the video state it writes, with no PPU emulation; the
+verification builds run the same code on the cycle-exact [NESRecomp](https://github.com/mstan/nesrecomp)
+host, and a port layer adds the menu, settings, presentation and enhancements on top. Every build is
+checked frame by frame against an independent reference machine.
 
 The repository contains no game data. You supply your own ROM, and the build generates all
 ROM-derived code locally.
@@ -25,8 +26,12 @@ ROM-derived code locally.
   per-frame state on every route at all four CPU/PPU alignments.
 - **No sprite flicker.** Every sprite is drawn on every frame in a fixed order, with no 8-per-line or
   64-sprite limit, and the HUD stays visible. Presentation only; the machine is untouched.
-- **No slowdown.** Extra CPU time per frame removes the console's lag frames without changing game
-  logic.
+- **Native runtime.** The game runs on a native bus and renderer instead of an emulated PPU, and its
+  presented picture is checked pixel for pixel against the cycle-exact build. Sound is not played yet:
+  the native synth is still being built, and until it lands the game is silent
+  (`ducktales_cycle.exe` has sound).
+- **No slowdown.** VBlank waits until the frame's logic is done, removing the console's lag frames
+  without changing game logic.
 - **Modern presentation.** Direct3D 11, per-monitor DPI awareness, refresh-aware frame pacing,
   sharp scaling, 8:7 pixel aspect and overscan crop.
 - **Enhancements.** Optional gameplay changes, all off by default; when off, the original code runs.
@@ -74,6 +79,7 @@ and `cmake --build build/windows --config Release --target PACKAGE` writes the p
 | `-DDUCKTALES_ORACLE=ON` | Also build the TriCNES reference machine (`ducktales_oracle.exe`) |
 | `-DDUCKTALES_DEV_DIAGNOSTICS=ON` | Typed state log, scheduled changes, TCP commands; development only |
 | `-DNESRECOMP_DEV_UI=ON` | Developer keys and native-coverage display |
+| `-DDUCKTALES_PLAYER=native\|cycle` | Runtime of `ducktales.exe` in a window build: native (default; the cycle host build is `ducktales_cycle.exe`) or cycle |
 
 ## Running
 
@@ -145,9 +151,13 @@ Each enhancement hooks a single, documented site in the original code, guarded b
    declared in `config/game.toml` and the entry points recorded in `config/ducktales.seeds`, and
    emits one C function per 1 KiB chunk of each 4 KiB bank view. Each instruction performs its CPU cycles through the runtime, so timing stays
    cycle-exact with the PPU and APU.
-2. **Runtime.** The generated code links against NESRecomp's cycle host, which supplies the PPU, APU,
-   mapper, input, audio output and the SDL2 window. Code that no seed covers runs on the interpreter
-   and is reported, so it can be added to the seeds.
+2. **Runtime.** The game (`ducktales.exe`) runs the generated code on the native runtime
+   (`src/native`): CPU RAM, the UxROM banks, controllers, sprite DMA and the PPU registers and
+   memories, with VBlank, the NMI and the sprite-0 hit placed from the cycle count; the native renderer
+   draws each frame from what the game wrote. The verification builds and `ducktales_cycle.exe` link
+   the same code against NESRecomp's cycle host (PPU, APU, mapper). Code that no seed covers runs on
+   the interpreter and is reported, so it can be added to the seeds. See
+   [native-runtime.md](docs/native-runtime.md).
 3. **Port layer.** `src/game` (typed game state, revision-specific symbols, enhancement hooks),
    `src/host` (settings, options, the sprite compositor, diagnostics) and `src/ui` (the menu, built with
    [formae-ui](https://gitlab.com/formae/formae-ui) on Dear ImGui,
@@ -203,7 +213,7 @@ build\headless\Release\ducktales.exe "roms\DuckTales (USA).nes" --input tests\ro
 | [validation.md](docs/validation.md) | Routes, coverage and verification results |
 | [rendering.md](docs/rendering.md) | Screen data, sprite builder, flicker analysis |
 | [presentation.md](docs/presentation.md) | Pacing, DPI, scaling and picture measurements |
-| [native-runtime.md](docs/native-runtime.md) | Native frame loop and lag analysis |
+| [native-runtime.md](docs/native-runtime.md) | Native runtime, the player build and lag analysis |
 | [memory-map.md](docs/memory-map.md), [functions.md](docs/functions.md) | RAM and routine reference |
 | [player.md](docs/player.md), [game-state.md](docs/game-state.md), [levels.md](docs/levels.md), [audio.md](docs/audio.md) | Reverse-engineering notes |
 

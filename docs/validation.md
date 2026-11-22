@@ -104,6 +104,46 @@ to the recompiled build: CPU RAM, cycles and registers equal on every frame of e
 (82,621 frames). `tests/lag_modes.py` measures lag on the full_* routes and compares the
 no-slowdown mode per logic step. Details: [native-runtime.md](native-runtime.md).
 
+## Native renderer (automated)
+
+`tests/native_render_test.py` draws every frame of the five `full_*` routes with the native renderer
+(no PPU) from the frame's video state and compares it with the PPU's picture: 47,440 frames, every
+pixel equal except on the HUD split line, where the console's mid-line write lands at a column that
+depends on the CPU's polling phase. With that column placed, 115 frames (all vertical row
+transitions) still differ on that one line. Details in [native-render.md](native-render.md).
+
+## Native player (automated)
+
+The player build (`ducktales.exe` on the native runtime, docs/native-runtime.md "The player build"),
+2026-11-22:
+
+- `py -3 -I tests/native_player_test.py --build build/windows --routes full_amazon full_moon
+  full_himalayas --frames 6000 --every 20`: the presented picture (1x, default presentation: clean
+  HUD split, No sprite flicker on) of `ducktales.exe --lag faithful` and of
+  `ducktales_cycle.exe --extra-scanlines 0` is identical pixel for pixel in all 900 pictures (300 per
+  route, every 20th frame of frames 0-5999), and in 40 of 40 on `amazon_intro` (frames 0-1999,
+  every 50).
+- `py -3 -I tests/window_smoke.py --build build/windows`: all 16 checks pass on the native
+  `ducktales.exe` (start, ROM import and refusals, config.ini round trips, presentation sizes and
+  VSync, the menu self-test's 14 pages, the first-run screen), and with `--exe ducktales_cycle.exe`.
+- Save state round trip: `ducktales.exe --frames 3000 --input tests/routes/full_amazon.txt --lag
+  faithful --state-check 2000`: saved after frame 2000, CPU RAM, the cycle count and the video
+  memories identical on all 300 frames run again after loading it.
+- Enhancement hooks on the native runtime, `full_amazon` frames 0-2999 with every enhancement on
+  (`--jump-scale 150 --no-damage on --infinite-time on --infinite-lives on --start-lives 5`): the
+  jump, damage and new-game-lives sites fired (14, 12 and 1 times). The higher jump reaches
+  `$EAB9-$EAC1` in bank 6, which no route seeds, so 694 instructions ran on the interpreter there
+  (347 with `--jump-scale 150` alone); none without enhancements (`fallback_instructions=0`).
+- With the player's bus changes (hook dispatch, the `$2002` latch-reset log, `native_route.c`):
+  `tests/native_routes.py --build build/headless` passes all 12 routes (RAM, cycles and registers
+  identical on every frame; PPU memory hashes differ on the same frame counts as before, 2-42 per
+  route), and `tests/verify_routes.py` on `amazon_intro` and `full_moon` passes at all four
+  alignments (100.0% native, oracle and interpreter match).
+- `tests/package_test.py --build build/windows`: all checks pass with the native `ducktales.exe`
+  in the ZIP (imports AVRT, COMDLG32, IMM32, KERNEL32, SDL2, SHELL32, USER32 and WINMM only).
+- Hidden window pacing: 600 frames with `--hidden --exit-after 600` took 12.0 s including start-up
+  (600 frames are 9.98 s at 60.0988 Hz); 3,000 frames `--uncapped` took 7.8 s.
+
 ## Not verified
 
 - The release package on a clean Windows installation without the Visual C++ redistributable: the
@@ -114,6 +154,8 @@ no-slowdown mode per logic step. Details: [native-runtime.md](native-runtime.md)
 - Difficult mode (the "difficult" route was found to select Easy and was renamed).
 - Comparison with Mesen2 (not installed on this machine yet); the TriCNES oracle is the only
   independent reference so far.
+- The native player's sound (silent until the native synth), its window by eye, F8/F9 by hand, and
+  `HudSplit = original` against the cycle build.
 - Window presentation as a person sees it on the 144 Hz monitor, gamepads, audio quality by ear,
   fullscreen, and the sprite presentation by eye in play: needs a person at the machine. The
   application-side pacing, DPI and picture measurements are in [presentation.md](presentation.md).
