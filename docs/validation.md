@@ -134,6 +134,13 @@ The player build (`ducktales.exe` on the native runtime, docs/native-runtime.md 
   jump, damage and new-game-lives sites fired (14, 12 and 1 times). The higher jump reaches
   `$EAB9-$EAC1` in bank 6, which no route seeds, so 694 instructions ran on the interpreter there
   (347 with `--jump-scale 150` alone); none without enhancements (`fallback_instructions=0`).
+- With the player's bus changes (hook dispatch, the `$2002` latch-reset log, `native_route.c`):
+  `tests/native_routes.py --build build/headless` passes all 12 routes (RAM, cycles and registers
+  identical on every frame; PPU memory hashes differ on the same frame counts as before, 2-42 per
+  route), and `tests/verify_routes.py` on `amazon_intro` and `full_moon` passes at all four
+  alignments (100.0% native, oracle and interpreter match).
+- `tests/package_test.py --build build/windows`: all checks pass with the native `ducktales.exe`
+  in the ZIP (imports AVRT, COMDLG32, IMM32, KERNEL32, SDL2, SHELL32, USER32 and WINMM only).
 - Hidden window pacing: 600 frames with `--hidden --exit-after 600` took 12.0 s including start-up
   (600 frames are 9.98 s at 60.0988 Hz); 3,000 frames `--uncapped` took 7.8 s.
 

@@ -34,6 +34,9 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   the native machine state. Sound goes through a synth seam that plays silence until the native
   synth lands. `-DDUCKTALES_PLAYER=native|cycle` chooses the runtime; the cycle host build is
   `ducktales_cycle.exe`. `tests/native_player_test.py` compares its picture with the cycle build's.
+- The native player keeps its pace with an unfocused window on Windows: no power throttling, the
+  frame loop in the MMCSS Games class, a 1 ms timer, and an audio queue that stretches a late frame's
+  samples instead of running dry.
 - Differential verification against the TriCNES reference machine on 12 routes, including all five
   lands played to their LAND CLEAR screens, at four CPU/PPU alignments, with the oracle's results
   cached between runs.
