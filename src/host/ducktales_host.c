@@ -12,6 +12,8 @@
  *                     event, input, audio_mix and frame_begin callbacks
  *   diagnostics       DUCKTALES_DEV_DIAGNOSTICS builds only
  *                     (host/ducktales_diagnostics.h)
+ *   native check      headless builds only: the native renderer against
+ *                     the PPU every frame (native/native_check.h)
  *
  * A command-line value applies to that run only; config.ini keeps what the
  * player saved (ducktales_host_saved_value).
@@ -21,6 +23,7 @@
 #include "game/enhancements.h"
 #include "host/ducktales_diagnostics.h"
 #include "host/ducktales_host.h"
+#include "native/native_check.h"
 #if DUCKTALES_WINDOW
 #include "ui/app_ui.h"
 #endif
@@ -94,7 +97,7 @@ static void save_settings(void *ctx, FILE *f)
 }
 
 /* One option per enhancement, then the developer ones. */
-static const CycHostOption DIAG_OPTIONS[] = { DT_DIAG_OPTIONS { NULL, false, NULL } };
+static const CycHostOption DIAG_OPTIONS[] = { DT_DIAG_OPTIONS NV_CHECK_OPTIONS { NULL, false, NULL } };
 static CycHostOption s_options[DT_ENH_COUNT + sizeof DIAG_OPTIONS / sizeof DIAG_OPTIONS[0]];
 static char s_option_help[DT_ENH_COUNT][160];
 
@@ -120,7 +123,7 @@ static bool option(void *ctx, const char *name, const char *value)
         int v;
         return dt_enh_parse((DtEnh)e, value, &v) && dt_enh_set((DtEnh)e, v);
     }
-    return dt_diag_option(name, value);
+    return dt_diag_option(name, value) || nv_check_option(name, value);
 }
 
 static void power_on(void *ctx)
@@ -142,6 +145,7 @@ static void frame_end(void *ctx)
 {
     (void)ctx;
     dt_diag_frame_end();
+    nv_check_frame_end();
 }
 
 static void tcp_setup(void *ctx)

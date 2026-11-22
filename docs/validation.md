@@ -49,6 +49,14 @@ lines).
 The windowed SDL2 build also ran 600 frames hidden (`--hidden --exit-after 600`) with audio
 enabled and exited cleanly.
 
+## Native renderer (automated)
+
+`tests/native_render_test.py` draws every frame of the five `full_*` routes with the native renderer
+(no PPU) from the frame's video state and compares it with the PPU's picture: 47,440 frames, every
+pixel equal except on the HUD split line, where the console's mid-line write lands at a column that
+depends on the CPU's polling phase. With that column placed, 115 frames (all vertical row
+transitions) still differ on that one line. Details in [native-render.md](native-render.md).
+
 ## Not verified
 
 - A complete playthrough of any land on Easy or Difficult, secret treasures, the Transylvania return, the

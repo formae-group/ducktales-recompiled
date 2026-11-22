@@ -27,7 +27,13 @@ set(_ducktales_extras
     "${CMAKE_SOURCE_DIR}/src/game/ducktales_state.c"
     "${CMAKE_SOURCE_DIR}/src/game/ducktales_jump.c"
     "${CMAKE_SOURCE_DIR}/src/game/enhancements.c"
-    "${CMAKE_SOURCE_DIR}/src/host/ducktales_host.c")
+    "${CMAKE_SOURCE_DIR}/src/host/ducktales_host.c"
+    "${CMAKE_SOURCE_DIR}/src/native/native_render.c"
+    "${CMAKE_SOURCE_DIR}/src/native/native_cycle.c")
+# The native renderer checked against the PPU every frame (docs/native-render.md).
+if(DUCKTALES_HEADLESS)
+    list(APPEND _ducktales_extras "${CMAKE_SOURCE_DIR}/src/native/native_check.c")
+endif()
 # The application (docs/architecture.md "Application"): the
 # program entry with the first-run ROM import, the in-game menu and live
 # settings, drawn with Dear ImGui (external/imgui) over the host's
@@ -77,6 +83,9 @@ if(NOT DUCKTALES_HEADLESS)
 endif()
 if(DUCKTALES_DEV_DIAGNOSTICS)
     target_compile_definitions(ducktales PRIVATE DUCKTALES_DEV_DIAGNOSTICS=1)
+endif()
+if(DUCKTALES_HEADLESS)
+    target_compile_definitions(ducktales PRIVATE DUCKTALES_NATIVE_CHECK=1)
 endif()
 
 # Unit test of the typed state decoder (pure C, no machine).
