@@ -1,5 +1,5 @@
 /*
- * native_check.h - the native renderer (native/native_video.h) checked
+ * native_check.h - the native renderer (native/native_render.h) checked
  * against the PPU on the cycle host, every frame. Headless builds only
  * (DUCKTALES_NATIVE_CHECK); other builds get the empty versions below.
  *

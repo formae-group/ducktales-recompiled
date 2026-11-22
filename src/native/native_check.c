@@ -23,7 +23,7 @@
  */
 #include "native/native_check.h"
 #include "native/native_cycle.h"
-#include "native/native_video.h"
+#include "native/native_render.h"
 
 #include "cyc_core.h"
 #include "cyc_render.h"

@@ -5,7 +5,7 @@ evidence that it equals the PPU's picture. Status words as in [memory-map.md](me
 
 | File | Contents |
 |---|---|
-| `src/native/native_video.h` | The renderer's input (`NvVideo`), options and entry points; depends on no runtime |
+| `src/native/native_render.h` | The renderer's input (`NvVideo`), options and entry points; depends on no runtime |
 | `src/native/native_render.c` | The renderer: background, sprites, priority, clipping, greyscale and emphasis, NTSC colors |
 | `src/native/native_cycle.[ch]` | `nv_cycle_fill`: `NvVideo` from NESRecomp's cycle host through `cyc_render.h` (both builds) |
 | `src/native/native_check.[ch]` | Headless builds only: `--native-render-check FILE` and `--native-render-dump DIR` |

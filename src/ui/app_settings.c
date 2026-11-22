@@ -15,9 +15,15 @@
  *                               the starting one after it)
  *   bindings                    CycHostExtras.input replaces the controller
  *                               bytes with cyc_input_eval() of the new bindings
- *   VSync                       saved; NESRecomp reads it at start and also
- *                               switches it for fast-forward, so it applies at
- *                               the next launch
+ *   frame pacing                [Game] FramePacing; resolved into the host's
+ *                               [Display] VSync before the host reads the file
+ *                               (app_ui_configure), so it applies at the next
+ *                               launch; Auto asks SDL for the refresh rate of
+ *                               the display the window opens on
+ *   pixels, aspect, overscan,   app_present.h: the picture CycHostExtras.present
+ *   HUD split                   hands the window; the window keeps a multiple of
+ *                               app_present_base_size, also after the host
+ *                               leaves full screen (it sizes by the picture)
  *
  * The host writes config.ini itself (on F11 and when it exits) from its stale
  * copy. Its save calls our [Game] writer (app_ui_host_saved), and the next
@@ -31,10 +37,12 @@
 #endif
 #include <SDL.h>
 
+#include "app_present.h"
 #include "app_settings.h"
 #include "app_ui.h"
 
 #include "cyc_input.h"
+#include "cyc_render.h"
 #include "cyc_settings.h"
 #include "host/ducktales_host.h"
 
@@ -57,12 +65,20 @@ static SDL_GameController *s_pads[CYC_INPUT_MAX_PADS];
 static char s_pad_guid[CYC_INPUT_MAX_PADS][40];
 static int s_pad_count = -1;
 
+static void game_load(void *ctx, const char *key, const char *value)
+{
+    (void)ctx;
+    ducktales_host_load_game_setting(key, value);
+}
+
 static void game_save(void *ctx, FILE *f)
 {
     (void)ctx;
     ducktales_host_write_game_settings(f);
 }
 static const CycSettingsGame GAME_WRITER = { NULL, NULL, game_save };
+static const CycSettingsGame GAME_KEYS = { NULL, game_load, game_save };
+static int s_refresh_hz;          /* the display's, at launch; 0 unknown */
 
 static void ensure_loaded(void)
 {
@@ -70,10 +86,17 @@ static void ensure_loaded(void)
     s_loaded = true;
     if (!s_path[0]) snprintf(s_path, sizeof s_path, "%s", cyc_settings_default_path());
     cyc_settings_default(&s_cfg);
-    cyc_settings_load(&s_cfg, s_path, NULL, NULL);
+    cyc_settings_load(&s_cfg, s_path, NULL, &GAME_KEYS);
     s_launch = s_cfg;
     /* the host turns the FDS Disk shortcut off for a cartridge (cyc_sdl.c) */
     s_launch.bind.shortcut_off |= 1u << CYC_SC_DISK;
+}
+
+static void save_now(void)
+{
+    if (!cyc_settings_save(&s_cfg, s_path, &GAME_WRITER))
+        fprintf(stderr, "[ducktales] cannot write the settings file %s\n", s_path);
+    s_unsaved = false;
 }
 
 void app_ui_configure(const AppLaunch *launch)
@@ -84,13 +107,19 @@ void app_ui_configure(const AppLaunch *launch)
     }
     s_loaded = false;
     ensure_loaded();
-}
-
-static void save_now(void)
-{
-    if (!cyc_settings_save(&s_cfg, s_path, &GAME_WRITER))
-        fprintf(stderr, "[ducktales] cannot write the settings file %s\n", s_path);
-    s_unsaved = false;
+    AppPresentation p;
+    app_present_get(&p);
+    if (p.pacing == APP_PACING_AUTO && SDL_InitSubSystem(SDL_INIT_VIDEO) == 0) {
+        SDL_DisplayMode mode;
+        if (SDL_GetDesktopDisplayMode(0, &mode) == 0) s_refresh_hz = mode.refresh_rate;
+        SDL_QuitSubSystem(SDL_INIT_VIDEO);
+    }
+    int vsync = app_present_vsync_for(p.pacing, s_refresh_hz);
+    if (s_cfg.vsync != vsync) {
+        s_cfg.vsync = vsync;
+        save_now();
+    }
+    s_launch.vsync = vsync;
 }
 
 /* After the host wrote its stale copy: keep its F11 choice, restore the rest. */
@@ -129,9 +158,11 @@ void app_settings_commit(void)
 
 static SDL_Window *find_window(void)
 {
+    static SDL_Window *found;
+    if (found) return found;
     for (Uint32 id = 1; id < 64; id++) {
         SDL_Window *w = SDL_GetWindowFromID(id);
-        if (w && SDL_GetRenderer(w)) return w;
+        if (w && SDL_GetRenderer(w)) return found = w;
     }
     return NULL;
 }
@@ -148,24 +179,71 @@ static void apply_integer(SDL_Window *win)
     if (SDL_RenderGetIntegerScale(ren) != want) SDL_RenderSetIntegerScale(ren, want);
 }
 
+/* The windowed size: the picture at 1x times the window scale, at most the
+ * display's usable area (as the host does for its own picture). */
+static void window_size(SDL_Window *win, int *w, int *h)
+{
+    int bw, bh, scale = s_cfg.window_scale;
+    app_present_base_size(&bw, &bh);
+    SDL_Rect area;
+    int display = SDL_GetWindowDisplayIndex(win);
+    if (display >= 0 && SDL_GetDisplayUsableBounds(display, &area) == 0)
+        while (scale > 1 && (bw * scale > area.w || bh * scale > area.h - 48)) --scale;
+    *w = bw * scale;
+    *h = bh * scale;
+}
+
+static void resize_window(SDL_Window *win)
+{
+    int w, h, cw = 0, ch = 0;
+    window_size(win, &w, &h);
+    SDL_GetWindowSize(win, &cw, &ch);
+    if (w == cw && h == ch) return;
+    SDL_SetWindowSize(win, w, h);
+    int display = SDL_GetWindowDisplayIndex(win);
+    if (display >= 0) SDL_SetWindowPosition(win, SDL_WINDOWPOS_CENTERED_DISPLAY(display), SDL_WINDOWPOS_CENTERED_DISPLAY(display));
+}
+
+static bool fullscreen(SDL_Window *win)
+{
+    return (SDL_GetWindowFlags(win) & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP)) != 0;
+}
+
 void app_display_get(AppDisplay *out)
 {
     ensure_loaded();
+    AppPresentation p;
+    app_present_get(&p);
     out->fullscreen = s_cfg.fullscreen;
     out->window_scale = s_cfg.window_scale;
     out->integer_scale = s_cfg.integer_scale;
-    out->vsync = s_cfg.vsync;
+    out->pixels = p.pixels;
+    out->aspect = p.aspect;
+    out->overscan = p.overscan;
+    out->clean_split = p.clean_split;
+    out->pacing = p.pacing;
     out->volume = s_cfg.volume;
 }
 
 void app_display_set(SDL_Window *win, const AppDisplay *d)
 {
     ensure_loaded();
+    AppPresentation was, p;
+    app_present_get(&was);
+    p = was;
+    p.pixels = d->pixels;
+    p.aspect = d->aspect;
+    p.overscan = d->overscan;
+    p.clean_split = d->clean_split != 0;
+    p.pacing = d->pacing;
+    app_present_set(&p);
+    app_present_get(&p);
     bool mode = d->fullscreen != s_cfg.fullscreen, size = d->window_scale != s_cfg.window_scale;
+    bool shape = p.aspect != was.aspect || p.overscan != was.overscan;
     s_cfg.fullscreen = d->fullscreen < 0 ? 0 : d->fullscreen > 2 ? 2 : d->fullscreen;
     s_cfg.window_scale = d->window_scale < 1 ? 1 : d->window_scale > 8 ? 8 : d->window_scale;
     s_cfg.integer_scale = d->integer_scale != 0;
-    s_cfg.vsync = d->vsync != 0;
+    s_cfg.vsync = app_present_vsync_for(p.pacing, s_refresh_hz);
     s_cfg.volume = d->volume < 0 ? 0 : d->volume > 100 ? 100 : d->volume;
     app_settings_changed();
     if (!win) return;
@@ -173,34 +251,45 @@ void app_display_set(SDL_Window *win, const AppDisplay *d)
         Uint32 fs = s_cfg.fullscreen == 1 ? SDL_WINDOW_FULLSCREEN_DESKTOP : s_cfg.fullscreen == 2 ? SDL_WINDOW_FULLSCREEN : 0;
         SDL_SetWindowFullscreen(win, fs);
     }
-    if (!s_cfg.fullscreen && (mode || size)) {
-        SDL_Renderer *ren = SDL_GetRenderer(win);
-        int lw = 256, lh = 240, scale = s_cfg.window_scale;
-        if (ren) SDL_RenderGetLogicalSize(ren, &lw, &lh);
-        if (lw <= 0 || lh <= 0) lw = 256, lh = 240;
-        SDL_Rect area;
-        int display = SDL_GetWindowDisplayIndex(win);
-        if (display >= 0 && SDL_GetDisplayUsableBounds(display, &area) == 0)
-            while (scale > 1 && (lw * scale > area.w || lh * scale > area.h - 48)) --scale;
-        SDL_SetWindowSize(win, lw * scale, lh * scale);
-        if (display >= 0) SDL_SetWindowPosition(win, SDL_WINDOWPOS_CENTERED_DISPLAY(display), SDL_WINDOWPOS_CENTERED_DISPLAY(display));
-    }
+    if (!s_cfg.fullscreen && (mode || size || shape)) resize_window(win);
     apply_integer(win);
 }
 
 bool app_vsync_pending(void) { return s_cfg.vsync != s_launch.vsync; }
 bool app_volume_pending(void) { return s_cfg.volume != s_launch.volume && s_launch.volume == 0; }
 
+const uint32_t *app_ui_picture(int out_w, int out_h, int *w, int *h, bool *exact)
+{
+    const uint32_t *pic = app_present_picture(out_w, out_h, s_cfg.integer_scale != 0, w, h, exact);
+    return pic ? pic : cyc_render_present(w, h);
+}
+
+const uint32_t *app_ui_present(int *width, int *height)
+{
+    SDL_Window *win = find_window();
+    SDL_Renderer *ren = win ? SDL_GetRenderer(win) : NULL;
+    int ow = 0, oh = 0;
+    bool exact;
+    if (ren) SDL_GetRendererOutputSize(ren, &ow, &oh);
+    return app_present_picture(ow, oh, s_cfg.integer_scale != 0, width, height, &exact);
+}
+
 void app_ui_frame_begin(void)
 {
     /* DUCKTALES_UI_SELFTEST (app_ui.cpp): open the menu once, by itself. */
     static long frames;
+    static bool was_fullscreen;
     if (++frames == 120 && getenv("DUCKTALES_UI_SELFTEST")) {
         SDL_Window *win = find_window();
         if (win && app_menu_run(win)) app_menu_closed();
     }
     if (s_host_saved) reconcile();
-    if (s_changed && s_cfg.integer_scale != s_launch.integer_scale) apply_integer(find_window());
+    SDL_Window *win = find_window();
+    if (!win) return;
+    bool fs = fullscreen(win);
+    if (was_fullscreen && !fs) resize_window(win);
+    was_fullscreen = fs;
+    if (s_changed && s_cfg.integer_scale != s_launch.integer_scale) apply_integer(win);
 }
 
 void app_ui_audio(int16_t *samples, size_t count)

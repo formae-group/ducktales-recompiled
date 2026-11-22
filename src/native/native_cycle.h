@@ -1,5 +1,5 @@
 /*
- * native_cycle.h - NvVideo (native/native_video.h) filled from NESRecomp's
+ * native_cycle.h - NvVideo (native/native_render.h) filled from NESRecomp's
  * cycle host through its public compositor API (cyc_render.h), at a frame's
  * end: what that frame was drawn with. Used by the per-frame check against
  * the PPU (native/native_check.c) and by a compositor that draws the
@@ -15,7 +15,7 @@
 #pragma once
 #include <stdbool.h>
 
-#include "native/native_video.h"
+#include "native/native_render.h"
 
 #ifdef __cplusplus
 extern "C" {

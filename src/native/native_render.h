@@ -1,5 +1,5 @@
 /*
- * native_video.h - the video state one frame of DuckTales is drawn from, and
+ * native_render.h - the video state one frame of DuckTales is drawn from, and
  * the native renderer that draws it (native/native_render.c). Nothing here
  * depends on a runtime: the cycle host fills NvVideo from its PPU
  * (native/native_check.c), a native runtime fills it from what the game

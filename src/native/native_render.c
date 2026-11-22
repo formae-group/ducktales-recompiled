@@ -1,6 +1,6 @@
 /*
  * native_render.c - DuckTales' picture drawn from its video state
- * (native/native_video.h), with no PPU: each line is drawn from the segment
+ * (native/native_render.h), with no PPU: each line is drawn from the segment
  * that covers it, the way the 2C02 composes it (nesdev wiki "PPU rendering",
  * "PPU sprite evaluation", "PPU sprite priority").
  *
@@ -18,7 +18,7 @@
  *   output       palette RAM's entry, greyscale and emphasis as $2001 sets
  *                them, the same 9-bit index the PPU outputs
  */
-#include "native/native_video.h"
+#include "native/native_render.h"
 
 #include <math.h>
 #include <string.h>

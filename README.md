@@ -1,144 +1,201 @@
+<div align="center">
+
+<img src="assets/icon/ducktales-128.png" alt="DuckTales Recompiled" width="128" height="128">
+
 # DuckTales Recompiled
 
-A native PC port of *DuckTales* (NES, Capcom, 1989), built by static recompilation with
-[NESRecomp](https://github.com/mstan/nesrecomp). At build time the game's 6502 program is
-translated to C from a ROM you supply, and NESRecomp's cycle-accurate PPU, APU, mapper and SDL2
-host run around it. The repository contains no game data.
+A native Windows port of *DuckTales* (NES, Capcom, 1989), built by static recompilation.
+
+</div>
+
+DuckTales Recompiled translates the game's 6502 program into C at build time and compiles it into a
+native executable. The game logic runs as native code; the cartridge hardware it talks to (PPU, APU,
+UxROM mapper, controllers) is supplied by the [NESRecomp](https://github.com/mstan/nesrecomp) runtime,
+and a port layer adds the menu, settings, presentation and enhancements on top. Every build is checked
+frame by frame against an independent reference machine.
+
+The repository contains no game data. You supply your own ROM, and the build generates all
+ROM-derived code locally.
 
 ## Features
 
-- **Native code, verified frame by frame.** Every test route runs recompiled, interpreted and on a
-  reference machine, and the three must match on every frame (see [Verification](#verification)).
-- **Settings menu.** Display mode, window size, integer scaling, VSync, volume and key and
-  controller bindings, all applied live and saved to `config.ini`.
-- **Optional enhancements.** Jump height, no damage, infinite time, infinite lives and starting
-  lives. All are off by default, and while one is off the original code runs unchanged.
-- **Keyboard, mouse and controller** support with no setup.
+- **Native execution.** 100% of the CPU cycles executed across the test routes run in recompiled
+  code; the interpreter remains only as a fallback for code no route has reached.
+- **Verified against a reference.** Recompiled, interpreted and TriCNES runs must produce identical
+  per-frame state on every route at all four CPU/PPU alignments.
+- **No sprite flicker.** Every sprite is drawn on every frame in a fixed order, with no 8-per-line or
+  64-sprite limit, and the HUD stays visible. Presentation only; the machine is untouched.
+- **No slowdown.** Extra CPU time per frame removes the console's lag frames without changing game
+  logic.
+- **Modern presentation.** Direct3D 11, per-monitor DPI awareness, refresh-aware frame pacing,
+  sharp scaling, 8:7 pixel aspect and overscan crop.
+- **Enhancements.** Optional gameplay changes, all off by default; when off, the original code runs.
+- **Input.** Keyboard, mouse and SDL game controllers, fully rebindable.
 
-## Requirements
+## Supported ROM
 
-| | |
+Only one revision is supported. The file is verified when imported and again at every start; any
+other dump, revision or modified image is refused.
+
+| Field | Value |
 |---|---|
-| OS | Windows, x64 |
-| Toolchain | Visual Studio 2022 with *Desktop development with C++*, CMake 3.20+, Python 3.11+, Git |
-| Game | Your own `DuckTales (USA).nes` (identity in [docs/rom.md](docs/rom.md)) |
+| File | `DuckTales (USA).nes`, 131,088 bytes, iNES 1.0, mapper 2 (UxROM), 128 KiB PRG, 8 KiB CHR-RAM |
+| SHA-256 | `97d472f7b2c1088448d1644155b2650a546bad887b3cba571e16d7986824c169` |
+| SHA-1 | `f83191749d019d75eb5ff95d247ef25882c2571a` |
+| MD5 | `ee0812f62f6595e45812a8b26bbb637e` |
+| CRC32 | `06B994B2` |
+| CRC32 (without header) | `EFB09075` |
+
+Further detail on the header and board behaviour is in [docs/rom.md](docs/rom.md).
 
 ## Building
 
-``powershell
-git clone --recurse-submodules https://gitlab.com/formae/ducktales.git
-cd ducktales
+Requirements: Windows x64, Visual Studio 2022 (*Desktop development with C++*), CMake 3.20+,
+Python 3.11+ and Git.
+
+```powershell
+git clone --recurse-submodules https://gitlab.com/formae/ducktales-recompiled.git
+cd ducktales-recompiled
 copy "C:\path\to\DuckTales (USA).nes" roms\
 cmake -S . -B build/windows -G "Visual Studio 17 2022" -A x64
 cmake --build build/windows --config Release --parallel
-``
+```
 
-The executable is `build\windows\Release\ducktales.exe`. To use a ROM outside `roms/`, pass
-`-DDUCKTALES_ROM=<path>` when configuring. The generated C code is written under
-`build/*/cycle-ducktales/` and regenerated whenever the ROM, `config/` or NESRecomp's
-compiler changes.
+The executable is written to `build\windows\Release\ducktales.exe`. Code generation runs at configure
+time and again whenever the ROM, `config/` or the recompiler changes; the generated sources live under
+`build/*/cycle-ducktales/` and are never committed.
 
 | CMake option | Effect |
 |---|---|
-| `-DNESRECOMP_DEV_UI=ON` | Developer keys (F2 switches between recompiled code and the interpreter) and native coverage in the title bar |
-| `-DDUCKTALES_DEV_DIAGNOSTICS=ON` | Typed state log, scheduled changes and TCP commands; never for distribution |
-| `-DDUCKTALES_HEADLESS=ON -DDUCKTALES_ORACLE=ON` | Windowless verification build (see [Verification](#verification)) |
+| `-DDUCKTALES_ROM=<path>` | Use a ROM outside `roms/` |
+| `-DDUCKTALES_HEADLESS=ON` | Windowless build for verification |
+| `-DDUCKTALES_ORACLE=ON` | Also build the TriCNES reference machine (`ducktales_oracle.exe`) |
+| `-DDUCKTALES_DEV_DIAGNOSTICS=ON` | Typed state log, scheduled changes, TCP commands; development only |
+| `-DNESRECOMP_DEV_UI=ON` | Developer keys and native-coverage display |
 
-## Playing
+## Running
 
-### First run
+On first launch, select your `DuckTales (USA).nes` or drop it on the window. The file's SHA-256 is
+checked against the table above, and the verified copy is stored in `%APPDATA%\DuckTales Recompiled\`
+for later launches. Headless import: `ducktales.exe --import-rom <path>` (exit code 0 on success,
+1 when refused). `DUCKTALES_DATA_DIR` overrides the data folder.
 
-Start `ducktales.exe` without arguments and choose your `DuckTales (USA).nes`, or drop it on
-the window. The file must match the original's SHA-256 exactly; anything else is refused and its
-hash is shown. The verified copy is stored in `%APPDATA%\DuckTales Recompiled\` and used on
-every later start.
-
-To import without a window, run `ducktales.exe --import-rom "C:\path\to\DuckTales (USA).nes"`
-(exit code 0 on success, 1 when refused). A ROM path given on the command line is always used
-as is, and the `DUCKTALES_DATA_DIR` environment variable moves the data folder.
-
-### Controls
-
-| NES | Keyboard | Controller |
+| Action | Keyboard | Controller |
 |---|---|---|
 | D-pad | Arrow keys | D-pad |
 | A / B | Z / X | A / X |
 | Start / Select | Return / Backslash | Start / Back |
 | Menu | Escape | RB |
+| Fullscreen | F11, Alt+Enter | |
+| Fast-forward (hold) | Tab | RT |
+| Save / load state | F8 / F9 | |
 
-| Key | Action |
-|---|---|
-| F11 or Alt+Enter | Toggle fullscreen |
-| Tab | Fast-forward |
-| F8 / F9 | Save / load state |
+Settings are saved to `config.ini` next to the executable (`--config FILE` selects another file).
 
-### Menu
+### Settings
 
-Escape or RB pauses the game and opens the menu: Resume, Reset, Settings, Controls, Enhancements
-and Quit. It works with the keyboard, the mouse and a controller. To rebind, choose a cell on the
-Controls page and press the new key or button; Escape cancels and Delete clears the binding. VSync
-changes take effect at the next start.
+| Setting | Values | Key |
+|---|---|---|
+| Display | Windowed, borderless, exclusive fullscreen | `[Display] Fullscreen` |
+| Window size | 1x to 8x | `[Display] WindowScale` |
+| Integer scaling | On, off | `[Display] IntegerScale` |
+| Pixels | Nearest, sharp, smooth | `[Game] Pixels` |
+| Pixel aspect | Square, 8:7 | `[Game] PixelAspect` |
+| Overscan crop | Off, top-bottom, all | `[Game] Overscan` |
+| HUD split line | Clean, original | `[Game] HudSplit` |
+| Frame pacing | Auto, VSync, steady | `[Game] FramePacing` |
+| No sprite flicker | On (default), off | `[Game] NoSpriteFlicker` |
+| No slowdown | On (default), off | `[Game] NoSlowdown` |
+| Volume | 0% to 100% | `[Audio] Volume` |
 
-All settings are saved in `config.ini` next to the executable, in NESRecomp's format
-(`--config FILE` selects another file).
+Frame pacing applies at the next launch: *Auto* uses VSync on displays up to 70 Hz and a steady
+present hold above that. Measurements are in [docs/presentation.md](docs/presentation.md).
 
 ### Enhancements
 
-Set them in the menu, in the `[Game]` section of `config.ini`, or on the command line.
-
-| Enhancement | `[Game]` key | Option | Values |
+| Enhancement | Key | Option | Values |
 |---|---|---|---|
-| Jump height | `JumpScale` | `--jump-scale N` | 25 to 400 percent; 100 is the original |
-| No damage | `NoDamage` | `--no-damage on` | Hits still knock Scrooge back but cost no health |
+| Jump height | `JumpScale` | `--jump-scale N` | 25 to 400 percent (100 = original) |
+| No damage | `NoDamage` | `--no-damage on` | Hits knock Scrooge back but cost no health |
 | Infinite time | `InfiniteTime` | `--infinite-time on` | The level timer stops |
 | Infinite lives | `InfiniteLives` | `--infinite-lives on` | Losing a life costs none |
-| Extra lives at start | `StartLives` | `--start-lives N` | 0 to 9, or off (original: 2), from the next new game |
+| Extra lives at start | `StartLives` | `--start-lives N` | 0 to 9, or off (original: 2) |
 
-How each one works, and the evidence behind it, is in [docs/architecture.md](docs/architecture.md).
+Each enhancement hooks a single, documented site in the original code, guarded by a content key
+(address, length and CRC-32) so it can never fire on unexpected code.
+
+## How it works
+
+1. **Recompilation.** NESRecomp's compiler reads the ROM, starts from the vectors, the functions
+   declared in `config/game.toml` and the entry points recorded in `config/ducktales.seeds`, and
+   emits one C function per 1 KiB chunk of each 4 KiB bank view. Each instruction performs its CPU cycles through the runtime, so timing stays
+   cycle-exact with the PPU and APU.
+2. **Runtime.** The generated code links against NESRecomp's cycle host, which supplies the PPU, APU,
+   mapper, input, audio output and the SDL2 window. Code that no seed covers runs on the interpreter
+   and is reported, so it can be added to the seeds.
+3. **Port layer.** `src/game` (typed game state, revision-specific symbols, enhancement hooks),
+   `src/host` (settings, options, the sprite compositor, diagnostics) and `src/ui` (Dear ImGui menu,
+   ROM import, presentation) attach to the host through its public extension points. The NESRecomp
+   submodule is never modified.
+4. **Presentation.** The window shows a picture composed from the machine's output: all sprites
+   without hardware limits, the cleaned HUD split, the chosen scaling and pacing. The machine's own
+   picture, used for verification and save states, is unchanged.
 
 ## Verification
 
-``powershell
+```powershell
 cmake -S . -B build/headless -G "Visual Studio 17 2022" -A x64 -DDUCKTALES_HEADLESS=ON -DDUCKTALES_ORACLE=ON
 cmake --build build/headless --config Release --parallel
 py -3 -I tests/verify_routes.py --build build/headless
-``
+```
 
-Each input route in `tests/routes/` runs recompiled, interpreter-only and on the TriCNES
-reference machine at four CPU/PPU alignments, and the runs must agree on every frame. Details are in
-[docs/validation.md](docs/validation.md).
+Each route in `tests/routes/` is a deterministic input schedule from power-on. It covers the five
+lands, played to their LAND CLEAR screens, plus intro and mapping routes. Every route runs three
+ways at four CPU/PPU clock alignments:
 
-`py -3 -I tests/window_smoke.py --build build/windows` checks the window build: start-up, ROM
-import and refusal, and every menu page. Setting `DUCKTALES_UI_SELFTEST=<folder>` makes the
-first-run screen and the menu run on their own and save a PNG of each screen.
-
-### Refreshing seeds
-
-A new route can reach code that no route has executed yet. That code still runs correctly on the
-interpreter; to compile it natively, append the route's misses and rebuild:
-
-``powershell
-build\headless\Release\ducktales.exe "roms\DuckTales (USA).nes" --input tests\routes\NEW.txt --frames N --miss-log config\ducktales.seeds
-``
-
-## Repository layout
-
-| Path | Contents |
+| Run | Purpose |
 |---|---|
-| `src/game/` | Typed game state, revision-specific symbols, enhancement hooks |
-| `src/host/` | Integration with NESRecomp's host: entry point, settings, options, diagnostics |
-| `src/ui/` | First run and ROM import, menu, live settings |
-| `config/` | Recompiler configuration and entry-point seeds for this ROM |
-| `tests/` | Input routes, differential regression, window and enhancement tests |
-| `tools/` | Reverse-engineering helpers (disassembler, frame logs, access tracer, Mesen2 replay) |
-| `docs/` | ROM identity, reverse-engineering notes, architecture, validation, licensing |
-| `external/` | NESRecomp and Dear ImGui as pinned, unmodified submodules |
+| Recompiled | The build under test |
+| Interpreter only | Same host, no native code |
+| TriCNES oracle | Independent reference machine |
+
+Per-frame hashes cover the bus trace, CPU RAM, nametables, OAM, palette, CHR-RAM, the picture and
+the CPU registers, and must be identical on every frame. The oracle's hashes are cached in
+`build/verify-cache/`, keyed on the oracle binary, ROM, route, frame count and alignment
+(`--no-cache` reruns it).
+
+| Test | Checks |
+|---|---|
+| `tests/verify_routes.py` | Recompiled, interpreter and oracle equality on every route |
+| `tests/sprites_test.py` | Sprite presentation versus the machine picture |
+| `tests/enhancements_test.py` | Each enhancement's effect, and identity with the original when off |
+| `tests/window_smoke.py` | Start-up, ROM import and refusal, settings persistence, every menu page |
+
+New routes can reach code no route has executed; append its interpreter misses to the seeds and
+rebuild:
+
+```powershell
+build\headless\Release\ducktales.exe "roms\DuckTales (USA).nes" --input tests\routes\NEW.txt --frames N --miss-log config\ducktales.seeds
+```
+
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [architecture.md](docs/architecture.md) | Port layer, hooks, enhancements, application |
+| [validation.md](docs/validation.md) | Routes, coverage and verification results |
+| [rendering.md](docs/rendering.md) | Screen data, sprite builder, flicker analysis |
+| [presentation.md](docs/presentation.md) | Pacing, DPI, scaling and picture measurements |
+| [native-runtime.md](docs/native-runtime.md) | Native frame loop and lag analysis |
+| [memory-map.md](docs/memory-map.md), [functions.md](docs/functions.md) | RAM and routine reference |
+| [player.md](docs/player.md), [game-state.md](docs/game-state.md), [levels.md](docs/levels.md), [audio.md](docs/audio.md) | Reverse-engineering notes |
 
 ## License
 
 The code in this repository is MIT licensed ([LICENSE](LICENSE)). NESRecomp is licensed under
-PolyForm Noncommercial 1.0.0 with additional permissions, so builds of this port must be
-distributed free of charge. See [docs/licensing.md](docs/licensing.md).
+PolyForm Noncommercial 1.0.0 with additional permissions, so builds of this port must be distributed
+free of charge. Dear ImGui and SDL2 are used under their own licenses. See
+[docs/licensing.md](docs/licensing.md).
 
-*DuckTales* is a trademark of Disney. This project is not affiliated with Disney or Capcom and does
-not include any part of the game.
+*DuckTales* is a trademark of Disney. This project is not affiliated with Disney or Capcom and
+distributes no part of the game.

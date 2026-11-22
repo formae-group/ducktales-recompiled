@@ -12,11 +12,23 @@
  *   3. Otherwise the first-run screen asks for the ROM, verifies it,
  *      imports it and starts the game with it.
  *
+ * Before any window opens it asks SDL for two things the host does not:
+ * per-monitor DPI awareness (otherwise Windows stretches the whole window by
+ * the display's scaling, blurring every pixel) and the Direct3D 11 renderer
+ * (flip model: even presents, no tearing with VSync off; SDL's first choice,
+ * Direct3D 9, blocks in its VSync presents and drops pictures). The
+ * SDL_RENDER_DRIVER environment variable still wins. docs/presentation.md.
+ *
  * --import-rom FILE verifies and imports without a window (exit 0 or 1), for
  * scripts and tests; DUCKTALES_DATA_DIR overrides the data folder. Everything
  * else goes to NESRecomp's host untouched, and the application UI is told which
  * window flags were given (ui/app_ui.h).
  */
+#ifndef SDL_MAIN_HANDLED
+#define SDL_MAIN_HANDLED
+#endif
+#include <SDL.h>
+
 #include "ui/app_rom.h"
 #include "ui/app_ui.h"
 
@@ -75,8 +87,18 @@ static void host_path(const char *utf8, char *out, size_t cap)
 #endif
 }
 
+/* Again after the first-run screen: SDL_Quit clears every hint. */
+static void sdl_hints(void)
+{
+    SDL_SetHint(SDL_HINT_WINDOWS_DPI_AWARENESS, "permonitorv2");
+#ifdef _WIN32
+    SDL_SetHint(SDL_HINT_RENDER_DRIVER, "direct3d11");
+#endif
+}
+
 int main(int argc, char **argv)
 {
+    sdl_hints();
     char **args = (char **)calloc((size_t)argc + 2, sizeof *args);
     if (!args) return 2;
     int n = 0;
@@ -130,6 +152,7 @@ int main(int argc, char **argv)
         args[n++] = rom_for_host;
     }
     args[n] = NULL;
+    sdl_hints();
     app_ui_configure(&launch);
     int result = ducktales_host_main(n, args);
     app_ui_finish();

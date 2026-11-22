@@ -4,7 +4,7 @@
 // The menu is a modal loop: it runs inside the host's event callback, so no
 // machine frame runs while it is open (the game is paused by construction)
 // and nothing of it reaches the machine's picture, screenshots or hashes. It
-// draws the last machine frame, dimmed, with its own texture, and gives the
+// draws the last presented picture, dimmed, with its own texture, and gives the
 // renderer back exactly as it found it. Events the host still needs (quit,
 // resize, controllers) are pushed back when it closes.
 #ifndef SDL_MAIN_HANDLED
@@ -16,11 +16,13 @@
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_sdlrenderer2.h"
 
+#include "app_present.h"
 #include "app_settings.h"
 #include "app_rom.h"
 #include "app_ui.h"
 #include "game/enhancements.h"
 #include "host/ducktales_host.h"
+#include "host/ducktales_sprites.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -38,7 +40,6 @@
 #include <commdlg.h>
 #endif
 
-extern "C" const uint32_t *cyc_frame_argb(void);   // cyc_core.h (a C header)
 extern "C" bool cyc_write_png(const char *path, const uint32_t *argb, int width, int height);   // cyc_png.h
 
 namespace {
@@ -350,6 +351,12 @@ void page_reset(Menu &m, Layout &L, const Fonts &F)
     if (row(L, F, "Cancel") == ROW_ACTIVATE) go(m, PAGE_MAIN);
 }
 
+void cycle(RowResult r, int &value, int count)
+{
+    if (r == ROW_DEC) value = (value + count - 1) % count;
+    if (r == ROW_INC || r == ROW_ACTIVATE) value = (value + 1) % count;
+}
+
 void page_settings(Menu &m, Layout &L, const Fonts &F, SDL_Window *win)
 {
     (void)m;
@@ -367,14 +374,32 @@ void page_settings(Menu &m, Layout &L, const Fonts &F, SDL_Window *win)
     if ((r == ROW_INC || r == ROW_ACTIVATE) && d.window_scale < 8) d.window_scale++;
     r = row(L, F, "Integer scaling", d.integer_scale ? "On" : "Off");
     if (r != ROW_NONE) d.integer_scale = !d.integer_scale;
-    r = row(L, F, "VSync", d.vsync ? "On" : "Off");
-    if (r != ROW_NONE) d.vsync = !d.vsync;
+    static const char *PIXELS[] = { "Nearest", "Sharp", "Smooth" };
+    cycle(row(L, F, "Pixels", PIXELS[d.pixels]), d.pixels, APP_PIXELS_COUNT);
+    static const char *ASPECT[] = { "Square", "8:7" };
+    cycle(row(L, F, "Pixel aspect", ASPECT[d.aspect]), d.aspect, APP_ASPECT_COUNT);
+    static const char *OVERSCAN[] = { "Off", "Top and bottom", "All edges" };
+    cycle(row(L, F, "Crop overscan", OVERSCAN[d.overscan]), d.overscan, APP_OVERSCAN_COUNT);
+    r = row(L, F, "HUD split line", d.clean_split ? "Clean" : "Original");
+    if (r != ROW_NONE) d.clean_split = !d.clean_split;
+    static const char *PACING[] = { "Auto", "VSync", "Steady" };
+    cycle(row(L, F, "Frame pacing", PACING[d.pacing]), d.pacing, APP_PACING_COUNT);
     char vol[16];
     std::snprintf(vol, sizeof vol, "%d%%", d.volume);
     r = row(L, F, "Volume", vol);
     if (r == ROW_DEC) d.volume = d.volume >= 5 ? d.volume - 5 : 0;
     if (r == ROW_INC || r == ROW_ACTIVATE) d.volume = d.volume <= 95 ? d.volume + 5 : 100;
     if (std::memcmp(&d, &was, sizeof d)) app_display_set(win, &d);
+    if (row(L, F, DT_SPRITES_LABEL, dt_sprites_get() ? "On" : "Off") != ROW_NONE) {
+        dt_sprites_set(!dt_sprites_get());
+        ducktales_host_set_saved_sprites(dt_sprites_get());
+        app_settings_changed();
+    }
+    bool smooth = ducktales_host_no_slowdown();
+    if (row(L, F, "No slowdown", smooth ? "On" : "Off") != ROW_NONE) {
+        ducktales_host_set_no_slowdown(!smooth);
+        app_settings_changed();
+    }
 }
 
 void page_controls(Menu &m, Layout &L, const Fonts &F)
@@ -510,11 +535,17 @@ void selftest_shot(SDL_Renderer *ren, const char *name)
     std::fflush(stdout);
 }
 
-void draw_picture(SDL_Renderer *ren, SDL_Texture *tex, int ow, int oh)
+// Where the window draws the picture: 1:1 when it is already at drawable
+// resolution, otherwise fitted (whole multiples with integer scaling).
+void draw_picture(SDL_Renderer *ren, SDL_Texture *tex, int pw, int ph, bool exact, int ow, int oh)
 {
-    if (!tex) return;
-    float s = (float)ow / 256.0f < (float)oh / 240.0f ? (float)ow / 256.0f : (float)oh / 240.0f;
-    SDL_Rect dst = { (int)((ow - 256 * s) / 2), (int)((oh - 240 * s) / 2), (int)(256 * s), (int)(240 * s) };
+    if (!tex || pw <= 0 || ph <= 0) return;
+    AppDisplay d;
+    app_display_get(&d);
+    float s = (float)ow / pw < (float)oh / ph ? (float)ow / pw : (float)oh / ph;
+    if (exact && pw <= ow && ph <= oh) s = 1.0f;
+    else if (d.integer_scale && s >= 1.0f) s = (float)(int)s;
+    SDL_Rect dst = { (int)((ow - pw * s) / 2), (int)((oh - ph * s) / 2), (int)(pw * s), (int)(ph * s) };
     SDL_RenderCopy(ren, tex, nullptr, &dst);
 }
 
@@ -533,11 +564,25 @@ extern "C" bool app_menu_run(SDL_Window *win)
         SDL_SetRenderTarget(ren, target);
         return false;
     }
-    SDL_Texture *pic = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, 256, 240);
-    if (pic) {
-        SDL_UpdateTexture(pic, nullptr, cyc_frame_argb(), 256 * 4);
-        SDL_SetTextureScaleMode(pic, SDL_ScaleModeNearest);
-    }
+    int pic_w = 0, pic_h = 0;
+    bool pic_exact = false;
+    SDL_Texture *pic = nullptr;
+    auto update_picture = [&]() {
+        int out_w = 0, out_h = 0, w = 0, h = 0;
+        SDL_GetRendererOutputSize(ren, &out_w, &out_h);
+        const uint32_t *picture = app_ui_picture(out_w, out_h, &w, &h, &pic_exact);
+        if (!picture) return;
+        if (!pic || w != pic_w || h != pic_h) {
+            if (pic) SDL_DestroyTexture(pic);
+            pic = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, w, h);
+            if (!pic) return;
+            SDL_SetTextureScaleMode(pic, SDL_ScaleModeNearest);
+            pic_w = w;
+            pic_h = h;
+        }
+        SDL_UpdateTexture(pic, nullptr, picture, w * 4);
+    };
+    update_picture();
     std::printf("[ducktales] menu open\n");
     std::fflush(stdout);
     Menu m;
@@ -564,7 +609,8 @@ extern "C" bool app_menu_run(SDL_Window *win)
         SDL_GetRendererOutputSize(ren, &ow, &oh);
         SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
         SDL_RenderClear(ren);
-        draw_picture(ren, pic, ow, oh);
+        update_picture();
+        draw_picture(ren, pic, pic_w, pic_h, pic_exact, ow, oh);
 
         ImGui_ImplSDLRenderer2_NewFrame();
         ImGui_ImplSDL2_NewFrame();

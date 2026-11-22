@@ -1,7 +1,7 @@
 """Native renderer against the PPU (docs/native-render.md).
 
 For each route this runs the headless build with --native-render-check, which
-fills the native renderer's input (src/native/native_video.h) from the PPU at
+fills the native renderer's input (src/native/native_render.h) from the PPU at
 the end of every frame, draws the frame natively with the console's sprite
 rules and compares it with the machine's picture pixel for pixel. It prints,
 per route, the frames and pixels that differ:
