@@ -224,7 +224,7 @@ if(NOT DUCKTALES_HEADLESS)
     target_link_libraries(ducktales_player PRIVATE imgui formae::ui SDL2::SDL2)
     formae_ui_embed_file(ducktales_player app_about_logo_png "${CMAKE_SOURCE_DIR}/assets/brand/formae.png")
     if(WIN32)
-        target_link_libraries(ducktales_player PRIVATE comdlg32 shell32)
+        target_link_libraries(ducktales_player PRIVATE comdlg32 shell32 avrt winmm)
         target_sources(ducktales_player PRIVATE "${CMAKE_BINARY_DIR}/ducktales.rc")
         add_custom_command(TARGET ducktales_player POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:SDL2::SDL2> $<TARGET_FILE_DIR:ducktales_player>)

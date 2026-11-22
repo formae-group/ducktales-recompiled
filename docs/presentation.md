@@ -100,6 +100,26 @@ What this shows:
   display 0, where the host opens the window, from `SDL_GetDesktopDisplayMode`; unknown counts as
   60 Hz). VSync and Steady force one or the other.
 
+### Unfocused window (native player)
+
+When its window is not focused, Windows lowers a process: no foreground boost, power throttling
+(EcoQoS, which may move it to the E-cores of a hybrid CPU such as the i5-13450HX on the Balanced
+plan) and coarser timers. Frames then run late, the audio queue runs dry and the sound crackles, as
+reported on the cycle build. The native player (`src/native/native_window.c`) needs far less CPU per
+frame and also guards against it:
+
+- At start it turns power throttling off for the process (`SetProcessInformation`,
+  `ProcessPowerThrottling` with `EXECUTION_SPEED | IGNORE_TIMER_RESOLUTION` in the control mask and a
+  zero state mask), registers the frame-loop thread with MMCSS in the `Games` class
+  (`AvSetMmThreadCharacteristicsW`) and holds a 1 ms timer resolution (`timeBeginPeriod(1)`); all
+  three are released at exit.
+- When late frames let the audio queue fall below the device buffer plus one frame, that frame's
+  samples are stretched (linear interpolation, at most twice their length) to refill it, so the
+  device never runs out; a short pitch drop replaces the crackle. The queue still holds at most
+  100 ms.
+
+`ducktales_cycle.exe` has neither. Not verified by ear or with an unfocused window on that machine.
+
 ## DPI scaling
 
 Without a DPI awareness declaration Windows draws the window at 96 dpi and stretches it by the

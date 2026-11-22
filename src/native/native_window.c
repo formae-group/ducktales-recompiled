@@ -28,7 +28,13 @@
  *                 [Display] VSync says (FramePacing resolves it at launch),
  *                 off while fast-forwarding or --uncapped
  *   sound         native_synth_frame per frame, queued at 48 kHz with at
- *                 most 100 ms waiting; none while fast-forwarding
+ *                 most 100 ms waiting; none while fast-forwarding. When late
+ *                 frames let the queue fall below the device buffer plus one
+ *                 frame, the frame is stretched to refill it, so the device
+ *                 never runs dry
+ *   scheduling    Windows: no power throttling (EcoQoS, timer coalescing),
+ *                 the frame loop in the MMCSS "Games" class and a 1 ms timer,
+ *                 so an unfocused window keeps its pace
  *   save states   F8 saves and F9 loads <exe dir>/saves/DuckTales.native-state:
  *                 CPU, bus, video state and the frame count (native_runtime.h)
  *
@@ -73,6 +79,12 @@
 #include <string.h>
 #ifdef _WIN32
 #include <direct.h>
+#include <windows.h>
+#include <avrt.h>
+#include <timeapi.h>
+#ifndef PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION
+#define PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION 0x4
+#endif
 #endif
 
 #define FRAME_HZ    60.0988
@@ -445,6 +457,48 @@ static void present_shot(const char *base, long frame)
     free(px);
 }
 
+#ifdef _WIN32
+static HANDLE s_mmcss;
+
+/* Windows lowers an unfocused process: power throttling (EcoQoS, E-cores on
+ * hybrid CPUs), coarser timers and no foreground boost. The frame loop opts
+ * out so frames stay on time and the audio queue fed. */
+static void scheduling_begin(void)
+{
+    PROCESS_POWER_THROTTLING_STATE state = { 0 };
+    state.Version = PROCESS_POWER_THROTTLING_CURRENT_VERSION;
+    state.ControlMask = PROCESS_POWER_THROTTLING_EXECUTION_SPEED | PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION;
+    state.StateMask = 0;
+    SetProcessInformation(GetCurrentProcess(), ProcessPowerThrottling, &state, sizeof state);
+    timeBeginPeriod(1);
+    DWORD task = 0;
+    s_mmcss = AvSetMmThreadCharacteristicsW(L"Games", &task);
+}
+
+static void scheduling_end(void)
+{
+    if (s_mmcss) AvRevertMmThreadCharacteristics(s_mmcss);
+    s_mmcss = NULL;
+    timeEndPeriod(1);
+}
+#else
+static void scheduling_begin(void) {}
+static void scheduling_end(void) {}
+#endif
+
+/* Stretches pcm[0..n) over m >= n samples by linear interpolation. */
+static void stretch(int16_t *pcm, size_t n, size_t m)
+{
+    if (n < 2 || m <= n) return;
+    for (size_t i = m; i-- > 0;) {
+        double x = (double)i * (double)(n - 1) / (double)(m - 1);
+        size_t j = (size_t)x;
+        double frac = x - (double)j;
+        int16_t a = pcm[j], b = pcm[j + 1 < n ? j + 1 : j];
+        pcm[i] = (int16_t)(a + (b - a) * frac);
+    }
+}
+
 static int run_window(bool hidden, bool uncapped, long exit_after, const char *present_out, long present_every)
 {
     if (hidden) SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
@@ -480,6 +534,7 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
     if (dev) SDL_PauseAudioDevice(dev, 0);
     else fprintf(stderr, "SDL audio: %s (continuing without sound)\n", SDL_GetError());
     open_pads();
+    scheduling_begin();
 
     const Uint64 freq = SDL_GetPerformanceFrequency(), frame_ticks = (Uint64)((double)freq / FRAME_HZ);
     Uint64 next = SDL_GetPerformanceCounter(), shown = 0;
@@ -534,7 +589,15 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
         int16_t pcm[4096];
         const NativeFrame *f = native_last_frame();
         size_t n = native_synth_frame(f->apu_writes, f->apu_write_count, f->cycles, pcm, sizeof pcm / sizeof pcm[0]);
-        if (dev && n && !fast && s_set.audio_enabled && SDL_GetQueuedAudioSize(dev) < (Uint32)(have.freq / 10) * 2) {
+        size_t queued = dev ? SDL_GetQueuedAudioSize(dev) / sizeof pcm[0] : 0;
+        if (dev && n && !fast && s_set.audio_enabled && queued < (size_t)have.freq / 10) {
+            size_t low = (size_t)have.samples + n;
+            if (queued < low) {
+                size_t m = n + (low - queued);
+                if (m > 2 * n) m = 2 * n;
+                stretch(pcm, n, m);
+                n = m;
+            }
             if (s_set.volume < 100)
                 for (size_t i = 0; i < n; i++) pcm[i] = (int16_t)(pcm[i] * s_set.volume / 100);
             app_ui_audio(pcm, n);
@@ -561,6 +624,7 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
         if (unpaced || now > next + 4 * frame_ticks) next = now;
         if (exit_after > 0 && frames_done >= exit_after) running = false;
     }
+    scheduling_end();
     save_settings();
     if (dev) SDL_CloseAudioDevice(dev);
     if (s_tex) SDL_DestroyTexture(s_tex);
