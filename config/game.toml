@@ -14,46 +14,50 @@ cycle_seed_file = "ducktales.seeds"
 bank = 7
 addr = 0xD4E6
 
-# Jump experiment hook site (src/game/ducktales_jump.c, docs/architecture.md).
-# The instruction that follows the jump start's two velocity stores; the
-# content key (CRC32 of the 8 bytes there) keeps the site tied to this
-# revision's code. Nothing fires unless --jump-scale / [Game] JumpScale is
-# set to something other than 100.
-[[mod_function_hook]]
-id = "ducktales.jump-scale"
-addr = 0xE3FE
-length = 8
-crc32 = 0xC37F991F
+# Event sites (src/game/events.c, docs/decompilation.md "Events"). Each
+# fires only while its event has a handler (an enhancement that differs from
+# the original game, or a mod); the content keys are CRC32s of the 8 bytes at
+# each site. They come before the decompilation's sites, so at an address
+# both use ($EB5E) the event runs first.
 
-# Enhancement hook sites (src/game/enhancements.c, docs/architecture.md
-# "Enhancements"). Each fires only while its enhancement differs from the
-# original game; the content keys are CRC32s of the 8 bytes at each site.
-
-# Entry of the damage routine; the callback returns from it (No damage).
+# Entry of the damage routine; a cancel returns from it.
 [[mod_function_hook]]
-id = "ducktales.no-damage"
+id = "ducktales.event.player-damaged"
 addr = 0xEB5E
 length = 8
 crc32 = 0xE8776DC5
 
-# The timer's decrement of the frames-per-tick counter $B0 (Infinite time).
+# The timer's decrement of the frames-per-tick counter $B0.
 [[mod_function_hook]]
-id = "ducktales.infinite-time"
+id = "ducktales.event.timer-tick"
 addr = 0xE2A6
 length = 8
 crc32 = 0x1FF60228
 
-# The only decrement of the lives counter $0361 (Infinite lives).
+# The only decrement of the lives counter $0361.
 [[mod_function_hook]]
-id = "ducktales.infinite-lives"
+id = "ducktales.event.life-lost"
 addr = 0xDCB0
 length = 8
 crc32 = 0x5E982A4B
 
-# After the title set-up copied the HUD template that sets $0361 to 2
-# (Extra lives at start).
+# After the title set-up copied the HUD template that sets $0361 to 2.
 [[mod_function_hook]]
-id = "ducktales.start-lives"
+id = "ducktales.event.new-game"
 addr = 0xD59C
 length = 8
 crc32 = 0xB92CE193
+
+# The instruction that follows the jump start's two velocity stores.
+[[mod_function_hook]]
+id = "ducktales.event.jump-start"
+addr = 0xE3FE
+length = 8
+crc32 = 0xC37F991F
+
+# The decrement of the boss hits left $B1, reached only for a hit that counts.
+[[mod_function_hook]]
+id = "ducktales.event.boss-hit"
+addr = 0xF6DD
+length = 8
+crc32 = 0xA509A34C

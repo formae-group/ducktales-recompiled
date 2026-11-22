@@ -1,10 +1,12 @@
 /*
  * enhancements.h - optional changes to the game, all off by default.
  *
- * Each enhancement owns one [[mod_function_hook]] site (enhancements_sites.h,
- * config/game.toml). At its stock value the site's hook is disabled, so the
- * generated code runs the original instruction with nothing changed; the
- * value is applied live and can be switched at any frame boundary.
+ * Each enhancement is a handler of one game event (ducktales/events.h,
+ * src/game/events.c), registered only while its value differs from stock. An
+ * event without handlers keeps its site's hook disabled, so at the stock
+ * value the generated code runs the original instruction with nothing
+ * changed; the value is applied live and can be switched at any frame
+ * boundary. The handlers are short examples of the typed game API.
  *
  *   JumpScale      take-off velocity percent (25-400, 100 = stock), game/ducktales_jump.c
  *   NoDamage       hits still knock Scrooge back but never cost an HP dot

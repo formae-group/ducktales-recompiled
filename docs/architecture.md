@@ -7,9 +7,11 @@ machine's state and, when a feature asks for it, changes behaviour at specific i
 ```
 src/game/ducktales_symbols.h         the only file that names revision-specific addresses
 src/game/ducktales_state.[ch]        typed state decoded from a CPU RAM image (pure functions)
-src/game/ducktales_jump.[ch]         jump-height experiment: one hook site, off by default
-src/game/enhancements.[ch]           the optional enhancements: one table, one hook site each
-src/game/enhancements_sites.h        their code sites (to move into ducktales_symbols.h)
+include/ducktales/                   the typed game API: RAM transactions, objects, Scrooge, HUD, game, events
+src/game/game_ram.c                  RAM transactions (ducktales/ram.h)
+src/game/events.c                    game events: one hook site each, enabled only while handled
+src/game/ducktales_jump.[ch]         jump-height experiment: a handler of EVENT_JUMP_START, off by default
+src/game/enhancements.[ch]           the optional enhancements: one table, one event handler each
 src/host/ducktales_host.c            cyc_host_extras(): settings, options, per-frame callbacks
 src/host/ducktales_sprites.[ch]      presentation: every sprite, fixed order, HUD kept (on by default)
 src/host/ducktales_main.c            main() of the window build: ROM choice, then the host
@@ -94,13 +96,14 @@ addresses.
 - The pogo bounce sets its own velocity elsewhere (`$07C0` = 5 at frame 1827). The experiment does
   not touch it.
 
-The hook site is `$E3FE` (`config/game.toml`, id `ducktales.jump-scale`). The callback reads slot 0's
+The site is `$E3FE`, the site of `EVENT_JUMP_START` (`config/game.toml`, id
+`ducktales.event.jump-start`; [decompilation.md](decompilation.md) "Events"). The handler reads slot 0's
 velocity, multiplies it by `JumpScale`/100 (clamped to `$7FFF`; a negative value is left alone) and
 writes it back. After that the game's own physics runs the jump unchanged.
 
 The scale is set with `config.ini` `[Game] JumpScale = <percent>` in the window, or
 `--jump-scale <percent>` in both hosts. The range is 25-400 and the default is 100. At 100 the hook is
-disabled, so the machine runs exactly as the stock game.
+unregistered and the event's hook disabled, so the machine runs exactly as the stock game.
 
 Measured with `py -3 -I tests/jump_experiment.py --build build/headless --dev-build build/headless-dev`:
 
@@ -129,19 +132,20 @@ match on every frame, with 100.0% native cycles (2026-11-21).
 
 Five optional changes, all off by default. `enhancements.c` holds one table that gives each its
 `config.ini` `[Game]` key, its command-line option, its menu label, its range and its stock value.
-The host (load, save, usage), the menu and the tests iterate that table. Every enhancement except
-the jump owns one `[[mod_function_hook]]` site (`config/game.toml`, addresses in
-`src/game/enhancements_sites.h`). Its hook is enabled only while its value differs from stock.
-So with an enhancement off, the generated code runs the original instruction, as described under
-Mechanism. All sites are in the fixed bank 7, so the bank mapped at `$8000` never matters.
+The host (load, save, usage), the menu and the tests iterate that table. Each enhancement is a
+handler of one game event (`include/ducktales/events.h`, [decompilation.md](decompilation.md)
+"Events"), registered only while its value differs from stock, and an event without handlers keeps
+its `[[mod_function_hook]]` site disabled. So with an enhancement off, the generated code runs the
+original instruction, as described under Mechanism. All sites are in the fixed bank 7, so the bank
+mapped at `$8000` never matters.
 
-| Key / option | Values | Site | What the callback does |
+| Key / option | Values | Site (event) | What the handler does |
 |---|---|---|---|
 | `JumpScale` / `--jump-scale` | 25-400, 100 = stock | `$E3FE` | See "Jump experiment" above. |
-| `NoDamage` / `--no-damage` | on/off | `$EB5E`, entry of `damage` | Returns as the routine's RTS would, so no HP dot is marked and the Easy hit counter `$5F` is left alone. The knock-back is done by the callers and still happens. |
-| `InfiniteTime` / `--infinite-time` | on/off | `$E2A6`, in `timer_tick` (`$E28C`) | Before the decrement of `$B0` (frames to the next time tick), sets `$B0` back to its reload value `$3C`, so it never reaches 0 and the HUD time never drops. |
-| `InfiniteLives` / `--infinite-lives` | on/off | `$DCB0`, in `death_or_warp` (`$DC3E`) | Before the decrement of `$0361`, adds one, so the count stays the same. |
-| `StartLives` / `--start-lives` | 0-9 or off (stock 2) | `$D59C`, title set-up | After the copy of the HUD template sets `$0361` to 2, writes the chosen count. It takes effect from the next new game (power-on, reset, or the restart after a game over). |
+| `NoDamage` / `--no-damage` | on/off | `$EB5E`, entry of `damage` (`PLAYER_DAMAGED`) | Cancels it: the routine returns as its RTS would, so no HP dot is marked and the Easy hit counter `$5F` is left alone. The knock-back is done by the callers and still happens. |
+| `InfiniteTime` / `--infinite-time` | on/off | `$E2A6`, in `timer_tick` (`$E28C`) (`TIMER_TICK`) | Cancels it: before the decrement of `$B0` (frames to the next time tick), `$B0` is set back to its reload value `$3C`, so it never reaches 0 and the HUD time never drops. |
+| `InfiniteLives` / `--infinite-lives` | on/off | `$DCB0`, in `death_or_warp` (`$DC3E`) (`LIFE_LOST`) | Cancels it: before the decrement of `$0361`, one is added, so the count stays the same. |
+| `StartLives` / `--start-lives` | 0-9 or off (stock 2) | `$D59C`, title set-up (`NEW_GAME`) | After the copy of the HUD template sets `$0361` to 2, writes the chosen count. It takes effect from the next new game (power-on, reset, or the restart after a game over). |
 
 Evidence for the sites (controlled runs with `tools/whoaccesses.py`, `tools/framelog.py` and a
 search of the ROM for every reference to the address; status: verified unless marked):
@@ -313,7 +317,10 @@ it the host links empty inline stubs and lists none of these options.
   fired.
 - `--dt-enh-at FRAME:KEY=VALUE` (repeatable) changes an enhancement before that frame, for example
   `--dt-enh-at 1000:NoDamage=off`. `--dt-reset-at FRAME` presses Reset before that frame.
-- At exit the log reports, for each enhancement, its value and how many times it changed the game.
+- At exit the log reports, for each enhancement, its value and how many times it changed the game,
+  and for each game event how many times it was raised.
+- `--dt-events-log FILE|-` registers a handler on every event that changes nothing and writes one
+  line per raised event (`frame=1004 event=player-damaged`).
 - `--dt-sprite-log FILE|-` composes the presented picture every frame and writes one line per frame from
   the sprite compositor; at exit the log reports its totals.
 - In the window, with `--tcp PORT`: `dt_state` returns the typed state as JSON, and `dt_jump_scale`
@@ -321,12 +328,17 @@ it the host links empty inline stubs and lists none of these options.
 
 ## Adding a behaviour change
 
+If an event in `include/ducktales/events.h` already marks the moment, register a handler for it
+and change the game through the typed API; nothing below is needed. Otherwise add an event (or, for
+a one-off, a site of its own):
+
 1. Find the instruction with a controlled run and record the evidence in `docs/`.
 2. Add its address to `ducktales_symbols.h`.
 3. Add a `[[mod_function_hook]]` with an `id` and a `length`/`crc32` key of the bytes at the site.
    Compute the CRC locally from your ROM and never commit the bytes.
 4. Register a callback for that id with `NES_MOD_CONSTRUCTOR` and
-   `nes_mod_register_function_entry_plugin`. Enable it only while its setting differs from stock.
+   `nes_mod_register_function_entry_plugin` (for an event: in `src/game/events.c`). Enable it only
+   while its setting differs from stock (for an event: while it has a handler).
 5. With the feature off, run `tests/verify_routes.py`. Every route must still match the
    interpreter and the oracle.
 

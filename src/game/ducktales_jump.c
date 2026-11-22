@@ -1,40 +1,33 @@
 #include "ducktales_jump.h"
-#include "ducktales_symbols.h"
 
-#include "cyc_mod.h"
-#include "mod_function_hooks.h"
-#include "mod_runtime.h"
+#include "ducktales/events.h"
+#include "ducktales/objects.h"
+#include "ducktales/player.h"
 
 static int s_percent = DT_JUMP_SCALE_STOCK;
 static uint64_t s_rescaled;
 
-/* Runs before the instruction at DT_SITE_JUMP_START, after the jump start
- * stored the take-off velocity in slot 0. Rewrites it scaled, as two CPU
- * stores would, and lets the original instruction run (return 0). */
-static int on_jump_start(uint16_t addr)
+/* A jump just copied the take-off velocity into Scrooge's: scale it and let
+ * the game's own physics run the jump. A negative velocity is left alone. */
+static EventResult scale_jump(EventId id, void *user)
 {
-    (void)addr;
-    const uint16_t lo = DT_ROW_VY_FRAC + DT_SLOT_SCROOGE, hi = DT_ROW_VY + DT_SLOT_SCROOGE;
-    uint32_t v = (uint32_t)cyc_mod_peek(hi) << 8 | cyc_mod_peek(lo);
-    if (v & 0x8000) return 0;
+    (void)id;
+    (void)user;
+    uint32_t v = Obj_GetVelocityY(PLAYER_SLOT);
+    if (v & 0x8000) return EVENT_CONTINUE;
     v = v * (uint32_t)s_percent / 100;
     if (v > 0x7FFF) v = 0x7FFF;
-    cyc_mod_poke(lo, (uint8_t)v);
-    cyc_mod_poke(hi, (uint8_t)(v >> 8));
+    Obj_SetVelocityY(PLAYER_SLOT, (uint16_t)v);
     s_rescaled++;
-    return 0;
-}
-
-NES_MOD_CONSTRUCTOR(dt_register_jump_hook)
-{
-    nes_mod_register_function_entry_plugin(DT_SITE_JUMP_START_ID, DT_SITE_JUMP_START, on_jump_start);
+    return EVENT_CONTINUE;
 }
 
 bool dt_jump_set_scale(int percent)
 {
     if (percent < DT_JUMP_SCALE_MIN || percent > DT_JUMP_SCALE_MAX) return false;
     s_percent = percent;
-    nes_mod_set_function_hook_enabled(DT_SITE_JUMP_START_ID, percent != DT_JUMP_SCALE_STOCK);
+    if (percent != DT_JUMP_SCALE_STOCK) Events_On(EVENT_JUMP_START, scale_jump, NULL);
+    else Events_Off(EVENT_JUMP_START, scale_jump, NULL);
     return true;
 }
 

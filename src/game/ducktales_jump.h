@@ -1,9 +1,10 @@
 /*
  * ducktales_jump.h - reversible jump-height experiment.
  *
- * Scales Scrooge's take-off velocity by a percentage at the hook site
- * DT_SITE_JUMP_START (ducktales_symbols.h). 100 is the stock game: the site's
- * hook is then disabled, so the machine runs exactly as without this code.
+ * Scales Scrooge's take-off velocity by a percentage, as a handler of
+ * EVENT_JUMP_START (ducktales/events.h). 100 is the stock game: the handler
+ * is then unregistered and the event's site hook disabled, so the machine
+ * runs exactly as without this code.
  */
 #pragma once
 #include <stdbool.h>

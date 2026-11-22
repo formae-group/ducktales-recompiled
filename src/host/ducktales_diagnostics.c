@@ -13,6 +13,8 @@
 #include "game/ducktales_state.h"
 #include "host/ducktales_sprites.h"
 
+#include "ducktales/events.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,6 +30,14 @@ static int s_enh_at_n;
 static unsigned long s_reset_at[MAX_JUMP_EVENTS];
 static int s_reset_at_n;
 static FILE *s_sprite_log;
+static FILE *s_events_log;
+
+static EventResult log_event(EventId id, void *user)
+{
+    (void)user;
+    fprintf(s_events_log, "frame=%lu event=%s\n", (unsigned long)cyc_ring_frame, Events_Name(id));
+    return EVENT_CONTINUE;
+}
 
 static void report(void)
 {
@@ -47,7 +57,11 @@ static void report(void)
             DT_SPRITES_KEY, dt_sprites_get() ? "on" : "off", (unsigned long long)sp.composed,
             (unsigned long long)sp.reused, (unsigned long long)sp.fallback, (unsigned long long)sp.declined, (unsigned long long)sp.hud_restored,
             (unsigned long long)sp.leftover, (unsigned long long)sp.lines_over_8, (unsigned long long)sp.beyond_63);
+    for (int e = 0; e < EVENT_COUNT; e++)
+        fprintf(f, "dt-diag: event %s raised=%llu\n", Events_Name((EventId)e), (unsigned long long)Events_Raised((EventId)e));
     fflush(f);
+    if (s_events_log && s_events_log != stdout) fclose(s_events_log);
+    s_events_log = NULL;
     if (s_log && s_log != stdout) fclose(s_log);
     dt_sprites_set_log(NULL);
     if (s_sprite_log && s_sprite_log != stdout) fclose(s_sprite_log);
@@ -94,6 +108,12 @@ bool dt_diag_option(const char *name, const char *value)
             return true;
         }
         return false;
+    }
+    if (!strcmp(name, "--dt-events-log")) {
+        s_events_log = !strcmp(value, "-") ? stdout : fopen(value, "w");
+        if (!s_events_log) return false;
+        for (int e = 0; e < EVENT_COUNT; e++) Events_On((EventId)e, log_event, NULL);
+        return true;
     }
     if (!strcmp(name, "--dt-reset-at")) {
         if (s_reset_at_n >= MAX_JUMP_EVENTS) return false;

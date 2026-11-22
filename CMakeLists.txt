@@ -22,9 +22,12 @@ if(DUCKTALES_HEADLESS)
     list(APPEND _ducktales_options HEADLESS)
 endif()
 # The port's systems layer (docs/architecture.md): typed game state, the hook
-# sites it alters behaviour at, settings and options. Both hosts link it.
+# sites it alters behaviour at, settings and options; the typed game API and
+# its events (include/ducktales/). Both hosts link it.
 set(_ducktales_extras
     "${CMAKE_SOURCE_DIR}/src/game/ducktales_state.c"
+    "${CMAKE_SOURCE_DIR}/src/game/game_ram.c"
+    "${CMAKE_SOURCE_DIR}/src/game/events.c"
     "${CMAKE_SOURCE_DIR}/src/game/ducktales_jump.c"
     "${CMAKE_SOURCE_DIR}/src/game/enhancements.c"
     "${CMAKE_SOURCE_DIR}/src/host/ducktales_sprites.c"
@@ -58,7 +61,7 @@ nesrecomp_add_cycle_game(ducktales
     GAME_CONFIG "${CMAKE_SOURCE_DIR}/config/game.toml"
     ${_ducktales_options}
     HOST_EXTRAS ${_ducktales_extras})
-target_include_directories(ducktales PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_include_directories(ducktales PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/include")
 if(NOT DUCKTALES_HEADLESS)
     # The ROM identity the first-run import checks (docs/rom.md: SHA-256 of
     # the whole file), taken from the ROM this build was generated from.
