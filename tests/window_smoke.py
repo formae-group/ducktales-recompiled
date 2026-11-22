@@ -17,9 +17,14 @@ folder (DUCKTALES_DATA_DIR):
      at the size the overscan crop, the pixel aspect and the window scale
      give (docs/presentation.md);
   7. DUCKTALES_UI_SELFTEST: the in-game menu opens by itself at frame 120, walks
-     its pages and closes, and the first-run screen shows a refused ROM; each
-     state is written as a PNG (into --shots, default a temporary folder) and
-     the game still reaches its exit frame.
+     every tab and category (Settings: General, Graphics, Audio, Controls with
+     a capture, Gameplay; Enhancements: Gameplay, Restore defaults; About),
+     draws Graphics and About off screen at 1280x720 and 3840x2160, opens the
+     Reset and Quit confirmations without confirming them, and closes; the
+     first-run screen shows a refused ROM. Each state is written as a PNG (into
+     --shots, default a temporary folder) and the game still reaches its exit
+     frame;
+  8. the menu's own [Game] keys (MenuOpacity, MenuControllerNav) survive a run.
 
     py -3 -I tests/window_smoke.py --build build/windows [--shots captures/shots]
 
@@ -96,13 +101,18 @@ def main():
         check(code == 0, 'without a ROM argument the imported copy starts the game', out)
 
         ini = tmp / 'd.ini'
-        ini.write_text('[Game]\nNoDamage = on\nStartLives = 5\nJumpScale = 150\nNoSpriteFlicker = off\nNoSlowdown = off\n')
+        ini.write_text('[Game]\nNoDamage = on\nStartLives = 5\nJumpScale = 150\nNoSpriteFlicker = off\nNoSlowdown = off\n'
+                       'MenuOpacity = 55\nMenuControllerNav = off\n')
         code, out = run(args.rom, '--hidden', '--exit-after', '120', '--config', str(ini))
         text = ini.read_text()
         check(code == 0 and 'NoDamage = on' in text and 'StartLives = 5' in text and 'JumpScale = 150' in text
               and 'InfiniteLives = off' in text and 'NoSpriteFlicker = off' in text
               and 'NoSlowdown = off' in text and 'No slowdown:' not in out,
               'enhancement and sprite settings survive a run in config.ini [Game]', text)
+        check('MenuOpacity = 55' in text and 'MenuControllerNav = off' in text,
+              'the menu settings survive a run in config.ini [Game]', text)
+        check('MenuOpacity = 80' in (tmp / 'a.ini').read_text() and 'MenuControllerNav = on' in (tmp / 'a.ini').read_text(),
+              'the menu settings default to 80% opacity and controller navigation on', (tmp / 'a.ini').read_text())
 
         def png_size(path):
             with open(path, 'rb') as f:
@@ -132,8 +142,19 @@ def main():
         code, out = run(args.rom, '--hidden', '--exit-after', '400', '--config', str(tmp / 'e.ini'),
                         extra_env={'DUCKTALES_UI_SELFTEST': str(shots)})
         menu = sorted(p.name for p in shots.glob('menu_*.png'))
-        check(code == 0 and len(menu) == 5 and '[ducktales] menu closed' in out,
-              f'the menu opens, draws its 5 pages ({", ".join(menu)}) and closes; the run still ends', out)
+        want = ['menu_01_settings_general', 'menu_02_settings_graphics', 'menu_03_settings_audio',
+                'menu_04_settings_controls', 'menu_05_settings_controls_capture', 'menu_06_settings_gameplay',
+                'menu_07_enhancements_gameplay', 'menu_08_enhancements_restore_defaults', 'menu_09_about',
+                'menu_10_settings_graphics_720p', 'menu_11_settings_graphics_2160p', 'menu_12_about_2160p',
+                'menu_13_reset', 'menu_14_quit']
+        check(code == 0 and menu == [w + '.png' for w in want] and '[ducktales] menu closed' in out
+              and '(quit)' not in out and 'could not write' not in out,
+              f'the menu opens, draws every tab and category ({len(menu)} PNGs) and closes; the run still ends', out)
+        sizes = {w: png_size(shots / f'{w}.png') for w in want if (shots / f'{w}.png').exists()}
+        check(sizes.get('menu_10_settings_graphics_720p') == (1280, 720)
+              and sizes.get('menu_11_settings_graphics_2160p') == (3840, 2160)
+              and sizes.get('menu_12_about_2160p') == (3840, 2160),
+              f'the off-screen pages have their sizes ({sizes})')
         empty = tmp / 'empty-data'
         bad = tmp / 'bad.nes'
         shutil.copyfile(args.rom, bad)
