@@ -37,6 +37,7 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Changed
 
+- The application icon is now original artwork, a treasure chest.
 - The window build links the static MSVC runtime, so players need no Visual C++ redistributable.
 - The README was rewritten as a technical overview with the supported ROM's hashes.
 - The pause menu no longer shows help and hint text.
