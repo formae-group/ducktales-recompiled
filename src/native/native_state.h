@@ -64,7 +64,8 @@ typedef struct {
     uint32_t cycle;           /* CPU cycle within the frame */
     uint16_t scanline;        /* where the PPU was when the write landed */
     uint16_t dot;
-    uint16_t addr;            /* $2000-$2007, or $4014 for a sprite DMA */
+    uint16_t addr;            /* $2000-$2007, or $4014 for a sprite DMA; $2002 is a read
+                                 that reset the $2005/$2006 write latch (value: what it read) */
     uint8_t  value;
 } NativeRegWrite;
 

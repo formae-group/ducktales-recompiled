@@ -340,3 +340,15 @@ size_t native_audio_frame(const NativeFrame *frame, int16_t *out, size_t max)
     if (length > now) advance(length - now, out, max, &n);
     return n < max ? n : max;
 }
+
+void native_audio_wav_header(FILE *f, int sample_rate, uint32_t samples)
+{
+    uint32_t rate = (uint32_t)sample_rate, bytes = samples * 2, riff = 36 + bytes, fmt = 16, byte_rate = rate * 2;
+    uint16_t pcm = 1, channels = 1, align = 2, bits = 16;
+    long at = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    fwrite("RIFF", 1, 4, f), fwrite(&riff, 4, 1, f), fwrite("WAVEfmt ", 1, 8, f), fwrite(&fmt, 4, 1, f);
+    fwrite(&pcm, 2, 1, f), fwrite(&channels, 2, 1, f), fwrite(&rate, 4, 1, f), fwrite(&byte_rate, 4, 1, f);
+    fwrite(&align, 2, 1, f), fwrite(&bits, 2, 1, f), fwrite("data", 1, 4, f), fwrite(&bytes, 4, 1, f);
+    if (at > 44) fseek(f, at, SEEK_SET);
+}

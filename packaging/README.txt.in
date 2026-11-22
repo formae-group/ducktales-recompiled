@@ -1,0 +1,54 @@
+DuckTales Recompiled @_ducktales_version@
+========================================
+
+A native Windows port of DuckTales (NES, Capcom, 1989), built by static
+recompilation. This package contains no game data: you need your own copy of
+the game's ROM. 64-bit Windows only; nothing else needs to be installed.
+
+
+Supplying the ROM
+-----------------
+
+Only DuckTales (USA) is supported:
+
+  File      DuckTales (USA).nes (131,088 bytes, iNES)
+  SHA-256   97d472f7b2c1088448d1644155b2650a546bad887b3cba571e16d7986824c169
+
+Start ducktales.exe, then pick the ROM in the window or drop the file on it.
+The file is checked against the SHA-256 above; any other dump, revision or
+modified file is refused. The checked copy is stored in
+%APPDATA%\DuckTales Recompiled\, so later launches start the game directly.
+
+From a command prompt you can import it without opening the window:
+
+  ducktales.exe --import-rom "C:\path\to\DuckTales (USA).nes"
+
+
+Controls
+--------
+
+  Action               Keyboard             Controller
+  D-pad                Arrow keys           D-pad
+  A / B                Z / X                A / X
+  Start / Select       Return / Backslash   Start / Back
+  Menu                 Escape               RB
+  Fullscreen           F11, Alt+Enter
+  Fast-forward (hold)  Tab                  RT
+  Save / load state    F8 / F9
+
+Every control can be rebound in the menu (Settings > Controls). Settings are
+saved in config.ini next to ducktales.exe.
+
+
+Licences
+--------
+
+DuckTales Recompiled's own code is MIT licensed (LICENSE.txt). It is built on
+NESRecomp, licensed under PolyForm Noncommercial 1.0.0 with the additional
+permissions in licenses/NESRecomp-PERMISSIONS.md: this package must be free of
+charge to obtain and play, and may not be sold. It also contains formae-ui
+(MIT), Dear ImGui (MIT), SDL2 (zlib) and emu2413 (MIT). Each licence text is in
+licenses/.
+
+DuckTales is a trademark of Disney. This project is not affiliated with Disney
+or Capcom and distributes no part of the game.

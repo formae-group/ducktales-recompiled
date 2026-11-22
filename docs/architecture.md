@@ -232,14 +232,36 @@ considered:
   host's own `SDL_Renderer`, so there is no second graphics context. Only the window target
   compiles it. The headless and oracle builds do not.
 
+### formae-ui
+
+Everything in the menu that is not DuckTales' own lives in
+[formae-ui](https://gitlab.com/formae/formae-ui), Formae's menu library, pinned as the submodule
+`external/formae-ui` (v0.1.0, MIT) so the next ports share the same look and behaviour. It was
+extracted from this menu without changing a pixel. The split:
+
+| formae-ui (`formae/ui.h`) | DuckTales (`src/ui/app_ui.cpp`) |
+|---|---|
+| Theme colours (the defaults are this menu's), Segoe UI fonts, the base size from height and DPI | The ImGui SDL2 and SDL_Renderer backends, the modal loop, the game picture behind the menu |
+| The menu shell: tabs, Reset, Quit and Resume icon buttons, sidebar, page, backdrop opacity, confirmations | The tabs, categories and pages, the questions ("Quit DuckTales?") and what Reset and Quit do |
+| Section separators, toggles, combos, sliders with - and +, buttons, the "Restart to apply" tag | The settings they show and where changes are written |
+| The binding table and its capture | The rows, `app_bind_*` names and the binding encoding |
+| The About page layout and the logo's scaling | The texts, version, build date, credits and the SDL texture callback |
+| The first-run layout | The texts, the file dialog and the import |
+| The close rules (menu shortcut, Escape and B unless busy) and capture rules | The translation of SDL events into `formae::ui::InputEvent` |
+
+The library links the `imgui` target that `CMakeLists.txt` builds from `external/imgui`, so the
+program has one Dear ImGui; the SDL backends stay in the `ducktales` target.
+
 ### How it attaches to the host
 
 ```
 src/host/ducktales_main.c   the real main(): chooses the ROM, then calls the host
 src/ui/app_rom.[ch]      ROM check, import and the data folder (UTF-8 paths, _w* calls)
-src/ui/app_app.[ch]      config.ini copy, live settings, bindings, menu shortcut
+src/ui/app_settings.[ch] config.ini copy, live settings, bindings, menu shortcut, menu settings
 src/ui/app_present.[ch]  the picture the window shows: HUD split, overscan, scaling, aspect, pacing
-src/ui/app_ui.cpp        Dear ImGui: the first-run screen and the menu
+src/ui/app_ui.cpp        the first-run screen and the menu on formae-ui and Dear ImGui
+external/formae-ui       the menu library (submodule, docs/architecture.md "formae-ui")
+assets/brand/formae.png  the About page's logo, embedded by formae_ui_embed_file
 ```
 
 - For the `ducktales` target only, CMake compiles NESRecomp's `cyc_host.c` with
@@ -250,9 +272,39 @@ src/ui/app_ui.cpp        Dear ImGui: the first-run screen and the menu
   `frame_begin`, `event`, `input`, `audio_mix`, and the `[Game]` section writer.
 - The menu opens from the `event` callback, on Escape or on the controller's Menu binding (RB by
   default). It runs its own modal loop inside that callback. It pumps SDL events and draws over the
-  last game picture, so no machine frame runs while it is open, and the pause is exact. Its pages
-  are Resume, Reset, Settings, Controls and Enhancements, plus Quit. Keyboard, mouse and controller
-  all work.
+  last game picture, so no machine frame runs while it is open, and the pause is exact.
+- The menu's layout follows Ship of Harkinian's: a bar of tabs (Settings, Enhancements, About) with
+  Reset, Quit and Resume icon buttons on its right, and under it a sidebar of the tab's categories
+  beside the chosen category's page. Settings has General (menu background opacity, controller
+  navigation), Graphics, Audio, Controls and Gameplay (No slowdown); Enhancements has Gameplay (the
+  `DtEnhInfo` table, iterated) and Restore defaults. Pages are titled separators and ImGui's own
+  checkboxes, sliders with -/+ buttons, combos and buttons; there are no tooltips or help lines.
+  Reset and Quit ask in a modal first.
+- Navigation is ImGui's: `NavEnableKeyboard` always, `NavEnableGamepad` while
+  `[Game] MenuControllerNav` is on. The sidebar and the page are `NavFlattened` children, so
+  the arrows and the D-pad cross between the bar, the sidebar and the page; moving onto a tab or a
+  category chooses it. Escape and B close the menu unless a popup is open or an item is active
+  (then ImGui gets them: a combo closes, a confirmation cancels). The menu binding (RB) always
+  closes it.
+- `app_ui.cpp` translates every SDL event into a `formae::ui::InputEvent` (`cancel` for Escape,
+  `clear` for Delete and Backspace, `back` for B, `menu` for the menu bindings) and gives it to the
+  menu before ImGui; the rules below are formae-ui's.
+- During a capture on the Controls page the events go to the binding, not to ImGui: Escape
+  (or B for a keyboard cell) cancels, Delete or Backspace clears, a click elsewhere cancels. The menu
+  stays disabled until Enter, Space and A are released, so the button that was bound does not start
+  another capture.
+- Sizes follow the drawable: the base size is a 42nd of its height, at least 15 px at 96 DPI times
+  the display's scale and at most a 20th of the height. Fonts (Segoe UI and Segoe UI Semibold) and
+  the style are built again when it changes. The menu's background is the game picture under a
+  dark layer of `MenuOpacity` percent.
+- The About tab shows the version (`git describe --tags --always --dirty` when CMake configures),
+  the configure date, "Developed by Formae" with the logo, the credits and licences, and that the
+  project is not affiliated with Disney or Capcom. The logo is `assets/brand/formae.png` (the mark
+  and wordmark in the menu's text colour on a transparent background). formae-ui's
+  `formae_ui_embed_file` turns it into the byte array `app_about_logo_png`, so the program needs
+  no loose file; formae-ui decodes it (its own copy of `stb_image`), area-averages it to the size
+  drawn, and `app_ui.cpp` makes the SDL texture through `formae::ui::TextureCallbacks`. The version
+  and the date are in `app_about.c`, generated by CMake.
 - Settings are applied live through what the window exposes. `app_settings.c` keeps its own copy of
   `config.ini`, read and written with the host's `cyc_settings_load`/`cyc_settings_save`, so the
   file format stays the host's:
@@ -265,6 +317,8 @@ src/ui/app_ui.cpp        Dear ImGui: the first-run screen and the menu
     at start.
   - Pixels, pixel aspect, overscan crop and the HUD split line act on the picture the window
     shows (`CycHostExtras.present`), never on the machine: [presentation.md](presentation.md).
+  - `[Game] MenuOpacity` and `MenuControllerNav` are the menu's own; `ducktales_host.c` hands
+    them to `app_ui_load_game_setting`/`app_ui_write_game_settings` with the other `[Game]` keys.
   - `[Game] NoSlowdown` (the No slowdown row, on by default) sets the cycle host's extra
     scanlines between frames (`ducktales_host_set_no_slowdown`); see
     [native-runtime.md](native-runtime.md#the-same-thing-on-the-cycle-host-without-changing-nesrecomp).
@@ -273,7 +327,7 @@ src/ui/app_ui.cpp        Dear ImGui: the first-run screen and the menu
   file is written again from the menu's copy, keeping only the host's fullscreen value. This runs
   only after the player changed something in the menu. The FDS Disk shortcut stays off for a
   cartridge.
-- The Controls page remaps the player 1 keyboard and controller bindings
+- The Controls category remaps the player 1 keyboard and controller bindings
   (`[Keyboard.Player1]`/`[Gamepad.Player1]`) and the Menu shortcut
   (`[Keyboard.Shortcuts]`/`[Gamepad.Shortcuts]`).
 
@@ -297,14 +351,15 @@ The data folder path is UTF-8 internally and uses the wide Windows calls. The ho
 ### Self-test and checks
 
 `DUCKTALES_UI_SELFTEST=<folder>` (a Windows path) runs the UI without input. The menu opens by itself
-at frame 120, visits each page and writes a PNG of each. The first-run screen writes its two
-screens, and `DUCKTALES_UI_SELFTEST_PICK=<file>` sets the file it picks.
+at frame 120, visits every tab and category (a capture, the Reset and Quit confirmations, and
+Graphics and About drawn off screen at 1280x720 and 3840x2160 included) and writes a PNG of each. The
+first-run screen, in the menu's colours and fonts, writes its two screens, and `DUCKTALES_UI_SELFTEST_PICK=<file>` sets the file it picks.
 `py -3 -I tests/window_smoke.py --build build/windows` uses this to check:
 
 - a hidden start and exit;
 - the refusal of a modified ROM and of a file that is not a ROM;
 - the import, and a start from the imported copy;
-- `[Game]` persistence;
+- `[Game]` persistence, the menu's own keys included;
 - both selftests.
 
 `app_rom_test` (headless build) checks the ROM import code.

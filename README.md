@@ -9,10 +9,11 @@ A native Windows port of *DuckTales* (NES, Capcom, 1989), built by static recomp
 </div>
 
 DuckTales Recompiled translates the game's 6502 program into C at build time and compiles it into a
-native executable. The game logic runs as native code; the cartridge hardware it talks to (PPU, APU,
-UxROM mapper, controllers) is supplied by the [NESRecomp](https://github.com/mstan/nesrecomp) runtime,
-and a port layer adds the menu, settings, presentation and enhancements on top. Every build is checked
-frame by frame against an independent reference machine.
+native executable. The game logic runs as native code on a small native runtime that gives it the
+bus it talks to and draws its picture from the video state it writes, with no PPU emulation; the
+verification builds run the same code on the cycle-exact [NESRecomp](https://github.com/mstan/nesrecomp)
+host, and a port layer adds the menu, settings, presentation and enhancements on top. Every build is
+checked frame by frame against an independent reference machine.
 
 The repository contains no game data. You supply your own ROM, and the build generates all
 ROM-derived code locally.
@@ -25,8 +26,12 @@ ROM-derived code locally.
   per-frame state on every route at all four CPU/PPU alignments.
 - **No sprite flicker.** Every sprite is drawn on every frame in a fixed order, with no 8-per-line or
   64-sprite limit, and the HUD stays visible. Presentation only; the machine is untouched.
-- **No slowdown.** Extra CPU time per frame removes the console's lag frames without changing game
-  logic.
+- **Native runtime.** The game runs on a native bus and renderer instead of an emulated PPU, and its
+  presented picture is checked pixel for pixel against the cycle-exact build. Sound is not played yet:
+  the native synth is still being built, and until it lands the game is silent
+  (`ducktales_cycle.exe` has sound).
+- **No slowdown.** VBlank waits until the frame's logic is done, removing the console's lag frames
+  without changing game logic.
 - **Modern presentation.** Direct3D 11, per-monitor DPI awareness, refresh-aware frame pacing,
   sharp scaling, 8:7 pixel aspect and overscan crop.
 - **Enhancements.** Optional gameplay changes, all off by default; when off, the original code runs.
@@ -63,7 +68,9 @@ cmake --build build/windows --config Release --parallel
 
 The executable is written to `build\windows\Release\ducktales.exe`. Code generation runs at configure
 time and again whenever the ROM, `config/` or the recompiler changes; the generated sources live under
-`build/*/cycle-ducktales/` and are never committed.
+`build/*/cycle-ducktales/` and are never committed. The window build links the static MSVC runtime,
+and `cmake --build build/windows --config Release --target PACKAGE` writes the player package
+`DuckTalesRecompiled-<version>-win64.zip` (see [CONTRIBUTING.md](CONTRIBUTING.md#releasing)).
 
 | CMake option | Effect |
 |---|---|
@@ -72,6 +79,7 @@ time and again whenever the ROM, `config/` or the recompiler changes; the genera
 | `-DDUCKTALES_ORACLE=ON` | Also build the TriCNES reference machine (`ducktales_oracle.exe`) |
 | `-DDUCKTALES_DEV_DIAGNOSTICS=ON` | Typed state log, scheduled changes, TCP commands; development only |
 | `-DNESRECOMP_DEV_UI=ON` | Developer keys and native-coverage display |
+| `-DDUCKTALES_PLAYER=native\|cycle` | Runtime of `ducktales.exe` in a window build: native (default; the cycle host build is `ducktales_cycle.exe`) or cycle |
 
 ## Running
 
@@ -92,24 +100,37 @@ for later launches. Headless import: `ducktales.exe --import-rom <path>` (exit c
 
 Settings are saved to `config.ini` next to the executable (`--config FILE` selects another file).
 
-### Settings
+### Menu
 
-| Setting | Values | Key |
-|---|---|---|
-| Display | Windowed, borderless, exclusive fullscreen | `[Display] Fullscreen` |
-| Window size | 1x to 8x | `[Display] WindowScale` |
-| Integer scaling | On, off | `[Display] IntegerScale` |
-| Pixels | Nearest, sharp, smooth | `[Game] Pixels` |
-| Pixel aspect | Square, 8:7 | `[Game] PixelAspect` |
-| Overscan crop | Off, top-bottom, all | `[Game] Overscan` |
-| HUD split line | Clean, original | `[Game] HudSplit` |
-| Frame pacing | Auto, VSync, steady | `[Game] FramePacing` |
-| No sprite flicker | On (default), off | `[Game] NoSpriteFlicker` |
-| No slowdown | On (default), off | `[Game] NoSlowdown` |
-| Volume | 0% to 100% | `[Audio] Volume` |
+Escape or RB pauses the game and opens the menu; Escape, B, RB or the Resume button closes it. The bar
+at the top holds the **Settings**, **Enhancements** and **About** tabs, and Reset, Quit (each asks
+first) and Resume on the right. Each tab lists its categories on the left and the chosen one's page
+on the right. Everything works with the mouse, the keyboard (arrows, Tab, Enter, Space) and a
+controller (D-pad, A, B); changes apply at once and are saved to `config.ini`. On the Controls page,
+choose a cell and press the new key or button: Escape cancels and Delete clears.
+
+| Tab, category | Setting | Values | Key |
+|---|---|---|---|
+| Settings, General | Menu background opacity | 0% to 100% (80%) | `[Game] MenuOpacity` |
+| | Controller navigation | On (default), off | `[Game] MenuControllerNav` |
+| Settings, Graphics | Display mode | Windowed, borderless, exclusive fullscreen | `[Display] Fullscreen` |
+| | Window size | 1x to 8x | `[Display] WindowScale` |
+| | Integer scaling | On, off | `[Display] IntegerScale` |
+| | Pixels | Nearest, sharp, smooth | `[Game] Pixels` |
+| | Pixel aspect | Square, 8:7 | `[Game] PixelAspect` |
+| | Crop overscan | Off, top and bottom, all edges | `[Game] Overscan` |
+| | HUD split line | Clean, original | `[Game] HudSplit` |
+| | Frame pacing | Auto, VSync, steady | `[Game] FramePacing` |
+| | No sprite flicker | On (default), off | `[Game] NoSpriteFlicker` |
+| Settings, Audio | Master volume | 0% to 100% | `[Audio] Volume` |
+| Settings, Controls | Player 1 keyboard and controller bindings, Menu shortcut | | `[Keyboard.*]`, `[Gamepad.*]` |
+| Settings, Gameplay | No slowdown | On (default), off | `[Game] NoSlowdown` |
+| Enhancements, Gameplay | The enhancements below | | `[Game]` |
+| Enhancements, Restore defaults | Restore the original game | | |
 
 Frame pacing applies at the next launch: *Auto* uses VSync on displays up to 70 Hz and a steady
-present hold above that. Measurements are in [docs/presentation.md](docs/presentation.md).
+present hold above that. Measurements are in [docs/presentation.md](docs/presentation.md). The About
+tab shows the version, the build date and the credits.
 
 ### Enhancements
 
@@ -130,11 +151,16 @@ Each enhancement hooks a single, documented site in the original code, guarded b
    declared in `config/game.toml` and the entry points recorded in `config/ducktales.seeds`, and
    emits one C function per 1 KiB chunk of each 4 KiB bank view. Each instruction performs its CPU cycles through the runtime, so timing stays
    cycle-exact with the PPU and APU.
-2. **Runtime.** The generated code links against NESRecomp's cycle host, which supplies the PPU, APU,
-   mapper, input, audio output and the SDL2 window. Code that no seed covers runs on the interpreter
-   and is reported, so it can be added to the seeds.
+2. **Runtime.** The game (`ducktales.exe`) runs the generated code on the native runtime
+   (`src/native`): CPU RAM, the UxROM banks, controllers, sprite DMA and the PPU registers and
+   memories, with VBlank, the NMI and the sprite-0 hit placed from the cycle count; the native renderer
+   draws each frame from what the game wrote. The verification builds and `ducktales_cycle.exe` link
+   the same code against NESRecomp's cycle host (PPU, APU, mapper). Code that no seed covers runs on
+   the interpreter and is reported, so it can be added to the seeds. See
+   [native-runtime.md](docs/native-runtime.md).
 3. **Port layer.** `src/game` (typed game state, revision-specific symbols, enhancement hooks),
-   `src/host` (settings, options, the sprite compositor, diagnostics) and `src/ui` (Dear ImGui menu,
+   `src/host` (settings, options, the sprite compositor, diagnostics) and `src/ui` (the menu, built with
+   [formae-ui](https://gitlab.com/formae/formae-ui) on Dear ImGui,
    ROM import, presentation) attach to the host through its public extension points. The NESRecomp
    submodule is never modified.
 4. **Presentation.** The window shows a picture composed from the machine's output: all sprites
@@ -169,7 +195,8 @@ the CPU registers, and must be identical on every frame. The oracle's hashes are
 | `tests/verify_routes.py` | Recompiled, interpreter and oracle equality on every route |
 | `tests/sprites_test.py` | Sprite presentation versus the machine picture |
 | `tests/enhancements_test.py` | Each enhancement's effect, and identity with the original when off |
-| `tests/window_smoke.py` | Start-up, ROM import and refusal, settings persistence, every menu page |
+| `tests/window_smoke.py` | Start-up, ROM import and refusal, settings persistence, every menu tab and category |
+| `tests/package_test.py` | The release ZIP's contents, and the game starting from it unpacked |
 
 New routes can reach code no route has executed; append its interpreter misses to the seeds and
 rebuild:
@@ -186,7 +213,7 @@ build\headless\Release\ducktales.exe "roms\DuckTales (USA).nes" --input tests\ro
 | [validation.md](docs/validation.md) | Routes, coverage and verification results |
 | [rendering.md](docs/rendering.md) | Screen data, sprite builder, flicker analysis |
 | [presentation.md](docs/presentation.md) | Pacing, DPI, scaling and picture measurements |
-| [native-runtime.md](docs/native-runtime.md) | Native frame loop and lag analysis |
+| [native-runtime.md](docs/native-runtime.md) | Native runtime, the player build and lag analysis |
 | [memory-map.md](docs/memory-map.md), [functions.md](docs/functions.md) | RAM and routine reference |
 | [player.md](docs/player.md), [game-state.md](docs/game-state.md), [levels.md](docs/levels.md), [audio.md](docs/audio.md) | Reverse-engineering notes |
 
@@ -194,7 +221,8 @@ build\headless\Release\ducktales.exe "roms\DuckTales (USA).nes" --input tests\ro
 
 The code in this repository is MIT licensed ([LICENSE](LICENSE)). NESRecomp is licensed under
 PolyForm Noncommercial 1.0.0 with additional permissions, so builds of this port must be distributed
-free of charge. Dear ImGui and SDL2 are used under their own licenses. See
+free of charge. [formae-ui](https://gitlab.com/formae/formae-ui) (MIT, Formae's menu library),
+Dear ImGui and SDL2 are used under their own licenses. See
 [docs/licensing.md](docs/licensing.md).
 
 *DuckTales* is a trademark of Disney. This project is not affiliated with Disney or Capcom and

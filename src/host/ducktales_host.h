@@ -36,6 +36,13 @@ void ducktales_host_write_game_settings(FILE *f);
 bool ducktales_host_no_slowdown(void);
 /* Applied between frames and saved with the other [Game] keys. */
 void ducktales_host_set_no_slowdown(bool on);
+/* Each runtime's own No slowdown: the cycle host's extra scanlines
+ * (ducktales_host.c) or the native runtime's lag mode (native_window.c). */
+void ducktales_host_apply_no_slowdown(bool on);
+
+/* An enhancement or sprite option (--jump-scale 150, --no-sprite-flicker off):
+ * true if the name is one of them, *ok whether the value was accepted. */
+bool ducktales_host_game_option(const char *name, const char *value, bool *ok);
 
 #ifdef __cplusplus
 }

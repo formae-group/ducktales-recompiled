@@ -16,6 +16,7 @@
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #include "native/native_state.h"
 
@@ -36,6 +37,10 @@ void native_audio_reset(int sample_rate);
  * signed 16-bit mono samples to out (at most max) and returns how many:
  * sample_rate / 60.0988 per frame on average. */
 size_t native_audio_frame(const NativeFrame *frame, int16_t *out, size_t max);
+
+/* A 44-byte mono 16-bit PCM WAV header at the start of f, for --wav-out:
+ * written first with 0 samples, again with the count when done. */
+void native_audio_wav_header(FILE *f, int sample_rate, uint32_t samples);
 
 #ifdef __cplusplus
 }

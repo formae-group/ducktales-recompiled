@@ -64,6 +64,39 @@ frame 1230 equals the headless presented picture with the feature on and the mac
 off. With the feature linked and on by default, `tests/verify_routes.py --build build/headless` passes all
 twelve routes at all four alignments with 100.0% native cycles (2026-11-22).
 
+## Release package (automated)
+
+`py -3 -I tests/package_test.py --build build/windows` (2026-11-22, all checks pass, on a
+clean tree at this change, so the archive is `DuckTalesRecompiled-<commit>-win64.zip`): the archive
+holds exactly the release files in one top-level folder and no ROM, source, symbols or test tool;
+its name carries the version the executable reports; neither `ducktales.exe` (static `/MT` runtime;
+imports COMDLG32, IMM32, KERNEL32, SDL2, SHELL32, USER32, WS2_32) nor `SDL2.dll` (system DLLs and
+msvcrt) imports a Visual C++ runtime DLL; unpacked into a temporary folder and run there with PATH
+reduced to the Windows folders, the executable imports a copy of the ROM with `--import-rom`, starts
+from the imported copy hidden for 300 frames, writes `config.ini` next to itself, and the menu
+self-test draws all 14 pages. `tests/window_smoke.py --build build/windows` also passes all 16 checks
+on the `/MT` build.
+
+## Menu on formae-ui (automated)
+
+The menu moved to formae-ui 0.1.0 (`external/formae-ui`) with no visible change (2026-11-22). The
+window build of main (`64ef62e`'s tree) and of this change were each configured with `git describe`
+unavailable, so the About page shows the same version (`unknown`) and date in both, and run with
+`DUCKTALES_UI_SELFTEST` at fixed paths (the menu run and the first-run run with a modified ROM).
+Decoded RGB of the 16 PNGs, compared pixel by pixel over 5 runs before and 6 runs after:
+
+- 15 PNGs are identical in every run of both builds: the 14 menu pages other than the Reset
+  confirmation (the 768x720 window, 1280x720 and both 3840x2160 off-screen pages included) and both
+  first-run screens.
+- `menu_13_reset` varies from run to run in the unmodified build as well (up to 6 levels per
+  channel, uniformly over the picture): the shot is taken during ImGui's modal dim fade-in, whose
+  progress depends on frame timing. One run before and two runs after are identical to each other on
+  all 16 PNGs.
+
+With the change, `tests/window_smoke.py --build build/windows` passes all 16 checks and
+`tests/package_test.py --build build/windows` all 12; the package now also carries
+`licenses/formae-ui-LICENSE.txt`.
+
 ## Native runtime
 
 `tests/native_routes.py` holds the native-runtime prototype (`ducktales_native`, faithful lag mode)
@@ -74,7 +107,7 @@ no-slowdown mode per logic step. Details: [native-runtime.md](native-runtime.md)
 ## Native synth
 
 `tests/audio_compare.py` records each route twice from power-on at 48 kHz: the cycle host's APU
-(`ducktales.exe --wav-out`) and the native runtime's synth (`ducktales_native --lag faithful
+(headless `ducktales.exe --wav-out`) and the native runtime's synth (`ducktales_native --lag faithful
 --wav-out`, [audio.md](audio.md#native-synth)). Both runs also write `--ram-hash-out`; RAM and cycle
 count were equal on every frame of all ten routes below, so the synth was fed exactly the register
 writes the APU received, at the same cycles. The two WAVs had the same number of samples on every
@@ -155,16 +188,61 @@ of the same three routes (2,128, 5,092 and 6,200 frames; PPU memories differ on 
 the known one-frame store lag of `$2007` writes). With the synth running (`--wav-out`), the native
 runtime's RAM and cycles equalled the cycle host's on every frame of the ten routes above.
 
+## Native renderer (automated)
+
+`tests/native_render_test.py` draws every frame of the five `full_*` routes with the native renderer
+(no PPU) from the frame's video state and compares it with the PPU's picture: 47,440 frames, every
+pixel equal except on the HUD split line, where the console's mid-line write lands at a column that
+depends on the CPU's polling phase. With that column placed, 115 frames (all vertical row
+transitions) still differ on that one line. Details in [native-render.md](native-render.md).
+
+## Native player (automated)
+
+The player build (`ducktales.exe` on the native runtime, docs/native-runtime.md "The player build"),
+2026-11-22:
+
+- `py -3 -I tests/native_player_test.py --build build/windows --routes full_amazon full_moon
+  full_himalayas --frames 6000 --every 20`: the presented picture (1x, default presentation: clean
+  HUD split, No sprite flicker on) of `ducktales.exe --lag faithful` and of
+  `ducktales_cycle.exe --extra-scanlines 0` is identical pixel for pixel in all 900 pictures (300 per
+  route, every 20th frame of frames 0-5999), and in 40 of 40 on `amazon_intro` (frames 0-1999,
+  every 50).
+- `py -3 -I tests/window_smoke.py --build build/windows`: all 16 checks pass on the native
+  `ducktales.exe` (start, ROM import and refusals, config.ini round trips, presentation sizes and
+  VSync, the menu self-test's 14 pages, the first-run screen), and with `--exe ducktales_cycle.exe`.
+- Save state round trip: `ducktales.exe --frames 3000 --input tests/routes/full_amazon.txt --lag
+  faithful --state-check 2000`: saved after frame 2000, CPU RAM, the cycle count and the video
+  memories identical on all 300 frames run again after loading it.
+- Enhancement hooks on the native runtime, `full_amazon` frames 0-2999 with every enhancement on
+  (`--jump-scale 150 --no-damage on --infinite-time on --infinite-lives on --start-lives 5`): the
+  jump, damage and new-game-lives sites fired (14, 12 and 1 times). The higher jump reaches
+  `$EAB9-$EAC1` in bank 6, which no route seeds, so 694 instructions ran on the interpreter there
+  (347 with `--jump-scale 150` alone); none without enhancements (`fallback_instructions=0`).
+- With the player's bus changes (hook dispatch, the `$2002` latch-reset log, `native_route.c`):
+  `tests/native_routes.py --build build/headless` passes all 12 routes (RAM, cycles and registers
+  identical on every frame; PPU memory hashes differ on the same frame counts as before, 2-42 per
+  route), and `tests/verify_routes.py` on `amazon_intro` and `full_moon` passes at all four
+  alignments (100.0% native, oracle and interpreter match).
+- `tests/package_test.py --build build/windows`: all checks pass with the native `ducktales.exe`
+  in the ZIP (imports AVRT, COMDLG32, IMM32, KERNEL32, SDL2, SHELL32, USER32 and WINMM only).
+- Hidden window pacing: 600 frames with `--hidden --exit-after 600` took 12.0 s including start-up
+  (600 frames are 9.98 s at 60.0988 Hz); 3,000 frames `--uncapped` took 7.8 s.
+
 ## Not verified
 
+- The release package on a clean Windows installation without the Visual C++ redistributable: the
+  test checks the import tables but runs on a developer machine that has the runtime installed. A
+  Debug (`/MTd`) window build and a package from a tagged commit have not been built either.
 - A complete playthrough of any land on Easy or Difficult, secret treasures, the Transylvania return, the
   ending and the three endings' conditions.
 - Difficult mode (the "difficult" route was found to select Easy and was renamed).
 - Comparison with Mesen2 (not installed on this machine yet); the TriCNES oracle is the only
   independent reference so far.
-- The native synth by ear, and in a window (the window build still plays the cycle host's APU);
+- The native synth by ear in the player's window (only hidden and off-screen runs were made);
   Launchpad ride music `$0B`; effects alone are covered only where routes trigger them (the
   "no music" row and the effects inside the music rows).
+- The native player's window by eye, F8/F9 by hand, and
+  `HudSplit = original` against the cycle build.
 - Window presentation as a person sees it on the 144 Hz monitor, gamepads, audio quality by ear,
   fullscreen, and the sprite presentation by eye in play: needs a person at the machine. The
   application-side pacing, DPI and picture measurements are in [presentation.md](presentation.md).
