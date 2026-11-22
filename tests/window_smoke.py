@@ -26,7 +26,12 @@ folder (DUCKTALES_DATA_DIR):
      frame;
   8. the menu's own [Game] keys (MenuOpacity, MenuControllerNav) survive a run.
 
-    py -3 -I tests/window_smoke.py --build build/windows [--shots captures/shots]
+    py -3 -I tests/window_smoke.py --build build/windows [--shots captures/shots] [--exe NAME]
+
+The player build (ducktales.exe) runs on the native runtime or, with
+-DDUCKTALES_PLAYER=cycle, on NESRecomp's cycle host; --exe ducktales_cycle.exe
+(or ducktales_player.exe) tests the other one. Each runtime reports its own No
+slowdown: 128 extra scanlines (cycle) or the held VBlank (native).
 
 What a hidden window cannot show: real keyboard, mouse and controller input in
 the menu, the file dialog, full-screen switching and VSync are not exercised.
@@ -49,8 +54,9 @@ def main():
     ap.add_argument('--config', default='Release')
     ap.add_argument('--rom', default=str(ROOT / 'roms' / 'DuckTales (USA).nes'))
     ap.add_argument('--shots', help='keep the self-test PNGs here (never commit them)')
+    ap.add_argument('--exe', default='ducktales.exe', help='the executable in <build>/<config> to test')
     args = ap.parse_args()
-    exe = str(ROOT / args.build / args.config / 'ducktales.exe')
+    exe = str(ROOT / args.build / args.config / args.exe)
     failed = []
 
     def check(ok, what, detail=''):
@@ -73,9 +79,10 @@ def main():
 
         code, out = run(args.rom, '--hidden', '--exit-after', '300', '--config', str(tmp / 'a.ini'))
         check(code == 0, 'starts with a ROM argument and exits after 300 frames', out)
-        check('[ducktales] No slowdown: 128 extra scanlines per frame' in out
+        check(('[ducktales] No slowdown: 128 extra scanlines per frame' in out
+               or '[ducktales] No slowdown: the native runtime holds VBlank' in out)
               and 'NoSlowdown = on' in (tmp / 'a.ini').read_text(),
-              'No slowdown is on by default (128 extra scanlines) and saved as NoSlowdown = on', out)
+              'No slowdown is on by default and saved as NoSlowdown = on', out)
 
         code, out = run('--hidden', '--exit-after', '60', '--config', str(tmp / 'b.ini'))
         check(code == 2 and 'No DuckTales (USA) ROM is set up yet' in out, 'hidden start without a ROM refuses clearly', out)
