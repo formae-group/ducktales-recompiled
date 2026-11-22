@@ -9,6 +9,7 @@
  *                        [--ram-dump FILE] [--nmi-audit FILE]
  *                        [--step-dump FILE] [--latch-log FILE | --latch-input FILE]
  *                        [--split-log FILE] [--trace-frame N --trace-out FILE]
+ *                        [--wav-out FILE]
  *
  * --input takes the cycle host's route format (tests/routes): one
  * "<frame> BUTTONS" line per change, buttons joined by +, "-" releases, "2:"
@@ -29,8 +30,11 @@
  * RAM each time a frame's logic completes instead. --latch-log records the
  * buttons latched at every controller strobe; --latch-input replays such a
  * log strobe by strobe in place of --input, so two lag modes can be given
- * the same input per logic step (tools/lag_report.py --steps).
+ * the same input per logic step (tools/lag_report.py --steps). --wav-out
+ * plays every frame's APU writes through the native synth (native_audio.h)
+ * and writes the result as 48 kHz mono 16-bit PCM (tests/audio_compare.py).
  */
+#include "native/native_audio.h"
 #include "native/native_hash.h"
 #include "native/native_runtime.h"
 #include "native/native_state.h"
@@ -54,6 +58,16 @@ static size_t step_count;
 static FILE *step_f, *latch_log_f;
 static uint8_t (*latches)[2];
 static size_t latch_count, latch_next;
+
+static void wav_header(FILE *f, uint32_t samples)
+{
+    uint32_t rate = 48000, bytes = samples * 2, riff = 36 + bytes, fmt = 16, byte_rate = rate * 2;
+    uint16_t pcm = 1, channels = 1, align = 2, bits = 16;
+    fseek(f, 0, SEEK_SET);
+    fwrite("RIFF", 1, 4, f), fwrite(&riff, 4, 1, f), fwrite("WAVEfmt ", 1, 8, f), fwrite(&fmt, 4, 1, f);
+    fwrite(&pcm, 2, 1, f), fwrite(&channels, 2, 1, f), fwrite(&rate, 4, 1, f), fwrite(&byte_rate, 4, 1, f);
+    fwrite(&align, 2, 1, f), fwrite(&bits, 2, 1, f), fwrite("data", 1, 4, f), fwrite(&bytes, 4, 1, f);
+}
 
 static void dump_step(void) { fwrite(native_cpu_ram(), 1, 0x800, step_f); }
 
@@ -157,7 +171,7 @@ static uint8_t *read_file(const char *path, size_t *size)
 int main(int argc, char **argv)
 {
     const char *rom = NULL, *input = NULL, *hash_out = NULL, *split_out = NULL, *trace_out = NULL, *lag_out = NULL,
-               *dump_out = NULL, *audit_out = NULL, *step_out = NULL, *latch_out = NULL, *latch_in = NULL;
+               *dump_out = NULL, *audit_out = NULL, *step_out = NULL, *latch_out = NULL, *latch_in = NULL, *wav_out = NULL;
     NativeLagMode lag_mode = NATIVE_LAG_NONE;
     long frames = 600, trace_frame = -1;
     for (int i = 1; i < argc; i++) {
@@ -173,16 +187,17 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--step-dump") && i + 1 < argc) step_out = argv[++i];
         else if (!strcmp(argv[i], "--latch-log") && i + 1 < argc) latch_out = argv[++i];
         else if (!strcmp(argv[i], "--latch-input") && i + 1 < argc) latch_in = argv[++i];
+        else if (!strcmp(argv[i], "--wav-out") && i + 1 < argc) wav_out = argv[++i];
         else if (!strcmp(argv[i], "--lag") && i + 1 < argc && !strcmp(argv[i + 1], "none")) lag_mode = NATIVE_LAG_NONE, i++;
         else if (!strcmp(argv[i], "--lag") && i + 1 < argc && !strcmp(argv[i + 1], "faithful")) lag_mode = NATIVE_LAG_FAITHFUL, i++;
         else if (argv[i][0] != '-' && !rom) rom = argv[i];
         else {
-            fprintf(stderr, "usage: %s ROM [--input FILE] [--frames N] [--ram-hash-out FILE] [--lag none|faithful] [--lag-log FILE] [--split-log FILE]\n", argv[0]);
+            fprintf(stderr, "usage: %s ROM [--input FILE] [--frames N] [--ram-hash-out FILE] [--lag none|faithful] [--lag-log FILE] [--split-log FILE] [--wav-out FILE]\n", argv[0]);
             return 2;
         }
     }
     if (!rom) {
-        fprintf(stderr, "usage: %s ROM [--input FILE] [--frames N] [--ram-hash-out FILE] [--lag none|faithful] [--lag-log FILE] [--split-log FILE]\n", argv[0]);
+        fprintf(stderr, "usage: %s ROM [--input FILE] [--frames N] [--ram-hash-out FILE] [--lag none|faithful] [--lag-log FILE] [--split-log FILE] [--wav-out FILE]\n", argv[0]);
         return 2;
     }
     size_t size;
@@ -207,8 +222,10 @@ int main(int argc, char **argv)
     FILE *audit_f = audit_out ? fopen(audit_out, "w") : NULL;
     step_f = step_out ? fopen(step_out, "wb") : NULL;
     latch_log_f = latch_out ? fopen(latch_out, "w") : NULL;
+    FILE *wav_f = wav_out ? fopen(wav_out, "wb") : NULL;
     if ((hash_out && !hash_f) || (split_out && !split_f) || (trace_out && !trace_f) || (lag_out && !lag_f) ||
-        (dump_out && !dump_f) || (audit_out && !audit_f) || (step_out && !step_f) || (latch_out && !latch_log_f)) {
+        (dump_out && !dump_f) || (audit_out && !audit_f) || (step_out && !step_f) || (latch_out && !latch_log_f) ||
+        (wav_out && !wav_f)) {
         fprintf(stderr, "cannot write the output files\n");
         return 2;
     }
@@ -218,6 +235,11 @@ int main(int argc, char **argv)
     if (step_f) native_set_step_hook(dump_step);
     if (latch_log_f) native_set_latch_hook(record_latch);
     if (latches) native_set_latch_hook(replay_latch);
+    uint32_t wav_samples = 0;
+    if (wav_f) {
+        native_audio_reset(48000);
+        wav_header(wav_f, 0);
+    }
     uint8_t held[2] = { 0, 0 };
     size_t next = 0;
     clock_t start = clock();
@@ -241,6 +263,13 @@ int main(int argc, char **argv)
             native_hash_line(hash_f, frame, &in);
         }
         if (dump_f) fwrite(native_cpu_ram(), 1, 0x800, dump_f);
+        if (wav_f) {
+            static int16_t pcm[NATIVE_AUDIO_MAX_FRAME_SAMPLES];
+            const NativeFrame *f = native_last_frame();
+            size_t n = native_audio_frame(f, pcm, NATIVE_AUDIO_MAX_FRAME_SAMPLES);
+            fwrite(pcm, sizeof pcm[0], n, wav_f);
+            wav_samples += (uint32_t)n;
+        }
         if (lag_f) {
             static const char *const END[] = { "-", "idle", "poll", "cap" };
             const NativeLagFrame *l = native_last_lag();
@@ -259,6 +288,10 @@ int main(int argc, char **argv)
     }
     double seconds = (double)(clock() - start) / CLOCKS_PER_SEC;
     if (lag_f) fclose(lag_f);
+    if (wav_f) {
+        wav_header(wav_f, wav_samples);
+        fclose(wav_f);
+    }
     if (dump_f) fclose(dump_f);
     if (step_f) fclose(step_f);
     if (latch_log_f) fclose(latch_log_f);
