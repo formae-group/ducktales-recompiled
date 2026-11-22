@@ -180,6 +180,24 @@ RAM-identical in replace mode.
 | `Player_Mode12` | `$EC2D` | checked (pokes only) | 0 | mode12, mode12-page7 | no vertical direction with Y below `$18` |
 | `Player_Death` | `$EC9B` | checked | 8 | hurt-last-dot | none |
 | `Player_Mode14` | `$ECFF` | checked | 1 | - | none |
+| `Camera_Update` | `$EFE2` | claimed (decomp/level) | - | - | - |
+| `Map_LoadHeader` | `$C7B0` | claimed (decomp/level) | - | - | - |
+| `Level_DrawStartColumns` | `$C71D` | claimed (decomp/level) | - | - | - |
+| `Level_DrawScreen` | `$C78F` | claimed (decomp/level) | - | - | - |
+| `Scroll_StreamBlocks` | `$C830` | claimed (decomp/level) | - | - | - |
+| `Level_DecodeBlock` | `$CCBD` | claimed (decomp/level) | - | - | - |
+| `Level_MetatileAt` | `$CDE2` | claimed (decomp/level) | - | - | - |
+| `Level_ScreenPointer` | `$CE2C` | claimed (decomp/level) | - | - | - |
+| `Vram_FlushQueue` | `$C139` | claimed (decomp/level) | - | - | - |
+| `Vram_FlushTileEdits` | `$C15E` | claimed (decomp/level) | - | - | - |
+| `Bg_Probe` | `$D120` | claimed (decomp/level) | - | - | - |
+| `Bg_SnapLeft` | `$D49A` | claimed (decomp/level) | - | - | - |
+| `Bg_SnapRight` | `$D4B2` | claimed (decomp/level) | - | - | - |
+| `Bg_SnapDown` | `$D4C8` | claimed (decomp/level) | - | - | - |
+| `Bg_SnapUp` | `$D4D6` | claimed (decomp/level) | - | - | - |
+| `Level_PlaceFromEntry` | `$DD4E` | claimed (decomp/level) | - | - | - |
+| `Boss_Trigger` | `$CF93` | claimed (decomp/level) | - | - | - |
+| `Level_TileEdit` | `$F574` | claimed (decomp/level) | - | - | - |
 
 Not decompiled yet, and still run as the original from the C:
 
