@@ -23,7 +23,8 @@ if(DUCKTALES_HEADLESS)
 endif()
 # The port's systems layer (docs/architecture.md): typed game state, the hook
 # sites it alters behaviour at, settings and options; the typed game API and
-# its events (include/ducktales/). Both hosts link it.
+# its events (include/ducktales/) and the decompiled routines (src/decomp/,
+# docs/decompilation.md). Both hosts link it.
 set(_ducktales_extras
     "${CMAKE_SOURCE_DIR}/src/game/ducktales_state.c"
     "${CMAKE_SOURCE_DIR}/src/game/game_ram.c"
@@ -31,6 +32,9 @@ set(_ducktales_extras
     "${CMAKE_SOURCE_DIR}/src/game/ducktales_jump.c"
     "${CMAKE_SOURCE_DIR}/src/game/enhancements.c"
     "${CMAKE_SOURCE_DIR}/src/host/ducktales_sprites.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/decomp.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/motion.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/sound.c"
     "${CMAKE_SOURCE_DIR}/src/host/ducktales_host.c")
 # The application (docs/architecture.md "Application"): the
 # program entry with the first-run ROM import, the in-game menu and live

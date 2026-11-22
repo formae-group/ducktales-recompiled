@@ -15,6 +15,8 @@
 
 #include "ducktales/events.h"
 
+#include "cpu6502.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -30,7 +32,7 @@ static int s_enh_at_n;
 static unsigned long s_reset_at[MAX_JUMP_EVENTS];
 static int s_reset_at_n;
 static FILE *s_sprite_log;
-static FILE *s_events_log;
+static FILE *s_events_log, *s_ram_log;
 
 static EventResult log_event(EventId id, void *user)
 {
@@ -61,7 +63,8 @@ static void report(void)
         fprintf(f, "dt-diag: event %s raised=%llu\n", Events_Name((EventId)e), (unsigned long long)Events_Raised((EventId)e));
     fflush(f);
     if (s_events_log && s_events_log != stdout) fclose(s_events_log);
-    s_events_log = NULL;
+    if (s_ram_log) fclose(s_ram_log);
+    s_events_log = s_ram_log = NULL;
     if (s_log && s_log != stdout) fclose(s_log);
     dt_sprites_set_log(NULL);
     if (s_sprite_log && s_sprite_log != stdout) fclose(s_sprite_log);
@@ -115,6 +118,10 @@ bool dt_diag_option(const char *name, const char *value)
         for (int e = 0; e < EVENT_COUNT; e++) Events_On((EventId)e, log_event, NULL);
         return true;
     }
+    if (!strcmp(name, "--dt-ram-log")) {
+        s_ram_log = fopen(value, "wb");
+        return s_ram_log != NULL;
+    }
     if (!strcmp(name, "--dt-reset-at")) {
         if (s_reset_at_n >= MAX_JUMP_EVENTS) return false;
         s_reset_at[s_reset_at_n++] = strtoul(value, NULL, 10);
@@ -141,6 +148,10 @@ void dt_diag_frame_begin(void)
 
 void dt_diag_frame_end(void)
 {
+    if (s_ram_log) {
+        fwrite(cyc_cpu_ram(), 1, 0x800, s_ram_log);
+        fputc(cpu.s, s_ram_log);
+    }
     if (s_sprite_log) {
         int w, h;
         cyc_render_present(&w, &h);

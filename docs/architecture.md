@@ -12,6 +12,7 @@ src/game/game_ram.c                  RAM transactions (ducktales/ram.h)
 src/game/events.c                    game events: one hook site each, enabled only while handled
 src/game/ducktales_jump.[ch]         jump-height experiment: a handler of EVENT_JUMP_START, off by default
 src/game/enhancements.[ch]           the optional enhancements: one table, one event handler each
+src/decomp/                          decompiled routines (docs/decompilation.md), --decomp off by default
 src/host/ducktales_host.c            cyc_host_extras(): settings, options, per-frame callbacks
 src/host/ducktales_sprites.[ch]      presentation: every sprite, fixed order, HUD kept (on by default)
 src/host/ducktales_main.c            main() of the window build: ROM choice, then the host
@@ -321,6 +322,8 @@ it the host links empty inline stubs and lists none of these options.
   and for each game event how many times it was raised.
 - `--dt-events-log FILE|-` registers a handler on every event that changes nothing and writes one
   line per raised event (`frame=1004 event=player-damaged`).
+- `--dt-ram-log FILE` writes CPU RAM (2 KiB) and the CPU's S after every frame, raw, for
+  `tests/decomp_test.py`.
 - `--dt-sprite-log FILE|-` composes the presented picture every frame and writes one line per frame from
   the sprite compositor; at exit the log reports its totals.
 - In the window, with `--tcp PORT`: `dt_state` returns the typed state as JSON, and `dt_jump_scale`

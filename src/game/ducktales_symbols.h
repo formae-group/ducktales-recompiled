@@ -151,6 +151,17 @@
 #define DT_ADDR_HUD_GROUP_TIME   0x0140
 
 /* ---- code sites (fixed bank 7 at $C000-$FFFF) ---- */
+/* ---- code (fixed bank 7 at $C000-$FFFF) ----
+ * Routines the decompilation names or calls (docs/functions.md,
+ * docs/player.md, docs/decompilation.md). config/game.toml declares a
+ * [[mod_function_hook]] with a content key at every one the port hooks. */
+#define DT_CODE_MOVE_RIGHT_SPEED 0xF234  /* world X += speed (X = slot) */
+#define DT_CODE_MOVE_LEFT_SPEED  0xF252  /* world X -= speed (X = slot) */
+#define DT_CODE_APPLY_VY         0xF2A1  /* Y -= vertical velocity (X = slot) */
+#define DT_CODE_APPLY_GRAVITY    0xF2B5  /* vertical velocity -= gravity (X = slot) */
+#define DT_CODE_MUSIC_REQUEST    0xF752  /* remember the music id in $C5, then queue it */
+#define DT_CODE_SOUND_REQUEST    0xF754  /* queue a sound id in the request ring */
+
 /* ---- hook sites of the event system (src/game/events.c) ----
  * config/game.toml declares each with a length/crc32 content key, so another
  * revision fails code generation instead of firing at the wrong code. */

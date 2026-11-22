@@ -61,3 +61,48 @@ id = "ducktales.event.boss-hit"
 addr = 0xF6DD
 length = 8
 crc32 = 0xA509A34C
+
+# Decompiled routines (src/decomp/, docs/decompilation.md): one site at each
+# routine's entry, enabled only with --decomp check or replace.
+
+# Obj_ApplyVelocityY
+[[mod_function_hook]]
+id = "ducktales.decomp.F2A1"
+addr = 0xF2A1
+length = 8
+crc32 = 0x94C209F4
+
+# Obj_ApplyGravity
+[[mod_function_hook]]
+id = "ducktales.decomp.F2B5"
+addr = 0xF2B5
+length = 8
+crc32 = 0xC861F10C
+
+# Obj_MoveRight
+[[mod_function_hook]]
+id = "ducktales.decomp.F234"
+addr = 0xF234
+length = 8
+crc32 = 0x520D3935
+
+# Obj_MoveLeft
+[[mod_function_hook]]
+id = "ducktales.decomp.F252"
+addr = 0xF252
+length = 8
+crc32 = 0x7E95A00A
+
+# Music_Request
+[[mod_function_hook]]
+id = "ducktales.decomp.F752"
+addr = 0xF752
+length = 8
+crc32 = 0xE4E4E38D
+
+# Sound_Request
+[[mod_function_hook]]
+id = "ducktales.decomp.F754"
+addr = 0xF754
+length = 8
+crc32 = 0x8E2E80FD

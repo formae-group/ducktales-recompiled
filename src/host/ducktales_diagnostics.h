@@ -14,6 +14,8 @@
  *                         compositor (host/ducktales_sprites.h; "-" = stdout)
  *   --dt-events-log FILE  one line per game event raised (ducktales/events.h);
  *                         registers a handler that changes nothing
+ *   --dt-ram-log FILE     CPU RAM (2 KiB) and the CPU's S after every frame,
+ *                         raw, for comparing runs (tests/decomp_test.py)
  *   TCP (window --tcp PORT): dt_state, dt_jump_scale [value]
  */
 #pragma once
@@ -27,7 +29,8 @@
     { "--dt-enh-at", true, "dev: FRAME:KEY=VALUE enhancement change (repeatable)" }, \
     { "--dt-reset-at", true, "dev: FRAME console reset (repeatable)" }, \
     { "--dt-sprite-log", true, "dev: sprite compositor line per presented picture to FILE (- = stdout)" }, \
-    { "--dt-events-log", true, "dev: one line per game event to FILE (- = stdout)" },
+    { "--dt-events-log", true, "dev: one line per game event to FILE (- = stdout)" }, \
+    { "--dt-ram-log", true, "dev: CPU RAM and S after every frame to FILE (raw)" },
 bool dt_diag_option(const char *name, const char *value);
 void dt_diag_power_on(void);
 void dt_diag_frame_begin(void);
