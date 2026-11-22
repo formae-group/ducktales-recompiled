@@ -2,8 +2,8 @@
  * native_window.c - the player build's window on the native runtime
  * (docs/native-runtime.md "The player build"): the recompiled program runs on
  * the native bus one 60 Hz frame at a time (native_run_frame), the native
- * renderer draws the picture (native_present.c) and the synth seam
- * (native_synth.h) the sound. No part of NESRecomp's cycle host is linked.
+ * renderer draws the picture (native_present.c) and the native synth
+ * (native_audio.h) the sound. No part of NESRecomp's cycle host is linked.
  *
  * It is the program entry's host (host/ducktales_main.c calls
  * ducktales_host_main, as it calls NESRecomp's in the cycle build), and it
@@ -27,7 +27,7 @@
  *   pacing        each frame at its deadline (1 / 60.0988 s); VSync as
  *                 [Display] VSync says (FramePacing resolves it at launch),
  *                 off while fast-forwarding or --uncapped
- *   sound         native_synth_frame per frame, queued at 48 kHz with at
+ *   sound         native_audio_frame per frame, queued at 48 kHz with at
  *                 most 100 ms waiting; none while fast-forwarding. When late
  *                 frames let the queue fall below the device buffer plus one
  *                 frame, the frame is stretched to refill it, so the device
@@ -59,7 +59,7 @@
 #include "native/native_route.h"
 #include "native/native_runtime.h"
 #include "native/native_state.h"
-#include "native/native_synth.h"
+#include "native/native_audio.h"
 
 #include "game/enhancements.h"
 #include "host/ducktales_host.h"
@@ -530,7 +530,7 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
     want.channels = 1;
     want.samples = 1024;
     SDL_AudioDeviceID dev = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
-    native_synth_reset(dev ? have.freq : AUDIO_RATE);
+    native_audio_reset(dev ? have.freq : AUDIO_RATE);
     if (dev) SDL_PauseAudioDevice(dev, 0);
     else fprintf(stderr, "SDL audio: %s (continuing without sound)\n", SDL_GetError());
     open_pads();
@@ -588,7 +588,7 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
 
         int16_t pcm[4096];
         const NativeFrame *f = native_last_frame();
-        size_t n = native_synth_frame(f->apu_writes, f->apu_write_count, f->cycles, pcm, sizeof pcm / sizeof pcm[0]);
+        size_t n = native_audio_frame(f, pcm, sizeof pcm / sizeof pcm[0]);
         size_t queued = dev ? SDL_GetQueuedAudioSize(dev) / sizeof pcm[0] : 0;
         if (dev && n && !fast && s_set.audio_enabled && queued < (size_t)have.freq / 10) {
             size_t low = (size_t)have.samples + n;

@@ -20,13 +20,14 @@ src/native/native_bus.c       NESRecomp's hw.h for the generated code: RAM, UNRO
                               sprite DMA, APU write capture, cycle count, scheduler watch
 src/native/native_video.c     PPU registers and memories, VBlank/NMI/$2002/sprite-0 timing
 src/native/native_state.h     the interface for a renderer and a synth
+src/native/native_audio.c     the synth: a frame's APU writes in, its samples out (audio.md)
 src/native/native_hash.h      the per-frame state line both builds write (--ram-hash-out)
 src/native/native_main.c      ducktales_native: input routes, logs, dumps
 src/native/native_hooks.c     game.toml hook sites: the enhancements' callbacks
 src/native/native_route.c     input routes (tests/routes) for both native programs
 src/native/native_window.c    the player build's window (ducktales.exe)
 src/native/native_present.c   the frame record drawn and offered as cyc_render.h
-src/native/native_synth.c     the synth seam (silence until the native synth)
+src/native/native_audio.c     the native synth: each frame's APU writes to samples
 src/host/ducktales_settings.c config.ini [Game] and the game options, shared by both hosts
 src/host/ducktales_ramhash.c  --ram-hash-out and --lag-log for the cycle host (headless only)
 tools/native_compare.py       compares two per-frame state files field by field
@@ -212,8 +213,10 @@ The runtime hands out, per machine frame (VBlank to VBlank):
 
 A renderer draws frame N from `start`, applying `ppu_writes[]` in order; one that only wants the HUD
 split uses `split_line`. A synth plays `apu_writes[]` at their cycle offsets (1,789,773 Hz); when the
-no-slowdown mode has stretched a frame it scales the offsets by 29781 / `cycles`, since every frame
-is still presented for one 60 Hz period. Nothing in the interface is read back by the game, so a
+no-slowdown mode has stretched a frame it plays it in `cycles - held_cycles` and scales the offsets
+to match, since every frame is still presented for one 60 Hz period. The synth exists:
+`native_audio_frame()` in `src/native/native_audio.h` ([audio.md](audio.md#native-synth)), and
+`ducktales_native --wav-out FILE` records it. Nothing in the interface is read back by the game, so a
 renderer or synth cannot change the machine.
 
 ## Lag
@@ -415,7 +418,7 @@ NESRecomp it takes the CPU sequences and instruction templates, the hook registr
 | No slowdown | `[Game] NoSlowdown`: on (default) is `NATIVE_LAG_NONE`, off is `NATIVE_LAG_FAITHFUL` |
 | Enhancements | `native_hooks.c` binds the plugins `src/game` registers (`mod_function_hooks.h`) to the `game.toml` sites, arms `cyc_hooks_armed` while one is enabled, and runs the callbacks at the instruction boundary when the content key holds, returning from a handled routine as its RTS would: the cycle host's rules (`cyc_hooks.c`) |
 | Save states | F8 / F9: `<exe dir>/saves/DuckTales.native-state`, CPU registers and interrupt lines, CPU RAM, the bus (bank, cycle count, DMA, controllers, lag state) and the video state (memories, registers, frame timing), with the generated program's PRG hash; a toast confirms |
-| Sound | `native_synth.h`: `native_synth_frame(apu_writes, count, cycles, out, cap)` per frame, queued at 48 kHz with at most 100 ms waiting. The placeholder plays silence; the native synth replaces `native_synth.c` behind the same calls |
+| Sound | `native_audio.h`: `native_audio_frame(frame, out, cap)` per frame, queued at 48 kHz with at most 100 ms waiting (the native synth, docs/audio.md "Native synth") |
 
 Off screen (`--frames N [--input ROUTE] [--lag none|faithful] [--present-out FILE --present-every K]
 [--state-check F]`) the player writes the picture the window would show at 1x, named as the cycle
@@ -431,14 +434,15 @@ host's `--present-out` names it, and can check a save state round trip.
 
 ## Next steps
 
-1. The native synth (`native_synth.h`) in place of the silent placeholder.
+1. Listen to the native synth in the player's window (it is compared only by `tests/audio_compare.py`).
 2. The split column from the write's dot (`NvSegment.split_column`), so the original HUD split line
    jitters as on the console; with the default clean split it is not shown.
 3. Keep `tests/native_routes.py` and `tests/native_player_test.py` in the verification set.
 
 ## Not verified
 
-- Sound: the player plays silence until the native synth is plugged in.
+- Sound by ear: `--wav-out` is compared with the cycle host APU by `tests/audio_compare.py`,
+  but nobody has listened to it in a window.
 - The player's window as a person sees it (pacing on the 144 Hz monitor, VSync, full screen, gamepads,
   F8/F9 by hand): only hidden and off-screen runs were made.
 - `HudSplit = original` on the native player: the split line is drawn at a line boundary

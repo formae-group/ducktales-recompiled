@@ -37,6 +37,9 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - The native player keeps its pace with an unfocused window on Windows: no power throttling, the
   frame loop in the MMCSS Games class, a 1 ms timer, and an audio queue that stretches a late frame's
   samples instead of running dry.
+- Native synth for the native runtime (`src/native/native_audio.c`): plays each frame's APU
+  register writes without emulating the APU cycle by cycle; `ducktales_native --wav-out` records
+  it, and `tests/audio_compare.py` compares it with the cycle host's APU per route and per track.
 - Differential verification against the TriCNES reference machine on 12 routes, including all five
   lands played to their LAND CLEAR screens, at four CPU/PPU alignments, with the oracle's results
   cached between runs.

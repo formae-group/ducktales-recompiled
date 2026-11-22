@@ -164,6 +164,7 @@ set(_nes_cyc "${NESRECOMP_ROOT}/runner/cyc")
 set(_native_runtime
     "${CMAKE_SOURCE_DIR}/src/native/native_bus.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_video.c"
+    "${CMAKE_SOURCE_DIR}/src/native/native_audio.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_hooks.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_route.c"
     "${_nes_cyc}/cpu6502.c"
@@ -197,7 +198,6 @@ if(NOT DUCKTALES_HEADLESS)
     add_executable(ducktales_player
         "${CMAKE_SOURCE_DIR}/src/native/native_window.c"
         "${CMAKE_SOURCE_DIR}/src/native/native_present.c"
-        "${CMAKE_SOURCE_DIR}/src/native/native_synth.c"
         "${CMAKE_SOURCE_DIR}/src/native/native_render.c"
         "${CMAKE_SOURCE_DIR}/src/native/native_cycle.c"
         "${CMAKE_SOURCE_DIR}/src/game/ducktales_state.c"
