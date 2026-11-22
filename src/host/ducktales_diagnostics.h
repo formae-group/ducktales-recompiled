@@ -10,6 +10,8 @@
  *   --dt-enh-at F:KEY=V   set an enhancement (game/enhancements.h config key)
  *                         before frame F (repeatable)
  *   --dt-reset-at F       press the console's reset before frame F (repeatable)
+ *   --dt-sprite-log FILE  one line per presented picture from the sprite
+ *                         compositor (host/ducktales_sprites.h; "-" = stdout)
  *   TCP (window --tcp PORT): dt_state, dt_jump_scale [value]
  */
 #pragma once
@@ -21,7 +23,8 @@
     { "--dt-state-every", true, "dev: log every Nth frame" }, \
     { "--dt-jump-at", true, "dev: FRAME:PERCENT jump scale change (repeatable)" }, \
     { "--dt-enh-at", true, "dev: FRAME:KEY=VALUE enhancement change (repeatable)" }, \
-    { "--dt-reset-at", true, "dev: FRAME console reset (repeatable)" },
+    { "--dt-reset-at", true, "dev: FRAME console reset (repeatable)" }, \
+    { "--dt-sprite-log", true, "dev: sprite compositor line per presented picture to FILE (- = stdout)" },
 bool dt_diag_option(const char *name, const char *value);
 void dt_diag_power_on(void);
 void dt_diag_frame_begin(void);

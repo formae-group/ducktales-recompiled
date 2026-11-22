@@ -20,7 +20,9 @@ them with what the PPU and RAM actually hold (commands under [Reproducing](#repr
   background and the common sprites are copied once at land load, and `$0900-$0FFF` (enemy sprites)
   is replaced per map row.
 - Sprites are object slots drawn through animation scripts and metasprites; OAM slot order
-  alternates every frame (flicker) and there is no other budget than the 63 OAM entries.
+  alternates every frame (flicker) and there is no other budget than the 63 OAM entries. The window
+  removes the flicker, the dropout and the HUD cut in presentation only (see
+  [Sprites without limits](#sprites-without-limits-presentation)).
 
 ## Frame structure (NMI `$C000`)
 
@@ -130,7 +132,9 @@ Called every frame by the frame loop with `$98` set (so the NMI does not DMA a h
    pause, `$39 != $0F` and Scrooge's Y `>= $44`, the three HUD groups are copied first (4-byte
    records, `$FF` ends a group).
 2. `$95` is incremented; on even values slots are visited 0 to 15, on odd values 15 to 0. This is the
-   flicker: when more than 63 sprites are wanted, a different set is cut off on alternate frames.
+   flicker: the PPU keeps the first 8 sprites of a line in OAM order, so a crowded line loses a
+   different set on alternate frames, overlapping objects swap front and back, and when more than 63
+   sprites are wanted a different set is cut off.
 3. A slot is drawn when `$0700` bit 7 is set and `$0600 != $FF`. With `$0700` bit 5 (world
    coordinates) the screen X `$0650` = world X - camera; an object on another page is not drawn (and is
    deleted when more than `$40` px away, except type `$5A`); bit 4 hides it. `$0600` bit 1 blinks it
@@ -151,6 +155,75 @@ Status: verified. `render_oam.py check` replays these rules from the RAM of a fr
 bytes at frames 1449 and 1450, with the slot order flipping between the two frames and every unused
 entry parked.
 
+### Sprite limits measured
+
+`tools/render_oam.py limits` reads a frame log and checks every frame against the RAM saved at the end of
+the frame before, which is the state its OAM was built from (see below). Counts are over the five
+`full_*` routes, frames 10 to the end, Land Select and lands only (`$F6 <= 5`); the
+`full_african_mines` figures start at frame 7120, after its Transylvania part. Status: verified
+(2026-11-22, frame logs of the headless build).
+
+| Land (route) | Frames | Frames with a line over 8 | Lines over 8 / sprite-lines dropped | Most on a line | Frames wanting > 63 / entries cut | Most wanted | HUD left out for Scrooge's Y | Frames with overlapping objects |
+|---|---|---|---|---|---|---|---|---|
+| Amazon | 9,590 | 294 | 1,392 / 1,829 | 12 | 215 / 667 | 70 | 573 | 729 |
+| Himalayas | 6,190 | 256 | 2,572 / 4,767 | 14 | 76 / 76 | 64 | 174 | 252 |
+| Transylvania | 7,110 | 489 | 2,656 / 3,806 | 14 | 139 / 486 | 71 | 172 | 1,287 |
+| African Mines | 6,400 | 4 | 16 / 16 | 9 | 0 | 53 | 195 | 431 |
+| Moon | 10,990 | 426 | 3,988 / 5,200 | 12 | 0 | 58 | 212 | 723 |
+
+Where (land, map row `$F1`, camera page `$F3`; screens identified from the pictures):
+
+- Lines over 8: Himalayas row 2 page 4, the boss and its snowballs (221 of 256 frames); Transylvania
+  row 3 page 5 (252) and row 5 page 3, the mummies and treasure (106); Moon row 5 page 4, the boss
+  (249); Amazon row 2 page 2 (110), row 3 pages 3-4 (72).
+- More than 63 entries: Amazon row 3 page 4, Gyro's helicopter with a bee and stone blocks (185 of
+  215); Himalayas row 2 page 4 (76); Transylvania row 4 page 5 (86) and row 5 pages 3-4 (53).
+- The HUD band (lines above `$30`) never has more than 8 sprites on a line on these routes, so the HUD
+  digits are not lost to the per-line limit. Where the HUD disappears it is the builder's own rule: it
+  copies the HUD groups only while Scrooge's Y (`$0640`) is `$44` or more, and the lives counter (P.2,
+  `$0358` group at X `$78-$88`, Y `$20`) sits where he climbs into the band (Amazon vine shaft
+  frames 1223-1258, 36 frames).
+- "Overlapping objects" counts frames where sprites of two different groups (HUD, slots) share pixels'
+  8x8 cells: on those the front object alternates every frame.
+
+How the RAM relates to the OAM: the OAM a frame shows equals the `$0200` shadow at the end of the frame
+before (299 of 299 frames, `full_amazon` 1200-1499), and the builder replayed on that RAM gives it
+slot by slot, every other entry parked, on 39,676 of the 40,280 frames above. Three exceptions, all
+handled below: an object spawned after the
+builder ran in that frame (its slot is in RAM but not in the OAM, 663 frames); entries a shorter table
+left unparked (the console shows them; Transylvania boss frames 6460-6646, Scrooge's last sprite of the
+previous animation frame); and frames where the builder does not run (`$95` unchanged: deaths,
+respawns, lag), whose OAM stays the last one built while the HUD records change.
+
+## Sprites without limits (presentation)
+
+`src/host/ducktales_sprites.c` is a stock-width compositor (`cyc_render.h`): the window presents a
+picture it paints, while the machine keeps drawing the console's own picture, so hashes, sprite-0 hit
+and overflow are unchanged. Setting: `[Game] NoSpriteFlicker`, `--no-sprite-flicker on|off`, the
+Settings page; on by default. Off presents the machine's picture unchanged.
+
+| Step | What it does | Status |
+|---|---|---|
+| Snapshot | `frame_end` keeps the CPU RAM of the last two frames; the picture of frame N is composed from the RAM at the end of N-1. A loaded state or power-on forgets them. | verified (above) |
+| Rebuild | Bank 5 `$8000`'s rules (step 3-6 above, `ducktales_symbols.h`) replayed on that RAM in the order of its `$95`; a slot is kept when its sprites equal the next OAM entries, else left out (spawned after the builder). The 63-entry cut is not applied, so slots past it are drawn. Unparked entries after the last slot are kept, behind everything. While the HUD is in the OAM its entries come from the OAM. | verified (`tests/sprites_test.py`) |
+| Same OAM | An OAM equal to the last rebuilt one (the builder did not run) keeps that list. Until two frames were saved the OAM is drawn as it is. | verified (route logs: 1 such frame per route, frame 0) |
+| HUD | Drawn whenever the builder's other conditions hold (`$7F` bit 7, no message `$6C`, ending `$AC`, pause `$E6`, `$39 != $0F`), whatever Scrooge's Y, from the same records, with tiles from `$1000` as the top of the frame uses when the HUD shows (`$0000` on `$F6 = 9`, as the NMI does). | verified (vine shaft) |
+| Order | OAM entry 0 (split sprite), Scrooge (slot 0), the HUD groups, slots 1 to 15, leftovers. This is the builder's even-frame order with Scrooge moved before the HUD: the game never shows both in the band, and with the HUD restored Scrooge covers the lives counter as he covers the HUD frame, while the HUD stays in front of every enemy. Blinking (`$0600` bit 1 with `$95` bit 1) is kept: it is the game's damage feedback. | design; blink replayed as the builder does (code) |
+| Drawing | Over the exact background (`cyc_render_capture_background`), front to back per line with no per-line limit: the first opaque sprite pixel wins, and a behind-background one shows the background where `cyc_frame_bg_opaque` is set (the PPU's priority rule). Pattern table, 8x16, sprite enable and the left-column clip come from each line's `cyc_render_line_*`. | verified (identical frames below) |
+
+Measured on all five `full_*` routes with `--dt-sprite-log` (dev build): every frame after frame 0
+was rebuilt or kept (Amazon 7,807 rebuilt / 1,792 kept, Himalayas 4,685 / 1,514, Transylvania 5,427 /
+1,692, Transylvania + African Mines 9,662 / 3,857, Moon 8,695 / 2,304); per-frame hashes with the feature
+on and off are identical on every frame of all five routes. `tests/sprites_test.py` checks, on the
+windows Amazon 1215-1264 (vine shaft), Amazon 3200-3229, Himalayas 4371-4400 and Transylvania 1581-1610,
+that the presented picture differs from the machine's only inside sprites, is identical on every frame
+where the console loses nothing, shows every frame with a crowded line or a cut, and draws the HUD
+records Scrooge does not cover.
+
+Known limits: colors use the emphasis of the picture's last line (`cyc_render_color`), which DuckTales
+never changes mid-frame (hypothesis); a sprite whose priority quirk relies on the 8-per-line limit to
+hide another (not seen in DuckTales) would show.
+
 ## Reproducing
 
 ```sh
@@ -158,6 +231,7 @@ E=build/headless/Release/ducktales.exe; ROM="roms/DuckTales (USA).nes"
 $E "$ROM" --frames 1451 --input tests/routes/amazon_intro.txt --frame-log captures/fl_amazon.bin --frame-log-frames 1449:1450
 py -3 -I tools/render_map.py "$ROM" check captures/fl_amazon.bin --frame 1450 --picture
 py -3 -I tools/render_oam.py "$ROM" check captures/fl_amazon.bin --frame 1450 --slots
+py -3 -I tools/render_oam.py "$ROM" limits captures/fl_amazon.bin   # with a log of many frames
 py -3 -I tools/render_map.py "$ROM" tables            # CHR lists, row lists, tileset banks
 py -3 -I tools/render_map.py "$ROM" land 0 captures/amazon_map.png --scale 1
 py -3 -I tools/whoaccesses.py --input tests/routes/transylvania_intro.txt --frame 1369 0400,0401,0402

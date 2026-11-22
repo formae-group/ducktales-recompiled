@@ -53,6 +53,38 @@
 #define DT_HP_DOT_LOST           0x01    /* attribute of a lost HP dot; 0 = full (verified) */
 #define DT_ADDR_LIVES            0x0361  /* extra lives, also the HUD digit tile (verified) */
 
+/* ---- sprite builder (bank 5 $8000, docs/rendering.md "Sprites") ----
+ * Read by the presentation compositor (host/ducktales_sprites.c) to rebuild
+ * the sprite list without the console's limits; all verified by
+ * tools/render_oam.py check. */
+#define DT_SPR_BANK              5       /* PRG bank holding the builder's tables */
+#define DT_SPR_SCRIPT_LO         0xB1C7  /* animation script pointer by type ($0620) */
+#define DT_SPR_SCRIPT_HI         0xB257
+#define DT_SPR_META_LO           0x9681  /* metasprite pointer by id */
+#define DT_SPR_META_HI           0x9779
+#define DT_SPR_OFFSET_LO         0xADE1  /* dY, dX table pointer by offset-table id (minus 2) */
+#define DT_SPR_OFFSET_HI         0xAEC1
+#define DT_ADDR_SPR_PHASE        0x0095  /* incremented by the builder: bit 0 slot order, bit 1 blink */
+#define DT_ADDR_HUD_GATE         0x007F  /* bit 7: the HUD groups may be drawn */
+#define DT_ADDR_MESSAGE          0x006C  /* non-zero: a message is shown (no HUD sprites) */
+#define DT_ADDR_ENDING           0x00AC  /* non-zero: no HUD sprites (ending) */
+#define DT_ADDR_PAUSE            0x00E6  /* non-zero: no HUD sprites (pause) */
+#define DT_ADDR_MODE             0x0039  /* $0F: no HUD sprites, animations frozen */
+#define DT_MODE_FROZEN           0x0F
+#define DT_ADDR_CAMERA_X         0x00F2  /* camera X low, page in DT_ADDR_CAMERA_PAGE */
+#define DT_ADDR_CAMERA_PAGE      0x00F3
+#define DT_ADDR_LAND             0x00F6  /* 0-4 lands, 5 Land Select, 6+ other screens */
+#define DT_LAND_HUD_TABLE_OFF    9       /* $F6 value whose top of frame keeps sprites at $0000 */
+#define DT_HUD_MIN_SCROOGE_Y     0x44    /* the builder adds the HUD only with Scrooge's Y >= this */
+#define DT_HUD_BAND_Y            0x30    /* objects but slot 0 lose sprites above this unless $0600 bit 4 */
+#define DT_ROW_FRAME             0x0610  /* animation frame, bit 7 = loop point */
+#define DT_ROW_STATUS            0x0700  /* bit 7 live, bit 5 world coordinates, bit 4 hidden */
+#define DT_ROW_POS_X             0x0720  /* X: world low byte with status bit 5, else screen */
+#define DT_ROW_POS_PAGE          0x0730  /* world X page */
+#define DT_ADDR_HUD_GROUP_HP     0x0340  /* the three HUD sprite groups, in builder order */
+#define DT_ADDR_HUD_GROUP_LIVES  0x0358
+#define DT_ADDR_HUD_GROUP_TIME   0x0140
+
 /* ---- code sites (fixed bank 7 at $C000-$FFFF) ---- */
 
 /* The instruction right after the jump start copied DT_ADDR_JUMP_VY{,_FRAC}

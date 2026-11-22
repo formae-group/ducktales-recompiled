@@ -4,7 +4,7 @@
 // The menu is a modal loop: it runs inside the host's event callback, so no
 // machine frame runs while it is open (the game is paused by construction)
 // and nothing of it reaches the machine's picture, screenshots or hashes. It
-// draws the last machine frame, dimmed, with its own texture, and gives the
+// draws the last presented picture, dimmed, with its own texture, and gives the
 // renderer back exactly as it found it. Events the host still needs (quit,
 // resize, controllers) are pushed back when it closes.
 #ifndef SDL_MAIN_HANDLED
@@ -21,6 +21,7 @@
 #include "app_ui.h"
 #include "game/enhancements.h"
 #include "host/ducktales_host.h"
+#include "host/ducktales_sprites.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -39,6 +40,7 @@
 #endif
 
 extern "C" const uint32_t *cyc_frame_argb(void);   // cyc_core.h (a C header)
+extern "C" const uint32_t *cyc_render_present(int *width, int *height);   // cyc_render.h
 extern "C" bool cyc_write_png(const char *path, const uint32_t *argb, int width, int height);   // cyc_png.h
 
 namespace {
@@ -375,6 +377,11 @@ void page_settings(Menu &m, Layout &L, const Fonts &F, SDL_Window *win)
     if (r == ROW_DEC) d.volume = d.volume >= 5 ? d.volume - 5 : 0;
     if (r == ROW_INC || r == ROW_ACTIVATE) d.volume = d.volume <= 95 ? d.volume + 5 : 100;
     if (std::memcmp(&d, &was, sizeof d)) app_display_set(win, &d);
+    if (row(L, F, DT_SPRITES_LABEL, dt_sprites_get() ? "On" : "Off") != ROW_NONE) {
+        dt_sprites_set(!dt_sprites_get());
+        ducktales_host_set_saved_sprites(dt_sprites_get());
+        app_settings_changed();
+    }
 }
 
 void page_controls(Menu &m, Layout &L, const Fonts &F)
@@ -534,8 +541,13 @@ extern "C" bool app_menu_run(SDL_Window *win)
         return false;
     }
     SDL_Texture *pic = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STATIC, 256, 240);
+    auto update_picture = [pic]() {
+        int w = 0, h = 0;
+        const uint32_t *shown = cyc_render_present(&w, &h);
+        SDL_UpdateTexture(pic, nullptr, w == 256 && h == 240 ? shown : cyc_frame_argb(), 256 * 4);
+    };
     if (pic) {
-        SDL_UpdateTexture(pic, nullptr, cyc_frame_argb(), 256 * 4);
+        update_picture();
         SDL_SetTextureScaleMode(pic, SDL_ScaleModeNearest);
     }
     std::printf("[ducktales] menu open\n");
@@ -564,6 +576,7 @@ extern "C" bool app_menu_run(SDL_Window *win)
         SDL_GetRendererOutputSize(ren, &ow, &oh);
         SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
         SDL_RenderClear(ren);
+        if (pic) update_picture();
         draw_picture(ren, pic, ow, oh);
 
         ImGui_ImplSDLRenderer2_NewFrame();
