@@ -13,6 +13,11 @@
  *   Application UI    window builds (DUCKTALES_WINDOW): the in-game menu,
  *                     live settings and bindings (ui/app_ui.h) through the
  *                     event, input, audio_mix and frame_begin callbacks
+ *   presentation      window builds: the picture the window shows (present,
+ *                     ui/app_present.h) and its [Game] keys; present_rate with
+ *                     present_from_snapshot and no present_phase turns on the
+ *                     window's steady hold while VSync is off, with no
+ *                     in-between pictures (docs/presentation.md)
  *   diagnostics       DUCKTALES_DEV_DIAGNOSTICS builds only
  *                     (host/ducktales_diagnostics.h)
  *
@@ -26,6 +31,7 @@
 #include "host/ducktales_host.h"
 #include "host/ducktales_sprites.h"
 #if DUCKTALES_WINDOW
+#include "ui/app_present.h"
 #include "ui/app_ui.h"
 #endif
 
@@ -87,6 +93,9 @@ void ducktales_host_load_game_setting(const char *key, const char *value)
         dt_enh_set((DtEnh)e, v);
         return;
     }
+#if DUCKTALES_WINDOW
+    app_present_load(key, value);
+#endif
 }
 
 void ducktales_host_write_game_settings(FILE *f)
@@ -97,6 +106,9 @@ void ducktales_host_write_game_settings(FILE *f)
         fprintf(f, "%s = %s\n", dt_enh_info((DtEnh)e)->key, dt_enh_format((DtEnh)e, s_saved[e], v, sizeof v));
     }
     fprintf(f, "%s = %s\n", DT_SPRITES_KEY, s_saved_sprites ? "on" : "off");
+#if DUCKTALES_WINDOW
+    app_present_write(f);
+#endif
 }
 
 static void load_setting(void *ctx, const char *key, const char *value)
@@ -206,6 +218,12 @@ static void audio_mix(void *ctx, int16_t *samples, size_t count)
     (void)ctx;
     app_ui_audio(samples, count);
 }
+
+static const uint32_t *present(void *ctx, int *width, int *height)
+{
+    (void)ctx;
+    return app_ui_present(width, height);
+}
 #endif
 
 static CycHostExtras s_extras = {
@@ -221,6 +239,9 @@ static CycHostExtras s_extras = {
     .input = input,
     .event = event,
     .audio_mix = audio_mix,
+    .present = present,
+    .present_rate = 60,
+    .present_from_snapshot = true,
 #endif
 };
 

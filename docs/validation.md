@@ -71,5 +71,6 @@ twelve routes at all four alignments with 100.0% native cycles (2026-11-22).
 - Difficult mode (the "difficult" route was found to select Easy and was renamed).
 - Comparison with Mesen2 (not installed on this machine yet); the TriCNES oracle is the only
   independent reference so far.
-- Window presentation on the 144 Hz monitor, gamepads, audio quality by ear, fullscreen, and the
-  sprite presentation by eye in play: needs a person at the machine.
+- Window presentation as a person sees it on the 144 Hz monitor, gamepads, audio quality by ear,
+  fullscreen, and the sprite presentation by eye in play: needs a person at the machine. The
+  application-side pacing, DPI and picture measurements are in [presentation.md](presentation.md).
