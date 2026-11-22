@@ -13,11 +13,14 @@ hour). This is the loop for iterating on a change (docs/validation.md,
              and picture, interrupt lines, hardware internals). Each file is
              keyed on the ROM, the route file's SHA-256 and the frame count.
              The run also keeps a save state every --state-every frames
-             (<route>.states/) and then replays each segment between two
-             states with --interp-only --miss-log: that run must reproduce the
-             golden frames from its state, and its miss log is the set of PRG
-             addresses the segment executes (<route>.cover). Never commit any
-             of it: it is derived from the ROM.
+             (<route>.states/<frame>.state) and then replays each segment
+             between two states with --interp-only --miss-log: that run must
+             reproduce the golden frames from its state, and its miss log is
+             the set of PRG addresses the segment executes (<route>.cover).
+             ducktales_native, when the build has it, saves its own states at
+             the same frames (<frame>.native), each replayed against the golden
+             frames in the same way. Never commit any of it: it is derived
+             from the ROM.
 
   (default)  run the candidate on the selected routes at alignment 0, compare
              every frame with the golden file while the run writes it, stop a
@@ -37,9 +40,7 @@ hour). This is the loop for iterating on a change (docs/validation.md,
              start each route from a golden save state instead of power-on:
              auto, the state just before the first segment that executes the
              --changed/--routes-for code; FRAME, the latest state at or before
-             it. The native runtime cannot load a state (docs/native-runtime.md,
-             next steps), so this runs the cycle build. --span N stops N
-             frames after the start.
+             it. --span N stops N frames after the start.
 
     py -3 -I tests/quick_verify.py --record --build build/headless
     py -3 -I tests/quick_verify.py --build build/headless
@@ -248,8 +249,8 @@ def hits(offsets, ranges):
     return any(lo <= o <= hi for o in offsets for lo, hi in ranges)
 
 
-def state_path(golden_dir, route, start):
-    return golden_dir / f'{route.stem}.states' / f'{start}.state'
+def state_path(golden_dir, route, start, runtime='cycle'):
+    return golden_dir / f'{route.stem}.states' / f'{start}.{"native" if runtime == "native" else "state"}'
 
 
 def record_route(route, args, exe, golden_dir, rom_sha):
@@ -259,7 +260,7 @@ def record_route(route, args, exe, golden_dir, rom_sha):
     work.mkdir(parents=True, exist_ok=True)
     states = golden_dir / f'{route.stem}.states'
     states.mkdir(parents=True, exist_ok=True)
-    for old in states.glob('*.state'):
+    for old in states.iterdir():
         old.unlink()
     ram, hsh = work / f'{route.stem}.ram.txt', work / f'{route.stem}.hash.txt'
     cmd = [str(exe), args.rom, '--input', str(route), '--frames', str(frames), '--align', '0',
@@ -314,6 +315,31 @@ def cover_segment(route, start, end, args, exe, golden_dir, golden):
     return start, offsets, None
 
 
+def native_states(route, args, native, golden_dir, golden):
+    """Save ducktales_native's states at the golden state frames, then replay each segment from its state."""
+    frames = route_frames(route)
+    work = Path(args.out) / 'record'
+    base = [str(native), args.rom, '--input', str(route), '--lag', 'faithful']
+    starts = list(range(args.state_every, frames, args.state_every))
+    cmd = base + ['--frames', str(frames)]
+    for s in starts:
+        cmd += ['--save-state', f'{s - 1}:{state_path(golden_dir, route, s, "native")}']
+    p = subprocess.run(cmd, capture_output=True, text=True, creationflags=NO_WINDOW)
+    if p.returncode:
+        return f'{route.stem}: ducktales_native exited with {p.returncode}: {p.stderr.strip()}'
+    for s, end in zip(starts, starts[1:] + [frames]):
+        ram, log = work / f'{route.stem}.{s}.native.txt', work / f'{route.stem}.{s}.native.log'
+        first, _, error = run_compared(base + ['--frames', str(end), '--ram-hash-out', str(ram), '--load-state',
+                                               str(state_path(golden_dir, route, s, 'native'))],
+                                       [ram], golden, NATIVE_FIELDS, s, end, log)
+        if first or error:
+            what = error or f'frame {first[0]} differs in {", ".join(first[1])}'
+            return f'{route.stem}: ducktales_native from its state at frame {s} does not match the golden file: {what}'
+        ram.unlink()
+        log.unlink()
+    return None
+
+
 def record(args, routes, exe, golden_dir, rom_sha):
     golden_dir.mkdir(parents=True, exist_ok=True)
     t0 = time.monotonic()
@@ -345,7 +371,18 @@ def record(args, routes, exe, golden_dir, rom_sha):
                 f.write(f'{s} {write_ranges(o)}\n')
         print(f'{route.stem:24s} {len(segs)} segments replayed from their states match the golden frames; '
               f'{len(total)} PRG instruction addresses executed')
-    print(f'coverage: {len(jobs)} segments in {time.monotonic() - t1:.0f} s')
+    print(f'coverage: {len(jobs)} segments in {time.monotonic() - t1:.0f} s', flush=True)
+    native = exe.with_name('ducktales_native.exe')
+    if not native.exists():
+        print(f'no {native}: no native states, so --from-state runs need --runtime cycle')
+        return
+    t2 = time.monotonic()
+    with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+        errors = [e for e in pool.map(lambda r: native_states(r, args, native, golden_dir, goldens[r.stem]), routes) if e]
+    if errors:
+        sys.exit('\n'.join(errors))
+    print(f'native states: {len(jobs) - len(routes)} states, each replayed to the next against the golden frames, '
+          f'in {time.monotonic() - t2:.0f} s')
 
 
 def check_golden(route, golden_dir):
@@ -375,9 +412,9 @@ def verify_route(route, start, args, golden_dir):
         ram, hsh = out / f'{route.stem}.cycle.ram.txt', out / f'{route.stem}.cycle.hash.txt'
         cmd = [str(build / 'ducktales.exe')] + base + ['--align', '0', '--ram-hash-out', str(ram),
                                                         '--hash-out', str(hsh)]
-        if start:
-            cmd += ['--load-state', str(state_path(golden_dir, route, start))]
         outputs, fields = [ram, hsh], GOLDEN_FIELDS
+    if start:
+        cmd += ['--load-state', str(state_path(golden_dir, route, start, args.runtime))]
     t0 = time.monotonic()
     first, compared, error = run_compared(cmd, outputs, golden, fields, start, end,
                                           out / f'{route.stem}.{args.runtime}.log')
@@ -422,7 +459,7 @@ def main():
                     help='native (ducktales_native, the default) or cycle (ducktales.exe, every field)')
     ap.add_argument('--changed', nargs='+', metavar='RANGE', help='[BANK:]ADDR[-ADDR] ranges a change touches')
     ap.add_argument('--routes-for', nargs='+', metavar='ADDR', help='routine addresses, [BANK:]ADDR')
-    ap.add_argument('--from-state', metavar='auto|FRAME', help='start from a golden save state (cycle build)')
+    ap.add_argument('--from-state', metavar='auto|FRAME', help='start from a golden save state')
     ap.add_argument('--span', type=int, help='with --from-state: frames to run from the start')
     ap.add_argument('--list', action='store_true', help='print the selected routes and start frames, run nothing')
     args = ap.parse_args()
@@ -443,9 +480,7 @@ def main():
         record(args, routes, exe, golden_dir, rom_sha)
         return
 
-    if args.from_state and args.runtime == 'native':
-        sys.exit('--from-state needs --runtime cycle: the native runtime cannot load a save state yet')
-    args.runtime = args.runtime or ('cycle' if args.from_state else 'native')
+    args.runtime = args.runtime or 'native'
     exe = build / ('ducktales_native.exe' if args.runtime == 'native' else 'ducktales.exe')
     if not exe.exists():
         sys.exit(f'missing {exe} (configure with -DDUCKTALES_HEADLESS=ON'
@@ -479,6 +514,10 @@ def main():
         starts = {r.stem: min(int(args.from_state), route_frames(r) - 1) // every * every for r in routes}
     elif not specs:
         sys.exit('--from-state auto needs --changed or --routes-for')
+    missing = [str(state_path(golden_dir, r, s, args.runtime)) for r in routes
+               for s in [starts[r.stem]] if s and not state_path(golden_dir, r, s, args.runtime).exists()]
+    if missing:
+        sys.exit('no golden state ' + ', '.join(missing) + '; record with --record from a build with this runtime')
     if args.list:
         for r in routes:
             print(f'{r.stem:24s} from frame {starts[r.stem]}')

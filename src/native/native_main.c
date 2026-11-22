@@ -33,6 +33,11 @@
  * the same input per logic step (tools/lag_report.py --steps). --wav-out
  * plays every frame's APU writes through the native synth (native_audio.h)
  * and writes the result as 48 kHz mono 16-bit PCM (tests/audio_compare.py).
+ * --save-state F:FILE (repeatable) writes the machine (native_state_save)
+ * after frame F; --load-state FILE starts from one: the run continues at the
+ * frame after it, with the route's input from there and the frame numbers of
+ * every log continuing the saved run's (tests/quick_verify.py --from-state).
+ * The lag mode is not part of a state: give the same --lag.
  */
 #include "native/native_audio.h"
 #include "native/native_hash.h"
@@ -41,6 +46,7 @@
 #include "native/native_state.h"
 
 #include "cpu6502.h"
+#include "cyc_recomp.h"
 #include "cyc_trace.h"
 
 #include <stdio.h>
@@ -48,7 +54,16 @@
 #include <string.h>
 #include <time.h>
 
+#define STATE_MAGIC "DTNFRAME"
+#define STATE_VERSION 1u
+#define MAX_STATE_SAVES 256
+
 static NativeRoute route;
+static struct {
+    long frame;
+    const char *path;
+} state_saves[MAX_STATE_SAVES];
+static size_t state_save_count;
 
 static FILE *step_f, *latch_log_f;
 static uint8_t (*latches)[2];
@@ -116,10 +131,43 @@ static uint8_t *read_file(const char *path, size_t *size)
     return data;
 }
 
+static bool write_state(const char *path, long next_frame)
+{
+    size_t size = native_state_save(NULL, 0);
+    uint8_t *blob = (uint8_t *)malloc(size);
+    FILE *f = blob ? fopen(path, "wb") : NULL;
+    bool ok = false;
+    if (f) {
+        uint32_t head[4] = { STATE_VERSION, cyc_native_prg_hash, (uint32_t)size, (uint32_t)next_frame };
+        native_state_save(blob, size);
+        ok = fwrite(STATE_MAGIC, 1, 8, f) == 8 && fwrite(head, sizeof head, 1, f) == 1 && fwrite(blob, 1, size, f) == size;
+        ok = fclose(f) == 0 && ok;
+    }
+    free(blob);
+    return ok;
+}
+
+static long read_state(const char *path)
+{
+    size_t size = 0;
+    uint8_t *data = read_file(path, &size);
+    uint32_t head[4];
+    long frame = -1;
+    if (data && size >= 8 + sizeof head && !memcmp(data, STATE_MAGIC, 8)) {
+        memcpy(head, data + 8, sizeof head);
+        if (head[0] == STATE_VERSION && head[1] == cyc_native_prg_hash && head[2] == size - 8 - sizeof head &&
+            native_state_load(data + 8 + sizeof head, head[2]))
+            frame = (long)head[3];
+    }
+    free(data);
+    return frame;
+}
+
 int main(int argc, char **argv)
 {
     const char *rom = NULL, *input = NULL, *hash_out = NULL, *split_out = NULL, *trace_out = NULL, *lag_out = NULL,
-               *dump_out = NULL, *audit_out = NULL, *step_out = NULL, *latch_out = NULL, *latch_in = NULL, *wav_out = NULL;
+               *dump_out = NULL, *audit_out = NULL, *step_out = NULL, *latch_out = NULL, *latch_in = NULL, *wav_out = NULL,
+               *load_state = NULL;
     NativeLagMode lag_mode = NATIVE_LAG_NONE;
     long frames = 600, trace_frame = -1;
     for (int i = 1; i < argc; i++) {
@@ -136,16 +184,22 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--latch-log") && i + 1 < argc) latch_out = argv[++i];
         else if (!strcmp(argv[i], "--latch-input") && i + 1 < argc) latch_in = argv[++i];
         else if (!strcmp(argv[i], "--wav-out") && i + 1 < argc) wav_out = argv[++i];
+        else if (!strcmp(argv[i], "--load-state") && i + 1 < argc) load_state = argv[++i];
+        else if (!strcmp(argv[i], "--save-state") && i + 1 < argc && state_save_count < MAX_STATE_SAVES &&
+                 strchr(argv[i + 1], ':') && strchr(argv[i + 1], ':')[1]) {
+            state_saves[state_save_count].frame = atol(argv[++i]);
+            state_saves[state_save_count++].path = strchr(argv[i], ':') + 1;
+        }
         else if (!strcmp(argv[i], "--lag") && i + 1 < argc && !strcmp(argv[i + 1], "none")) lag_mode = NATIVE_LAG_NONE, i++;
         else if (!strcmp(argv[i], "--lag") && i + 1 < argc && !strcmp(argv[i + 1], "faithful")) lag_mode = NATIVE_LAG_FAITHFUL, i++;
         else if (argv[i][0] != '-' && !rom) rom = argv[i];
         else {
-            fprintf(stderr, "usage: %s ROM [--input FILE] [--frames N] [--ram-hash-out FILE] [--lag none|faithful] [--lag-log FILE] [--split-log FILE] [--wav-out FILE]\n", argv[0]);
+            fprintf(stderr, "usage: %s ROM [--input FILE] [--frames N] [--ram-hash-out FILE] [--lag none|faithful] [--lag-log FILE] [--split-log FILE] [--wav-out FILE] [--save-state F:FILE] [--load-state FILE]\n", argv[0]);
             return 2;
         }
     }
     if (!rom) {
-        fprintf(stderr, "usage: %s ROM [--input FILE] [--frames N] [--ram-hash-out FILE] [--lag none|faithful] [--lag-log FILE] [--split-log FILE] [--wav-out FILE]\n", argv[0]);
+        fprintf(stderr, "usage: %s ROM [--input FILE] [--frames N] [--ram-hash-out FILE] [--lag none|faithful] [--lag-log FILE] [--split-log FILE] [--wav-out FILE] [--save-state F:FILE] [--load-state FILE]\n", argv[0]);
         return 2;
     }
     size_t size;
@@ -188,9 +242,14 @@ int main(int argc, char **argv)
         native_audio_reset(48000);
         wav_header(wav_f, 0);
     }
+    long first = 0;
+    if (load_state && (first = read_state(load_state)) < 0) {
+        fprintf(stderr, "--load-state %s: not a state of this build\n", load_state);
+        return 2;
+    }
     uint8_t held[2] = { 0, 0 };
     clock_t start = clock();
-    for (long frame = 0; frame < frames; frame++) {
+    for (long frame = first; frame < frames; frame++) {
         native_route_frame(&route, frame, held);
         native_set_controller(0, held[0]);
         native_set_controller(1, held[1]);
@@ -229,6 +288,12 @@ int main(int argc, char **argv)
                     f->cycles, f->rendered, f->split_line, f->split_x, f->ppu_write_count, f->apu_write_count,
                     f->overflowed ? " overflowed" : "");
         }
+        for (size_t k = 0; k < state_save_count; k++) {
+            if (state_saves[k].frame == frame && !write_state(state_saves[k].path, frame + 1)) {
+                fprintf(stderr, "--save-state: cannot write %s\n", state_saves[k].path);
+                return 2;
+            }
+        }
     }
     double seconds = (double)(clock() - start) / CLOCKS_PER_SEC;
     if (lag_f) fclose(lag_f);
@@ -250,6 +315,6 @@ int main(int argc, char **argv)
     if (trace_f) fclose(trace_f);
     printf("native: frames=%ld cycles=%llu fallback_instructions=%llu unmodeled_reads=%llu seconds=%.2f (%.0f fps)\n",
            frames, (unsigned long long)native_cycle_count(), (unsigned long long)native_fallback_instructions(),
-           (unsigned long long)native_unmodeled_reads(), seconds, seconds > 0 ? frames / seconds : 0.0);
+           (unsigned long long)native_unmodeled_reads(), seconds, seconds > 0 ? (frames - first) / seconds : 0.0);
     return 0;
 }
