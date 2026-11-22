@@ -1,0 +1,107 @@
+# Contributing to DuckTales Recompiled
+
+DuckTales Recompiled is a static recompilation of one specific ROM. Every change has to keep the port
+identical to the console when its options are at their original settings, and that is checked frame
+by frame. These notes describe how to set up, what a change must satisfy, and how to submit it.
+
+## Setup
+
+Follow the build steps in the [README](README.md). For development you need three build trees:
+
+```powershell
+cmake -S . -B build/windows -G "Visual Studio 17 2022" -A x64
+cmake -S . -B build/headless -G "Visual Studio 17 2022" -A x64 -DDUCKTALES_HEADLESS=ON -DDUCKTALES_ORACLE=ON
+cmake -S . -B build/headless-dev -G "Visual Studio 17 2022" -A x64 -DDUCKTALES_HEADLESS=ON -DDUCKTALES_DEV_DIAGNOSTICS=ON
+cmake --build build/<tree> --config Release --parallel
+```
+
+`build/windows` is the game as players run it, `build/headless` adds the TriCNES reference machine for
+differential tests, and `build/headless-dev` adds the typed state log and scheduled state changes the
+enhancement and sprite tests use.
+
+## Ground rules
+
+- **No game data.** Never commit the ROM, generated C, captured frames, frame logs, recordings or
+  anything else derived from the ROM. `roms/`, `build*/` and `captures/` are ignored for that reason.
+- **NESRecomp is not modified.** `external/nesrecomp` is a pinned submodule. The port attaches through
+  its public extension points (hooks, host extras, the render compositor, settings). If something
+  can only be done inside the runtime, raise it upstream instead of patching the submodule.
+- **Original behaviour by default.** Every gameplay change is an enhancement that is off by default.
+  When it is off, the original code runs unchanged. Presentation options may change what the window
+  shows, but never the machine state, the machine picture or any verified hash.
+- **Windows only.** The supported target is Windows x64 with Visual Studio 2022.
+
+## Where code goes
+
+| Path | Contents |
+|---|---|
+| `src/game/` | Revision-specific symbols, typed game state, enhancement sites and hooks (C) |
+| `src/host/` | Host integration: options, sprite compositor, diagnostics, entry point (C) |
+| `src/ui/` | Menu, ROM import, settings and presentation; `app_ui.cpp` is the only C++ file |
+| `src/native/` | Native runtime prototype (`DUCKTALES_NATIVE`) |
+| `config/` | Recompiler configuration (`game.toml`) and the recorded entry points (`ducktales.seeds`) |
+| `tests/` | Differential, presentation, enhancement and window tests; `tests/routes/` holds input schedules |
+| `tools/` | Reverse-engineering and analysis scripts |
+| `docs/` | Design notes, reverse-engineering references and validation results |
+
+## Changing the game
+
+Game behaviour changes go through [docs/architecture.md](docs/architecture.md#adding-a-behaviour-change):
+
+1. Identify the routine and document it in [docs/functions.md](docs/functions.md) and the RAM it uses
+   in [docs/memory-map.md](docs/memory-map.md).
+2. Name the address in `src/game/enhancements_sites.h` and declare a `[[mod_function_hook]]` for it
+   in `config/game.toml` with a content key (length and CRC-32 of the original bytes), so the hook
+   refuses to run on unexpected code. Compute the CRC from your own ROM and never commit the bytes.
+3. Implement the enhancement in `src/game/enhancements.c` with a `config.ini` key and a command-line
+   option, off by default, and expose it in the menu.
+4. Add a case to `tests/enhancements_test.py` that shows the effect when on and identity with the
+   original when off.
+
+## Verification
+
+Run the checks that cover what you touched before submitting:
+
+| Change | Required checks |
+|---|---|
+| Game code, hooks, seeds, runtime integration | `py -3 -I tests/verify_routes.py --build build/headless` |
+| Enhancements | `py -3 -I tests/enhancements_test.py --build build/headless --dev-build build/headless-dev` |
+| Sprite presentation | `py -3 -I tests/sprites_test.py --build build/headless --dev-build build/headless-dev` |
+| Menu, settings, ROM import, window | `py -3 -I tests/window_smoke.py --build build/windows` |
+| ROM identity and import | `build\headless\Release\app_rom_test.exe` |
+
+`verify_routes.py` must report native, interpreter and oracle equality on every frame of every route at
+all four alignments, with 100% of CPU cycles in recompiled code. `--routes` limits a run to a subset
+while iterating; run the full set once before submitting. The oracle's results are cached in
+`build/verify-cache/`, and `--no-cache` discards them.
+
+A new route that reaches code no route has executed adds interpreter misses. Append them to
+`config/ducktales.seeds` with `--miss-log`, rebuild and rerun the route; see the README.
+
+Record new verified results in [docs/validation.md](docs/validation.md), and list anything you did
+not verify in its *Not verified* section.
+
+## Style
+
+- C for `src/game`, `src/host`, `src/native` and `src/ui`; C++ only in `src/ui/app_ui.cpp`.
+- Four-space indentation, CRLF line endings, matching the surrounding file.
+- Each file opens with a header comment that says what it is for and which settings or options it
+  owns. Do not add comments inside function bodies.
+- Use the existing prefixes: `dt_` / `Dt` for game code, `app_` for the application layer.
+- Python tools and tests run with `py -3 -I` and use only the standard library unless the script
+  says otherwise.
+
+## Commits and merge requests
+
+- One logical change per commit. Write the subject as a short imperative sentence in sentence case,
+  without a prefix or trailing period: *Cache the oracle's route hashes in verify_routes*.
+- Put the reason and the evidence (routes run, frames, results) in the body or the merge request.
+- Work on a branch and open a merge request against `main`. Update the README, the relevant `docs/`
+  page and [CHANGELOG.md](CHANGELOG.md) in the same merge request.
+- A merge request is accepted when its checks pass and the change keeps the original behaviour at
+  default settings.
+
+## Licensing
+
+Contributions are accepted under the MIT license in [LICENSE](LICENSE). Builds link NESRecomp, which
+is licensed for noncommercial use only; see [docs/licensing.md](docs/licensing.md).
