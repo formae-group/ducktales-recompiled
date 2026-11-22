@@ -64,6 +64,19 @@ frame 1230 equals the headless presented picture with the feature on and the mac
 off. With the feature linked and on by default, `tests/verify_routes.py --build build/headless` passes all
 twelve routes at all four alignments with 100.0% native cycles (2026-11-22).
 
+## Release package (automated)
+
+`py -3 -I tests/package_test.py --build build/windows` (2026-11-22, all checks pass, on a
+clean tree at this change, so the archive is `DuckTalesRecompiled-<commit>-win64.zip`): the archive
+holds exactly the release files in one top-level folder and no ROM, source, symbols or test tool;
+its name carries the version the executable reports; neither `ducktales.exe` (static `/MT` runtime;
+imports COMDLG32, IMM32, KERNEL32, SDL2, SHELL32, USER32, WS2_32) nor `SDL2.dll` (system DLLs and
+msvcrt) imports a Visual C++ runtime DLL; unpacked into a temporary folder and run there with PATH
+reduced to the Windows folders, the executable imports a copy of the ROM with `--import-rom`, starts
+from the imported copy hidden for 300 frames, writes `config.ini` next to itself, and the menu
+self-test draws all 14 pages. `tests/window_smoke.py --build build/windows` also passes all 16 checks
+on the `/MT` build.
+
 ## Native runtime
 
 `tests/native_routes.py` holds the native-runtime prototype (`ducktales_native`, faithful lag mode)
@@ -81,6 +94,9 @@ transitions) still differ on that one line. Details in [native-render.md](native
 
 ## Not verified
 
+- The release package on a clean Windows installation without the Visual C++ redistributable: the
+  test checks the import tables but runs on a developer machine that has the runtime installed. A
+  Debug (`/MTd`) window build and a package from a tagged commit have not been built either.
 - A complete playthrough of any land on Easy or Difficult, secret treasures, the Transylvania return, the
   ending and the three endings' conditions.
 - Difficult mode (the "difficult" route was found to select Easy and was renamed).
