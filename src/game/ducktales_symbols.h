@@ -223,6 +223,50 @@
 #define DT_CODE_OBJ_FIND_FREE    0xF7BE  /* highest free slot 15..1 (code) */
 #define DT_CODE_OBJ_DISTANCE_X   0xF7DA  /* |Scrooge's world X - the slot's|, low byte (code) */
 #define DT_CODE_OBJ_MARK_CONSUMED 0xF7F0 /* set the slot's record bit in $0120 (verified, game-state.md) */
+#define DT_CODE_OBJ_EDIT_TILE    0xF506  /* edit the metatile at the slot (rendering.md) */
+#define DT_CODE_BIT_TABLE        0xF80A  /* 1 << n, n = 0-7 (code) */
+#define DT_CODE_LAND_BIT         0xD8C7  /* bit by land or message id (code) */
+#define DT_ADDR_PALETTE_UPLOAD   0x0018  /* palette upload request (verified) */
+#define DT_ADDR_MASTER_PALETTE   0x0100  /* fade source (verified) */
+#define DT_ADDR_PALETTE          0x0300  /* palette buffer (verified) */
+#define DT_ADDR_BLOCK_OPENED     0x005B  /* a block was launched or uncovered this frame (code) */
+#define DT_ADDR_MONEY_CHANGED    0x0074  /* incremented by the money adder; the frame loop runs $DE6C while set (code) */
+#define DT_ADDR_MESSAGE_SLOT     0x007A  /* slot of the character whose message shows (code) */
+#define DT_ADDR_LAUNCHPAD_RIDES  0x00A6  /* lands where the Launchpad ride was taken (hypothesis, game-state.md) */
+#define DT_ADDR_MESSAGES_SHOWN   0x00A8  /* bit per message id already shown (hypothesis, game-state.md) */
+#define DT_ADDR_EXTRA_DOT_TAKEN  0x00AE  /* the extra HP dot was taken in the Himalayas (code) */
+#define DT_ADDR_RANDOM           0x00C0  /* four random bytes, stepped by $C2E6 (code) */
+/* Handlers by kind (bank 6 unless noted) and their tables. */
+#define DT_CODE_HIT_HEIGHT       0x814A  /* $80C1: half-heights by the thrower's hitbox (code) */
+#define DT_CODE_HIT_WIDTH        0x816A  /* $80C1: half-widths (code) */
+#define DT_CODE_MOTION_VY        0x81A5  /* $818A: vertical velocity by index, 8.8 */
+#define DT_CODE_MOTION_SPEED     0x81E5  /* $818A: speed by index, 8.8 */
+#define DT_CODE_SNAPPER_HOLD_Y   0x8661  /* kind 7: Scrooge's Y offset when caught, by pose */
+#define DT_CODE_SNAPPER_HOLD_POSE 0x8663 /* kind 7: Scrooge's pose when caught */
+#define DT_CODE_SNAPPER_HITBOX   0x8665  /* kind 7: hitbox by animation frame */
+#define DT_CODE_KIND_BLOCK       0x8668  /* kind 8 */
+#define DT_CODE_KIND_THROWN      0x8722  /* kind 9 */
+#define DT_CODE_THROWN_STEP_LO   0x88FC  /* kind 9's code by step, low bytes (9 entries) */
+#define DT_CODE_THROWN_STEP_HI   0x8905
+#define DT_CODE_BLOCK_LAUNCH     0x890E  /* launch velocity, speed by pose - $1A, 4 bytes each */
+#define DT_CODE_KIND_DEFEATED    0x897B  /* kind $0B */
+#define DT_CODE_KIND_PICKUP      0x8A59  /* kind $13 */
+#define DT_CODE_ITEM_TAKE_LO     0x8BFE  /* what taking items $23-$29 does, low bytes */
+#define DT_CODE_ITEM_TAKE_HI     0x8C05
+#define DT_CODE_ITEM_SOUND       0x8C0C  /* their sounds */
+#define DT_CODE_KIND_HIDDEN_ITEM 0x8C45  /* kind $14 */
+#define DT_CODE_KIND_CHEST       0x8D19  /* kind $15 */
+#define DT_CODE_ITEM_BY_INDEX    0x8FB8  /* item by $06B0 */
+#define DT_CODE_CHEST_ITEM       0x8FDA  /* chest: 0 = no item shown, by land * 4 + $06B0 */
+#define DT_CODE_CHEST_RISE       0x9002  /* chest: Y offset when opened */
+#define DT_CODE_ITEM_BY_LAND     0x9016  /* item of a pose-$3F block by land * 3 + $06B0 */
+#define DT_CODE_DROP_BY_KIND     0x9025  /* item a beaten enemy may drop, by kind */
+#define DT_CODE_KIND_DOOR        0x9065  /* kind $2F */
+#define DT_CODE_FLYER_PATH       0x9215  /* kind $0D: motion index by step, 14 entries */
+#define DT_CODE_SWING_PATH       0x92ED  /* kind $0E: motion index by step, bit 7 = long step, 36 entries */
+#define DT_CODE_SWING_FRAMES     0x9311  /* kind $0E: frames per step, short and long */
+#define DT_CODE_KIND_LIFT        0x9093  /* kind $0F */
+#define DT_CODE_KIND_TALKER      0xFDF5  /* kind $35 (fixed bank) */
 
 /* ---- hook sites of the event system (src/game/events.c) ----
  * config/game.toml declares each with a length/crc32 content key, so another

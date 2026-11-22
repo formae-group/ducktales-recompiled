@@ -325,30 +325,73 @@ addr = 0xF1F9
 length = 8
 crc32 = 0x9496E318
 
-# Obj_FaceScrooge
+# Obj_Block (bank 6)
 [[mod_function_hook]]
-id = "ducktales.decomp.F6BD"
-addr = 0xF6BD
+id = "ducktales.decomp.6.8668"
+bank = 6
+addr = 0x8668
 length = 8
-crc32 = 0xA4CA0EC3
+crc32 = 0x066D9BAA
 
-# Obj_DistanceX
+# Obj_Thrown (bank 6)
 [[mod_function_hook]]
-id = "ducktales.decomp.F7DA"
-addr = 0xF7DA
+id = "ducktales.decomp.6.8722"
+bank = 6
+addr = 0x8722
 length = 8
-crc32 = 0x6C8400A8
+crc32 = 0xF701D69A
 
-# Obj_MarkConsumed
+# Obj_Defeated (bank 6)
 [[mod_function_hook]]
-id = "ducktales.decomp.F7F0"
-addr = 0xF7F0
+id = "ducktales.decomp.6.897B"
+bank = 6
+addr = 0x897B
 length = 8
-crc32 = 0x353FCE0E
+crc32 = 0x127C5196
 
-# Obj_FindFreeSlot
+# Obj_Pickup (bank 6)
 [[mod_function_hook]]
-id = "ducktales.decomp.F7BE"
-addr = 0xF7BE
+id = "ducktales.decomp.6.8A59"
+bank = 6
+addr = 0x8A59
 length = 8
-crc32 = 0x5A610BF8
+crc32 = 0xAE25735D
+
+# Obj_HiddenItem (bank 6)
+[[mod_function_hook]]
+id = "ducktales.decomp.6.8C45"
+bank = 6
+addr = 0x8C45
+length = 8
+crc32 = 0x22D5914E
+
+# Obj_Chest (bank 6)
+[[mod_function_hook]]
+id = "ducktales.decomp.6.8D19"
+bank = 6
+addr = 0x8D19
+length = 8
+crc32 = 0x22D5914E
+
+# Obj_Door (bank 6)
+[[mod_function_hook]]
+id = "ducktales.decomp.6.9065"
+bank = 6
+addr = 0x9065
+length = 8
+crc32 = 0xC4CD77A4
+
+# Obj_Lift (bank 6)
+[[mod_function_hook]]
+id = "ducktales.decomp.6.9093"
+bank = 6
+addr = 0x9093
+length = 8
+crc32 = 0x18E5F6E0
+
+# Obj_Talker
+[[mod_function_hook]]
+id = "ducktales.decomp.FDF5"
+addr = 0xFDF5
+length = 8
+crc32 = 0x6A8B0434

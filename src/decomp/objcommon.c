@@ -41,8 +41,6 @@
 
 static uint8_t HitboxHeight(uint8_t box) { return Game_ReadRom((uint16_t)(DT_CODE_HITBOX_HEIGHT + box)); }
 static uint8_t HitboxWidth(uint8_t box) { return Game_ReadRom((uint16_t)(DT_CODE_HITBOX_WIDTH + box)); }
-static uint8_t AbsDiff(uint8_t a, uint8_t b) { return a >= b ? (uint8_t)(a - b) : (uint8_t)(b - a); }
-static uint8_t AbsDiff16(uint16_t a, uint16_t b) { return (uint8_t)(a >= b ? a - b : b - a); }
 
 /* $F179: free the slot; a slot that held the marker in $4F (slot | $80)
  * resets it to $3C. */
@@ -298,24 +296,6 @@ static void Run_WalkRight(Regs *r) { r->x = Obj_WalkRight(r->x, r->a, r->y); }
 static void Run_WalkLeft(Regs *r) { r->x = Obj_WalkLeft(r->x, r->a, r->y); }
 static void Run_Fall(Regs *r) { r->x = Obj_Fall(r->x, r->a, r->y); }
 static void Run_Rise(Regs *r) { r->x = Obj_Rise(r->x, r->a, r->y); }
-static void Run_FaceScrooge(Regs *r) { Obj_FaceScrooge(r->x); }
-static void Run_DistanceX(Regs *r)
-{
-    r->a = Obj_DistanceX(r->x);
-    r->p = Flags_NZ(r->p, r->a);
-}
-static void Run_MarkConsumed(Regs *r)
-{
-    Obj_MarkConsumed(r->x);
-    r->y = (uint8_t)(gObjects->record[r->x] >> 3);
-    r->a = RAM_U8(DT_ADDR_CONSUMED + r->y);
-}
-static void Run_FindFreeSlot(Regs *r)
-{
-    uint8_t slot;
-    SetCarry(r, !Obj_FindFreeSlot(&slot));
-    r->x = slot;
-}
 
 const DecompRoutine gObjCommonRoutines[] = {
     { DT_CODE_OBJ_TOUCH_SCROOGE, "ducktales.decomp.F436", "Obj_TouchScrooge", Run_TouchScrooge, OUT_X | OUT_C },
@@ -323,9 +303,5 @@ const DecompRoutine gObjCommonRoutines[] = {
     { DT_CODE_OBJ_WALK_LEFT, "ducktales.decomp.F13B", "Obj_WalkLeft", Run_WalkLeft, OUT_X },
     { DT_CODE_OBJ_FALL, "ducktales.decomp.F1BE", "Obj_Fall", Run_Fall, OUT_X },
     { DT_CODE_OBJ_RISE, "ducktales.decomp.F1F9", "Obj_Rise", Run_Rise, OUT_X },
-    { DT_CODE_OBJ_FACE_SCROOGE, "ducktales.decomp.F6BD", "Obj_FaceScrooge", Run_FaceScrooge, OUT_X },
-    { DT_CODE_OBJ_DISTANCE_X, "ducktales.decomp.F7DA", "Obj_DistanceX", Run_DistanceX, OUT_A | OUT_X },
-    { DT_CODE_OBJ_MARK_CONSUMED, "ducktales.decomp.F7F0", "Obj_MarkConsumed", Run_MarkConsumed, OUT_X },
-    { DT_CODE_OBJ_FIND_FREE, "ducktales.decomp.F7BE", "Obj_FindFreeSlot", Run_FindFreeSlot, OUT_X | OUT_C },
 };
 const int gObjCommonRoutineCount = sizeof gObjCommonRoutines / sizeof gObjCommonRoutines[0];

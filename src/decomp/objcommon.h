@@ -7,6 +7,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+/* |a - b| as the original computes it (SBC, then negate on a borrow); for
+ * 16-bit world X only the low byte is kept. */
+static inline uint8_t AbsDiff(uint8_t a, uint8_t b) { return a >= b ? (uint8_t)(a - b) : (uint8_t)(b - a); }
+static inline uint8_t AbsDiff16(uint16_t a, uint16_t b) { return (uint8_t)(a >= b ? a - b : b - a); }
+
 bool Obj_TouchScrooge(uint8_t slot);
 bool Obj_TouchBlockH(uint8_t slot);
 bool Obj_TouchBlockV(uint8_t slot);
