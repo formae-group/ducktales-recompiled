@@ -18,10 +18,12 @@
  *                     the first pixel where sprite 0 and the background are
  *                     both opaque, and the dot that pixel is drawn on
  *   frame record      NativeFrame: the memories at line 0, the writes made
- *                     while lines 0-239 were drawn, the split, the APU writes
+ *                     while lines 0-239 were drawn (and the $2002 reads that
+ *                     reset the write latch then), the split, the APU writes
  *   held VBlank       with NATIVE_LAG_NONE the bus can hold the VBlank event
  *                     back (native_vblank_deferred): the frame's events move
  *                     later and the PPU stays in post-render line 240
+ *   save states       video_state_save / video_state_load (between frames)
  */
 #include "native/native_runtime.h"
 #include "native/native_state.h"
@@ -275,6 +277,7 @@ uint8_t video_read(uint16_t addr, uint64_t cycle)
     uint64_t prerender = frame_dot + EVENT_PRERENDER;
     bool s0 = s0_dot <= sample && !(s0_dot < prerender && sample >= prerender);
     uint8_t value = (uint8_t)((vblank ? 0x80 : 0) | (s0 ? 0x40 : 0) | (io_bus & 0x1F));
+    if (regs.w) log_ppu(0x2002, value, cycle);
     video_advance(3 * cycle + 3);
     vblank = false;
     regs.w = 0;
@@ -390,3 +393,59 @@ void video_frame_end(uint64_t cycle)
 const NativeVideoMemory *native_video_memory(void) { return &mem; }
 const NativeVideoRegs *native_video_regs(void) { return &regs; }
 const NativeFrame *native_last_frame(void) { return &frames[cur ^ 1]; }
+
+typedef struct {
+    NativeVideoMemory mem;
+    NativeVideoRegs regs;
+    uint64_t frame_dot, now_dot, s0_dot, mask_at, frame_cycle0, held_dots;
+    uint32_t next_event;
+    uint8_t io_bus, vblank, odd_frame, frame_ended, mask_live, mask_pending;
+} VideoState;
+
+size_t video_state_save(uint8_t *out, size_t cap)
+{
+    if (!out || cap < sizeof(VideoState)) return sizeof(VideoState);
+    VideoState s;
+    memset(&s, 0, sizeof s);
+    s.mem = mem;
+    s.regs = regs;
+    s.frame_dot = frame_dot;
+    s.now_dot = now_dot;
+    s.s0_dot = s0_dot;
+    s.mask_at = mask_at;
+    s.frame_cycle0 = frame_cycle0;
+    s.held_dots = held_dots;
+    s.next_event = next_event;
+    s.io_bus = io_bus;
+    s.vblank = vblank;
+    s.odd_frame = odd_frame;
+    s.frame_ended = frame_ended;
+    s.mask_live = mask_live;
+    s.mask_pending = mask_pending;
+    memcpy(out, &s, sizeof s);
+    return sizeof s;
+}
+
+bool video_state_load(const uint8_t *in, size_t size)
+{
+    if (size != sizeof(VideoState)) return false;
+    VideoState s;
+    memcpy(&s, in, sizeof s);
+    if (s.next_event > 3) return false;
+    mem = s.mem;
+    regs = s.regs;
+    frame_dot = s.frame_dot;
+    now_dot = s.now_dot;
+    s0_dot = s.s0_dot;
+    mask_at = s.mask_at;
+    frame_cycle0 = s.frame_cycle0;
+    held_dots = s.held_dots;
+    next_event = s.next_event;
+    io_bus = s.io_bus;
+    vblank = s.vblank != 0;
+    odd_frame = s.odd_frame != 0;
+    frame_ended = s.frame_ended != 0;
+    mask_live = s.mask_live;
+    mask_pending = s.mask_pending;
+    return true;
+}

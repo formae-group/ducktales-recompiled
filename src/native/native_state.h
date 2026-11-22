@@ -28,8 +28,9 @@
  * In the no-slowdown lag mode (native_runtime.h) a frame can be longer than
  * 29781 cycles: held_cycles of it is post-render time added before VBlank so
  * the game's logic could finish, and writes made then report scanline 241
- * dot 0. A frame is still presented for one 60 Hz period, so a synth scales
- * apu_writes[] offsets by 29781 / cycles rather than playing the extra time.
+ * dot 0. A frame is still presented for one 60 Hz period, so a synth plays it
+ * in cycles - held_cycles, scaling apu_writes[] offsets to match, rather than
+ * playing the extra time (native_audio.h does).
  */
 #pragma once
 #include <stdbool.h>
@@ -63,7 +64,8 @@ typedef struct {
     uint32_t cycle;           /* CPU cycle within the frame */
     uint16_t scanline;        /* where the PPU was when the write landed */
     uint16_t dot;
-    uint16_t addr;            /* $2000-$2007, or $4014 for a sprite DMA */
+    uint16_t addr;            /* $2000-$2007, or $4014 for a sprite DMA; $2002 is a read
+                                 that reset the $2005/$2006 write latch (value: what it read) */
     uint8_t  value;
 } NativeRegWrite;
 
