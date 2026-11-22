@@ -28,6 +28,10 @@
  *            its RTS would. Interrupts and frames therefore come at the same
  *            points of the game's work as on the console (an NMI that the
  *            original would take inside the routine is taken right after it).
+ *            The isolated call runs with hook sites on, so it takes the same
+ *            path as the C: an event site raises nothing there, and at the
+ *            damage site ($EB5E) the original returns as its RTS would when
+ *            the C's EVENT_PLAYER_DAMAGED was cancelled, in the C's order.
  *
  * A call whose C ends in Decomp_RunOriginal runs the original in both modes
  * and is not compared: the paths that use it lead into code (a row scroll, a
@@ -64,6 +68,8 @@ static uint8_t s_orig[GAME_RAM_SIZE];
 static bool s_scope;
 static uint8_t s_entry_s, s_entry_p;
 static bool s_run_original;
+static bool s_damage_cancel[8];
+static int s_damage_raised, s_damage_replayed;
 
 static void fail(const char *what, uint16_t routine)
 {
@@ -92,7 +98,10 @@ void Decomp_RunOriginal(void) { s_run_original = true; }
 int Decomp_RaiseEvent(int event)
 {
     if (s_mode != DECOMP_REPLACE) return EVENT_CONTINUE;
-    return Events_Raise((EventId)event);
+    EventResult result = Events_Raise((EventId)event);
+    if (event == EVENT_PLAYER_DAMAGED && s_damage_raised < (int)(sizeof s_damage_cancel / sizeof s_damage_cancel[0]))
+        s_damage_cancel[s_damage_raised++] = result == EVENT_CANCEL;
+    return result;
 }
 
 /* The C of a routine on an image of RAM at its entry; s_image holds the RAM
@@ -103,6 +112,7 @@ static void run_c(const DecompRoutine *rt, const CycModRegs *in, Regs *out)
     s_entry_s = in->s;
     s_entry_p = in->p;
     s_run_original = false;
+    s_damage_raised = 0;
     s_scope = false;
     Regs r = { in->a, in->x, in->y, in->p };
     GameRam_Enter(s_image);
@@ -123,10 +133,12 @@ static bool live(uint16_t a, uint8_t entry_s)
 /* The original routine alone on the machine's state: its RAM into s_orig,
  * its registers into *out; returns its cycle count, 0 when it did not
  * return. */
-static uint64_t run_original(const DecompRoutine *rt, const CycModRegs *in, CycModRegs *out)
+static uint64_t run_original(const DecompRoutine *rt, const CycModRegs *in, CycModRegs *out, bool hooked)
 {
     CycModStats before, after;
     if (!cyc_mod_isolate_begin()) fail("cannot open an isolated scope", rt->addr);
+    s_damage_replayed = 0;
+    cyc_mod_allow_isolated_hooks(hooked);
     cyc_mod_stats(&before);
     *out = *in;
     bool returned = cyc_mod_call(rt->addr, out);
@@ -162,7 +174,7 @@ static void check(int i, const CycModRegs *in)
 {
     const DecompRoutine *rt = s_routine[i];
     CycModRegs o;
-    uint64_t cycles = run_original(rt, in, &o);
+    uint64_t cycles = run_original(rt, in, &o, false);
     Regs c;
     run_c(rt, in, &c);
     s_stats[i].calls++;
@@ -193,7 +205,7 @@ static int replace(int i, const CycModRegs *in)
         return 0;
     }
     CycModRegs o;
-    uint64_t cycles = run_original(rt, in, &o);
+    uint64_t cycles = run_original(rt, in, &o, true);
     if (!cycles) fail("the original routine did not return in an isolated call", rt->addr);
     const uint8_t *ram = cyc_cpu_ram();
     for (uint16_t a = 0; a < GAME_RAM_SIZE; a++)
@@ -207,6 +219,8 @@ static int replace(int i, const CycModRegs *in)
 
 static int on_entry(uint16_t addr)
 {
+    if (cyc_mod_isolated())
+        return addr == DT_SITE_DAMAGE && s_damage_replayed < s_damage_raised && s_damage_cancel[s_damage_replayed++];
     for (int i = 0; i < s_count; i++) {
         if (s_routine[i]->addr != addr) continue;
         CycModRegs in;

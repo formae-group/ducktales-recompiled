@@ -113,6 +113,11 @@ work as on the console. The one difference: an NMI that the original would take 
 routine is taken right after it, so the bytes it pushes on the stack differ. With this, replace
 mode is RAM-identical to the console on every frame of every route (see Verification).
 
+The measuring call runs with hook sites on, so it takes the C's path through a cancelled event:
+an event site raises nothing there, and at `$EB5E` the original returns as its RTS would whenever
+the C's `EVENT_PLAYER_DAMAGED` was cancelled. Without this, NoDamage in replace mode was charged
+the HP-dot work it skips, and `moon_intro` drifted from the console at frame 1088.
+
 **Code that is not decompiled yet** stays original in two ways:
 
 - `Decomp_Call(addr, a, x, y)` runs an original routine from the C, in an isolated call on the

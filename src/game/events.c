@@ -12,11 +12,15 @@
  *   LIFE_LOST       before the lives decrement: one more life first
  *   TIMER_TICK      before the decrement of $B0: reload it with 60
  *   BOSS_HIT        before the decrement of $B1: one more hit first
+ *
+ * Inside an isolated call (cyc_mod.h) a site raises nothing: the original
+ * routine runs there only to be measured (src/decomp/decomp.c).
  */
 #include "ducktales/events.h"
 #include "ducktales/game.h"
 #include "ducktales/hud.h"
 
+#include "cyc_mod.h"
 #include "mod_function_hooks.h"
 #include "mod_runtime.h"
 
@@ -94,6 +98,7 @@ EventResult Events_Raise(EventId id)
 
 static int at_site(EventId id)
 {
+    if (cyc_mod_isolated()) return 0;
     GameRam_Begin();
     EventResult result = Events_Raise(id);
     GameRam_End();
