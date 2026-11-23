@@ -8,9 +8,10 @@ port's own files and all switched off by default:
 - **Game events** (`include/ducktales/events.h`, `src/game/events.c`): verified code sites where mod
   code can react to, or cancel, something the game does. The enhancements are handlers of these
   events.
-- **Decompiled routines** (`src/decomp/`): Scrooge's per-frame code and the motion and sound
-  primitives it uses, written as C on the API. Each replaces the recompiled routine at its entry, and
-  each is checked against the original on every call of every route.
+- **Decompiled routines** (`src/decomp/`): Scrooge's per-frame code, shared motion and sound
+  primitives, and parts of the frame loop and HUD, written as C. The cycle host can check them
+  against the original or run them in its place. Flow tasks can hand control back to recompiled
+  code and resume in C when the task resumes, without a hook at each resume point.
 
 Addresses are named only in `src/game/ducktales_symbols.h`. Status words (verified, code,
 hypothesis) are used as in [memory-map.md](memory-map.md). Code addresses are in bank 7 (the fixed

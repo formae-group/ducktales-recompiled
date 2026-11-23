@@ -92,6 +92,7 @@ static void ensure_loaded(void)
     }
     cyc_settings_default(&s_cfg);
     cyc_settings_load(&s_cfg, s_path, NULL, &GAME_KEYS);
+    ducktales_host_load_audio_settings(s_path);
     s_launch = s_cfg;
     /* the host turns the FDS Disk shortcut off for a cartridge (cyc_sdl.c) */
     s_launch.bind.shortcut_off |= 1u << CYC_SC_DISK;
@@ -162,7 +163,7 @@ void app_ui_host_saved(void)
 
 /* ---- the menu's own settings ---- */
 
-static AppMenuPrefs s_menu = { 80, 1 };
+static AppMenuPrefs s_menu = { 80, 1, 0 };
 
 void app_menu_prefs_get(AppMenuPrefs *out)
 {
@@ -173,6 +174,20 @@ void app_menu_prefs_set(const AppMenuPrefs *p)
 {
     s_menu.opacity = p->opacity < 0 ? 0 : p->opacity > 100 ? 100 : p->opacity;
     s_menu.pad_nav = p->pad_nav != 0;
+    s_menu.pause = p->pause != 0;
+}
+
+static void parse_switch(const char *value, int *out)
+{
+    static const char *ON[] = { "on", "1", "true", "yes" }, *OFF[] = { "off", "0", "false", "no" };
+    for (int i = 0; i < 4; i++) {
+        if (!strcmp(value, ON[i])) {
+            *out = 1;
+        }
+        if (!strcmp(value, OFF[i])) {
+            *out = 0;
+        }
+    }
 }
 
 bool app_ui_load_game_setting(const char *key, const char *value)
@@ -189,15 +204,11 @@ bool app_ui_load_game_setting(const char *key, const char *value)
         return true;
     }
     if (!strcmp(key, "MenuControllerNav")) {
-        static const char *ON[] = { "on", "1", "true", "yes" }, *OFF[] = { "off", "0", "false", "no" };
-        for (int i = 0; i < 4; i++) {
-            if (!strcmp(value, ON[i])) {
-                s_menu.pad_nav = 1;
-            }
-            if (!strcmp(value, OFF[i])) {
-                s_menu.pad_nav = 0;
-            }
-        }
+        parse_switch(value, &s_menu.pad_nav);
+        return true;
+    }
+    if (!strcmp(key, "MenuPausesGame")) {
+        parse_switch(value, &s_menu.pause);
         return true;
     }
     return false;
@@ -205,7 +216,8 @@ bool app_ui_load_game_setting(const char *key, const char *value)
 
 void app_ui_write_game_settings(FILE *f)
 {
-    fprintf(f, "MenuOpacity = %d\nMenuControllerNav = %s\n", s_menu.opacity, s_menu.pad_nav ? "on" : "off");
+    fprintf(f, "MenuOpacity = %d\nMenuControllerNav = %s\nMenuPausesGame = %s\n", s_menu.opacity,
+            s_menu.pad_nav ? "on" : "off", s_menu.pause ? "on" : "off");
 }
 
 void app_settings_changed(void)

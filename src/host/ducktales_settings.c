@@ -13,6 +13,8 @@
  *                     (ducktales_host_apply_no_slowdown)
  *   presentation      window builds: ui/app_present.h and the menu's own keys
  *                     (ui/app_ui.h)
+ *   extra voices      [Audio] MusicUnderEffects and OverlapEffects (off by
+ *                     default), played by the native player only
  *
  * A command-line value applies to that run only; config.ini keeps what the
  * player saved (ducktales_host_saved_value).
@@ -25,6 +27,7 @@
 #include "ui/app_ui.h"
 #endif
 
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -37,9 +40,96 @@ static bool s_no_slowdown = true;
 static bool s_no_slowdown = false;
 #endif
 
+static bool s_music_under_effects, s_overlap_effects;
+
 bool ducktales_host_no_slowdown(void)
 {
     return s_no_slowdown;
+}
+
+bool ducktales_host_music_under_effects(void)
+{
+    return s_music_under_effects;
+}
+
+void ducktales_host_set_music_under_effects(bool on)
+{
+    s_music_under_effects = on;
+}
+
+bool ducktales_host_overlap_effects(void)
+{
+    return s_overlap_effects;
+}
+
+void ducktales_host_set_overlap_effects(bool on)
+{
+    s_overlap_effects = on;
+}
+
+static bool same_text(const char *a, const char *b)
+{
+    while (*a && tolower((unsigned char)*a) == tolower((unsigned char)*b)) {
+        a++, b++;
+    }
+    return !*a && !*b;
+}
+
+static void parse_on_off(const char *value, bool *on)
+{
+    static const char *ON[] = { "on", "1", "true", "yes" }, *OFF[] = { "off", "0", "false", "no" };
+    for (int i = 0; i < 4; i++) {
+        if (same_text(value, ON[i])) {
+            *on = true;
+        }
+        if (same_text(value, OFF[i])) {
+            *on = false;
+        }
+    }
+}
+
+static char *trim(char *s)
+{
+    while (isspace((unsigned char)*s)) {
+        s++;
+    }
+    char *end = s + strlen(s);
+    while (end > s && isspace((unsigned char)end[-1])) {
+        *--end = 0;
+    }
+    return s;
+}
+
+void ducktales_host_load_audio_settings(const char *path)
+{
+    FILE *f = path ? fopen(path, "r") : NULL;
+    if (!f) {
+        return;
+    }
+    char line[1024];
+    bool audio = false;
+    while (fgets(line, sizeof line, f)) {
+        char *t = trim(line), *eq = strchr(t, '=');
+        if (*t == '[') {
+            char *end = strchr(t, ']');
+            if (end) {
+                *end = 0;
+            }
+            audio = same_text(t + 1, "Audio");
+            continue;
+        }
+        if (!audio || !eq) {
+            continue;
+        }
+        *eq = 0;
+        char *key = trim(t), *value = trim(eq + 1);
+        if (same_text(key, "MusicUnderEffects")) {
+            parse_on_off(value, &s_music_under_effects);
+        } else if (same_text(key, "OverlapEffects")) {
+            parse_on_off(value, &s_overlap_effects);
+        }
+    }
+    fclose(f);
 }
 
 void ducktales_host_set_no_slowdown(bool on)
@@ -96,15 +186,7 @@ void ducktales_host_load_game_setting(const char *key, const char *value)
         return;
     }
     if (!strcmp(key, "NoSlowdown")) {
-        static const char *ON[] = { "on", "1", "true", "yes" }, *OFF[] = { "off", "0", "false", "no" };
-        for (int i = 0; i < 4; i++) {
-            if (!strcmp(value, ON[i])) {
-                s_no_slowdown = true;
-            }
-            if (!strcmp(value, OFF[i])) {
-                s_no_slowdown = false;
-            }
-        }
+        parse_on_off(value, &s_no_slowdown);
         return;
     }
     for (int e = 0; e < DT_ENH_COUNT; e++) {
@@ -143,6 +225,8 @@ void ducktales_host_write_game_settings(FILE *f)
     app_present_write(f);
     app_ui_write_game_settings(f);
 #endif
+    fprintf(f, "[Audio]\nMusicUnderEffects = %s\nOverlapEffects = %s\n", s_music_under_effects ? "on" : "off",
+            s_overlap_effects ? "on" : "off");
 }
 
 bool ducktales_host_game_option(const char *name, const char *value, bool *ok)

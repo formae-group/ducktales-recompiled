@@ -19,6 +19,10 @@
  *                 app_ui_input; Escape (the Menu binding) opens the menu
  *                 through app_ui_event; F11 and Alt+Enter full screen, Tab
  *                 (held) fast-forward, F12 a screenshot of the picture
+ *   menu          the open menu calls menu_tick each menu frame: the game
+ *                 frames due at 60.0988 Hz run with no buttons pressed and
+ *                 their sound is queued, so the game keeps running behind the
+ *                 menu ([Game] MenuPausesGame stops it, app_ui.h)
  *   No slowdown   [Game] NoSlowdown: the runtime's lag mode
  *                 (NATIVE_LAG_NONE when on, NATIVE_LAG_FAITHFUL when off)
  *   picture       app_ui_present (ui/app_present.h) or the plain picture, in
@@ -44,7 +48,9 @@
  * --frames N [--input ROUTE] [--lag none|faithful] [--present-out FILE
  * [--present-every N]] writes the picture the window would show (at 1x, the
  * presentation settings at their defaults) after every Nth frame, named as
- * the cycle host's --present-out names them, for tests/native_player_test.py.
+ * the cycle host's --present-out names them, for tests/native_player_test.py;
+ * --wav-out FILE writes the synth's sound as 48 kHz mono 16-bit PCM, before
+ * the window's volume and queue stretching.
  * --state-check F saves the machine after frame F, runs 300 frames, loads the
  * state and runs them again, and reports whether CPU RAM, the cycle count and
  * the video memories matched on every one. The summary line lists how often
@@ -159,6 +165,16 @@ static void numbered_path(char *out, size_t cap, const char *base, long frame)
 
 /* ---- off screen: a route, the pictures to files ---- */
 
+/* --music-under-effects / --overlap-effects for this run, else -1: the saved
+ * [Audio] value (ducktales_host.h). */
+static int s_voice_override[2] = { -1, -1 };
+
+static void apply_voices(void)
+{
+    native_audio_voices(s_voice_override[0] >= 0 ? s_voice_override[0] != 0 : ducktales_host_music_under_effects(),
+                        s_voice_override[1] >= 0 ? s_voice_override[1] != 0 : ducktales_host_overlap_effects());
+}
+
 static uint64_t machine_hash(void)
 {
     uint64_t h = 1469598103934665603ull;
@@ -174,7 +190,7 @@ static uint64_t machine_hash(void)
 }
 
 static int run_off_screen(long frames, const char *input, int lag, const char *present_out, long present_every,
-                          long state_check)
+                          long state_check, const char *wav_out)
 {
     enum {
         CHECK_FRAMES = 300
@@ -191,6 +207,16 @@ static int run_off_screen(long frames, const char *input, int lag, const char *p
     if (input && !native_route_load(&route, input)) {
         return 2;
     }
+    FILE *wav = wav_out ? fopen(wav_out, "wb") : NULL;
+    if (wav_out && !wav) {
+        fprintf(stderr, "cannot write %s\n", wav_out);
+        return 2;
+    }
+    uint32_t wav_samples = 0;
+    if (wav) {
+        native_audio_reset(AUDIO_RATE);
+        native_audio_wav_header(wav, AUDIO_RATE, 0);
+    }
     power_on();
     if (lag >= 0) {
         native_set_lag_mode((NativeLagMode)lag);
@@ -199,6 +225,13 @@ static int run_off_screen(long frames, const char *input, int lag, const char *p
         uint8_t held[2];
         native_route_frame(&route, frame, held);
         run_frame(held[0], held[1]);
+        if (wav) {
+            static int16_t pcm[NATIVE_AUDIO_MAX_FRAME_SAMPLES];
+            apply_voices();
+            size_t n = native_audio_frame(native_last_frame(), pcm, NATIVE_AUDIO_MAX_FRAME_SAMPLES);
+            fwrite(pcm, sizeof pcm[0], n, wav);
+            wav_samples += (uint32_t)n;
+        }
         if (state_check >= 0 && frame == state_check) {
             state_size = native_state_save(NULL, 0);
             state = (uint8_t *)malloc(state_size);
@@ -244,6 +277,10 @@ static int run_off_screen(long frames, const char *input, int lag, const char *p
                 fprintf(stderr, "cannot write %s\n", path);
             }
         }
+    }
+    if (wav) {
+        native_audio_wav_header(wav, AUDIO_RATE, wav_samples);
+        fclose(wav);
     }
     printf("native player: frames=%ld cycles=%llu fallback_instructions=%llu unmodeled_reads=%llu\n", frames,
            (unsigned long long)native_cycle_count(), (unsigned long long)native_fallback_instructions(),
@@ -593,6 +630,55 @@ static void stretch(int16_t *pcm, size_t n, size_t m)
     }
 }
 
+static SDL_AudioDeviceID s_dev;
+static SDL_AudioSpec s_have;
+
+static void queue_audio(bool fast)
+{
+    int16_t pcm[4096];
+    const NativeFrame *f = native_last_frame();
+    apply_voices();
+    size_t n = native_audio_frame(f, pcm, sizeof pcm / sizeof pcm[0]);
+    size_t queued = s_dev ? SDL_GetQueuedAudioSize(s_dev) / sizeof pcm[0] : 0;
+    if (!s_dev || !n || fast || !s_set.audio_enabled || queued >= (size_t)s_have.freq / 10) {
+        return;
+    }
+    size_t low = (size_t)s_have.samples + n;
+    if (queued < low) {
+        size_t m = n + (low - queued);
+        if (m > 2 * n) {
+            m = 2 * n;
+        }
+        stretch(pcm, n, m);
+        n = m;
+    }
+    if (s_set.volume < 100) {
+        for (size_t i = 0; i < n; i++) {
+            pcm[i] = (int16_t)(pcm[i] * s_set.volume / 100);
+        }
+    }
+    app_ui_audio(pcm, n);
+    SDL_QueueAudio(s_dev, pcm, (Uint32)(n * sizeof pcm[0]));
+}
+
+static int menu_tick(void)
+{
+    static Uint64 next;
+    const Uint64 freq = SDL_GetPerformanceFrequency(), frame_ticks = (Uint64)((double)freq / FRAME_HZ);
+    const Uint64 now = SDL_GetPerformanceCounter();
+    if (next == 0 || now > next + 4 * frame_ticks) {
+        next = now;
+    }
+    int ran = 0;
+    while (next <= now) {
+        run_frame(0, 0);
+        queue_audio(false);
+        next += frame_ticks;
+        ran++;
+    }
+    return ran;
+}
+
 static int run_window(bool hidden, bool uncapped, long exit_after, const char *present_out, long present_every)
 {
     if (hidden) {
@@ -624,13 +710,15 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
     set_vsync(s_set.vsync && !uncapped);
     apply_fullscreen();
 
-    SDL_AudioSpec want = { 0 }, have;
+    SDL_AudioSpec want = { 0 };
     want.freq = AUDIO_RATE;
     want.format = AUDIO_S16SYS;
     want.channels = 1;
     want.samples = 1024;
-    SDL_AudioDeviceID dev = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
-    native_audio_reset(dev ? have.freq : AUDIO_RATE);
+    SDL_AudioDeviceID dev = SDL_OpenAudioDevice(NULL, 0, &want, &s_have, 0);
+    s_dev = dev;
+    native_audio_reset(dev ? s_have.freq : AUDIO_RATE);
+    app_ui_set_menu_tick(menu_tick);
     if (dev) {
         SDL_PauseAudioDevice(dev, 0);
     } else {
@@ -699,29 +787,7 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
         run_frame(buttons[0], buttons[1]);
         frames_done++;
         bool fast = st.shortcut[CYC_SC_FAST_FORWARD];
-
-        int16_t pcm[4096];
-        const NativeFrame *f = native_last_frame();
-        size_t n = native_audio_frame(f, pcm, sizeof pcm / sizeof pcm[0]);
-        size_t queued = dev ? SDL_GetQueuedAudioSize(dev) / sizeof pcm[0] : 0;
-        if (dev && n && !fast && s_set.audio_enabled && queued < (size_t)have.freq / 10) {
-            size_t low = (size_t)have.samples + n;
-            if (queued < low) {
-                size_t m = n + (low - queued);
-                if (m > 2 * n) {
-                    m = 2 * n;
-                }
-                stretch(pcm, n, m);
-                n = m;
-            }
-            if (s_set.volume < 100) {
-                for (size_t i = 0; i < n; i++) {
-                    pcm[i] = (int16_t)(pcm[i] * s_set.volume / 100);
-                }
-            }
-            app_ui_audio(pcm, n);
-            SDL_QueueAudio(dev, pcm, (Uint32)(n * sizeof pcm[0]));
-        }
+        queue_audio(fast);
 
         bool unpaced = fast || uncapped;
         set_vsync(s_set.vsync && !unpaced);
@@ -753,9 +819,11 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
         }
     }
     scheduling_end();
+    app_ui_set_menu_tick(NULL);
     save_settings();
     if (dev) {
         SDL_CloseAudioDevice(dev);
+        s_dev = 0;
     }
     if (s_tex) {
         SDL_DestroyTexture(s_tex);
@@ -781,16 +849,17 @@ static int usage(const char *self)
     fprintf(stderr,
             "usage: %s ROM [--hidden] [--exit-after N] [--config FILE] [--uncapped]\n"
             "       [--present-out FILE [--present-every N]]\n"
-            "       [--frames N [--input ROUTE] [--lag none|faithful] [--state-check FRAME]]\n"
+            "       [--frames N [--input ROUTE] [--lag none|faithful] [--state-check FRAME] [--wav-out FILE]]\n"
             "       [--jump-scale N] [--no-damage on|off] [--infinite-time on|off] [--infinite-lives on|off]\n"
-            "       [--start-lives 0-9|off] [--no-sprite-flicker on|off]\n",
+            "       [--start-lives 0-9|off] [--no-sprite-flicker on|off]\n"
+            "       [--music-under-effects on|off] [--overlap-effects on|off]\n",
             self);
     return 2;
 }
 
 int ducktales_host_main(int argc, char **argv)
 {
-    const char *rom = NULL, *present_out = NULL, *input = NULL, *config = NULL;
+    const char *rom = NULL, *present_out = NULL, *input = NULL, *config = NULL, *wav_out = NULL;
     long exit_after = -1, present_every = 1, frames = -1, state_check = -1;
     int lag = -1;
     bool hidden = false, uncapped = false;
@@ -822,6 +891,11 @@ int ducktales_host_main(int argc, char **argv)
             input = argv[++i];
         } else if (!strcmp(a, "--state-check") && v) {
             state_check = atol(argv[++i]);
+        } else if (!strcmp(a, "--wav-out") && v) {
+            wav_out = argv[++i];
+        } else if ((!strcmp(a, "--music-under-effects") || !strcmp(a, "--overlap-effects")) && v &&
+                   (!strcmp(v, "on") || !strcmp(v, "off"))) {
+            s_voice_override[a[2] == 'o'] = !strcmp(argv[++i], "on");
         } else if (!strcmp(a, "--lag") && v && !strcmp(v, "none")) {
             lag = NATIVE_LAG_NONE, i++;
         } else if (!strcmp(a, "--lag") && v && !strcmp(v, "faithful")) {
@@ -859,6 +933,7 @@ int ducktales_host_main(int argc, char **argv)
         static const CycSettingsGame GAME = { NULL, game_load, game_save };
         cyc_settings_default(&s_set);
         cyc_settings_load(&s_set, s_set_path, stderr, &GAME);
+        ducktales_host_load_audio_settings(s_set_path);
         s_set.bind.shortcut_off |= 1u << CYC_SC_DISK;
     }
     for (int g = 0; g < game_n; g++) {
@@ -870,7 +945,7 @@ int ducktales_host_main(int argc, char **argv)
         }
     }
     if (off_screen) {
-        return run_off_screen(frames, input, lag, present_out, present_every, state_check);
+        return run_off_screen(frames, input, lag, present_out, present_every, state_check, wav_out);
     }
     power_on();
     return run_window(hidden, uncapped, exit_after, present_out, present_every);
