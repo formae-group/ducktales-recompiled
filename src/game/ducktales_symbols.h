@@ -66,6 +66,31 @@
 #define DT_ADDR_DIFFICULTY       0x00F9  /* 0 Easy, 1 Normal, 2 Difficult (verified) */
 #define DT_ADDR_BOSS_FIGHT       0x00FB  /* bit 7 = boss fight (verified) */
 #define DT_ADDR_FRAME_COUNTER    0x0092  /* incremented by every NMI (verified) */
+#define DT_ADDR_SCRATCH2         0x0002  /* scratch (code) */
+#define DT_ADDR_PAD2_NEW         0x0015  /* controller 2, newly pressed (code, read_controllers) */
+#define DT_ADDR_RANDOM           0x00C0  /* 32-bit shift register stepped by $C2E6 (code) */
+#define DT_ADDR_BLANKED          0x00E8  /* non-zero: picture off, the NMI skips its PPU work (verified) */
+#define DT_ADDR_SPLIT            0x00EA  /* sprite-0 HUD split enabled, $40 in play (verified) */
+#define DT_ADDR_PPU_MASK         0x00FE  /* PPUMASK shadow (verified) */
+#define DT_ADDR_PPU_CTRL         0x00FF  /* PPUCTRL shadow (verified) */
+#define DT_ADDR_PALETTE_MASTER   0x0100  /* master palette, the fades' source (verified) */
+#define DT_ADDR_PALETTE          0x0300  /* palette buffer the NMI uploads (verified) */
+#define DT_ADDR_CHR_LIST         0x0002  /* scratch $02/$03 of $C301: the CHR list */
+#define DT_ADDR_CHR_PAGES        0x0004  /* scratch of $C301: pages left, minus one */
+#define DT_ADDR_CHR_SOURCE       0x0005  /* scratch $05/$06 of $C301: source page */
+#define DT_ADDR_CHR_INDEX        0x0007  /* scratch of $C301: offset in the list */
+#define DT_ADDR_CHR_BANK         0x0010  /* scratch of $C301: the record's PRG bank */
+#define DT_ADDR_VRAM_PENDING     0x0019  /* non-zero: the NMI uploads the $0400 queue (verified) */
+#define DT_ADDR_ROW_CHR_STATE    0x0050  /* row sprite-CHR stream: 0 start, bit 1 mid-record, negative done (verified) */
+#define DT_ADDR_ROW_CHR_BANK     0x0051  /* its record's PRG bank (code) */
+#define DT_ADDR_ROW_CHR_LIST     0x0052  /* $52/$53: its CHR list (code) */
+#define DT_ADDR_ROW_CHR_SOURCE   0x0054  /* $54/$55: source page (code) */
+#define DT_ADDR_ROW_CHR_PPU      0x0056  /* $56/$57: PPU address of the next packet (code) */
+#define DT_ADDR_ROW_CHR_OFFSET   0x0058  /* offset of the next record in the list (code) */
+#define DT_ADDR_ROW_CHR_BYTE     0x0059  /* offset in the source page (code) */
+#define DT_ADDR_ROW_CHR_PAGES    0x005A  /* pages left in the record, minus one (code) */
+#define DT_ADDR_TOTAL_DIGITS     0x0334  /* TOTAL money digit tiles (verified) */
+#define DT_ADDR_VRAM_QUEUE       0x0400  /* VRAM update queue (verified) */
 
 /* Controller bits, the layout of DT_ADDR_PAD_NEW / DT_ADDR_PAD_HELD. */
 #define DT_PAD_A       0x80
@@ -154,6 +179,18 @@
 #define DT_ADDR_HUD_GROUP_HP     0x0340  /* the three HUD sprite groups, in builder order */
 #define DT_ADDR_HUD_GROUP_LIVES  0x0358
 #define DT_ADDR_HUD_GROUP_TIME   0x0140
+#define DT_ADDR_OAM              0x0200  /* OAM shadow, 64 entries of Y, tile, attribute, X */
+#define DT_ADDR_SPR_SLOT         0x0096  /* slot being drawn */
+#define DT_ADDR_OAM_NEXT         0x0097  /* offset of the next free OAM entry; 0 = full */
+#define DT_ADDR_SPR_SCRIPT       0x0000  /* scratch $00/$01: the slot's animation script */
+#define DT_ADDR_SPR_META         0x0002  /* scratch $02/$03: the frame's metasprite */
+#define DT_ADDR_SPR_LEFT         0x0004  /* scratch: sprites left to place, minus one */
+#define DT_ADDR_SPR_OFFSETS      0x0005  /* scratch $05/$06: the dY, dX table, minus 2 */
+#define DT_ADDR_SPR_PRIORITY     0x0007  /* scratch: attribute bit 5 from $0600 bit 2 */
+#define DT_ADDR_SPR_FLIP         0x0010  /* scratch: attribute bit 6 from $0600 bit 6 */
+#define DT_ADDR_SPR_FLAGS        0x0011  /* scratch: 1 when flipped (offset-table step), then $0600 */
+#define DT_ADDR_SPR_Y            0x0012  /* scratch: the slot's screen Y */
+#define DT_ADDR_SPR_X            0x0013  /* scratch: the slot's screen X */
 
 /* ---- code sites (fixed bank 7 at $C000-$FFFF) ---- */
 /* ---- code (fixed bank 7 at $C000-$FFFF) ----
@@ -204,6 +241,34 @@
 #define DT_CODE_APPLY_GRAVITY    0xF2B5  /* vertical velocity -= gravity (X = slot) */
 #define DT_CODE_MUSIC_REQUEST    0xF752  /* remember the music id in $C5, then queue it */
 #define DT_CODE_SOUND_REQUEST    0xF754  /* queue a sound id in the request ring */
+#define DT_CODE_OAM_BUILD        0x8000  /* bank 5: the sprite builder */
+#define DT_CODE_PPU_BLANK        0xC197  /* picture off, $E8 + 1 */
+#define DT_CODE_PPU_UNBLANK      0xC1A1  /* picture on, $E8 - 1 */
+#define DT_CODE_READ_CONTROLLERS 0xC1AB  /* read both pads into $14-$17 */
+#define DT_CODE_FILL_NAMETABLE   0xC203  /* fill a nametable while blanked */
+#define DT_CODE_OAM_CLEAR        0xC267  /* park the OAM shadow's entries */
+#define DT_CODE_RANDOM_NEXT      0xC2E6  /* step the shift register $C0-$C3 */
+#define DT_CODE_CHR_LOAD_LIST    0xC301  /* upload a CHR list while blanked */
+#define DT_CODE_PALETTE_SCENE    0xF76D  /* load a scene's palettes */
+#define DT_CODE_BANK_SELECT      0xFFDE  /* map bank A at $8000 and record it in $E7 */
+#define DT_CODE_BANK_SELECT_TEMP 0xFFE0  /* map bank A without recording it */
+#define DT_CODE_BANK_TABLE       0xFFE5  /* bus-conflict table: byte n holds n */
+#define DT_CODE_CHR_STREAM_ROW   0xC42C  /* stream the row's sprite CHR, 64 bytes per call */
+#define DT_CODE_DRAW_STRINGS     0xBAB0  /* bank 5: draw a string set while blanked */
+#define DT_TABLE_ROW_BASE        0xC508  /* first row entry of each land in the next two tables */
+#define DT_TABLE_ROW_CHR_LIST    0xC511  /* row CHR list number; bit 7 = two lists by camera page */
+#define DT_TABLE_ROW_PALETTE     0xC53A  /* row sprite palette 3 number */
+#define DT_TABLE_ROW_LISTS_LO    0xC563  /* row CHR list pointers */
+#define DT_TABLE_ROW_LISTS_HI    0xC583
+#define DT_TABLE_ROW_PALETTES    0xC6D9  /* sprite palette 3 bytes, 4 per number */
+#define DT_TABLE_STRINGS_LO      0xBAFA  /* bank 5: string set pointers */
+#define DT_TABLE_STRINGS_HI      0xBB06
+#define DT_TABLE_CHR_LIST_LO     0xC358  /* CHR list pointers by list number */
+#define DT_TABLE_CHR_LIST_HI     0xC363
+#define DT_TABLE_SCENE_BG        0xE127  /* scene background palette: index of its last byte */
+#define DT_TABLE_SCENE_SPR       0xE12D  /* scene sprite palette: index of its last byte, bit 7 = palette 3 too */
+#define DT_TABLE_SCENE_PALETTES  0xE143  /* the scene palette bytes */
+#define DT_TABLE_SCENE_SPRITE_PAL3 0xE1A3 /* sprite palette 3 by $F9, 4 bytes each */
 
 /* ---- hook sites of the event system (src/game/events.c) ----
  * config/game.toml declares each with a length/crc32 content key, so another
@@ -244,3 +309,9 @@
  * (docs/decompilation.md "Events"). */
 #define DT_SITE_BOSS_HIT          0xF6DD
 #define DT_SITE_BOSS_HIT_ID       "ducktales.event.boss-hit"
+
+/* The RTI of the NMI handler ($C000), its only exit: replace mode spends
+ * there the cycles a replaced routine still owed when the NMI came
+ * (docs/decompilation.md "Timing in replace mode"). */
+#define DT_SITE_NMI_EXIT          0xC138
+#define DT_SITE_NMI_EXIT_ID       "ducktales.decomp.nmi-exit"

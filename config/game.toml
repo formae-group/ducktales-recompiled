@@ -129,3 +129,104 @@ addr = 0xEBB4
 length = 8
 crc32 = 0xDB4C6AB4
 
+# Bank_Select
+[[mod_function_hook]]
+id = "ducktales.decomp.FFDE"
+addr = 0xFFDE
+length = 8
+crc32 = 0x132BF327
+
+# Bank_SelectTemp
+[[mod_function_hook]]
+id = "ducktales.decomp.FFE0"
+addr = 0xFFE0
+length = 8
+crc32 = 0x906ED902
+
+# Input_ReadControllers
+[[mod_function_hook]]
+id = "ducktales.decomp.C1AB"
+addr = 0xC1AB
+length = 8
+crc32 = 0xB6DF6899
+
+# Ppu_Blank
+[[mod_function_hook]]
+id = "ducktales.decomp.C197"
+addr = 0xC197
+length = 8
+crc32 = 0xB236959A
+
+# Ppu_Unblank
+[[mod_function_hook]]
+id = "ducktales.decomp.C1A1"
+addr = 0xC1A1
+length = 8
+crc32 = 0x9490DE2F
+
+# Ppu_FillNametable
+[[mod_function_hook]]
+id = "ducktales.decomp.C203"
+addr = 0xC203
+length = 8
+crc32 = 0x1F68DC28
+
+# Oam_Clear
+[[mod_function_hook]]
+id = "ducktales.decomp.C267"
+addr = 0xC267
+length = 8
+crc32 = 0xED4A869E
+
+# Random_Next
+[[mod_function_hook]]
+id = "ducktales.decomp.C2E6"
+addr = 0xC2E6
+length = 8
+crc32 = 0x709D5E99
+
+# Chr_LoadList
+[[mod_function_hook]]
+id = "ducktales.decomp.C301"
+addr = 0xC301
+length = 8
+crc32 = 0xFD794306
+
+# Chr_StreamRow
+[[mod_function_hook]]
+id = "ducktales.decomp.C42C"
+addr = 0xC42C
+length = 8
+crc32 = 0xC14ABEE7
+
+# Palette_LoadScene
+[[mod_function_hook]]
+id = "ducktales.decomp.F76D"
+addr = 0xF76D
+length = 8
+crc32 = 0x3F37AFAC
+
+# Oam_Build
+[[mod_function_hook]]
+id = "ducktales.decomp.5.8000"
+addr = 0x8000
+bank = 5
+length = 8
+crc32 = 0x82DC07A5
+
+# Text_DrawStrings
+[[mod_function_hook]]
+id = "ducktales.decomp.5.BAB0"
+addr = 0xBAB0
+bank = 5
+length = 8
+crc32 = 0xEDE7D6B8
+
+# RTI of the NMI handler: replace mode spends there the cycles a replaced
+# routine still owed when the NMI came (src/decomp/decomp.c)
+[[mod_function_hook]]
+id = "ducktales.decomp.nmi-exit"
+addr = 0xC138
+length = 8
+crc32 = 0x45D72BBE
+

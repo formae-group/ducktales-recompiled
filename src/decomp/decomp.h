@@ -20,6 +20,13 @@
  *            routine takes from the same state, and the routine returns as
  *            its RTS would
  *
+ * Routines that talk to the hardware (the PPU, the APU, the controllers and
+ * the mapper's bus-conflict table) do it with Decomp_Read and Decomp_Write.
+ * In check mode those accesses go to the isolated machine the C runs on, and
+ * the devices' state after the routine (PPU memories and registers, APU,
+ * mapper) must equal the original's too. In replace mode they are real CPU
+ * accesses, made in program order.
+ *
  * Code the decompilation has not reached yet stays original in two ways:
  * Decomp_Call runs an original routine from C (in an isolated call whose RAM
  * changes are taken back into the image), and Decomp_RunOriginal hands the
@@ -46,6 +53,7 @@ typedef struct Regs { uint8_t a, x, y, p; } Regs;
 #define OUT_X 0x02
 #define OUT_Y 0x04
 #define OUT_P 0x08   /* N, V, Z and C */
+#define OUT_DEVICE 0x10   /* not a register: the routine accesses devices (Decomp_Read/Decomp_Write) */
 
 typedef struct DecompRoutine {
     uint16_t addr;
@@ -53,6 +61,7 @@ typedef struct DecompRoutine {
     const char *name;
     void (*run)(Regs *r);   /* in: the registers at entry; out: at its RTS */
     uint8_t out;
+    uint8_t bank;   /* a routine at $8000-$BFFF: the 16 KiB PRG bank it is in */
 } DecompRoutine;
 
 typedef enum DecompMode { DECOMP_OFF, DECOMP_CHECK, DECOMP_REPLACE } DecompMode;
@@ -72,6 +81,12 @@ Regs Decomp_Call(uint16_t routine, uint8_t a, uint8_t x, uint8_t y);
  * the original runs from its entry. The C must return without doing anything
  * else. */
 void Decomp_RunOriginal(void);
+/* A CPU read or store of a device register, or of the mapper's bus-conflict
+ * table, from decompiled code (the routine's entry needs OUT_DEVICE). A
+ * routine that gives its call to the original must do so before its first
+ * access. */
+uint8_t Decomp_Read(uint16_t addr);
+void Decomp_Write(uint16_t addr, uint8_t value);
 /* The host's frame end (replace mode gives a call that would still run at
  * the frame end to the original routine, so the RAM at every frame end is
  * the console's). */
@@ -113,3 +128,7 @@ extern const DecompRoutine gSoundRoutines[];
 extern const int gSoundRoutineCount;
 extern const DecompRoutine gPlayerRoutines[];
 extern const int gPlayerRoutineCount;
+extern const DecompRoutine gSystemRoutines[];
+extern const int gSystemRoutineCount;
+extern const DecompRoutine gSpriteRoutines[];
+extern const int gSpriteRoutineCount;
