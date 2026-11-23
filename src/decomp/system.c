@@ -14,6 +14,7 @@
  */
 #include "decomp/decomp.h"
 #include "decomp/devices.h"
+#include "decomp/system.h"
 
 #include "ducktales/game.h"
 
@@ -155,7 +156,7 @@ static void Ppu_FillNametable(uint8_t nt, uint8_t tile, uint8_t attribute)
 }
 
 /* $C267: park every OAM entry below the screen, but the split sprite. */
-static void Oam_Clear(void)
+void Oam_Clear(void)
 {
     Decomp_Enter(DT_CODE_OAM_CLEAR, 0, 0, 0);
     for (unsigned entry = gSplitEnabled ? OAM_SPLIT_ENTRY : 0; entry < 0x100; entry += 4) {

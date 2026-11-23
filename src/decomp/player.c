@@ -34,6 +34,7 @@
 #include "decomp/motion.h"
 #include "decomp/objcommon.h"
 #include "decomp/sound.h"
+#include "decomp/system.h"
 
 #include "ducktales/events.h"
 #include "ducktales/game.h"
@@ -1595,8 +1596,9 @@ static void Message_Shown(Regs *r)
     r->a = 0;
     gMessageNext = gMessageAt = gMessageLine = 0;
     Task_SelectBank(r, DT_BANK_SPRITES);
-    Task_Call(r, DT_CODE_OAM_CLEAR);
-    Task_Call(r, DT_B5_BUILD_OAM);
+    Oam_Clear();
+    r->y = Oam_Build();
+    r->x = RAM_U8(DT_ADDR_SPR_SLOT);
     Decomp_Handoff(DT_B5_PAUSE_TEXT, DT_MESSAGE_DRAWN, OUT_X | OUT_Y);
 }
 
