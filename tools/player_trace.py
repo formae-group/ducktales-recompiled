@@ -7,6 +7,7 @@ frames spent in the air for each airborne stretch.
 
     py -3 -I tools/player_trace.py LOG [--first N --last N] [--extra ADDR,...] [--summary]
 """
+
 import argparse
 import sys
 from pathlib import Path
@@ -35,9 +36,21 @@ def main():
         if f < a.first or f > a.last:
             continue
         v = vel(ram)
-        print('%5d  %02X  %02X  %02X   %02X.%02X  %+6.3f %04X  %02X  %s' % (
-            f, ram[0x16], ram[0x39], ram[0x620], ram[0x640], ram[0x660], v / 256, v & 0xFFFF,
-            ram[0x650], ' '.join('%02X  ' % ram[e] for e in extra)))
+        print(
+            '%5d  %02X  %02X  %02X   %02X.%02X  %+6.3f %04X  %02X  %s'
+            % (
+                f,
+                ram[0x16],
+                ram[0x39],
+                ram[0x620],
+                ram[0x640],
+                ram[0x660],
+                v / 256,
+                v & 0xFFFF,
+                ram[0x650],
+                ' '.join('%02X  ' % ram[e] for e in extra),
+            )
+        )
         if not a.summary:
             continue
         if ram[0x39] != 0 and not air:

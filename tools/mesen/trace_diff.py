@@ -10,6 +10,7 @@ address that both traces share). Reports every change of the relative cycle
 offset, then the first instruction whose address or registers differ, with a
 few instructions of context.
 """
+
 import argparse
 import re
 
@@ -17,7 +18,9 @@ import re
 def ours_trace(path):
     out = []
     for line in open(path):
-        m = re.match(r'(\d+) INSN PC=([0-9A-F]{4}) A=([0-9A-F]{2}) X=([0-9A-F]{2}) Y=([0-9A-F]{2}) S=([0-9A-F]{2})', line)
+        m = re.match(
+            r'(\d+) INSN PC=([0-9A-F]{4}) A=([0-9A-F]{2}) X=([0-9A-F]{2}) Y=([0-9A-F]{2}) S=([0-9A-F]{2})', line
+        )
         if m:
             out.append((int(m[1]), int(m[2], 16), tuple(int(m[i], 16) for i in range(3, 7)), ''))
     return out
@@ -36,11 +39,19 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('ours')
     ap.add_argument('mesen')
-    ap.add_argument('--align-pc', type=lambda s: int(s, 16), default=None,
-                    help='address to align on (default: the first address both traces share)')
+    ap.add_argument(
+        '--align-pc',
+        type=lambda s: int(s, 16),
+        default=None,
+        help='address to align on (default: the first address both traces share)',
+    )
     ap.add_argument('--context', type=int, default=6)
-    ap.add_argument('--regs', action='store_true', help='also stop at the first difference in A, X, Y or S '
-                    '(the registers an NMI interrupts with differ when the idle loop position does)')
+    ap.add_argument(
+        '--regs',
+        action='store_true',
+        help='also stop at the first difference in A, X, Y or S '
+        '(the registers an NMI interrupts with differ when the idle loop position does)',
+    )
     a = ap.parse_args()
     o, m = ours_trace(a.ours), mesen_trace(a.mesen)
     if not o or not m:
@@ -56,8 +67,10 @@ def main():
 
     def show(k):
         for j in range(max(0, k - a.context), min(k + 3, len(o), len(m))):
-            print('   ours  +%-6d %04X A=%02X X=%02X Y=%02X S=%02X' % ((o[j][0] - o0, o[j][1]) + o[j][2]),
-                  '| Mesen +%-6d %04X A=%02X X=%02X Y=%02X S=%02X %s' % ((m[j][0] - m0, m[j][1]) + m[j][2] + (m[j][3],)))
+            print(
+                '   ours  +%-6d %04X A=%02X X=%02X Y=%02X S=%02X' % ((o[j][0] - o0, o[j][1]) + o[j][2]),
+                '| Mesen +%-6d %04X A=%02X X=%02X Y=%02X S=%02X %s' % ((m[j][0] - m0, m[j][1]) + m[j][2] + (m[j][3],)),
+            )
 
     prev = 0
     for k, (x, y) in enumerate(zip(o, m)):

@@ -16,6 +16,7 @@ and fails if any pixel differs anywhere but the split line, or (with
 
     py -3 -I tests/native_render_test.py --build build/headless
 """
+
 import argparse
 import os
 import re
@@ -38,8 +39,16 @@ def route_frames(path):
 
 def run(exe, rom, route, out):
     report = out / f'{route.stem}.txt'
-    cmd = [str(exe), rom, '--input', str(route), '--frames', str(route_frames(route)),
-           '--native-render-check', str(report)]
+    cmd = [
+        str(exe),
+        rom,
+        '--input',
+        str(route),
+        '--frames',
+        str(route_frames(route)),
+        '--native-render-check',
+        str(report),
+    ]
     flags = BELOW_NORMAL if os.name == 'nt' else 0
     p = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, creationflags=flags)
     text = report.read_text() if report.exists() else ''
@@ -81,8 +90,10 @@ def main():
     with ThreadPoolExecutor(args.jobs) as pool:
         results = list(pool.map(lambda r: run(exe, args.rom, r, out), routes))
     failed = []
-    print(f'{"route":20s} {"frames":>7s}  {"line model frames/pixels":>25s}  {"final frames/pixels":>20s}  '
-          f'{"split $2005/$2006/unexpl.":>26s}  {"off split":>9s}')
+    print(
+        f'{"route":20s} {"frames":>7s}  {"line model frames/pixels":>25s}  {"final frames/pixels":>20s}  '
+        f'{"split $2005/$2006/unexpl.":>26s}  {"off split":>9s}'
+    )
     for name, f, err in results:
         if f is None:
             print(f'{name:20s} FAILED TO RUN\n{err}')
@@ -92,8 +103,12 @@ def main():
         final = f'{f["index_mismatch_frames"]}/{f["index_mismatch_pixels"]}'
         split = f'{f["split_fine_x"]}/{f["split_position"]}/{f["split_unexplained"]}'
         print(f'{name:20s} {f["frames"]:>7s}  {line:>25s}  {final:>20s}  {split:>26s}  {f["off_split_frames"]:>9s}')
-        bad = f['off_split_frames'] != '0' or f['argb_mismatch_pixels'] != f['index_mismatch_pixels'] or \
-            f['mirroring_mismatch_frames'] != '0' or (args.strict and f['index_mismatch_pixels'] != '0')
+        bad = (
+            f['off_split_frames'] != '0'
+            or f['argb_mismatch_pixels'] != f['index_mismatch_pixels']
+            or f['mirroring_mismatch_frames'] != '0'
+            or (args.strict and f['index_mismatch_pixels'] != '0')
+        )
         if bad:
             failed.append(name)
     if failed:

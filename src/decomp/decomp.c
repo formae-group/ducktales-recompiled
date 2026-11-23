@@ -81,26 +81,39 @@ static void fail(const char *what, uint16_t routine)
 Regs Decomp_Call(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
 {
     if (!s_scope) {
-        if (!cyc_mod_isolate_begin()) fail("cannot open an isolated scope", routine);
+        if (!cyc_mod_isolate_begin()) {
+            fail("cannot open an isolated scope", routine);
+        }
         s_scope = true;
     }
     const uint8_t *ram = cyc_cpu_ram();
-    for (uint16_t i = 0; i < GAME_RAM_SIZE; i++)
-        if (ram[i] != s_image[i]) cyc_mod_poke(i, s_image[i]);
+    for (uint16_t i = 0; i < GAME_RAM_SIZE; i++) {
+        if (ram[i] != s_image[i]) {
+            cyc_mod_poke(i, s_image[i]);
+        }
+    }
     CycModRegs r = { a, x, y, s_entry_s, s_entry_p, 0 };
-    if (!cyc_mod_call(routine, &r)) fail("an original routine called from C did not return", routine);
+    if (!cyc_mod_call(routine, &r)) {
+        fail("an original routine called from C did not return", routine);
+    }
     memcpy(s_image, cyc_cpu_ram(), GAME_RAM_SIZE);
     return (Regs){ r.a, r.x, r.y, r.p };
 }
 
-void Decomp_RunOriginal(void) { s_run_original = true; }
+void Decomp_RunOriginal(void)
+{
+    s_run_original = true;
+}
 
 int Decomp_RaiseEvent(int event)
 {
-    if (s_mode != DECOMP_REPLACE) return EVENT_CONTINUE;
+    if (s_mode != DECOMP_REPLACE) {
+        return EVENT_CONTINUE;
+    }
     EventResult result = Events_Raise((EventId)event);
-    if (event == EVENT_PLAYER_DAMAGED && s_damage_raised < (int)(sizeof s_damage_cancel / sizeof s_damage_cancel[0]))
+    if (event == EVENT_PLAYER_DAMAGED && s_damage_raised < (int)(sizeof s_damage_cancel / sizeof s_damage_cancel[0])) {
         s_damage_cancel[s_damage_raised++] = result == EVENT_CANCEL;
+    }
     return result;
 }
 
@@ -118,7 +131,9 @@ static void run_c(const DecompRoutine *rt, const CycModRegs *in, Regs *out)
     GameRam_Enter(s_image);
     rt->run(&r);
     GameRam_Leave();
-    if (s_scope) cyc_mod_isolate_end();
+    if (s_scope) {
+        cyc_mod_isolate_end();
+    }
     s_scope = false;
     *out = r;
 }
@@ -136,7 +151,9 @@ static bool live(uint16_t a, uint8_t entry_s)
 static uint64_t run_original(const DecompRoutine *rt, const CycModRegs *in, CycModRegs *out, bool hooked)
 {
     CycModStats before, after;
-    if (!cyc_mod_isolate_begin()) fail("cannot open an isolated scope", rt->addr);
+    if (!cyc_mod_isolate_begin()) {
+        fail("cannot open an isolated scope", rt->addr);
+    }
     s_damage_replayed = 0;
     cyc_mod_allow_isolated_hooks(hooked);
     cyc_mod_stats(&before);
@@ -150,7 +167,9 @@ static uint64_t run_original(const DecompRoutine *rt, const CycModRegs *in, CycM
 
 static void spend_cycles(uint16_t addr, uint64_t cycles)
 {
-    while (cycles-- > 1) (void)cpu_read(addr, 0);
+    while (cycles-- > 1) {
+        (void)cpu_read(addr, 0);
+    }
     (void)cpu_read(addr, CYC_POLL | CYC_DONE);
 }
 
@@ -160,11 +179,19 @@ static void report(const DecompRoutine *rt, const CycModRegs *in, const Regs *or
             rt->addr, (unsigned long long)cyc_ring_frame, in->a, in->x, in->y, in->s, in->p);
     int shown = 0;
     for (uint16_t a = 0; a < GAME_RAM_SIZE; a++) {
-        if (!live(a, in->s) || s_orig[a] == s_image[a]) continue;
-        if (shown++ < 24) fprintf(stderr, "[decomp]   $%04X original %02X decompiled %02X\n", a, s_orig[a], s_image[a]);
+        if (!live(a, in->s) || s_orig[a] == s_image[a]) {
+            continue;
+        }
+        if (shown++ < 24) {
+            fprintf(stderr, "[decomp]   $%04X original %02X decompiled %02X\n", a, s_orig[a], s_image[a]);
+        }
     }
-    if (shown > 24) fprintf(stderr, "[decomp]   ... %d bytes differ\n", shown);
-    fprintf(stderr, "[decomp]   registers original A=%02X X=%02X Y=%02X P=%02X decompiled A=%02X X=%02X Y=%02X P=%02X (contract %02X)\n",
+    if (shown > 24) {
+        fprintf(stderr, "[decomp]   ... %d bytes differ\n", shown);
+    }
+    fprintf(stderr,
+            "[decomp]   registers original A=%02X X=%02X Y=%02X P=%02X decompiled A=%02X X=%02X Y=%02X P=%02X "
+            "(contract %02X)\n",
             orig->a, orig->x, orig->y, orig->p, c->a, c->x, c->y, c->p, rt->out);
     fflush(stderr);
     exit(3);
@@ -184,13 +211,26 @@ static void check(int i, const CycModRegs *in)
     }
     Regs orig = { o.a, o.x, o.y, o.p };
     bool same = cycles != 0;
-    for (uint16_t a = 0; a < GAME_RAM_SIZE && same; a++)
-        if (live(a, in->s) && s_orig[a] != s_image[a]) same = false;
-    if ((rt->out & OUT_A) && orig.a != c.a) same = false;
-    if ((rt->out & OUT_X) && orig.x != c.x) same = false;
-    if ((rt->out & OUT_Y) && orig.y != c.y) same = false;
-    if ((rt->out & OUT_P) && ((orig.p ^ c.p) & (P_N | P_V | P_Z | P_C))) same = false;
-    if (!same) report(rt, in, &orig, &c);
+    for (uint16_t a = 0; a < GAME_RAM_SIZE && same; a++) {
+        if (live(a, in->s) && s_orig[a] != s_image[a]) {
+            same = false;
+        }
+    }
+    if ((rt->out & OUT_A) && orig.a != c.a) {
+        same = false;
+    }
+    if ((rt->out & OUT_X) && orig.x != c.x) {
+        same = false;
+    }
+    if ((rt->out & OUT_Y) && orig.y != c.y) {
+        same = false;
+    }
+    if ((rt->out & OUT_P) && ((orig.p ^ c.p) & (P_N | P_V | P_Z | P_C))) {
+        same = false;
+    }
+    if (!same) {
+        report(rt, in, &orig, &c);
+    }
     s_stats[i].compared++;
 }
 
@@ -206,10 +246,15 @@ static int replace(int i, const CycModRegs *in)
     }
     CycModRegs o;
     uint64_t cycles = run_original(rt, in, &o, true);
-    if (!cycles) fail("the original routine did not return in an isolated call", rt->addr);
+    if (!cycles) {
+        fail("the original routine did not return in an isolated call", rt->addr);
+    }
     const uint8_t *ram = cyc_cpu_ram();
-    for (uint16_t a = 0; a < GAME_RAM_SIZE; a++)
-        if (live(a, in->s) && ram[a] != s_image[a]) cyc_mod_poke(a, s_image[a]);
+    for (uint16_t a = 0; a < GAME_RAM_SIZE; a++) {
+        if (live(a, in->s) && ram[a] != s_image[a]) {
+            cyc_mod_poke(a, s_image[a]);
+        }
+    }
     uint8_t flags = P_N | P_V | P_Z | P_C;
     CycModRegs set = { c.a, c.x, c.y, in->s, (uint8_t)((c.p & flags) | (in->p & ~flags)), 0 };
     cyc_mod_set_regs(&set);
@@ -219,10 +264,13 @@ static int replace(int i, const CycModRegs *in)
 
 static int on_entry(uint16_t addr)
 {
-    if (cyc_mod_isolated())
+    if (cyc_mod_isolated()) {
         return addr == DT_SITE_DAMAGE && s_damage_replayed < s_damage_raised && s_damage_cancel[s_damage_replayed++];
+    }
     for (int i = 0; i < s_count; i++) {
-        if (s_routine[i]->addr != addr) continue;
+        if (s_routine[i]->addr != addr) {
+            continue;
+        }
         CycModRegs in;
         cyc_mod_regs(&in);
         if (s_mode == DECOMP_CHECK) {
@@ -251,22 +299,32 @@ NES_MOD_CONSTRUCTOR(dt_register_decomp_sites)
 
 static void report_stats(void)
 {
-    if (s_mode == DECOMP_OFF) return;
-    for (int i = 0; i < s_count; i++)
+    if (s_mode == DECOMP_OFF) {
+        return;
+    }
+    for (int i = 0; i < s_count; i++) {
         printf("decomp: mode=%s routine=%s addr=$%04X calls=%llu compared=%llu original=%llu\n",
                s_mode == DECOMP_CHECK ? "check" : "replace", s_routine[i]->name, s_routine[i]->addr,
                (unsigned long long)s_stats[i].calls, (unsigned long long)s_stats[i].compared,
                (unsigned long long)s_stats[i].original);
+    }
     fflush(stdout);
 }
 
 bool Decomp_ParseMode(const char *text, DecompMode *out)
 {
-    if (!text) return false;
-    if (!strcmp(text, "off")) *out = DECOMP_OFF;
-    else if (!strcmp(text, "check")) *out = DECOMP_CHECK;
-    else if (!strcmp(text, "replace")) *out = DECOMP_REPLACE;
-    else return false;
+    if (!text) {
+        return false;
+    }
+    if (!strcmp(text, "off")) {
+        *out = DECOMP_OFF;
+    } else if (!strcmp(text, "check")) {
+        *out = DECOMP_CHECK;
+    } else if (!strcmp(text, "replace")) {
+        *out = DECOMP_REPLACE;
+    } else {
+        return false;
+    }
     return true;
 }
 
@@ -278,8 +336,13 @@ bool Decomp_SetMode(DecompMode mode)
         atexit(report_stats);
     }
     s_mode = mode;
-    for (int i = 0; i < s_count; i++) nes_mod_set_function_hook_enabled(s_routine[i]->site_id, mode != DECOMP_OFF);
+    for (int i = 0; i < s_count; i++) {
+        nes_mod_set_function_hook_enabled(s_routine[i]->site_id, mode != DECOMP_OFF);
+    }
     return true;
 }
 
-DecompMode Decomp_Mode(void) { return s_mode; }
+DecompMode Decomp_Mode(void)
+{
+    return s_mode;
+}

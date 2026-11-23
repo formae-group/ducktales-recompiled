@@ -46,11 +46,20 @@ static void finish(Regs *r, uint8_t flags)
     r->p = (uint8_t)((r->p & ~(P_N | P_Z | P_C)) | flags);
 }
 
-static void Run_SoundRequest(Regs *r) { finish(r, Sound_Request(r->a, r->x)); }
-static void Run_MusicRequest(Regs *r) { finish(r, Music_Request(r->a, r->x)); }
+static void Run_SoundRequest(Regs *r)
+{
+    finish(r, Sound_Request(r->a, r->x));
+}
+
+static void Run_MusicRequest(Regs *r)
+{
+    finish(r, Music_Request(r->a, r->x));
+}
 
 const DecompRoutine gSoundRoutines[] = {
-    { DT_CODE_MUSIC_REQUEST, "ducktales.decomp.F752", "Music_Request", Run_MusicRequest, OUT_A | OUT_X | OUT_Y | OUT_P },
-    { DT_CODE_SOUND_REQUEST, "ducktales.decomp.F754", "Sound_Request", Run_SoundRequest, OUT_A | OUT_X | OUT_Y | OUT_P },
+    { DT_CODE_MUSIC_REQUEST, "ducktales.decomp.F752", "Music_Request", Run_MusicRequest,
+      OUT_A | OUT_X | OUT_Y | OUT_P },
+    { DT_CODE_SOUND_REQUEST, "ducktales.decomp.F754", "Sound_Request", Run_SoundRequest,
+      OUT_A | OUT_X | OUT_Y | OUT_P },
 };
 const int gSoundRoutineCount = sizeof gSoundRoutines / sizeof gSoundRoutines[0];
