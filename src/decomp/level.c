@@ -665,6 +665,228 @@ static void Level_TileEdit(int slot)
     q[14] = 0xFF;
 }
 
+/* ---- the row scroll's steps ----
+ *
+ * The row scroll ($C976) runs one step routine a frame through the pointers
+ * at $CA2A; an RTS to $C9FB ends each. A block row of the incoming row
+ * reaches the screen in two halves: $CAA1 decodes its 8 blocks, queues two
+ * of their tile rows and keeps the other two at $0460/$0480, which $CA4E
+ * queues on a later frame. $CB5A and $CB6E draw half a block row of the
+ * screens beside the camera's. The side ($2F, 0 or 4) picks each table's
+ * entry. The step routines run with the scroll's state and keep no other. */
+
+#define gScratch4   RAM_U8(DT_ADDR_SCRATCH4)
+#define gScratch5   RAM_U8(DT_ADDR_SCRATCH5)
+#define gScratch6   RAM_U8(DT_ADDR_SCRATCH5 + 1)
+#define gScratch7   RAM_U8(DT_ADDR_SCRATCH5 + 2)
+#define gRowSide    RAM_U8(DT_ADDR_ROW_SCROLL_SIDE)
+#define gRowKept    (&RAM_U8(DT_ADDR_ROW_KEPT)) /* two tile rows of 32, queued later */
+#define ROW_TILES   0x20
+#define ROW_RECORD  (3 + ROW_TILES) /* a tile row record of the queue: address high, low, count - 1, tiles */
+#define HALF_RECORD (3 + ROW_TILES / 2)
+#define ATTR_SECOND 0x40 /* attribute shadow of the second nametable */
+#define LAST_ROW    7    /* the half block row at the bottom */
+
+/* $CB1E: the headers of a block row's queue: two tile rows of 32 from block
+ * row row (the lower two with side 0) and its 8 attribute bytes. */
+static void Row_QueueHeaders(uint8_t row, uint8_t side)
+{
+    Decomp_Enter(DT_CODE_ROW_HEADERS, 0, side, row);
+    uint8_t hi = rom((uint16_t)(DT_CODE_QUEUE_TILE_HI + row)) | 0x04;
+    gVramQueue[0] = hi;
+    gVramQueue[ROW_RECORD] = hi;
+    gVramQueue[2 * ROW_RECORD] = hi | 0x03;
+    uint8_t lo = rom((uint16_t)(DT_CODE_QUEUE_TILE_LO + row)) | rom((uint16_t)(DT_CODE_ROW_ADDR_LO + side));
+    gVramQueue[1] = lo;
+    gVramQueue[ROW_RECORD + 1] = lo | 0x20;
+    gVramQueue[2 * ROW_RECORD + 1] = (uint8_t)(row << 3) | ATTR_TABLE_LO;
+    gVramQueue[2] = ROW_TILES - 1;
+    gVramQueue[ROW_RECORD + 2] = ROW_TILES - 1;
+    gVramQueue[2 * ROW_RECORD + 2] = 7;
+    gVramQueue[2 * ROW_RECORD + 3 + 8] = 0xFF;
+    gVramQueueReady = 0xFF;
+}
+
+/* $CAA1: block row $26 of the camera's screen, decoded into the queue's two
+ * tile row records (the half the side's $CC87 offset names) and the kept
+ * half; its attribute bytes are merged into the shadow of the second
+ * nametable and the queue. Ends with the headers of row $26 & 7. */
+static void Row_Draw(void)
+{
+    Decomp_Enter(DT_CODE_ROW_DRAW, 0, 0, 0);
+    Level_ScreenPointer(gCameraScreen);
+    gScratch4 = 0;
+    gScratch8 = 0;
+    for (;;) {
+        gStreamPage = 1;
+        Level_DecodeBlock();
+        gScratch5 = rom((uint16_t)(DT_CODE_ROW_BUFFER_HALF + gRowSide));
+        gScratch6 = gScratch5 ^ 0x08;
+        gScratch7 = 4;
+        do {
+            gVramQueue[3 + gScratch4] = gTileBuffer[gScratch5];
+            gVramQueue[ROW_RECORD + 3 + gScratch4] = gTileBuffer[gScratch5 + 4];
+            gRowKept[gScratch4] = gTileBuffer[gScratch6];
+            gRowKept[ROW_TILES + gScratch4] = gTileBuffer[gScratch6 + 4];
+            gScratch4++;
+            gScratch5++;
+            gScratch6++;
+        } while (--gScratch7);
+        uint8_t cell = gBlockCell | ATTR_SECOND;
+        gScratch9 = gAttrShadow[cell] & rom((uint16_t)(DT_CODE_ROW_ATTR_KEEP + gRowSide));
+        gAttrShadow[cell] = gBlockAttr;
+        gVramQueue[2 * ROW_RECORD + 3 + gScratch8] = (gBlockAttr & rom((uint16_t)(DT_CODE_ROW_ATTR_NEW + gRowSide))) |
+                                                     gScratch9;
+        gScratch8++;
+        uint8_t pos = (uint8_t)(gStreamPos + 8);
+        if (pos >= STREAM_COLUMNS) {
+            gStreamPos = pos & 7;
+            break;
+        }
+        gStreamPos = pos;
+    }
+    Row_QueueHeaders(gStreamPos, gRowSide);
+}
+
+/* $CA4A: the step that draws block row $26. */
+static void Row_DrawStep(void)
+{
+    Decomp_Enter(DT_CODE_ROW_DRAW_STEP, 0, 0, 0);
+    Row_Draw();
+}
+
+/* $CA4E: the step that queues the kept half of the last row drawn, with the
+ * attribute bytes of block row $26 from the shadow, and moves $26 a row on. */
+static void Row_KeptStep(void)
+{
+    Decomp_Enter(DT_CODE_ROW_KEPT_STEP, 0, 0, 0);
+    for (int i = ROW_TILES - 1; i >= 0; i--) {
+        gVramQueue[3 + i] = gRowKept[i];
+        gVramQueue[ROW_RECORD + 3 + i] = gRowKept[ROW_TILES + i];
+    }
+    uint8_t cell = (uint8_t)((gStreamPos & 7) << 3 | ATTR_SECOND);
+    for (int i = 0; i < 8; i++) {
+        gVramQueue[2 * ROW_RECORD + 3 + i] = gAttrShadow[cell + i];
+    }
+    uint8_t row = gStreamPos;
+    gStreamPos = (uint8_t)(row + rom((uint16_t)(DT_CODE_ROW_POS_STEP + gRowSide))) & 7;
+    Row_QueueHeaders(row, gRowSide ^ 4);
+}
+
+/* $CA8B: at the bottom block row, draws block row 7 as the other side
+ * would and moves $26 up; else the step of $CA4E. */
+static void Row_LastStep(void)
+{
+    Decomp_Enter(DT_CODE_ROW_LAST_STEP, 0, 0, 0);
+    if (gStreamPos != LAST_ROW) {
+        Row_KeptStep();
+        return;
+    }
+    uint8_t side = gRowSide;
+    gRowSide = side ^ 4;
+    Row_Draw();
+    gStreamPos--;
+    gRowSide = side;
+}
+
+/* $CB94: 4 blocks of the screen at ($22) from $26 on, one block column
+ * apart, into four tile row records of 16 at PPU column $07 and their
+ * attribute bytes. Nothing is queued when $26 names block row 0. The half
+ * block row at the bottom keeps its top tile rows, and row 1 drops the two
+ * tile rows that row 0 has, with the attribute halves the screen shows. */
+static void Row_DrawHalf(void)
+{
+    Decomp_Enter(DT_CODE_ROW_DRAW_HALF, 0, 0, 0);
+    gScratch4 = 0;
+    gScratch5 = 0;
+    gScratch6 = 4;
+    for (;;) {
+        gStreamPage = 0;
+        Level_DecodeBlock();
+        if (!(gStreamPos & 7)) {
+            gStreamPos += 8;
+            if (--gScratch6) {
+                continue;
+            }
+            return;
+        }
+        for (int i = 0; i < 4; i++) {
+            for (int k = 0; k < 4; k++) {
+                gVramQueue[k * HALF_RECORD + 3 + gScratch4] = gTileBuffer[4 * k + i];
+            }
+            gScratch4++;
+        }
+        gAttrShadow[gBlockCell] = gBlockAttr;
+        gVramQueue[4 * HALF_RECORD + 3 + gScratch5] = gBlockAttr;
+        gScratch5++;
+        gStreamPos += 8;
+        if (!--gScratch6) {
+            break;
+        }
+    }
+    uint8_t row = gStreamPos & 7;
+    uint8_t hi = rom((uint16_t)(DT_CODE_QUEUE_TILE_HI + row));
+    unsigned lo = rom((uint16_t)(DT_CODE_QUEUE_TILE_LO + row)) | gScratch7;
+    for (int k = 0; k < 4; k++) {
+        gVramQueue[k * HALF_RECORD] = hi;
+        gVramQueue[k * HALF_RECORD + 1] = (uint8_t)lo;
+        gVramQueue[k * HALF_RECORD + 2] = 0x0F;
+        lo = (lo & 0xFF) + 0x20 + (lo >> 8);
+    }
+    gVramQueue[4 * HALF_RECORD] = hi | 0x03;
+    gVramQueue[4 * HALF_RECORD + 1] = (gBlockCell & 0x3C) | ATTR_TABLE_LO;
+    gVramQueue[4 * HALF_RECORD + 2] = 3;
+    gVramQueue[4 * HALF_RECORD + 3 + 4] = 0xFF;
+    if (row == 1) {
+        for (int i = 0; i < 2 * HALF_RECORD + 8; i++) {
+            gVramQueue[i] = gVramQueue[2 * HALF_RECORD + i];
+        }
+        for (int i = 3; i >= 0; i--) {
+            gVramQueue[2 * HALF_RECORD + 3 + i] &= 0xF0;
+        }
+    } else if (row == LAST_ROW) {
+        for (int i = LAST_ROW; i >= 0; i--) {
+            gVramQueue[2 * HALF_RECORD + i] = gVramQueue[4 * HALF_RECORD + i];
+        }
+        for (int i = 3; i >= 0; i--) {
+            gVramQueue[2 * HALF_RECORD + 3 + i] &= 0x0F;
+        }
+    }
+    gVramQueueReady = 0xFF;
+}
+
+/* $CB5A/$CB6E: half a block row of the screen beside the camera's, unless
+ * the camera is at that end of the map row or no screen is there: from
+ * block column 0 of the screen to the right, at PPU column 0, or from
+ * column 4 of the screen to the left, at PPU column 16. */
+static void Row_DrawBeside(uint8_t screen, uint8_t column)
+{
+    gScratch7 = column;
+    Level_ScreenPointer(screen);
+    Row_DrawHalf();
+}
+
+static void Row_RightStep(void)
+{
+    Decomp_Enter(DT_CODE_ROW_RIGHT_STEP, 0, 0, 0);
+    uint8_t screen = (uint8_t)(gCameraScreen + 1);
+    if ((uint8_t)(gMapStride - 1) != gCameraPage && Map_Cell(screen) != 0xFF) {
+        Row_DrawBeside(screen, 0x00);
+    }
+    gStreamPos &= 7;
+}
+
+static void Row_LeftStep(void)
+{
+    Decomp_Enter(DT_CODE_ROW_LEFT_STEP, 0, 0, 0);
+    uint8_t screen = (uint8_t)(gCameraScreen - 1);
+    if (gCameraPage && Map_Cell(screen) != 0xFF) {
+        gStreamPos = (gStreamPos & 7) | 0x20;
+        Row_DrawBeside(screen, 0x10);
+    }
+    gStreamPos &= 7;
+}
+
 /* ---- site adapters ---- */
 
 static void Run_MapLoadHeader(Regs *r)
@@ -731,6 +953,53 @@ static void Run_ChrStreamRow(Regs *r)
     Chr_StreamRow();
 }
 
+static void Run_RowHeaders(Regs *r)
+{
+    Row_QueueHeaders(r->y, r->x);
+}
+
+static void Run_RowDraw(Regs *r)
+{
+    (void)r;
+    Row_Draw();
+}
+
+static void Run_RowDrawStep(Regs *r)
+{
+    (void)r;
+    Row_DrawStep();
+}
+
+static void Run_RowKeptStep(Regs *r)
+{
+    (void)r;
+    Row_KeptStep();
+}
+
+static void Run_RowLastStep(Regs *r)
+{
+    (void)r;
+    Row_LastStep();
+}
+
+static void Run_RowDrawHalf(Regs *r)
+{
+    (void)r;
+    Row_DrawHalf();
+}
+
+static void Run_RowRightStep(Regs *r)
+{
+    (void)r;
+    Row_RightStep();
+}
+
+static void Run_RowLeftStep(Regs *r)
+{
+    (void)r;
+    Row_LeftStep();
+}
+
 const DecompRoutine gLevelRoutines[] = {
     { DT_CODE_MAP_HEADER, "ducktales.decomp.C7B0", "Map_LoadHeader", Run_MapLoadHeader, OUT_X },
     { DT_CODE_STREAM_BLOCKS, "ducktales.decomp.C830", "Scroll_StreamBlocks", Run_StreamBlocks, OUT_X | OUT_HW },
@@ -744,5 +1013,13 @@ const DecompRoutine gLevelRoutines[] = {
     { DT_CODE_DECODE_BLOCK, NULL, "Level_DecodeBlock", Run_DecodeBlock, OUT_X },
     { DT_CODE_METATILE_AT, NULL, "Level_MetatileAt", Run_MetatileAt, OUT_A | OUT_X },
     { DT_CODE_ROW_CHR_STREAM, "ducktales.decomp.C42C", "Chr_StreamRow", Run_ChrStreamRow, OUT_HW },
+    { DT_CODE_ROW_HEADERS, NULL, "Row_QueueHeaders", Run_RowHeaders, 0 },
+    { DT_CODE_ROW_DRAW, NULL, "Row_Draw", Run_RowDraw, OUT_HW },
+    { DT_CODE_ROW_DRAW_HALF, NULL, "Row_DrawHalf", Run_RowDrawHalf, OUT_HW },
+    { DT_CODE_ROW_DRAW_STEP, "ducktales.decomp.CA4A", "Row_DrawStep", Run_RowDrawStep, OUT_HW },
+    { DT_CODE_ROW_KEPT_STEP, "ducktales.decomp.CA4E", "Row_KeptStep", Run_RowKeptStep, 0 },
+    { DT_CODE_ROW_LAST_STEP, "ducktales.decomp.CA8B", "Row_LastStep", Run_RowLastStep, OUT_HW },
+    { DT_CODE_ROW_RIGHT_STEP, "ducktales.decomp.CB5A", "Row_RightStep", Run_RowRightStep, OUT_HW },
+    { DT_CODE_ROW_LEFT_STEP, "ducktales.decomp.CB6E", "Row_LeftStep", Run_RowLeftStep, OUT_HW },
 };
 const int gLevelRoutineCount = sizeof gLevelRoutines / sizeof gLevelRoutines[0];

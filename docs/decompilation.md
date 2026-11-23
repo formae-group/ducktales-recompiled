@@ -319,6 +319,14 @@ RAM-identical in replace mode.
 | `Bg_SnapFeet` | `$D4D6` | checked | 12 | 11 of 11 | not measured |
 | `Level_TileEdit` | `$F574` | checked | 9 | - | not measured |
 | `Chr_StreamRow` | `$C42C` | checked | 12 | 11 of 11 | not measured |
+| `Row_DrawStep` | `$CA4A` | checked | 6 | - | not measured |
+| `Row_KeptStep` | `$CA4E` | checked | 6 | - | not measured |
+| `Row_LastStep` | `$CA8B` | checked | 4 | - | not measured |
+| `Row_Draw` | `$CAA1` | checked | 6 | - | not measured |
+| `Row_QueueHeaders` | `$CB1E` | checked | 6 | - | not measured |
+| `Row_RightStep` | `$CB5A` | checked | 6 | - | not measured |
+| `Row_LeftStep` | `$CB6E` | checked | 6 | - | not measured |
+| `Row_DrawHalf` | `$CB94` | checked | 5 | - | not measured |
 | `Nmi_Handler` | `$C000` | claimed (decomp/system): the NMI has no site form yet | - | - | - |
 | `Ppu_NmiOff` | `$C183` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
 | `Ppu_NmiOn` | `$C18D` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |

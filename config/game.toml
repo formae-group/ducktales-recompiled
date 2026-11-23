@@ -252,6 +252,43 @@ addr = 0xC42C
 length = 8
 crc32 = 0xC14ABEE7
 
+# The row scroll's step routines, reached through its pointers at $CA2A.
+
+# Row_DrawStep
+[[mod_function_hook]]
+id = "ducktales.decomp.CA4A"
+addr = 0xCA4A
+length = 8
+crc32 = 0x766DA69B
+
+# Row_KeptStep
+[[mod_function_hook]]
+id = "ducktales.decomp.CA4E"
+addr = 0xCA4E
+length = 8
+crc32 = 0xABEE62C0
+
+# Row_LastStep
+[[mod_function_hook]]
+id = "ducktales.decomp.CA8B"
+addr = 0xCA8B
+length = 8
+crc32 = 0xD7F35932
+
+# Row_RightStep
+[[mod_function_hook]]
+id = "ducktales.decomp.CB5A"
+addr = 0xCB5A
+length = 8
+crc32 = 0x6000C60F
+
+# Row_LeftStep
+[[mod_function_hook]]
+id = "ducktales.decomp.CB6E"
+addr = 0xCB6E
+length = 8
+crc32 = 0x6D1B63F7
+
 # Obj_UpdateAll (bank 6)
 [[mod_function_hook]]
 id = "ducktales.decomp.6.8000"
