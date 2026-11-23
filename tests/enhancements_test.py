@@ -18,6 +18,7 @@ Frames come from tests/routes/moon_intro.txt (lives set at frame 44 by the
 title set-up, first HP dot lost at frame 1004, first life lost at 1592) and
 amazon_intro.txt (the HUD timer runs from about frame 900).
 """
+
 import argparse
 import subprocess
 import sys
@@ -55,8 +56,17 @@ class Runner:
         """Per-frame hash lines, and {frame: ram} for the log window (first, last)."""
         self.n += 1
         hashes, out = self.tmp / f'{self.n}.hash', self.tmp / f'{self.n}.bin'
-        cmd = [str(self.exe), self.rom, '--frames', str(nframes), '--input', str(ROUTES / route),
-               '--hash-out', str(hashes), *extra]
+        cmd = [
+            str(self.exe),
+            self.rom,
+            '--frames',
+            str(nframes),
+            '--input',
+            str(ROUTES / route),
+            '--hash-out',
+            str(hashes),
+            *extra,
+        ]
         if log:
             cmd += ['--frame-log', str(out), '--frame-log-frames', f'{log[0]}:{log[1]}']
         p = subprocess.run(cmd, capture_output=True, text=True)
@@ -80,22 +90,62 @@ def first_difference(a, b):
 # option, stock text, on text, config key, route, frames, log window, effect(stock_ram, on_ram) -> (ok, text),
 # frame before which the enhancement has not acted yet (for the dev-build toggle check)
 CASES = [
-    ('--no-damage', 'off', 'on', 'NoDamage', 'moon_intro.txt', 1301, (1000, 1300),
-     lambda s, o: (hp(s[1010]) == 2 and hp(s[1300]) == 1 and hp(o[1010]) == 3 and hp(o[1300]) == 3,
-                   f'HP at 1010/1300: stock {hp(s[1010])}/{hp(s[1300])}, on {hp(o[1010])}/{hp(o[1300])}'),
-     1000),
-    ('--infinite-lives', 'off', 'on', 'InfiniteLives', 'moon_intro.txt', 1601, (1590, 1600),
-     lambda s, o: (s[1600][LIVES] == 1 and o[1600][LIVES] == 2,
-                   f'lives at 1600: stock {s[1600][LIVES]}, on {o[1600][LIVES]}'),
-     1500),
-    ('--infinite-time', 'off', 'on', 'InfiniteTime', 'amazon_intro.txt', 3001, (2990, 3000),
-     lambda s, o: (timer(s[3000]) != (5, 0, 0) and timer(o[3000]) == (5, 0, 0) and timer(o[2990]) == (5, 0, 0),
-                   f'HUD time at 3000: stock {timer(s[3000])}, on {timer(o[3000])}'),
-     600),
-    ('--start-lives', 'off', '7', 'StartLives', 'moon_intro.txt', 1601, (100, 100),
-     lambda s, o: (s[100][LIVES] == 2 and o[100][LIVES] == 7,
-                   f'lives at the title (frame 100): stock {s[100][LIVES]}, on {o[100][LIVES]}'),
-     30),
+    (
+        '--no-damage',
+        'off',
+        'on',
+        'NoDamage',
+        'moon_intro.txt',
+        1301,
+        (1000, 1300),
+        lambda s, o: (
+            hp(s[1010]) == 2 and hp(s[1300]) == 1 and hp(o[1010]) == 3 and hp(o[1300]) == 3,
+            f'HP at 1010/1300: stock {hp(s[1010])}/{hp(s[1300])}, on {hp(o[1010])}/{hp(o[1300])}',
+        ),
+        1000,
+    ),
+    (
+        '--infinite-lives',
+        'off',
+        'on',
+        'InfiniteLives',
+        'moon_intro.txt',
+        1601,
+        (1590, 1600),
+        lambda s, o: (
+            s[1600][LIVES] == 1 and o[1600][LIVES] == 2,
+            f'lives at 1600: stock {s[1600][LIVES]}, on {o[1600][LIVES]}',
+        ),
+        1500,
+    ),
+    (
+        '--infinite-time',
+        'off',
+        'on',
+        'InfiniteTime',
+        'amazon_intro.txt',
+        3001,
+        (2990, 3000),
+        lambda s, o: (
+            timer(s[3000]) != (5, 0, 0) and timer(o[3000]) == (5, 0, 0) and timer(o[2990]) == (5, 0, 0),
+            f'HUD time at 3000: stock {timer(s[3000])}, on {timer(o[3000])}',
+        ),
+        600,
+    ),
+    (
+        '--start-lives',
+        'off',
+        '7',
+        'StartLives',
+        'moon_intro.txt',
+        1601,
+        (100, 100),
+        lambda s, o: (
+            s[100][LIVES] == 2 and o[100][LIVES] == 7,
+            f'lives at the title (frame 100): stock {s[100][LIVES]}, on {o[100][LIVES]}',
+        ),
+        30,
+    ),
 ]
 
 
@@ -128,21 +178,29 @@ def main():
             check(ok, f'{opt} {on_v}: {text} (first differing frame {first})')
             if dev:
                 d = Runner(dev, args.rom, tmp)
-                toggled, _ = d.run(route, n, ['--dt-enh-at', f'0:{key}={on_v}', '--dt-enh-at', f'{quiet_until}:{key}={stock_v}'])
+                toggled, _ = d.run(
+                    route, n, ['--dt-enh-at', f'0:{key}={on_v}', '--dt-enh-at', f'{quiet_until}:{key}={stock_v}']
+                )
                 check(toggled == stock, f'{key} on at frame 0, off at {quiet_until}: identical to stock')
         # also the start-lives count at the first title: frame 100
         _, s_ram = r.run('moon_intro.txt', 101, log=(100, 100))
         _, o_ram = r.run('moon_intro.txt', 101, ['--start-lives', '0'], log=(100, 100))
-        check(s_ram[100][LIVES] == 2 and o_ram[100][LIVES] == 0,
-              f'--start-lives 0: lives at frame 100 stock {s_ram[100][LIVES]}, on {o_ram[100][LIVES]}')
+        check(
+            s_ram[100][LIVES] == 2 and o_ram[100][LIVES] == 0,
+            f'--start-lives 0: lives at frame 100 stock {s_ram[100][LIVES]}, on {o_ram[100][LIVES]}',
+        )
         if dev:
             d = Runner(dev, args.rom, tmp)
             _, s_ram = d.run('amazon_intro.txt', 1301, log=(1300, 1300))
             _, z_ram = d.run('amazon_intro.txt', 1301, ['--dt-reset-at', '1200'], log=(1300, 1300))
-            check(s_ram[1300][MUSIC] == 0 and z_ram[1300][MUSIC] == 7 and z_ram[1300][LIVES] == 2,
-                  f'reset at 1200: at 1300 music request stock {s_ram[1300][MUSIC]}, after reset {z_ram[1300][MUSIC]} '
-                  f'(7 = title), lives {z_ram[1300][LIVES]}')
-            _, n_ram = d.run('amazon_intro.txt', 1301, ['--dt-reset-at', '1200', '--start-lives', '7'], log=(1300, 1300))
+            check(
+                s_ram[1300][MUSIC] == 0 and z_ram[1300][MUSIC] == 7 and z_ram[1300][LIVES] == 2,
+                f'reset at 1200: at 1300 music request stock {s_ram[1300][MUSIC]}, after reset {z_ram[1300][MUSIC]} '
+                f'(7 = title), lives {z_ram[1300][LIVES]}',
+            )
+            _, n_ram = d.run(
+                'amazon_intro.txt', 1301, ['--dt-reset-at', '1200', '--start-lives', '7'], log=(1300, 1300)
+            )
             check(n_ram[1300][LIVES] == 7, f'--start-lives 7 after a reset at 1200: lives {n_ram[1300][LIVES]} at 1300')
     print('all passed' if not failed else f'{len(failed)} failed')
     return 1 if failed else 0

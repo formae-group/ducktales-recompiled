@@ -20,6 +20,7 @@ Exit status: 0 when every compared domain (with --ignore, CPU RAM outside the
 ignored ranges instead of all of it) matched on every frame of every route and
 alignment, 1 otherwise, 2 on a setup error.
 """
+
 import argparse
 import os
 import shutil
@@ -52,15 +53,20 @@ def read_log(path):
     with open(path, 'rb') as f:
         if f.read(8) != b'CYCFRAME':
             raise SystemExit(f'{path}: not a frame log')
-        version, = struct.unpack('<I', f.read(4))
+        (version,) = struct.unpack('<I', f.read(4))
         nlen = 6 if version >= 2 else 5
         while True:
             head = f.read(12 + 4 * nlen)
             if len(head) < 12 + 4 * nlen:
                 return out
             frame, lo, hi, *lens = struct.unpack('<III%dI' % nlen, head)
-            rec = {'cycles': lo | hi << 32, 'palette': f.read(32), 'oam': f.read(256), 'ram': f.read(lens[0]),
-                   'ciram': f.read(lens[1])}
+            rec = {
+                'cycles': lo | hi << 32,
+                'palette': f.read(32),
+                'oam': f.read(256),
+                'ram': f.read(lens[0]),
+                'ciram': f.read(lens[1]),
+            }
             f.seek(sum(lens[2:]), 1)
             out[frame] = rec
 
@@ -99,8 +105,20 @@ def domain_bytes(rec, domain):
 
 def run_ours(args, route, frames, out, align):
     raw = out.with_suffix('.raw')
-    cmd = [str(args.exe), args.rom, '--frames', str(frames), '--input', str(route), '--frame-log', str(raw),
-           '--frame-log-at', 'mesen', '--align', str(align)]
+    cmd = [
+        str(args.exe),
+        args.rom,
+        '--frames',
+        str(frames),
+        '--input',
+        str(route),
+        '--frame-log',
+        str(raw),
+        '--frame-log-at',
+        'mesen',
+        '--align',
+        str(align),
+    ]
     if args.trace_frame is not None:
         cmd += ['--trace-frame', str(args.trace_frame), '--trace-out', str(out.with_suffix('.trace.txt'))]
     if args.ram_init != 'native':
@@ -116,15 +134,30 @@ def run_ours(args, route, frames, out, align):
 
 
 def run_mesen(args, route, frames, out, status):
-    env = dict(os.environ, DT_MESEN_ROUTE=str(route), DT_MESEN_OUT=str(out), DT_MESEN_FRAMES=str(frames),
-               DT_MESEN_STATUS=str(status), DT_MESEN_CIRAM='1' if 'ciram' in args.domains else '0')
+    env = dict(
+        os.environ,
+        DT_MESEN_ROUTE=str(route),
+        DT_MESEN_OUT=str(out),
+        DT_MESEN_FRAMES=str(frames),
+        DT_MESEN_STATUS=str(status),
+        DT_MESEN_CIRAM='1' if 'ciram' in args.domains else '0',
+    )
     if args.trace_frame is not None:
         env.update(DT_MESEN_TRACE_FRAME=str(args.trace_frame), DT_MESEN_TRACE_OUT=str(out.with_suffix('.trace.txt')))
     if status.exists():
         status.unlink()
-    cmd = [str(args.mesen), '--testrunner', str(LUA), args.rom, '--debug.scriptWindow.allowIoOsAccess=true',
-           f'--timeout={args.timeout}', '--nes.region=Ntsc', '--nes.randomizeCpuPpuAlignment=false',
-           '--nes.randomizeMapperPowerOnState=false', '--emulation.runAheadFrames=0']
+    cmd = [
+        str(args.mesen),
+        '--testrunner',
+        str(LUA),
+        args.rom,
+        '--debug.scriptWindow.allowIoOsAccess=true',
+        f'--timeout={args.timeout}',
+        '--nes.region=Ntsc',
+        '--nes.randomizeCpuPpuAlignment=false',
+        '--nes.randomizeMapperPowerOnState=false',
+        '--emulation.runAheadFrames=0',
+    ]
     if args.ram_init != 'native':
         cmd.append(f'--nes.ramPowerOnState={MESEN_RAM[args.ram_init]}')
     with MESEN_LOCK:
@@ -182,8 +215,10 @@ def describe(frames, first_frame, res, ours, mesen, show):
             fr, diffs = r['first']
             head = ', '.join('$%04X ours=%02X mesen=%02X' % t for t in diffs[:show])
             more = f' (+{len(diffs) - show} more)' if len(diffs) > show else ''
-            line = (f'  {d:8s} FIRST DIVERGENCE frame {fr}: {len(diffs)} bytes: {head}{more}; '
-                    f'{r["count"]}/{span} frames differ')
+            line = (
+                f'  {d:8s} FIRST DIVERGENCE frame {fr}: {len(diffs)} bytes: {head}{more}; '
+                f'{r["count"]}/{span} frames differ'
+            )
             base = d.rstrip('*')
             for k, word in ((1, 'ahead of'), (-1, 'behind')):
                 if fr + k in ours and domain_bytes(ours[fr + k], base) == domain_bytes(mesen[fr], base):
@@ -206,22 +241,47 @@ def main():
     ap.add_argument('--frames', type=int, help='frames per route (default: last route line + 120)')
     ap.add_argument('--from-frame', type=int, default=0, help='first frame to compare (default 0)')
     ap.add_argument('--ram-init', choices=['zeros', 'ones', 'native'], default='zeros')
-    ap.add_argument('--align', type=int, nargs='+', default=[0, 1, 2, 3], choices=range(4),
-                    help='ducktales.exe CPU/PPU alignments to compare (default all four; one Mesen run serves all)')
+    ap.add_argument(
+        '--align',
+        type=int,
+        nargs='+',
+        default=[0, 1, 2, 3],
+        choices=range(4),
+        help='ducktales.exe CPU/PPU alignments to compare (default all four; one Mesen run serves all)',
+    )
     ap.add_argument('--domains', default='ram,oam,palette', help='comma list of ram, oam, palette, ciram')
-    ap.add_argument('--ignore', type=parse_range, action='append', default=[], metavar='LO-HI',
-                    help='hex CPU RAM range left out of an extra "ram*" line and of the exit status, '
-                         'e.g. --ignore 0100-01FF for the stack page')
+    ap.add_argument(
+        '--ignore',
+        type=parse_range,
+        action='append',
+        default=[],
+        metavar='LO-HI',
+        help='hex CPU RAM range left out of an extra "ram*" line and of the exit status, '
+        'e.g. --ignore 0100-01FF for the stack page',
+    )
     ap.add_argument('--show', type=int, default=8, help='divergent bytes to list per domain')
     ap.add_argument('--timeout', type=int, default=900, help='Mesen test runner timeout, seconds')
     ap.add_argument('--out', default=str(ROOT / 'captures' / 'mesen'))
-    ap.add_argument('--jobs', type=int, default=2, help='parallel runs; each ducktales.exe run writes a '
-                    'temporary frame log of about 130 KB per frame (up to 1 GB) before it is compacted')
-    ap.add_argument('--min-free-gb', type=float, default=8, help='refuse to start unless this much disk stays free '
-                    'after the temporary frame logs (default 8)')
+    ap.add_argument(
+        '--jobs',
+        type=int,
+        default=2,
+        help='parallel runs; each ducktales.exe run writes a '
+        'temporary frame log of about 130 KB per frame (up to 1 GB) before it is compacted',
+    )
+    ap.add_argument(
+        '--min-free-gb',
+        type=float,
+        default=8,
+        help='refuse to start unless this much disk stays free ' 'after the temporary frame logs (default 8)',
+    )
     ap.add_argument('--reuse', action='store_true', help='compare existing logs in --out without running')
-    ap.add_argument('--trace-frame', type=int, help='also write both instruction traces of this frame next to the '
-                    'logs (*.trace.txt), for tools/mesen/trace_diff.py')
+    ap.add_argument(
+        '--trace-frame',
+        type=int,
+        help='also write both instruction traces of this frame next to the '
+        'logs (*.trace.txt), for tools/mesen/trace_diff.py',
+    )
     args = ap.parse_args()
 
     args.exe = ROOT / args.build / args.config / 'ducktales.exe'
@@ -238,7 +298,9 @@ def main():
         if not Path(p).exists():
             print(f'missing {p} (build/tools/mesen2 comes from tools/mesen/fetch_mesen2.py)', file=sys.stderr)
             sys.exit(2)
-    routes = [Path(r).resolve() for r in args.routes] if args.routes else sorted((ROOT / 'tests' / 'routes').glob('*.txt'))
+    routes = (
+        [Path(r).resolve() for r in args.routes] if args.routes else sorted((ROOT / 'tests' / 'routes').glob('*.txt'))
+    )
     # Mesen2 changes its working directory to its home folder: give it absolute paths only.
     out_dir = Path(args.out).resolve()
     args.rom = str(Path(args.rom).resolve())
@@ -246,9 +308,12 @@ def main():
     need = args.jobs * 140_000 * max((args.frames or route_frames(r)) for r in routes) * 1.2
     free = shutil.disk_usage(out_dir).free
     if not args.reuse and free - need < args.min_free_gb * 1e9:
-        print(f'not enough free disk space in {out_dir}: {free / 1e9:.1f} GB free, the temporary frame logs of '
-              f'{args.jobs} parallel runs need about {need / 1e9:.1f} GB and --min-free-gb {args.min_free_gb} must '
-              f'stay free (lower --jobs or --frames)', file=sys.stderr)
+        print(
+            f'not enough free disk space in {out_dir}: {free / 1e9:.1f} GB free, the temporary frame logs of '
+            f'{args.jobs} parallel runs need about {need / 1e9:.1f} GB and --min-free-gb {args.min_free_gb} must '
+            f'stay free (lower --jobs or --frames)',
+            file=sys.stderr,
+        )
         sys.exit(2)
 
     def mesen_log(route):
@@ -265,11 +330,18 @@ def main():
         runs = {}
         if not args.reuse:
             for route in routes:
-                runs[route, None] = pool.submit(run_mesen, args, route, frames_of(route), mesen_log(route),
-                                                out_dir / f'{route.stem}.{args.ram_init}.mesen.status')
+                runs[route, None] = pool.submit(
+                    run_mesen,
+                    args,
+                    route,
+                    frames_of(route),
+                    mesen_log(route),
+                    out_dir / f'{route.stem}.{args.ram_init}.mesen.status',
+                )
                 for align in args.align:
-                    runs[route, align] = pool.submit(run_ours, args, route, frames_of(route), ours_log(route, align),
-                                                     align)
+                    runs[route, align] = pool.submit(
+                        run_ours, args, route, frames_of(route), ours_log(route, align), align
+                    )
         for route in routes:
             frames = frames_of(route)
             try:
@@ -292,8 +364,10 @@ def main():
                 res = compare(ours, mesen, args.domains, frames, args.from_frame, args.ignore)
                 ok = all('error' not in res[d] and res[d]['first'] is None for d in gating)
                 failed |= not ok
-                print(f'{route.stem}: {"MATCH" if ok else "DIVERGES"} ({frames} frames, ram-init {args.ram_init}, '
-                      f'align {align})')
+                print(
+                    f'{route.stem}: {"MATCH" if ok else "DIVERGES"} ({frames} frames, ram-init {args.ram_init}, '
+                    f'align {align})'
+                )
                 print('\n'.join(describe(frames, args.from_frame, res, ours, mesen, args.show)))
                 sys.stdout.flush()
     sys.exit(1 if failed else 0)

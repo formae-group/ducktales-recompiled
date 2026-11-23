@@ -49,11 +49,19 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Changed
 
+- One code layout for every C, C++ and Python source: `.clang-format` (4 spaces, 120 columns,
+  braces always, no one-line statements) and Black, applied by `tools/format.py` (`--check` to
+  verify). The machine and every hash are unchanged.
 - The menu and the first-run screen are drawn by [formae-ui](https://gitlab.com/formae/formae-ui)
   0.1.0 (`external/formae-ui`), Formae's menu library extracted from them for the next ports. Their
   look and behaviour are unchanged: the 16 self-test PNGs are pixel-identical.
 - The application icon is now original artwork, a treasure chest.
 - The window build links the static MSVC runtime, so players need no Visual C++ redistributable.
+- The game keeps running behind the open menu on the native player, as in other PC ports; Settings,
+  General, *Pause game while menu is open* (`[Game] MenuPausesGame`, off by default) stops it, and
+  the Reset and Quit questions always pause it.
+- The window build is a Windows program: no console window opens beside the game. Started from a
+  terminal, it prints there; pipes and redirections work as before.
 - The README was rewritten as a technical overview with the supported ROM's hashes.
 - The pause menu no longer shows help and hint text.
 

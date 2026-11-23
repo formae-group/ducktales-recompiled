@@ -161,8 +161,8 @@ static void draw_slot(int slot)
     if (!animate(slot, script)) {
         return;
     }
-    uint16_t meta =
-        rom_pointer(DT_SPR_META_LO, DT_SPR_META_HI, rom_at(script, (uint8_t)((gObjects->animFrame[slot] & 0x7F) + 2)));
+    uint16_t meta = rom_pointer(DT_SPR_META_LO, DT_SPR_META_HI,
+                                rom_at(script, (uint8_t)((gObjects->animFrame[slot] & 0x7F) + 2)));
     Ram_SetU16(DT_ADDR_SPR_META, DT_ADDR_SPR_META + 1, meta);
     gSprX = gObjects->x[slot];
     gSprY = gObjects->y[slot];

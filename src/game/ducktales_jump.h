@@ -20,7 +20,7 @@ extern "C" {
 
 /* False (and nothing changes) outside DT_JUMP_SCALE_MIN..MAX. */
 bool dt_jump_set_scale(int percent);
-int  dt_jump_scale(void);
+int dt_jump_scale(void);
 /* Jumps the hook has rescaled since start. */
 uint64_t dt_jump_rescaled(void);
 

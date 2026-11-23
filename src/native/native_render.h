@@ -24,15 +24,15 @@
 extern "C" {
 #endif
 
-#define NV_WIDTH         256
-#define NV_HEIGHT        240
-#define NV_MAX_SEGMENTS  240
-#define NV_TABLE_LINE    0xFFFFu
-#define NV_NO_SPLIT      256
+#define NV_WIDTH        256
+#define NV_HEIGHT       240
+#define NV_MAX_SEGMENTS 240
+#define NV_TABLE_LINE   0xFFFFu
+#define NV_NO_SPLIT     256
 
 typedef enum {
-    NV_MIRROR_VERTICAL,     /* $2000/$2800 page 0, $2400/$2C00 page 1 (DuckTales) */
-    NV_MIRROR_HORIZONTAL,   /* $2000/$2400 page 0, $2800/$2C00 page 1 */
+    NV_MIRROR_VERTICAL,   /* $2000/$2800 page 0, $2400/$2C00 page 1 (DuckTales) */
+    NV_MIRROR_HORIZONTAL, /* $2000/$2400 page 0, $2800/$2C00 page 1 */
     NV_MIRROR_SINGLE_0,
     NV_MIRROR_SINGLE_1,
 } NvMirroring;
@@ -40,21 +40,21 @@ typedef enum {
 /* Control bits of a segment: $2000 bits 3-5 and $2001 as the PPU uses them. */
 enum {
     NV_CTRL_SPRITE_1000 = 0x08,
-    NV_CTRL_BG_1000     = 0x10,
+    NV_CTRL_BG_1000 = 0x10,
     NV_CTRL_SPRITE_8X16 = 0x20,
-    NV_MASK_GREYSCALE   = 0x01,
-    NV_MASK_BG_LEFT     = 0x02,
+    NV_MASK_GREYSCALE = 0x01,
+    NV_MASK_BG_LEFT = 0x02,
     NV_MASK_SPRITE_LEFT = 0x04,
-    NV_MASK_BG          = 0x08,
-    NV_MASK_SPRITES     = 0x10,
+    NV_MASK_BG = 0x08,
+    NV_MASK_SPRITES = 0x10,
 };
 
 typedef struct {
-    uint8_t  first_line;  /* 0-239, increasing from segment to segment; the first is 0 */
-    uint8_t  ctrl;        /* NV_CTRL_* */
-    uint8_t  mask;        /* $2001: NV_MASK_*, emphasis in bits 5-7 */
-    uint16_t x;           /* background X at column 0: horizontal nametable bit << 8 | coarse X << 3 | fine X */
-    uint16_t y;           /* background Y of first_line: vertical nametable bit << 8 | coarse Y (0-31) << 3 | fine Y */
+    uint8_t first_line; /* 0-239, increasing from segment to segment; the first is 0 */
+    uint8_t ctrl;       /* NV_CTRL_* */
+    uint8_t mask;       /* $2001: NV_MASK_*, emphasis in bits 5-7 */
+    uint16_t x;         /* background X at column 0: horizontal nametable bit << 8 | coarse X << 3 | fine X */
+    uint16_t y;         /* background Y of first_line: vertical nametable bit << 8 | coarse Y (0-31) << 3 | fine Y */
     /* The segment's last line, from this column on, shows the background at
      * X split_x + column and Y split_y (same encodings as x and y) instead:
      * writes that land during the line (the HUD split: $2005 changes fine X
@@ -64,19 +64,19 @@ typedef struct {
 } NvSegment;
 
 typedef struct {
-    uint8_t     chr[0x2000];
-    uint8_t     ciram[2][0x400];
+    uint8_t chr[0x2000];
+    uint8_t ciram[2][0x400];
     NvMirroring mirroring;
-    uint8_t     palette[32];
-    uint8_t     oam[256];
-    int         segment_count;
-    NvSegment   segment[NV_MAX_SEGMENTS];
+    uint8_t palette[32];
+    uint8_t oam[256];
+    int segment_count;
+    NvSegment segment[NV_MAX_SEGMENTS];
 } NvVideo;
 
 /* A sprite of a list that replaces the OAM (NvRenderOptions.sprites). table
  * is NV_TABLE_LINE (the line's $2000 bit 3) or 0x0000/0x1000 for 8x8 tiles. */
 typedef struct {
-    uint8_t  y, tile, attr, x;
+    uint8_t y, tile, attr, x;
     uint16_t table;
 } NvSprite;
 

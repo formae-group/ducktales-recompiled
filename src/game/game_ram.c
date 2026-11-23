@@ -19,7 +19,11 @@ uint8_t *gRam;
 
 #define MAX_DEPTH 8
 
-static struct { uint8_t *image; bool live; } s_stack[MAX_DEPTH];
+static struct {
+    uint8_t *image;
+    bool live;
+} s_stack[MAX_DEPTH];
+
 static int s_depth;
 static uint8_t s_live_image[GAME_RAM_SIZE];
 
@@ -53,22 +57,38 @@ void GameRam_Begin(void)
 
 void GameRam_End(void)
 {
-    if (!s_depth) return;
+    if (!s_depth) {
+        return;
+    }
     if (s_stack[s_depth - 1].live) {
         const uint8_t *live = cyc_cpu_ram();
-        for (uint16_t a = 0; a < GAME_RAM_SIZE; a++)
-            if (s_live_image[a] != live[a]) cyc_mod_poke(a, s_live_image[a]);
+        for (uint16_t a = 0; a < GAME_RAM_SIZE; a++) {
+            if (s_live_image[a] != live[a]) {
+                cyc_mod_poke(a, s_live_image[a]);
+            }
+        }
     }
     pop();
 }
 
-void GameRam_Enter(uint8_t *image) { push(image, false); }
+void GameRam_Enter(uint8_t *image)
+{
+    push(image, false);
+}
 
 void GameRam_Leave(void)
 {
-    if (s_depth) pop();
+    if (s_depth) {
+        pop();
+    }
 }
 
-bool GameRam_Open(void) { return s_depth > 0; }
+bool GameRam_Open(void)
+{
+    return s_depth > 0;
+}
 
-uint8_t Game_ReadRom(uint16_t addr) { return cyc_mod_peek(addr); }
+uint8_t Game_ReadRom(uint16_t addr)
+{
+    return cyc_mod_peek(addr);
+}

@@ -5,16 +5,37 @@ Reads the user's ROM locally; output is for investigation and is not committed.
     py -3 -I tools/disasm6502.py ROM BANK ADDR [--count N]
     BANK is the 16 KiB PRG bank mapped at $8000 (ignored for ADDR >= $C000).
 """
+
 import argparse
 from pathlib import Path
 
 MODES = {
-    'imp': 0, 'acc': 0, 'imm': 1, 'zp': 1, 'zpx': 1, 'zpy': 1, 'izx': 1, 'izy': 1,
-    'rel': 1, 'abs': 2, 'abx': 2, 'aby': 2, 'ind': 2,
+    'imp': 0,
+    'acc': 0,
+    'imm': 1,
+    'zp': 1,
+    'zpx': 1,
+    'zpy': 1,
+    'izx': 1,
+    'izy': 1,
+    'rel': 1,
+    'abs': 2,
+    'abx': 2,
+    'aby': 2,
+    'ind': 2,
 }
 FMT = {
-    'imp': '', 'acc': 'A', 'imm': '#$%02X', 'zp': '$%02X', 'zpx': '$%02X,X', 'zpy': '$%02X,Y',
-    'izx': '($%02X,X)', 'izy': '($%02X),Y', 'abs': '$%04X', 'abx': '$%04X,X', 'aby': '$%04X,Y',
+    'imp': '',
+    'acc': 'A',
+    'imm': '#$%02X',
+    'zp': '$%02X',
+    'zpx': '$%02X,X',
+    'zpy': '$%02X,Y',
+    'izx': '($%02X,X)',
+    'izy': '($%02X),Y',
+    'abs': '$%04X',
+    'abx': '$%04X,X',
+    'aby': '$%04X,Y',
     'ind': '($%04X)',
 }
 _T = """
@@ -47,7 +68,7 @@ class Rom:
         data = Path(path).read_bytes()
         if data[:4] != b'NES\x1a':
             raise SystemExit('not an iNES image')
-        self.prg = data[16:16 + data[4] * 0x4000]
+        self.prg = data[16 : 16 + data[4] * 0x4000]
         self.last = data[4] - 1
 
     def read(self, bank, addr):

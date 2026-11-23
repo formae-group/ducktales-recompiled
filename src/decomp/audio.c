@@ -82,18 +82,18 @@
 #define ID_STOP_FX    0xFE
 #define ID_STOP_MUSIC 0xFF
 
-#define MUTE_VOLUME   0x30 /* constant volume 0 */
-#define SWEEP_OFF     0x08
-#define CHANNELS_ON   0x0F
-#define LENGTH_LOAD   0x08
+#define MUTE_VOLUME    0x30 /* constant volume 0 */
+#define SWEEP_OFF      0x08
+#define CHANNELS_ON    0x0F
+#define LENGTH_LOAD    0x08
 #define NOTE_TIME_STEP 4
-#define FX_NOTE       0x80
-#define FX_RESTART    0x0F
-#define FX_END        0x06
-#define VOICE_MUSIC   REC_VOICE
-#define VOICE_EFFECT  (0x80 | REC_FX_VOICE)
-#define SLIDE_MUSIC   REC_SLIDE
-#define SLIDE_EFFECT  (0x80 | REC_FX_SLIDE)
+#define FX_NOTE        0x80
+#define FX_RESTART     0x0F
+#define FX_END         0x06
+#define VOICE_MUSIC    REC_VOICE
+#define VOICE_EFFECT   (0x80 | REC_FX_VOICE)
+#define SLIDE_MUSIC    REC_SLIDE
+#define SLIDE_EFFECT   (0x80 | REC_FX_SLIDE)
 
 static void apu_write(uint8_t reg, uint8_t value)
 {
@@ -294,26 +294,26 @@ static void Sound_Play(uint8_t id, uint8_t y)
 {
     Decomp_Enter(DT_CODE_SOUND_PLAY, id, 0, y);
     switch (id) {
-    case ID_SPEED:
-        gSpeed = (uint8_t)(y + 1);
-        return;
-    case ID_FADE:
-        gFade = y;
-        gFadeStep = 1;
-        gSndFrame &= 1;
-        return;
-    case ID_STOP_FX:
-        gBusy = 1;
-        gRecordOffset = 0;
-        stop_effect();
-        return;
-    case ID_STOP_MUSIC:
-        gBusy = 1;
-        gRecordOffset = 0;
-        stop_music();
-        return;
-    default:
-        break;
+        case ID_SPEED:
+            gSpeed = (uint8_t)(y + 1);
+            return;
+        case ID_FADE:
+            gFade = y;
+            gFadeStep = 1;
+            gSndFrame &= 1;
+            return;
+        case ID_STOP_FX:
+            gBusy = 1;
+            gRecordOffset = 0;
+            stop_effect();
+            return;
+        case ID_STOP_MUSIC:
+            gBusy = 1;
+            gRecordOffset = 0;
+            stop_music();
+            return;
+        default:
+            break;
     }
     uint16_t header = rom_word((uint16_t)(DT_TABLE_SOUNDS + (uint8_t)(id << 1)));
     Ram_SetU16(DT_ADDR_SND_HEADER, DT_ADDR_SND_HEADER + 1, header);
@@ -483,80 +483,80 @@ static bool music_command(uint8_t command)
 {
     dispatch(DT_TABLE_MUSIC_COMMANDS, command);
     switch (command) {
-    case 0x00:
-        *field(REC_TEMPO) = next_music_byte();
-        return true;
-    case 0x01:
-        *field(REC_SLIDE) = next_music_byte();
-        return true;
-    case 0x02:
-        gTemp = next_music_byte();
-        *field(REC_VOICE) = (*field(REC_VOICE) & 0x3F) | gTemp;
-        return true;
-    case 0x03: {
-        uint8_t voice = next_music_byte();
-        if (gChannel != CHANNEL_TRIANGLE) {
-            gTemp = voice;
-            voice = (*field(REC_VOICE) & 0xC0) | gTemp;
-        }
-        *field(REC_VOICE) = voice;
-        return true;
-    }
-    case 0x04: {
-        uint8_t count = next_music_byte();
-        if (count) {
-            gTemp = *field(REC_LOOP) & 0x7F;
-            if (count == gTemp) {
-                *field(REC_LOOP) &= 0x80;
-                set_field_word(REC_STREAM, (uint16_t)(field_word(REC_STREAM) + 2));
-                return true;
+        case 0x00:
+            *field(REC_TEMPO) = next_music_byte();
+            return true;
+        case 0x01:
+            *field(REC_SLIDE) = next_music_byte();
+            return true;
+        case 0x02:
+            gTemp = next_music_byte();
+            *field(REC_VOICE) = (*field(REC_VOICE) & 0x3F) | gTemp;
+            return true;
+        case 0x03: {
+            uint8_t voice = next_music_byte();
+            if (gChannel != CHANNEL_TRIANGLE) {
+                gTemp = voice;
+                voice = (*field(REC_VOICE) & 0xC0) | gTemp;
             }
-            gTemp++;
-            *field(REC_LOOP) = (*field(REC_LOOP) & 0x80) | gTemp;
+            *field(REC_VOICE) = voice;
+            return true;
         }
-        uint8_t lo = next_music_byte();
-        uint8_t hi = next_music_byte();
-        set_field_word(REC_STREAM, (uint16_t)(hi << 8 | lo));
-        return true;
-    }
-    case 0x05: {
-        uint8_t transpose = next_music_byte();
-        Ram_SetU16(DT_ADDR_SND_TEMP, DT_ADDR_SND_TEMP + 1, DT_TABLE_PERIODS);
-        set_field_word(REC_PERIODS, (uint16_t)(DT_TABLE_PERIODS + (uint8_t)(transpose << 1)));
-        return true;
-    }
-    case 0x06: {
-        uint8_t note = next_music_byte();
-        set_note_time(Game_ReadRom((uint16_t)(DT_TABLE_DOTTED_LENGTHS + (note >> 5))));
-        play_note(note);
-        return false;
-    }
-    case 0x07: {
-        uint8_t envelope = next_music_byte();
-        *field(REC_ENVELOPE) = envelope;
-        *field(REC_ENV_LEVEL) = next_music_byte();
-        gTemp = envelope;
-        if (envelope & 0x7F) {
-            restart_envelope();
+        case 0x04: {
+            uint8_t count = next_music_byte();
+            if (count) {
+                gTemp = *field(REC_LOOP) & 0x7F;
+                if (count == gTemp) {
+                    *field(REC_LOOP) &= 0x80;
+                    set_field_word(REC_STREAM, (uint16_t)(field_word(REC_STREAM) + 2));
+                    return true;
+                }
+                gTemp++;
+                *field(REC_LOOP) = (*field(REC_LOOP) & 0x80) | gTemp;
+            }
+            uint8_t lo = next_music_byte();
+            uint8_t hi = next_music_byte();
+            set_field_word(REC_STREAM, (uint16_t)(hi << 8 | lo));
+            return true;
         }
-        return true;
-    }
-    case 0x08: {
-        uint8_t instrument = next_music_byte();
-        gTemp = instrument;
-        *field(REC_NOTE) = (*field(REC_NOTE) & 0xE0) | instrument;
-        if (!effect_owns_channel()) {
-            load_instrument(instrument);
+        case 0x05: {
+            uint8_t transpose = next_music_byte();
+            Ram_SetU16(DT_ADDR_SND_TEMP, DT_ADDR_SND_TEMP + 1, DT_TABLE_PERIODS);
+            set_field_word(REC_PERIODS, (uint16_t)(DT_TABLE_PERIODS + (uint8_t)(transpose << 1)));
+            return true;
         }
-        return true;
-    }
-    default:
-        set_field_word(REC_STREAM, 0);
-        gPriority &= 0xF0;
-        if (!effect_owns_channel()) {
-            mute_channel(gApuReg, gChannel);
+        case 0x06: {
+            uint8_t note = next_music_byte();
+            set_note_time(Game_ReadRom((uint16_t)(DT_TABLE_DOTTED_LENGTHS + (note >> 5))));
+            play_note(note);
+            return false;
         }
-        return false;
+        case 0x07: {
+            uint8_t envelope = next_music_byte();
+            *field(REC_ENVELOPE) = envelope;
+            *field(REC_ENV_LEVEL) = next_music_byte();
+            gTemp = envelope;
+            if (envelope & 0x7F) {
+                restart_envelope();
+            }
+            return true;
+        }
+        case 0x08: {
+            uint8_t instrument = next_music_byte();
+            gTemp = instrument;
+            *field(REC_NOTE) = (*field(REC_NOTE) & 0xE0) | instrument;
+            if (!effect_owns_channel()) {
+                load_instrument(instrument);
+            }
+            return true;
+        }
+        default:
+            set_field_word(REC_STREAM, 0);
+            gPriority &= 0xF0;
+            if (!effect_owns_channel()) {
+                mute_channel(gApuReg, gChannel);
+            }
+            return false;
     }
 }
 
@@ -566,23 +566,23 @@ static void read_music_events(void)
     for (;;) {
         uint8_t event = next_music_byte();
         switch (event & 0xF0) {
-        case 0x00:
-            if (!music_command(event)) {
+            case 0x00:
+                if (!music_command(event)) {
+                    return;
+                }
+                continue;
+            case 0x20:
+                read_music_events();
+                gTemp = (uint8_t)((event & 0x07) << 5);
+                *field(REC_NOTE) = (*field(REC_NOTE) & 0x1F) | gTemp;
                 return;
-            }
-            continue;
-        case 0x20:
-            read_music_events();
-            gTemp = (uint8_t)((event & 0x07) << 5);
-            *field(REC_NOTE) = (*field(REC_NOTE) & 0x1F) | gTemp;
-            return;
-        case 0x30:
-            *field(REC_LOOP) |= 0x80;
-            continue;
-        default:
-            set_note_time(Game_ReadRom((uint16_t)(DT_TABLE_NOTE_LENGTHS + (event >> 5))));
-            play_note(event);
-            return;
+            case 0x30:
+                *field(REC_LOOP) |= 0x80;
+                continue;
+            default:
+                set_note_time(Game_ReadRom((uint16_t)(DT_TABLE_NOTE_LENGTHS + (event >> 5))));
+                play_note(event);
+                return;
         }
     }
 }
@@ -834,49 +834,49 @@ static void effect_tick(void)
         }
         dispatch(DT_TABLE_EFFECT_COMMANDS, event);
         switch (event) {
-        case 0x00:
-            gEffectWait = next_effect_byte();
-            break;
-        case 0x01:
-            *field(REC_FX_SLIDE) = next_effect_byte();
-            break;
-        case 0x02:
-            gTemp = next_effect_byte();
-            *field(REC_FX_VOICE) = (*field(REC_FX_VOICE) & 0x3F) | gTemp;
-            break;
-        case 0x03: {
-            uint8_t voice = next_effect_byte();
-            if (gChannel != CHANNEL_TRIANGLE) {
-                gTemp = voice;
-                voice = (*field(REC_FX_VOICE) & 0xC0) | gTemp;
-            }
-            *field(REC_FX_VOICE) = voice;
-            break;
-        }
-        case 0x04: {
-            uint8_t count = next_effect_byte();
-            if (count && count == gEffectLoop) {
-                gEffectLoop = 0;
-                Ram_SetU16(DT_ADDR_SND_EFFECT_STREAM, DT_ADDR_SND_EFFECT_STREAM + 1,
-                           (uint16_t)(Ram_GetU16(DT_ADDR_SND_EFFECT_STREAM, DT_ADDR_SND_EFFECT_STREAM + 1) + 2));
+            case 0x00:
+                gEffectWait = next_effect_byte();
+                break;
+            case 0x01:
+                *field(REC_FX_SLIDE) = next_effect_byte();
+                break;
+            case 0x02:
+                gTemp = next_effect_byte();
+                *field(REC_FX_VOICE) = (*field(REC_FX_VOICE) & 0x3F) | gTemp;
+                break;
+            case 0x03: {
+                uint8_t voice = next_effect_byte();
+                if (gChannel != CHANNEL_TRIANGLE) {
+                    gTemp = voice;
+                    voice = (*field(REC_FX_VOICE) & 0xC0) | gTemp;
+                }
+                *field(REC_FX_VOICE) = voice;
                 break;
             }
-            if (count) {
-                gEffectLoop++;
+            case 0x04: {
+                uint8_t count = next_effect_byte();
+                if (count && count == gEffectLoop) {
+                    gEffectLoop = 0;
+                    Ram_SetU16(DT_ADDR_SND_EFFECT_STREAM, DT_ADDR_SND_EFFECT_STREAM + 1,
+                               (uint16_t)(Ram_GetU16(DT_ADDR_SND_EFFECT_STREAM, DT_ADDR_SND_EFFECT_STREAM + 1) + 2));
+                    break;
+                }
+                if (count) {
+                    gEffectLoop++;
+                }
+                gTemp = next_effect_byte();
+                RAM_U8(DT_ADDR_SND_EFFECT_STREAM + 1) = next_effect_byte();
+                RAM_U8(DT_ADDR_SND_EFFECT_STREAM) = gTemp;
+                break;
             }
-            gTemp = next_effect_byte();
-            RAM_U8(DT_ADDR_SND_EFFECT_STREAM + 1) = next_effect_byte();
-            RAM_U8(DT_ADDR_SND_EFFECT_STREAM) = gTemp;
-            break;
-        }
-        case 0x05:
-            for (gTemp = REC_VIBRATO; gTemp != REC_VIB_TIMER; gTemp++) {
-                *field(gTemp) = next_effect_byte();
-            }
-            break;
-        default:
-            end_effect_on_channel();
-            return;
+            case 0x05:
+                for (gTemp = REC_VIBRATO; gTemp != REC_VIB_TIMER; gTemp++) {
+                    *field(gTemp) = next_effect_byte();
+                }
+                break;
+            default:
+                end_effect_on_channel();
+                return;
         }
     }
 }
