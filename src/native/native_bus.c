@@ -19,6 +19,10 @@
  *                 begins its next pass ($FF38). A VBlank while a task runs
  *                 is a lag frame (NATIVE_LAG_FAITHFUL) or is held back until
  *                 the task yields (NATIVE_LAG_NONE)
+ *   hook sites    game.toml [[mod_function_hook]] sites run their enabled
+ *                 callbacks (native_hooks.c) at the instruction boundary, as
+ *                 the cycle host's scheduler does
+ *   save states   native_state_save / native_state_load: CPU, bus and video
  */
 #include "native/native_runtime.h"
 
@@ -115,6 +119,7 @@ bool native_load_ines(const uint8_t *image, size_t size, char *err, size_t err_s
 
 void native_power_on(void)
 {
+    native_hooks_init();
     for (unsigned i = 0; i < sizeof ram; i++) {
         bool bit1_clear = (i & 2) == 0, upper = (i & 0x1F) >= 0x10;
         ram[i] = bit1_clear != upper ? 0xF0 : 0x0F;
@@ -215,10 +220,31 @@ uint32_t native_frame_number(void) { return frame_number; }
 uint64_t native_fallback_instructions(void) { return fallback_instructions; }
 uint64_t native_unmodeled_reads(void) { return unmodeled_reads; }
 
+const uint8_t *native_prg(size_t *size)
+{
+    *size = prg_size;
+    return prg;
+}
+
 static inline uint8_t prg_byte(uint16_t addr)
 {
     unsigned bank = addr >= 0xC000 ? prg_banks - 1 : prg_bank;
     return prg[(size_t)bank * 0x4000 + (addr & 0x3FFF)];
+}
+
+bool native_peek(uint16_t addr, uint8_t *value)
+{
+    if (addr < 0x2000) *value = ram[addr & 0x7FF];
+    else if (addr >= 0x8000 && prg) *value = prg_byte(addr);
+    else return false;
+    return true;
+}
+
+bool native_poke(uint16_t addr, uint8_t value)
+{
+    if (addr >= 0x2000) return false;
+    ram[addr & 0x7FF] = value;
+    return true;
 }
 
 /* ---- hw.h ---- */
@@ -343,6 +369,15 @@ void native_run_frame(void)
     hw_frame_done = false;
     if (cpu.power_on) cpu_power_on_sequence();
     while (!hw_frame_done) {
+        if (cyc_hooks_armed) {
+            cyc_hook_hit = false;
+            if (native_hooks_due(cpu.pc)) {
+                uint16_t at = cpu.pc;
+                native_hooks_fire(at);
+                if (cpu.pc == at) cyc_hook_passed = at;
+                continue;
+            }
+        }
         if (cpu.jammed) {
             cpu_jam_cycle();
         } else if (cyc_native_has(cpu.pc)) {
@@ -351,10 +386,102 @@ void native_run_frame(void)
             fallback_instructions++;
             cpu_interp_step();
         }
+        cyc_hook_passed = -1;
     }
     video_frame_end(cycles);
     lag_last = lag_cur;
     memset(&lag_cur, 0, sizeof lag_cur);
     lag_cur.overrun_frame = -1;
     frame_number++;
+}
+
+/* ---- save states ---- */
+
+typedef struct {
+    uint8_t  ram[0x800];
+    uint64_t cycles, fallback_instructions, unmodeled_reads;
+    uint64_t defer_start, overrun_vblank, overrun_nmi, nmi_entry;
+    uint32_t prg_bank, frame_number, defer_polls;
+    int32_t  overrun_frame;
+    uint8_t  data_bus, dma_pending, dma_page, strobe;
+    uint8_t  buttons[2], shift[2];
+    uint8_t  task_running, deferring, defer_released, overrun_open, in_nmi, nmi_seen;
+    NativeLagFrame lag_cur, lag_last;
+    Cpu6502  cpu;
+} BusState;
+
+size_t native_state_save(uint8_t *out, size_t cap)
+{
+    size_t video = video_state_save(NULL, 0), need = sizeof(BusState) + video;
+    if (!out || cap < need) return need;
+    BusState s;
+    memset(&s, 0, sizeof s);
+    memcpy(s.ram, ram, sizeof ram);
+    s.cycles = cycles;
+    s.fallback_instructions = fallback_instructions;
+    s.unmodeled_reads = unmodeled_reads;
+    s.defer_start = defer_start;
+    s.overrun_vblank = overrun_vblank;
+    s.overrun_nmi = overrun_nmi;
+    s.nmi_entry = nmi_entry;
+    s.prg_bank = prg_bank;
+    s.frame_number = frame_number;
+    s.defer_polls = defer_polls;
+    s.overrun_frame = overrun_frame;
+    s.data_bus = data_bus;
+    s.dma_pending = dma_pending;
+    s.dma_page = dma_page;
+    s.strobe = strobe;
+    memcpy(s.buttons, buttons, 2);
+    memcpy(s.shift, shift, 2);
+    s.task_running = task_running;
+    s.deferring = deferring;
+    s.defer_released = defer_released;
+    s.overrun_open = overrun_open;
+    s.in_nmi = in_nmi;
+    s.nmi_seen = nmi_seen;
+    s.lag_cur = lag_cur;
+    s.lag_last = lag_last;
+    s.cpu = cpu;
+    memcpy(out, &s, sizeof s);
+    video_state_save(out + sizeof s, video);
+    return need;
+}
+
+bool native_state_load(const uint8_t *in, size_t size)
+{
+    if (size != native_state_save(NULL, 0)) return false;
+    BusState s;
+    memcpy(&s, in, sizeof s);
+    if (s.prg_bank >= prg_banks || !video_state_load(in + sizeof s, size - sizeof s)) return false;
+    memcpy(ram, s.ram, sizeof ram);
+    cycles = s.cycles;
+    fallback_instructions = s.fallback_instructions;
+    unmodeled_reads = s.unmodeled_reads;
+    defer_start = s.defer_start;
+    overrun_vblank = s.overrun_vblank;
+    overrun_nmi = s.overrun_nmi;
+    nmi_entry = s.nmi_entry;
+    prg_bank = s.prg_bank;
+    frame_number = s.frame_number;
+    defer_polls = s.defer_polls;
+    overrun_frame = s.overrun_frame;
+    data_bus = s.data_bus;
+    dma_pending = s.dma_pending != 0;
+    dma_page = s.dma_page;
+    strobe = s.strobe;
+    memcpy(buttons, s.buttons, 2);
+    memcpy(shift, s.shift, 2);
+    task_running = s.task_running != 0;
+    deferring = s.deferring != 0;
+    defer_released = s.defer_released != 0;
+    overrun_open = s.overrun_open != 0;
+    in_nmi = s.in_nmi != 0;
+    nmi_seen = s.nmi_seen != 0;
+    lag_cur = s.lag_cur;
+    lag_last = s.lag_last;
+    cpu = s.cpu;
+    hw_frame_done = false;
+    cyc_hook_passed = -1;
+    return true;
 }

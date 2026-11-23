@@ -56,6 +56,9 @@ uint8_t Game_ReadRom(uint16_t addr);
  * Game_ResetRomView. */
 void Game_MapperWrite(uint16_t addr, uint8_t value);
 void Game_ResetRomView(void);
+/* The bank of the view (-1: as mapped), to put it back after a nested run. */
+int Game_RomView(void);
+void Game_SetRomView(int bank);
 
 #ifdef __cplusplus
 }

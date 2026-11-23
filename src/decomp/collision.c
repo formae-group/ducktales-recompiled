@@ -93,7 +93,7 @@ static uint8_t Bg_SlipperyTile(int slot)
  * objects (bit 0 ends the probe). */
 static uint8_t Bg_SpecialTile(int slot)
 {
-    uint8_t kind = Level_MetatileAt() >> 4;
+    uint8_t kind = Level_MetatileAt((uint8_t)slot) >> 4;
     gScratch0 = rom((uint16_t)(DT_CODE_SPECIAL_LO + kind));
     gScratch1 = rom((uint16_t)(DT_CODE_SPECIAL_HI + kind));
     uint16_t handler = (uint16_t)(gScratch1 << 8 | gScratch0);
@@ -130,6 +130,7 @@ static uint8_t Bg_SpecialTile(int slot)
  * $10. Other objects than Scrooge stop at the first solid point. */
 void Bg_Probe(int slot)
 {
+    Decomp_Enter(DT_CODE_BG_PROBE, 0, (uint8_t)slot, 0);
     gObjects->flags[slot] &= (uint8_t)~FLAG_BEHIND;
     gProbeHits = 0;
     for (;;) {
@@ -145,6 +146,7 @@ void Bg_Probe(int slot)
 /* $D49A: after a hit moving right, back world X out of the tile. */
 void Bg_SnapRight(int slot)
 {
+    Decomp_Enter(DT_CODE_SNAP_RIGHT, 0, (uint8_t)slot, 0);
     gProbeX &= 0x0F;
     Obj_SetWorldX(slot, (uint16_t)(Obj_GetWorldX(slot) - gProbeX));
 }
@@ -152,18 +154,21 @@ void Bg_SnapRight(int slot)
 /* $D4B2: after a hit moving left, push world X to the next tile. */
 void Bg_SnapLeft(int slot)
 {
+    Decomp_Enter(DT_CODE_SNAP_LEFT, 0, (uint8_t)slot, 0);
     Obj_SetWorldX(slot, (uint16_t)(Obj_GetWorldX(slot) + 16 - (gProbeX & 0x0F)));
 }
 
 /* $D4C8: after a head hit, push Y down below the tile. */
 void Bg_SnapHead(int slot)
 {
+    Decomp_Enter(DT_CODE_SNAP_HEAD, 0, (uint8_t)slot, 0);
     gObjects->y[slot] = (uint8_t)(gObjects->y[slot] + 16 - (gProbeY & 0x0F));
 }
 
 /* $D4D6: after a feet hit, put Y on top of the tile. */
 void Bg_SnapFeet(int slot)
 {
+    Decomp_Enter(DT_CODE_SNAP_FEET, 0, (uint8_t)slot, 0);
     gProbeY &= 0x0F;
     gObjects->y[slot] = (uint8_t)(gObjects->y[slot] - gProbeY);
 }

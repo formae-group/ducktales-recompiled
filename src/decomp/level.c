@@ -72,6 +72,7 @@ static void Bank_Select(uint8_t bank)
 /* $C7B0: rows, stride and screen grid of a map (0-4 the lands). */
 void Map_LoadHeader(uint8_t map)
 {
+    Decomp_Enter(DT_CODE_MAP_HEADER, 0, map, 0);
     gMapRows = rom((uint16_t)(DT_CODE_MAP_ROWS + map));
     gMapStride = rom((uint16_t)(DT_CODE_MAP_STRIDE + map));
     Ram_SetU16(DT_ADDR_MAP_GRID, DT_ADDR_MAP_GRID + 1,
@@ -83,6 +84,7 @@ void Map_LoadHeader(uint8_t map)
  * scratch bytes. */
 void Level_ScreenPointer(uint8_t index)
 {
+    Decomp_Enter(DT_CODE_SCREEN_POINTER, 0, 0, index);
     uint8_t id = Map_Cell(index);
     gScratch0 = (uint8_t)(id >> 2);
     gScratch1 = (uint8_t)(id << 3);
@@ -138,6 +140,7 @@ static uint8_t Level_Substitute(int quadrant, uint8_t metatile)
  * the queue never uploads those tiles. Leaves the tileset bank mapped. */
 static void Level_DecodeBlock(void)
 {
+    Decomp_Enter(DT_CODE_DECODE_BLOCK, 0, 0, 0);
     uint8_t pos = gStreamPos;
     gBlockCell = (uint8_t)((pos & 7) << 3 | (pos >> 3 & 7));
     gScratch0 = pos;
@@ -166,8 +169,9 @@ static void Level_DecodeBlock(void)
 
 /* $CDE2: the metatile under a probed point (collision.c): screen page $03
  * of the current row, cell $05, quadrant $04. Keeps the bank mapped. */
-uint8_t Level_MetatileAt(void)
+uint8_t Level_MetatileAt(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_METATILE_AT, 0, x, 0);
     uint8_t bank = gBank;
     uint8_t screen = gScratch3;
     uint8_t row = gMapRow;
@@ -206,12 +210,14 @@ static void Vram_Upload(uint16_t queue)
 
 void Vram_FlushQueue(void)
 {
+    Decomp_Enter(DT_CODE_VRAM_FLUSH, 0, 0, 0);
     gVramQueueReady = 0;
     Vram_Upload(DT_ADDR_VRAM_QUEUE);
 }
 
 static void Vram_FlushTileEdits(void)
 {
+    Decomp_Enter(DT_CODE_TILE_EDIT_FLUSH, 0, 0, 0);
     gTileEditReady = 0;
     Vram_Upload(DT_ADDR_TILE_EDIT_QUEUE);
 }
@@ -293,6 +299,7 @@ static uint8_t Scroll_QueueBlock(void)
  * the HUD covers, queues nothing. */
 void Scroll_StreamBlocks(void)
 {
+    Decomp_Enter(DT_CODE_STREAM_BLOCKS, 0, 0, 0);
     for (;;) {
         Level_ScreenPointer(gStreamScreen);
         bool queued = false;
@@ -416,6 +423,7 @@ static void Camera_FollowScript(void)
  * lets the camera move, then stream the columns it uncovered. */
 void Camera_Update(void)
 {
+    Decomp_Enter(DT_CODE_CAMERA_UPDATE, 0, 0, 0);
     if (gScene & 2) {
         Camera_FollowScript();
         return;
@@ -438,6 +446,7 @@ void Camera_Update(void)
  * offset for none, left, or both). */
 static void Level_DrawStartColumns(void)
 {
+    Decomp_Enter(DT_CODE_DRAW_START, 0, 0, 0);
     gStreamScreen = gCameraScreen;
     Map_LoadHeader(gLand);
     uint8_t layout = 0;
@@ -469,6 +478,7 @@ static void Level_DrawStartColumns(void)
 /* $C78F, Land Select: draw the camera's whole screen. */
 static void Level_DrawScreen(void)
 {
+    Decomp_Enter(DT_CODE_DRAW_SCREEN, 0, 0, 0);
     gStreamScreen = gCameraScreen;
     Map_LoadHeader(gLand);
     gStreamPos = 0;
@@ -485,6 +495,7 @@ static void Level_DrawScreen(void)
  * columns around him. */
 static void Level_PlaceFromEntry(void)
 {
+    Decomp_Enter(DT_CODE_PLACE_FROM_ENTRY, 0, 0, 0);
     uint8_t index = gRespawn & 0x1F;
     gScratch0 = index;
     uint16_t entry = (uint16_t)(DT_CODE_RESPAWN_ENTRIES + (uint8_t)(index * 9));
@@ -519,6 +530,7 @@ static void Level_PlaceFromEntry(void)
  * page where the row has two), then load the row's sprite palette 3. */
 static void Chr_StreamRow(void)
 {
+    Decomp_Enter(DT_CODE_ROW_CHR_STREAM, 0, 0, 0);
     if (gChrStream & 0x80) return;
     uint8_t row = (uint8_t)(rom((uint16_t)(DT_CODE_ROW_CHR_BASE + gLand)) + gMapRow);
     if (!gChrStream) {
@@ -578,6 +590,7 @@ static void Chr_StreamRow(void)
  * the arena waits for frames, so it runs as the original. */
 static void Boss_CheckTrigger(void)
 {
+    Decomp_Enter(DT_CODE_BOSS_TRIGGER, 0, 0, 0);
     uint8_t land = gLand;
     if (gMapRow != rom((uint16_t)(DT_CODE_BOSS_ROW + land))) return;
     uint8_t dir = rom((uint16_t)(DT_CODE_BOSS_SCROLL + land)) & 2;
@@ -597,6 +610,7 @@ static void Boss_CheckTrigger(void)
  * the top attribute bytes is kept out of the queue). */
 static void Level_TileEdit(int slot)
 {
+    Decomp_Enter(DT_CODE_TILE_EDIT, 0, (uint8_t)slot, 0);
     uint8_t y = gObjects->unk_0740[slot];
     uint8_t x = gObjects->worldX[slot];
     uint8_t page = gObjects->worldPage[slot];
@@ -644,6 +658,9 @@ static void Run_DrawScreen(Regs *r) { (void)r; Level_DrawScreen(); }
 static void Run_PlaceFromEntry(Regs *r) { (void)r; Level_PlaceFromEntry(); }
 static void Run_VramFlush(Regs *r) { (void)r; Vram_FlushQueue(); }
 static void Run_TileEditFlush(Regs *r) { (void)r; Vram_FlushTileEdits(); }
+static void Run_ScreenPointer(Regs *r) { Level_ScreenPointer(r->y); }
+static void Run_DecodeBlock(Regs *r) { (void)r; Level_DecodeBlock(); }
+static void Run_MetatileAt(Regs *r) { r->a = Level_MetatileAt(r->x); }
 static void Run_CameraUpdate(Regs *r) { (void)r; Camera_Update(); }
 static void Run_BossCheckTrigger(Regs *r) { (void)r; Boss_CheckTrigger(); }
 static void Run_TileEdit(Regs *r) { Level_TileEdit(r->x); }
@@ -660,6 +677,9 @@ const DecompRoutine gLevelRoutines[] = {
     { DT_CODE_CAMERA_UPDATE, "ducktales.decomp.EFE2", "Camera_Update", Run_CameraUpdate, OUT_HW },
     { DT_CODE_BOSS_TRIGGER, "ducktales.decomp.CF93", "Boss_CheckTrigger", Run_BossCheckTrigger, 0 },
     { DT_CODE_TILE_EDIT, "ducktales.decomp.F574", "Level_TileEdit", Run_TileEdit, OUT_HW },
+    { DT_CODE_SCREEN_POINTER, NULL, "Level_ScreenPointer", Run_ScreenPointer, 0 },
+    { DT_CODE_DECODE_BLOCK, NULL, "Level_DecodeBlock", Run_DecodeBlock, 0 },
+    { DT_CODE_METATILE_AT, NULL, "Level_MetatileAt", Run_MetatileAt, OUT_A | OUT_X },
     { DT_CODE_ROW_CHR_STREAM, "ducktales.decomp.C42C", "Chr_StreamRow", Run_ChrStreamRow, OUT_HW },
 };
 const int gLevelRoutineCount = sizeof gLevelRoutines / sizeof gLevelRoutines[0];

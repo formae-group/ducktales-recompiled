@@ -15,7 +15,7 @@
 
 void Map_LoadHeader(uint8_t map);
 void Level_ScreenPointer(uint8_t index);
-uint8_t Level_MetatileAt(void);
+uint8_t Level_MetatileAt(uint8_t x);
 void Scroll_StreamBlocks(void);
 void Vram_FlushQueue(void);
 void Camera_Update(void);

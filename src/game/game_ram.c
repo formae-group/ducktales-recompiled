@@ -99,3 +99,7 @@ void Game_MapperWrite(uint16_t addr, uint8_t value)
 }
 
 void Game_ResetRomView(void) { s_view_bank = -1; }
+
+int Game_RomView(void) { return s_view_bank; }
+
+void Game_SetRomView(int bank) { s_view_bank = bank; }

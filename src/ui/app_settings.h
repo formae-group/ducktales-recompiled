@@ -46,6 +46,15 @@ void app_bind_text(int row, bool pad, char *out, size_t cap);   /* "Unbound" whe
 const char *app_bind_set(int row, bool pad, int value);
 void app_bind_defaults(void);
 
+/* ---- the menu's own settings (config.ini [Game] MenuOpacity, MenuControllerNav) ---- */
+typedef struct {
+    int opacity;   /* the menu's background over the game, percent 0..100 */
+    int pad_nav;   /* bool: a controller moves through the menu */
+} AppMenuPrefs;
+
+void app_menu_prefs_get(AppMenuPrefs *out);
+void app_menu_prefs_set(const AppMenuPrefs *p);
+
 /* ---- the game's own settings were changed in the menu ---- */
 void app_settings_changed(void);
 /* Write config.ini now if anything changed (the menu calls it on close). */
