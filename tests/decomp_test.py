@@ -178,6 +178,12 @@ POKES = [
         },
         ['Obj_Pickpocket', 'Obj_StealMoney'],
     ),
+    # kind $1A of variant 0 next to Scrooge: it jumps out and falls back with both splashes
+    (
+        'pit-splash',
+        {0x709: 0xA0, 0x719: 0x1A, 0x729: 0x50, 0x739: 0x00, 0x609: 0x80, 0x6B9: 0x00, 0x699: 0x00},
+        ['Obj_PitJumper', 'Obj_PitSplashOut', 'Obj_PitSplashIn'],
+    ),
 ]
 
 # name, route, options, routines that must be compared

@@ -489,6 +489,9 @@
 #define DT_CODE_KIND_FLYER           0x916C /* kind $0D */
 #define DT_CODE_KIND_SWING           0x9225 /* kind $0E */
 #define DT_CODE_KIND_SWOOPER         0x9430 /* kind $11 */
+#define DT_CODE_KIND_PIT_JUMPER      0x9956 /* kind $1A */
+#define DT_CODE_PIT_SPLASH_OUT       0x9A1E /* kind $1A: splash out of the pit */
+#define DT_CODE_PIT_SPLASH_IN        0x9A2A /* kind $1A: splash back into the pit */
 #define DT_CODE_KIND_PICKPOCKET      0xACBE /* kind $32 */
 #define DT_CODE_PICKPOCKET_WALK      0xAD56 /* kind $32: walk in the slot's direction */
 #define DT_CODE_PICKPOCKET_STEAL     0xAD6B /* kind $32: take 1 from the money's third digit */

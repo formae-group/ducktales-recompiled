@@ -53,6 +53,7 @@
 #define SFX_POUNCER_FLY  0x32
 #define SFX_POUNCE       0x1F
 #define SFX_POUNCER_LAND 0x20
+#define SFX_SPLASH       0x21
 
 #define gObjCursor        RAM_U8(DT_ADDR_OBJ_CURSOR)
 #define gScratch0         RAM_U8(DT_ADDR_SCRATCH0)
@@ -73,6 +74,7 @@
 #define gRandom(i)        RAM_U8(DT_ADDR_RANDOM + (i))
 #define gPaletteUpload    RAM_U8(DT_ADDR_PALETTE_REQUEST)
 #define gHeldSlot         RAM_U8(DT_ADDR_HELD_SLOT)
+#define gPaletteShown(i)  RAM_U8(DT_ADDR_PALETTE_SHOWN + (i))
 
 /* ---- shared pieces of the handlers ---- */
 
@@ -2412,6 +2414,112 @@ static void Obj_Pickpocket(uint8_t x)
     Obj_SetVelocityY(x, 0x0400);
 }
 
+/* The splash of kind $1A: palette entries $1E/$1F of the sprites, sound
+ * $21, a palette upload, and a splash (pose $37, kind 0, freed when its
+ * animation ends) at Y $BC in the highest free slot, if any. */
+static void Obj_PitSplash(uint8_t x, uint8_t c2, uint8_t c3)
+{
+    gPaletteShown(0x1E) = c2;
+    gPaletteShown(0x1F) = c3;
+    Sound_Request(SFX_SPLASH, x);
+    gPaletteUpload = 0xFF;
+    uint8_t y = 0x0F;
+    while (gObjects->state[y] & OBJ_STATUS_LIVE) {
+        if (--y == 0) {
+            return;
+        }
+    }
+    gObjects->state[y] = 0xA8;
+    gObjects->flags[y] = 0xA8;
+    gObjects->y[y] = 0xBC;
+    gObjects->worldX[y] = gObjects->worldX[x];
+    gObjects->worldPage[y] = gObjects->worldPage[x];
+    gObjects->action[y] = 0x37;
+    ResetAnim(y);
+    gObjects->hitbox[y] = 0;
+    gObjects->kind[y] = OBJ_KIND_NONE;
+}
+
+/* $9A1E: the splash as the jumper leaves the pit. */
+static void Obj_PitSplashOut(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_PIT_SPLASH_OUT, 0, x, 0);
+    Obj_PitSplash(x, 0x19, 0x27);
+}
+
+/* $9A2A: the splash as it falls back in. */
+static void Obj_PitSplashIn(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_PIT_SPLASH_IN, 0, x, 0);
+    Obj_PitSplash(x, 0x21, 0x17);
+}
+
+/* Kind $1A ($9956): an enemy that, once Scrooge is within 32 px, jumps out
+ * of a pit from the bottom of the screen (Y $EF) at the velocity its
+ * variant ($06B0) gives, falls back, and jumps again 120 frames after it
+ * passes Y $F0, with a splash at the frame counts ($06D0) its variant
+ * gives. It harms him (hitbox $91) only on screen above Y $D0. A hit beats
+ * it. */
+static void Obj_PitJumper(uint8_t x)
+{
+    static const uint16_t jumps[3] = { 0x0652, 0x07A5, 0x07A5 };
+    static const uint8_t splashOut[3] = { 0x08, 0x07, 0x00 };
+    static const uint8_t splashIn[3] = { 0x2A, 0x37, 0x00 };
+
+    Decomp_Enter(DT_CODE_KIND_PIT_JUMPER, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0) {
+        Obj_Defeat(x);
+        return;
+    }
+    gObjects->hitbox[x] = 0;
+    if (gObjects->y[x] != 0 && gObjects->y[x] < 0xD0) {
+        gObjects->hitbox[x] = 0x91;
+    }
+    if (Step(x) == 0) {
+        if (Obj_DistanceX(x) >= 0x20) {
+            return;
+        }
+        gObjects->vdir[x] = 0;
+        gObjects->unk_06C0[x] = 0;
+        gObjects->unk_06D0[x] = 0;
+        gObjects->y[x] = 0xEF;
+        Obj_SetVelocityY(x, jumps[gObjects->timer[x]]);
+        gObjects->animTimer[x] = 0x80;
+        gObjects->animFrame[x] = 0;
+        gObjects->state[x]++;
+    }
+    gObjects->unk_06D0[x]++;
+    uint8_t variant = gObjects->timer[x];
+    if (gObjects->vdir[x] == 0) {
+        Obj_ApplyVelocityY(x);
+        Obj_ApplyGravity(x);
+        if (gObjects->vy[x] & 0x80) {
+            gObjects->vdir[x]++;
+            Obj_SetVelocityY(x, 0);
+            gObjects->animFrame[x] = 1;
+        }
+        if (splashOut[variant] != 0 && splashOut[variant] == gObjects->unk_06D0[x]) {
+            Obj_PitSplashOut(x);
+        }
+        return;
+    }
+    if (gObjects->unk_06C0[x] == 0) {
+        Obj_ApplyGravity(x);
+        Obj_ApplyVelocityY(x);
+        if (gObjects->y[x] >= 0xF0) {
+            gObjects->yFrac[x] = 0;
+            gObjects->y[x] = 0;
+            gObjects->unk_06C0[x] = 0x78;
+        }
+    } else if (--gObjects->unk_06C0[x] == 0) {
+        gObjects->state[x] &= 0xF0;
+        return;
+    }
+    if (splashIn[variant] != 0 && splashIn[variant] == gObjects->unk_06D0[x]) {
+        Obj_PitSplashIn(x);
+    }
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -2498,6 +2606,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_POUNCER:
             Obj_Pouncer(slot);
+            break;
+        case OBJ_KIND_PIT_JUMPER:
+            Obj_PitJumper(slot);
             break;
         case OBJ_KIND_LEAPER:
             Obj_Leaper(slot);
@@ -2740,6 +2851,21 @@ static void Run_StealMoney(Regs *r)
     Obj_StealMoney(r->x);
 }
 
+static void Run_PitJumper(Regs *r)
+{
+    Obj_PitJumper(r->x);
+}
+
+static void Run_PitSplashOut(Regs *r)
+{
+    Obj_PitSplashOut(r->x);
+}
+
+static void Run_PitSplashIn(Regs *r)
+{
+    Obj_PitSplashIn(r->x);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -2909,6 +3035,9 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_PIT_JUMPER, NULL, "Obj_PitJumper", Run_PitJumper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_PIT_SPLASH_OUT, NULL, "Obj_PitSplashOut", Run_PitSplashOut, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_PIT_SPLASH_IN, NULL, "Obj_PitSplashIn", Run_PitSplashIn, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_PICKPOCKET, NULL, "Obj_Pickpocket", Run_Pickpocket, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_PICKPOCKET_WALK, NULL, "Obj_PickpocketWalk", Run_PickpocketWalk, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_PICKPOCKET_STEAL, NULL, "Obj_StealMoney", Run_StealMoney, 0, .bank = DT_BANK_OBJECTS },
