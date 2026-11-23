@@ -93,6 +93,7 @@ POKES = [
     ),
     ('select-poor', {0x34A: 0x01}, ['Player_SelectRefill'], {POKE_FRAME + 8: 'LEFT+SELECT', POKE_FRAME + 10: 'LEFT'}),
     ('select-full', {}, ['Player_SelectRefill'], {POKE_FRAME + 8: 'LEFT+SELECT', POKE_FRAME + 10: 'LEFT'}),
+    ('hud-total', {0xAB: 0x01}, ['Hud_RefreshTotal']),
 ]
 
 # name, route, options, routines that must be compared

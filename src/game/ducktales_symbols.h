@@ -261,6 +261,11 @@
 #define DT_ADDR_ROW_SCROLL_ADDR    0x00ED /* mid-frame $2006 low byte of the row scroll (hypothesis) */
 #define DT_ADDR_ROW_SCROLL_ADDR_HI 0x00EE /* its high byte (hypothesis) */
 #define DT_ADDR_SPRITE0_Y          0x00FA /* sprite-0 Y of the HUD split (verified, memory-map.md) */
+#define DT_ADDR_RANDOM             0x00C0 /* random generator, 4 bytes, stepped by $C2E6 (code) */
+#define DT_ADDR_SCROLL_Y           0x00FC /* top-of-frame scroll Y (verified, memory-map.md) */
+#define DT_ADDR_SCROLL_X           0x00FD /* top-of-frame scroll X (verified) */
+#define DT_ADDR_PPU_CTRL           0x00FF /* PPUCTRL shadow (verified) */
+#define DT_PPU_CTRL                0x2000
 #define DT_ADDR_TILESET_BANK       0x00F7 /* bank of the land's blocks and metatiles (verified) */
 #define DT_ADDR_BG_OFF_BELOW_SPLIT 0x00F8 /* background off below the split (verified, code) */
 #define DT_ADDR_HUD_MONEY_PACKET   0x0320 /* VRAM packet of the money: PPU address, count, digits (verified) */
@@ -310,6 +315,8 @@
 
 #define DT_CODE_BOSS_TRIGGER  0xCF93
 #define DT_CODE_LAND_SELECT   0xD630
+#define DT_CODE_MAIN_TASK     0xD4E6 /* the main task's start: the title */
+#define DT_CODE_TITLE_FRAME   0xD5D7
 #define DT_CODE_LAND_LOAD     0xD79B
 #define DT_CODE_LAND_TABLES   0xD9CA
 #define DT_CODE_LAND_PALETTE  0xD9F5 /* X = palette set * 16 */
@@ -351,6 +358,21 @@
 #define DT_FLOW_RESPAWN_DRAWN      0xDDAB
 #define DT_FLOW_GAME_OVER_NEXT     0xDEDE
 #define DT_FLOW_LAND_EXIT_NEXT     0xDF1E
+#define DT_FLOW_TITLE_START        0xD4F1
+#define DT_FLOW_TITLE_FADED        0xD500
+#define DT_FLOW_TITLE_BLACK        0xD509
+#define DT_FLOW_TITLE_SCREEN_OFF   0xD50C
+#define DT_FLOW_TITLE_FILLED       0xD51F
+#define DT_FLOW_TITLE_STRINGS      0xD52F
+#define DT_FLOW_TITLE_CHR          0xD534
+#define DT_FLOW_TITLE_SHOWN        0xD58B
+#define DT_FLOW_TITLE_FADE_IN      0xD58E
+#define DT_FLOW_TITLE_LIT          0xD591
+#define DT_FLOW_TITLE_READY        0xD59F
+#define DT_FLOW_TITLE_LOOP         0xD5D1
+#define DT_FLOW_TITLE_FRAME_DONE   0xD609
+#define DT_FLOW_BOSS_STREAMED      0xD01E
+#define DT_FLOW_BOSS_NEXT          0xD038
 #define DT_FLOW_LOAD_FADED         0xD79E
 #define DT_FLOW_LOAD_BLACK         0xD7A5
 #define DT_FLOW_LOAD_SCREEN_OFF    0xD7A8
@@ -375,6 +397,17 @@
 #define DT_DATA_HUD_TOTAL         0xDAE0 /* the TOTAL packet's start value */
 #define DT_DATA_HUD_HP            0xDAED /* the HP dot records */
 #define DT_HUD_HP_TEMPLATE_LEN    21
+#define DT_DATA_TITLE_OBJECTS     0xD621 /* the title's two objects: action, Y, X each */
+#define DT_DATA_DIFFICULTY_X      0xD629 /* X of the difficulty cursor (slot 1), per difficulty */
+#define DT_DATA_DIFFICULTY_STEP   0xD62C /* cursor step and its wrap: down, up */
+#define DT_DATA_HUD_LIVES         0xDB02 /* the HUD lives group as the title starts it */
+#define DT_HUD_LIVES_LEN          13
+#define DT_DATA_BOSS_ROW          0xD04D /* per land: map row of the boss trigger (levels.md) */
+#define DT_DATA_BOSS_PAGE         0xD052 /* per land: Scrooge's X page that fires it */
+#define DT_DATA_BOSS_DIR          0xD057 /* per land: scroll direction into the arena, pad bits */
+#define DT_DATA_BOSS_CAMERA_STEP  0xD05C /* 16-bit camera step per frame: right, left */
+#define DT_DATA_BOSS_X_STEP       0xD060 /* 16-bit X step of Scrooge (fraction first): right, left */
+#define DT_DATA_BOSS_AHEAD        0xD064 /* 16-bit offset added to his X before the page test: right, left */
 #define DT_DATA_HUD_TIME_GROUP    0xDB0F /* the HUD time group as a land starts it */
 #define DT_HUD_TIME_GROUP_LEN     29
 #define DT_DATA_LAND_TIME         0xDB2C /* per land: start time hundreds and tens */
@@ -505,11 +538,6 @@
 #define DT_CODE_SPECIAL_SLIPPERY      0xD1B1
 #define DT_CODE_SPECIAL_PIT           0xD1BF
 #define DT_CODE_SPECIAL_MARK_SLIPPERY 0xD1D1
-#define DT_CODE_BOSS_TRIGGER          0xCF93
-#define DT_CODE_BOSS_ROW              0xD04D /* boss trigger: row by land */
-#define DT_CODE_BOSS_PAGE             0xD052 /* boss trigger: Scrooge's X page by land */
-#define DT_CODE_BOSS_SCROLL           0xD057 /* boss trigger: scroll direction by land (move-dir bits) */
-#define DT_CODE_BOSS_LOOK_AHEAD       0xD064 /* 16-bit offset added to Scrooge's X by direction & 2 */
 #define DT_CODE_TILE_EDIT             0xF574
 #define DT_CODE_TILE_EDIT_METATILE    0xF653 /* replacement metatile by land * 4 + kind */
 #define DT_CODE_TILE_EDIT_HI          0xF67F /* PPU address high by tile row / 32 px */

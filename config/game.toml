@@ -143,6 +143,108 @@ addr = 0xEBB4
 length = 8
 crc32 = 0xDB4C6AB4
 
+# Camera, scrolling and level (src/decomp/level.c, collision.c). The sites of
+# $C71D, $C830, $EFE2, $CF93 and $C42C also stop the isolated runs of the game
+# flow's task code, which hands off to them.
+
+# Map_LoadHeader
+[[mod_function_hook]]
+id = "ducktales.decomp.C7B0"
+addr = 0xC7B0
+length = 8
+crc32 = 0x9E741C48
+
+# Scroll_StreamBlocks
+[[mod_function_hook]]
+id = "ducktales.decomp.C830"
+addr = 0xC830
+length = 8
+crc32 = 0x30386A7B
+
+# Level_DrawStartColumns
+[[mod_function_hook]]
+id = "ducktales.decomp.C71D"
+addr = 0xC71D
+length = 8
+crc32 = 0xD475BCE7
+
+# Level_DrawScreen
+[[mod_function_hook]]
+id = "ducktales.decomp.C78F"
+addr = 0xC78F
+length = 8
+crc32 = 0xD475BCE7
+
+# Vram_FlushQueue
+[[mod_function_hook]]
+id = "ducktales.decomp.C139"
+addr = 0xC139
+length = 8
+crc32 = 0x85FE5E41
+
+# Vram_FlushTileEdits
+[[mod_function_hook]]
+id = "ducktales.decomp.C15E"
+addr = 0xC15E
+length = 8
+crc32 = 0xB2C4A951
+
+# Camera_Update
+[[mod_function_hook]]
+id = "ducktales.decomp.EFE2"
+addr = 0xEFE2
+length = 8
+crc32 = 0x1944514D
+
+# Bg_Probe
+[[mod_function_hook]]
+id = "ducktales.decomp.D120"
+addr = 0xD120
+length = 8
+crc32 = 0x7F96AD47
+
+# Bg_SnapRight
+[[mod_function_hook]]
+id = "ducktales.decomp.D49A"
+addr = 0xD49A
+length = 8
+crc32 = 0xF2A30A12
+
+# Bg_SnapLeft
+[[mod_function_hook]]
+id = "ducktales.decomp.D4B2"
+addr = 0xD4B2
+length = 8
+crc32 = 0x92C72164
+
+# Bg_SnapHead
+[[mod_function_hook]]
+id = "ducktales.decomp.D4C8"
+addr = 0xD4C8
+length = 8
+crc32 = 0x34B02AD0
+
+# Bg_SnapFeet
+[[mod_function_hook]]
+id = "ducktales.decomp.D4D6"
+addr = 0xD4D6
+length = 8
+crc32 = 0x18A40AC9
+
+# Level_TileEdit
+[[mod_function_hook]]
+id = "ducktales.decomp.F574"
+addr = 0xF574
+length = 8
+crc32 = 0xB3B7F5F4
+
+# Chr_StreamRow
+[[mod_function_hook]]
+id = "ducktales.decomp.C42C"
+addr = 0xC42C
+length = 8
+crc32 = 0xC14ABEE7
+
 # Game flow (src/decomp/flow.c, docs/decompilation.md "Task code"): the
 # entries of the main task's decompiled code that original code reaches (its
 # resume points have no site: the RTS observer starts them), then the
@@ -182,6 +284,13 @@ id = "ducktales.decomp.DD52"
 addr = 0xDD52
 length = 8
 crc32 = 0x6C7EAD65
+
+# MainTask
+[[mod_function_hook]]
+id = "ducktales.decomp.D4E6"
+addr = 0xD4E6
+length = 8
+crc32 = 0x53CB8BF8
 
 # LandLoad
 [[mod_function_hook]]
@@ -275,112 +384,3 @@ length = 8
 crc32 = 0xD1E4F218
 
 # END game flow
-
-# Camera, scrolling and level (src/decomp/level.c, collision.c). The sites of
-# $C71D, $C830, $EFE2, $CF93 and $C42C also stop the isolated runs of the game
-# flow's task code, which hands off to them.
-
-# Map_LoadHeader
-[[mod_function_hook]]
-id = "ducktales.decomp.C7B0"
-addr = 0xC7B0
-length = 8
-crc32 = 0x9E741C48
-
-# Scroll_StreamBlocks
-[[mod_function_hook]]
-id = "ducktales.decomp.C830"
-addr = 0xC830
-length = 8
-crc32 = 0x30386A7B
-
-# Level_DrawStartColumns
-[[mod_function_hook]]
-id = "ducktales.decomp.C71D"
-addr = 0xC71D
-length = 8
-crc32 = 0xD475BCE7
-
-# Level_DrawScreen
-[[mod_function_hook]]
-id = "ducktales.decomp.C78F"
-addr = 0xC78F
-length = 8
-crc32 = 0xD475BCE7
-
-# Vram_FlushQueue
-[[mod_function_hook]]
-id = "ducktales.decomp.C139"
-addr = 0xC139
-length = 8
-crc32 = 0x85FE5E41
-
-# Vram_FlushTileEdits
-[[mod_function_hook]]
-id = "ducktales.decomp.C15E"
-addr = 0xC15E
-length = 8
-crc32 = 0xB2C4A951
-
-# Camera_Update
-[[mod_function_hook]]
-id = "ducktales.decomp.EFE2"
-addr = 0xEFE2
-length = 8
-crc32 = 0x1944514D
-
-# Bg_Probe
-[[mod_function_hook]]
-id = "ducktales.decomp.D120"
-addr = 0xD120
-length = 8
-crc32 = 0x7F96AD47
-
-# Bg_SnapRight
-[[mod_function_hook]]
-id = "ducktales.decomp.D49A"
-addr = 0xD49A
-length = 8
-crc32 = 0xF2A30A12
-
-# Bg_SnapLeft
-[[mod_function_hook]]
-id = "ducktales.decomp.D4B2"
-addr = 0xD4B2
-length = 8
-crc32 = 0x92C72164
-
-# Bg_SnapHead
-[[mod_function_hook]]
-id = "ducktales.decomp.D4C8"
-addr = 0xD4C8
-length = 8
-crc32 = 0x34B02AD0
-
-# Bg_SnapFeet
-[[mod_function_hook]]
-id = "ducktales.decomp.D4D6"
-addr = 0xD4D6
-length = 8
-crc32 = 0x18A40AC9
-
-# Boss_CheckTrigger
-[[mod_function_hook]]
-id = "ducktales.decomp.CF93"
-addr = 0xCF93
-length = 8
-crc32 = 0x54FB3F07
-
-# Level_TileEdit
-[[mod_function_hook]]
-id = "ducktales.decomp.F574"
-addr = 0xF574
-length = 8
-crc32 = 0xB3B7F5F4
-
-# Chr_StreamRow
-[[mod_function_hook]]
-id = "ducktales.decomp.C42C"
-addr = 0xC42C
-length = 8
-crc32 = 0xC14ABEE7

@@ -7,6 +7,10 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- The game flow is decompiled as task code (`src/decomp/flow.c`, docs/decompilation.md "Task
+  code"): the title and difficulty select, the land load, the frame loop with pause, death, warps,
+  respawn, game over and land exit, the HUD timer and refreshes, and the boss trigger with the
+  arena scroll. Its resume points start from the RTS observer, with no hook site.
 - `tests/decomp_test.py --changed <ranges> --from-state --span N` checks only the routes that run
   a decompiled routine, from the golden save state before it: 32 s instead of 689 s for a routine
   the routes reach late.
