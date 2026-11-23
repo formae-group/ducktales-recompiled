@@ -36,6 +36,9 @@ from PIL import Image, ImageChops
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
+from romfile import default_rom  # noqa: E402
+
+sys.path.insert(0, str(ROOT / 'tools'))
 from render_map import Rom  # noqa: E402
 from render_oam import hud_allowed, hud_in_oam, hud_records, log_records, slot_order, slot_sprites, build  # noqa: E402
 
@@ -182,7 +185,7 @@ def main():
     ap.add_argument('--build', default='build/headless')
     ap.add_argument('--dev-build')
     ap.add_argument('--config', default='Release')
-    ap.add_argument('--rom', default=str(ROOT / 'roms' / 'DuckTales (USA).nes'))
+    ap.add_argument('--rom', default=default_rom())
     args = ap.parse_args()
     exe = ROOT / args.build / args.config / 'ducktales.exe'
     rom = Rom(args.rom)

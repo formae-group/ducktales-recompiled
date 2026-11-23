@@ -7,11 +7,14 @@ Runs the headless build with --trace-frame/--trace-out and scans the per-cycle t
 """
 
 import argparse
+import sys
 import subprocess
 import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from romfile import default_rom  # noqa: E402
 
 
 def main():
@@ -21,7 +24,7 @@ def main():
     ap.add_argument('--input', required=True)
     ap.add_argument('--reads', action='store_true', help='also report reads')
     ap.add_argument('--exe', default=str(ROOT / 'build' / 'headless' / 'Release' / 'ducktales.exe'))
-    ap.add_argument('--rom', default=str(ROOT / 'roms' / 'DuckTales (USA).nes'))
+    ap.add_argument('--rom', default=default_rom())
     a = ap.parse_args()
     want = {int(x, 16) for x in a.addrs.split(',')}
     with tempfile.TemporaryDirectory() as tmp:

@@ -240,9 +240,10 @@ considered:
 ### formae-ui
 
 Everything in the menu that is not DuckTales' own lives in
-[formae-ui](https://gitlab.com/formae/formae-ui), Formae's menu library, pinned as the submodule
-`external/formae-ui` (v0.1.0, MIT) so the next ports share the same look and behaviour. It was
-extracted from this menu without changing a pixel. The split:
+[formae-ui](https://github.com/formae-group/formae-ui), Formae's menu library, pinned as the submodule
+`external/formae-ui` (v0.2.0, MIT) so the next ports share the same look and behaviour. It was
+extracted from this menu without changing a pixel; v0.2.0 added the reorderable list, notes and
+inline buttons the Mod Menu uses. The split:
 
 | formae-ui (`formae/ui.h`) | DuckTales (`src/ui/app_ui.cpp`) |
 |---|---|
@@ -265,6 +266,9 @@ src/ui/app_rom.[ch]      ROM check, import and the data folder (UTF-8 paths, _w*
 src/ui/app_settings.[ch] config.ini copy, live settings, bindings, menu shortcut, menu settings
 src/ui/app_present.[ch]  the picture the window shows: HUD split, overscan, scaling, aspect, pacing
 src/ui/app_ui.cpp        the first-run screen and the menu on formae-ui and Dear ImGui
+src/mods/core/           mods, game-agnostic: catalogue, archives, codecs, Lua sandbox (docs/mods.md)
+src/mods/nes/            mods for NES games: tile keys, .pal palettes
+src/mods/ducktales/      mods for DuckTales: assets, events, fields, audio
 external/formae-ui       the menu library (submodule, docs/architecture.md "formae-ui")
 assets/brand/formae.png  the About page's logo, embedded by formae_ui_embed_file
 ```
@@ -373,6 +377,25 @@ first-run screen, in the menu's colours and fonts, writes its two screens, and `
 - both selftests.
 
 `app_rom_test` (headless build) checks the ROM import code.
+
+## Mods (`src/mods/`)
+
+Mods are described in [docs/mods.md](mods.md). Every host links the same files, and the native
+player calls the same entry points as the cycle host:
+
+| Where | What it calls |
+|---|---|
+| start (cycle host `ducktales_host.c`, native player `native_window.c`) | `app_mods_use_player_folders` (window only: `[Mods]` and the data folder), `app_mods_start` with the PRG |
+| power-on and state load | `app_mods_reset` (forget the sounds playing) |
+| frame end | `app_mods_audio_frame_end` (request ids from RAM), `app_mods_scripts_frame` ("frame" handlers, queued `dt.set` writes, toasts, hot reload, stores) |
+| audio | the mute mask before the synth or the APU mix, `app_mods_audio_mix` after it |
+| picture | `app_mods_video_apply` and `app_mods_draw_overlay` (toasts) from the stock compositor (`ducktales_sprites.c`); `app_mods_color` for the pixels `app_present.c` redraws |
+| menu | the Settings, Mods page in `app_ui.cpp` (catalogue, order, rescan, restart note, script errors) |
+
+Asset mods only read the machine. Scripts write it only through `dt.set` (declared fields, at the
+frame's end) and event cancels. Scripts register handlers on the game events
+(`include/ducktales/events.h`), so a site's hook is enabled only while a script handles it, exactly
+as for the enhancements; with mods off nothing is registered.
 
 ## Developer diagnostics
 

@@ -25,6 +25,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from romfile import default_rom  # noqa: E402
+
 sys.path.insert(0, str(ROOT / 'tools'))
 from framelog import frames  # noqa: E402
 from route_seg import hp_dots  # noqa: E402
@@ -172,7 +175,7 @@ def main():
     ap.add_argument('--prefix', default='st')
     ap.add_argument('--jobs', type=int, default=8)
     ap.add_argument('--exe', default=str(ROOT / 'build' / 'headless' / 'Release' / 'ducktales.exe'))
-    ap.add_argument('--rom', default=str(ROOT / 'roms' / 'DuckTales (USA).nes'))
+    ap.add_argument('--rom', default=default_rom())
     ap.add_argument(
         '--add',
         action='append',
