@@ -61,6 +61,24 @@
  * results, makes its device writes, spends the original's cycles up to the
  * stop and jumps there. Inside an isolated call every other site lets the
  * original run.
+ *
+ * Device access (Decomp_BusWrite, Decomp_BusRead, Decomp_BusLoad; routines
+ * marked OUT_HW). The C records its writes and its side-effect reads; replace
+ * mode makes them on the bus after storing the RAM, spread over the
+ * original's cycles, and check mode makes them on an isolated copy of the
+ * machine and compares CIRAM, palette, OAM, CHR RAM, the PRG bank and every
+ * device register the machine lists (cyc_hw_state_dump) but the CPU bus
+ * fields and the two PPUMASK bits that show the previous bus value until two
+ * dots after a $2001 store (no clock runs in a scope, so they never settle
+ * there). A read whose value the C needs (Decomp_BusLoad: the controllers)
+ * is made at once with the operations before it: in the C's scope in check
+ * mode, for real in replace mode, each spaced as an absolute load is.
+ *
+ * Routines of the switchable window ($8000-$BFFF) match their site only with
+ * their bank (DecompRoutine.bank) mapped. A replaced routine that an NMI
+ * interrupts while it spends the original's cycles owes the rest; the NMI
+ * handler's exit (DT_SITE_NMI_EXIT) spends it, so the interrupted code
+ * resumes at the console's time.
  */
 #include "decomp/decomp.h"
 
@@ -83,10 +101,12 @@
 extern uint64_t hw_isolated_io_writes;
 
 #define MAX_ROUTINES     256
-#define MAX_BUS_OPS      8192
+#define MAX_BUS_OPS      16384
 #define MAX_STORES       8
 #define FRAME_END_MARGIN 32
 #define SCOPE_OP_GAP     8
+#define LOAD_GAP         3
+#define REGS_TEXT        0x4000
 
 typedef struct {
     uint64_t calls, compared, original;
@@ -117,11 +137,17 @@ static BusOp s_ops[MAX_BUS_OPS];
 static int s_nops, s_ops_in_scope;
 
 typedef struct {
-    uint64_t ciram, palette, chr;
+    uint64_t ciram, palette, chr, oam, regs;
     unsigned bank;
 } HwState;
 
 static HwState s_orig_hw;
+static char s_orig_regs[REGS_TEXT], s_c_regs[REGS_TEXT];
+static FILE *s_dump;
+static int s_played, s_loads;
+static uint64_t s_early, s_nmi_debt;
+static bool s_regs_text;
+static uint8_t s_c_bank, s_handoff_bank;
 static uint8_t s_cur_s;
 static bool s_handoff_set;
 static uint16_t s_handoff;
@@ -136,7 +162,8 @@ static int s_stores;
 
 typedef struct {
     uint16_t start, stop_pc;
-    uint8_t start_s, call_s, stop_s;
+    uint8_t start_s, call_s, stop_s, stop_bank;
+    uint8_t ret[2]; /* the isolated call's return address, where the RTS observer left it */
     bool fixup, stop_armed, stopped, returned;
     CycModRegs regs;
     uint64_t entry_cycles, cycles, io;
@@ -167,6 +194,9 @@ void Decomp_BusWrite(uint16_t addr, uint8_t value)
 {
     record(addr, value, true);
     Game_MapperWrite(addr, value);
+    if (Game_RomView() >= 0) {
+        s_c_bank = (uint8_t)Game_RomView();
+    }
 }
 
 void Decomp_BusRead(uint16_t addr)
@@ -204,6 +234,44 @@ static uint64_t fnv(const uint8_t *p, size_t n)
     return h;
 }
 
+static bool device_line_compared(const char *line)
+{
+    return strncmp(line, "hw.", 3) && strncmp(line, "ppu.greyscale ", 14) && strncmp(line, "ppu.emphasis ", 13);
+}
+
+/* The machine's device registers as text, the lines compared. */
+static void device_regs(char *regs)
+{
+    if (!s_dump && !(s_dump = tmpfile())) {
+        fail("cannot open a scratch file for the device state", 0);
+    }
+    rewind(s_dump);
+    cyc_hw_state_dump(s_dump);
+    fputc(0, s_dump);
+    fflush(s_dump);
+    rewind(s_dump);
+    char line[512];
+    size_t used = 0;
+    while (fgets(line, sizeof line, s_dump) && line[0]) {
+        size_t len = strlen(line);
+        if (device_line_compared(line) && used + len + 1 <= REGS_TEXT) {
+            memcpy(regs + used, line, len);
+            used += len;
+        }
+    }
+    regs[used] = 0;
+}
+
+/* The device registers the text of device_regs lists, and the cartridge's
+ * bank registers, as one hash: the same field tables nesrecomp dumps. */
+static uint64_t device_hash(void)
+{
+    uint64_t h[4] = { hw_cart_state_hash(0), ppu_state_hash(0), apu_state_hash(0),
+                      (uint64_t)hw_extra_timing.extra_scanlines | (uint64_t)hw_extra_timing.line << 16 |
+                          (uint64_t)hw_extra_timing.active << 32 };
+    return fnv((const uint8_t *)h, sizeof h);
+}
+
 static HwState hw_state(void)
 {
     size_t n = 0;
@@ -213,6 +281,8 @@ static HwState hw_state(void)
     s.palette = fnv(cyc_ppu_palette(), 32);
     const uint8_t *chr = cyc_chr_ram(&n);
     s.chr = fnv(chr, n);
+    s.oam = fnv(cyc_ppu_oam(), 256);
+    s.regs = device_hash();
     s.bank = hw_prg_bank4(0x8000);
     return s;
 }
@@ -258,7 +328,40 @@ Regs Decomp_CallP(uint16_t routine, uint8_t a, uint8_t x, uint8_t y, uint8_t p)
 
 void Decomp_RunOriginal(void)
 {
+    if (s_loads) {
+        fail("a routine gave its call to the original after a device load", s_top->addr);
+    }
     s_run_original = true;
+}
+
+/* A read the C needs the value of, made with the operations before it: in
+ * the C's scope in check mode, on the machine in replace mode. */
+uint8_t Decomp_BusLoad(uint16_t addr)
+{
+    if (s_top->task) {
+        fail("task code reads a device", addr);
+    }
+    s_loads++;
+    uint8_t value;
+    if (s_mode == DECOMP_CHECK) {
+        if (!s_scope) {
+            if (!cyc_mod_isolate_begin()) {
+                fail("cannot open an isolated scope", addr);
+            }
+            s_scope = true;
+        }
+        play_ops(s_ops_in_scope, (uint64_t)(s_nops - s_ops_in_scope + 1) * SCOPE_OP_GAP, addr);
+        value = cpu_read(addr, 0);
+        record(addr, value, false);
+        s_ops_in_scope = s_nops;
+        return value;
+    }
+    uint64_t gap = (uint64_t)(s_nops - s_played + 1) * LOAD_GAP;
+    s_early += play_ops(s_played, gap, s_top->addr);
+    value = cpu_read(addr, 0);
+    record(addr, value, false);
+    s_played = s_nops;
+    return value;
 }
 
 void Decomp_Push(uint8_t value)
@@ -301,6 +404,7 @@ void Decomp_Handoff(uint16_t routine, uint16_t resume, uint8_t uses)
         Decomp_PushReturn(resume);
     }
     s_handoff = routine;
+    s_handoff_bank = s_c_bank;
     s_handoff_uses = uses;
     s_handoff_set = true;
 }
@@ -318,6 +422,7 @@ static void record_store(uint16_t addr, uint8_t value)
 void Decomp_SelectBank(uint8_t bank)
 {
     Decomp_Call(DT_CODE_BANK_SELECT, bank, 0, 0);
+    s_c_bank = bank;
     record_store((uint16_t)(DT_CODE_BANK_TABLE + bank), bank);
 }
 
@@ -350,7 +455,9 @@ static void run_c(const DecompRoutine *rt, const CycModRegs *in, Regs *out)
     s_scope = false;
     s_top = rt;
     s_top_entered = false;
-    s_nops = s_ops_in_scope = 0;
+    s_nops = s_ops_in_scope = s_played = s_loads = 0;
+    s_early = 0;
+    s_c_bank = (uint8_t)(hw_prg_bank4(0x8000) >> 2);
     s_cur_s = in->s;
     s_handoff_set = false;
     s_stores = 0;
@@ -395,6 +502,9 @@ static uint64_t run_original(const DecompRoutine *rt, const CycModRegs *in, CycM
     memcpy(s_orig, cyc_cpu_ram(), GAME_RAM_SIZE);
     if (rt->out & OUT_HW) {
         s_orig_hw = hw_state();
+        if (s_regs_text) {
+            device_regs(s_orig_regs);
+        }
     }
     cyc_mod_isolate_end();
     return returned ? after.cycles - before.cycles : 0;
@@ -404,14 +514,19 @@ static uint64_t run_original(const DecompRoutine *rt, const CycModRegs *in, CycM
  * least the one that polls interrupts. */
 static uint64_t spare_cycles(uint64_t cycles)
 {
-    return cycles > (uint64_t)s_nops ? cycles - (uint64_t)s_nops : 1;
+    uint64_t used = (uint64_t)s_nops + s_early;
+    return cycles > used ? cycles - used : 1;
 }
 
+/* Stops early when an NMI comes: the rest is spent when the handler returns
+ * (on_nmi_exit), so the interrupted code resumes at the console's time. */
 static void spend_cycles(uint16_t addr, uint64_t cycles)
 {
-    while (cycles-- > 1) {
+    while (cycles > 1 && !cpu.nmi_edge) {
         (void)cpu_read(addr, 0);
+        cycles--;
     }
+    s_nmi_debt += cycles - 1;
     (void)cpu_read(addr, CYC_POLL | CYC_DONE);
 }
 
@@ -479,29 +594,49 @@ static void report(const DecompRoutine *rt, const CycModRegs *in, const char *ca
 
 /* The C's bus operations made on a copy of the machine at entry must leave
  * the PPU's memories and the PRG bank as the original left them. */
-static void check_hw(const DecompRoutine *rt, uint64_t cycles)
+/* Check mode's hardware verdict. The register hashes differ also when only
+ * the fields device_regs leaves out do; then both sides' register texts are
+ * compared, the original's from a second run of it. */
+static void check_hw(const DecompRoutine *rt, const CycModRegs *in, uint64_t cycles)
 {
-    HwState c;
-    if (s_nops) {
-        if (!cyc_mod_isolate_begin()) {
-            fail("cannot open an isolated scope", rt->addr);
-        }
-        play_ops(0, spare_cycles(cycles), rt->addr);
-        c = hw_state();
-        cyc_mod_isolate_end();
-    } else {
-        c = hw_state();
+    if (!cyc_mod_isolate_begin()) {
+        fail("cannot open an isolated scope", rt->addr);
+    }
+    play_ops(0, spare_cycles(cycles), rt->addr);
+    HwState c = hw_state();
+    bool regs_same = c.regs == s_orig_hw.regs;
+    if (!regs_same) {
+        device_regs(s_c_regs);
+    }
+    cyc_mod_isolate_end();
+    if (!regs_same) {
+        CycModRegs o;
+        s_regs_text = true;
+        run_original(rt, in, &o, false);
+        s_regs_text = false;
+        regs_same = !strcmp(s_orig_regs, s_c_regs);
     }
     if (c.ciram == s_orig_hw.ciram && c.palette == s_orig_hw.palette && c.chr == s_orig_hw.chr &&
-        c.bank == s_orig_hw.bank) {
+        c.oam == s_orig_hw.oam && regs_same && c.bank == s_orig_hw.bank) {
         return;
     }
-    fprintf(stderr, "[decomp] MISMATCH %s ($%04X) at frame %llu: hardware differs:%s%s%s%s (%d bus operations)\n",
+    fprintf(stderr, "[decomp] MISMATCH %s ($%04X) at frame %llu: hardware differs:%s%s%s%s%s%s (%d bus operations)\n",
             rt->name, rt->addr, (unsigned long long)cyc_ring_frame, c.ciram != s_orig_hw.ciram ? " CIRAM" : "",
             c.palette != s_orig_hw.palette ? " palette" : "", c.chr != s_orig_hw.chr ? " CHR-RAM" : "",
+            c.oam != s_orig_hw.oam ? " OAM" : "", !regs_same ? " registers" : "",
             c.bank != s_orig_hw.bank ? " PRG bank" : "", s_nops);
     if (c.bank != s_orig_hw.bank) {
         fprintf(stderr, "[decomp]   PRG bank original %u decompiled %u (4 KiB units)\n", s_orig_hw.bank, c.bank);
+    }
+    const char *o = regs_same ? "" : s_orig_regs, *d = s_c_regs;
+    for (int shown = 0; *o && *d && shown < 24;) {
+        size_t lo = strcspn(o, "\n"), ld = strcspn(d, "\n");
+        if (lo != ld || memcmp(o, d, lo)) {
+            fprintf(stderr, "[decomp]   original %.*s / decompiled %.*s\n", (int)lo, o, (int)ld, d);
+            shown++;
+        }
+        o += lo + (o[lo] != 0);
+        d += ld + (d[ld] != 0);
     }
     fflush(stderr);
     exit(3);
@@ -524,7 +659,7 @@ static void check(int i, const CycModRegs *in)
         report(rt, in, NULL, cycles != 0, s_orig, &orig, s_image, &c);
     }
     if (rt->out & OUT_HW) {
-        check_hw(rt, cycles);
+        check_hw(rt, in, cycles);
     }
     s_stats[i].compared++;
 }
@@ -591,7 +726,7 @@ void Decomp_Enter(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
         return;
     }
     for (int i = 0; i < s_count; i++) {
-        if (s_routine[i]->addr != routine) {
+        if (s_routine[i]->addr != routine || (routine < 0xC000 && s_routine[i]->bank != s_c_bank)) {
             continue;
         }
         if (s_inner) {
@@ -668,7 +803,7 @@ static int replace(int i, const CycModRegs *in)
     CycModRegs set = { c.a, c.x, c.y, in->s, (uint8_t)((c.p & flags) | (in->p & ~flags)), 0 };
     cyc_mod_set_regs(&set);
     uint64_t spare = spare_cycles(cycles);
-    spend_cycles(rt->addr, spare - play_ops(0, spare, rt->addr));
+    spend_cycles(rt->addr, spare - play_ops(s_played, spare, rt->addr));
     return 1;
 }
 
@@ -698,8 +833,13 @@ static int task_isolated_site(uint16_t addr)
     if (!s_run.stop_armed || s_run.stopped || addr != s_run.stop_pc || r.s != s_run.stop_s) {
         return 0;
     }
+    if (addr < 0xC000 && hw_prg_bank4(addr) >> 2 != s_run.stop_bank) {
+        return 0;
+    }
     s_run.stopped = true;
     s_run.regs = r;
+    cyc_mod_poke((uint16_t)(0x100 | (uint8_t)(s_run.call_s - 1)), s_run.ret[0]);
+    cyc_mod_poke((uint16_t)(0x100 | s_run.call_s), s_run.ret[1]);
     r.s = (uint8_t)(s_run.call_s - 2);
     cyc_mod_set_regs(&r);
     return 1;
@@ -725,6 +865,7 @@ static void run_task_original(const DecompRoutine *rt, const CycModRegs *in)
     s_run.stop_armed = s_handoff_set;
     s_run.stop_pc = s_handoff;
     s_run.stop_s = s_cur_s;
+    s_run.stop_bank = s_handoff_bank;
     s_run_active = true;
     uint64_t io = hw_isolated_io_writes;
     cyc_mod_stats(&before);
@@ -863,7 +1004,12 @@ static bool task_replace(int i, const CycModRegs *in)
     }
     const uint8_t *ram = cyc_cpu_ram();
     for (uint16_t a = 0; a < GAME_RAM_SIZE; a++) {
-        if (task_live(a) && ram[a] != s_image[a]) {
+        /* The routine's own return address is not compared (the isolated run
+         * has its own there), but a C that popped it and pushed another (the
+         * row change) leaves the bytes the original would. */
+        bool own_return = (a & 0xFF00) == 0x0100 &&
+                          ((uint8_t)a == s_run.call_s || (uint8_t)a == (uint8_t)(s_run.call_s - 1));
+        if ((task_live(a) || own_return) && ram[a] != s_image[a]) {
             cyc_mod_poke(a, s_image[a]);
         }
     }
@@ -916,6 +1062,8 @@ static void on_return(void)
         if (s_run_active && s_run.fixup) {
             s_run.fixup = false;
             s_run.entry_cycles = hw_isolated_cycles;
+            s_run.ret[0] = cyc_cpu_ram()[0x100 | (uint8_t)(s_run.call_s - 1)];
+            s_run.ret[1] = cyc_cpu_ram()[0x100 | s_run.call_s];
             CycModRegs r;
             cyc_mod_regs(&r);
             r.s = s_run.start_s;
@@ -942,6 +1090,13 @@ static void on_return(void)
     }
 }
 
+/* Whether the CPU at addr is at the routine's entry: for a routine of the
+ * switchable window, with its bank mapped. */
+static bool at_entry(const DecompRoutine *rt, uint16_t addr)
+{
+    return rt->addr == addr && (addr >= 0xC000 || hw_prg_bank4(addr) >> 2 == rt->bank);
+}
+
 static int on_entry(uint16_t addr)
 {
     if (cyc_mod_isolated()) {
@@ -951,10 +1106,7 @@ static int on_entry(uint16_t addr)
         return addr == DT_SITE_DAMAGE && s_damage_replayed < s_damage_raised && s_damage_cancel[s_damage_replayed++];
     }
     for (int i = 0; i < s_count; i++) {
-        if (s_routine[i]->addr != addr || !s_routine[i]->site_id) {
-            continue;
-        }
-        if (addr < 0xC000 && cyc_cpu_ram()[DT_ADDR_BANK] != s_routine[i]->bank) {
+        if (!at_entry(s_routine[i], addr) || !s_routine[i]->site_id) {
             continue;
         }
         CycModRegs in;
@@ -992,8 +1144,21 @@ static void add_table(const DecompRoutine *table, int n)
     }
 }
 
+/* The NMI handler's RTI: the cycles a replaced routine still owed when the
+ * NMI came. */
+static int on_nmi_exit(uint16_t addr)
+{
+    uint64_t debt = s_nmi_debt;
+    s_nmi_debt = 0;
+    if (debt) {
+        spend_cycles(addr, debt);
+    }
+    return 0;
+}
+
 NES_MOD_CONSTRUCTOR(dt_register_decomp_sites)
 {
+    nes_mod_register_function_entry_plugin(DT_SITE_NMI_EXIT_ID, DT_SITE_NMI_EXIT, on_nmi_exit);
     add_table(gMotionRoutines, gMotionRoutineCount);
     add_table(gSoundRoutines, gSoundRoutineCount);
     add_table(gPlayerRoutines, gPlayerRoutineCount);
@@ -1002,6 +1167,9 @@ NES_MOD_CONSTRUCTOR(dt_register_decomp_sites)
     add_table(gLevelRoutines, gLevelRoutineCount);
     add_table(gCollisionRoutines, gCollisionRoutineCount);
     add_table(gFlowRoutines, gFlowRoutineCount);
+    add_table(gSystemRoutines, gSystemRoutineCount);
+    add_table(gSpriteRoutines, gSpriteRoutineCount);
+    add_table(gAudioRoutines, gAudioRoutineCount);
     for (int i = 0; i < gFlowStopCount; i++) {
         nes_mod_register_function_entry_plugin(gFlowStops[i].site_id, gFlowStops[i].addr, on_entry);
     }
@@ -1046,14 +1214,18 @@ bool Decomp_SetMode(DecompMode mode)
         atexit(report_stats);
     }
     s_mode = mode;
+    const char *only = getenv("DT_DECOMP_ONLY");
     for (int i = 0; i < s_count; i++) {
         if (s_routine[i]->site_id) {
-            nes_mod_set_function_hook_enabled(s_routine[i]->site_id, mode != DECOMP_OFF);
+            bool on = mode != DECOMP_OFF && (!only || strstr(only, s_routine[i]->name));
+            nes_mod_set_function_hook_enabled(s_routine[i]->site_id, on);
         }
     }
     for (int i = 0; i < gFlowStopCount; i++) {
         nes_mod_set_function_hook_enabled(gFlowStops[i].site_id, mode != DECOMP_OFF);
     }
+    nes_mod_set_function_hook_enabled(DT_SITE_NMI_EXIT_ID, mode == DECOMP_REPLACE);
+    s_nmi_debt = 0;
     cyc_mod_set_return_hook(mode != DECOMP_OFF ? on_return : NULL);
     return true;
 }

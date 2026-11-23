@@ -147,10 +147,11 @@ the HP-dot work it skips, and `moon_intro` drifted from the console at frame 108
 each (`NES_MOD_MAX_FUNCTION_HOOKS` in `runner/src/mod_function_hooks.c`), so one site per routine
 would not last the whole game. A routine has a site (`site_id` in its table entry) only if
 original code reaches it; `tools/decomp_callers.py` lists, from a build's generated code, the
-instructions outside the decompiled ranges that jump to an entry. Of the 49 routines in the player,
-motion, sound, level and collision tables, 24 have
+instructions outside the decompiled ranges that jump to an entry. Of the 50 routines in the player,
+motion, sound, level and collision tables, 25 have
 one: `Player_Update` (the frame loop's `JSR` at `$DB6C`), `Player_PitDeath` (the original
-mode 15 and 16 code jumps to it at `$EDCC`), the four motion primitives and the two sound requests
+mode 15 and 16 code jumps to it at `$EDCC`), `Player_RowChange` (the original `$E878` falls into
+it), the four motion primitives and the two sound requests
 (object and game code everywhere), `Player_TakeDamage`, kept for replace mode's measuring call
 above, and 15 of the 18 camera, scrolling, level and background routines (all but
 `Level_ScreenPointer`, `Level_DecodeBlock` and `Level_MetatileAt`, which only decompiled code
@@ -221,12 +222,13 @@ leave the jump vector in `$00/$01` as the original's loop does.
 |---|---|---|---|
 | `Obj_ApplyVelocityY`, `Obj_ApplyGravity`, `Obj_MoveRight`, `Obj_MoveLeft`, `Obj_AddVelocityY`, `Obj_SubVelocityY` | X = slot | A, X, Y, P | callers test the flags of the last `ADC`/`SBC` (`$F298` keeps the Y move's carry across the probe) |
 | `Music_Request`, `Sound_Request` | A = id, X | A, X, Y, P | the caller's X is left in `$00` and the id in `$01` |
-| `Player_Update` | X | none | X goes into the power-up music request; modes 15 and 16 run as the original |
+| `Player_Update` | X | hardware | X goes into the power-up music request; the probe's metatile lookup switches banks; modes 15 and 16 run as the original |
 | `Player_Walk`, `Player_Knockback` | X | none | X is the slot the push of `$73` moves when no direction is held, and what the sound request keeps in `$00` |
 | `Player_MoveRight`, `Player_MoveLeft`, `Player_Fall`, `Player_Rise`, `Player_ProbeVertical` | X (moves only) | X | X is what the probe or contact routine returned; callers pass it on |
 | `Player_ContactH` | none | X, C | X is the slot touched (0 for none, carry set); the cane swing reads its kind |
 | `Player_ContactV` | none | C | carry clear for a contact |
 | `Player_SelectRefill` | none | X | X goes on to `Player_Walk` |
+| `Player_RowChange` | A = row, X = 0 or 2, Y = camera screen, `$00` | hand-off | task code: pops `Player_Update`'s return address and hands off to the row scroll `$C976`, returning to `$E8DF` |
 | every other `Player_*` | none | none | |
 | `Camera_Update` | X | X, hardware | the frame loop keeps X past `$CF93` into the code after it: X is the entry X when the camera stays, else what the column streaming leaves |
 | `Scroll_StreamBlocks` | none | X, hardware | X is the last step's collision map index (or the screen id >> 5 when its screen is missing), or where the upload stopped when the screen is blanked |
@@ -239,6 +241,10 @@ leave the jump vector in `$00/$01` as the original's loop does.
 | `Bg_SnapRight`, `Bg_SnapLeft`, `Bg_SnapHead`, `Bg_SnapFeet` | X = slot | X | X is kept |
 | `Level_TileEdit` | X = slot | hardware | |
 | `Level_DrawStartColumns`, `Level_DrawScreen`, `Vram_FlushTileEdits`, `Chr_StreamRow` | none | hardware | |
+| `Boss_CheckTrigger` | none | none | the arena start runs as the original (`Decomp_RunOriginal`): it scrolls the row |
+| `Bank_Select`, `Bank_SelectTemp` | A = bank | A, X, P, hardware | the bank is written to the bus-conflict table at `$FFE5` |
+| `Oam_Build`, `Random_Next` | none | X, Y | the frame loop yields right after them, and `task_yield` keeps X and Y on the stack |
+| `Ppu_Blank`, `Ppu_Unblank`, `Ppu_FillNametable`, `Chr_LoadList`, `Text_DrawStrings`, `Input_ReadControllers`, `Sound_Update`, `Sound_Play` | as the original | hardware | the controller reads use `Decomp_BusLoad`, made at once; check also compares OAM and the APU, PPU and mapper registers |
 | `Hud_Reset` | none | none | |
 | `Land_ApplyTables`, `Land_LoadPalette` | X = palette set (palette) | X, Y | Land Select and the title read X and Y after them |
 | `Timer_Tick`, `Hud_RefreshMoney`, `Hud_RefreshTotal` | none | none | called from the frame loop's C |
@@ -290,6 +296,7 @@ RAM-identical in replace mode.
 | `Player_ContactH` | `$D202` | checked | 12 | - | not measured |
 | `Player_ContactV` | `$D291` | checked | 12 | - | not measured (the fall into `$D350` needs `$0690` to wrap under the power-up) |
 | `Player_SelectRefill` | `$E2FE` | checked (pokes only) | 0 | select-refill, select-poor, select-full | not measured |
+| `Player_RowChange` | `$E8C0` | checked | 6 | - | not measured |
 | `Camera_Update` | `$EFE2` | checked | 12 | 11 of 11 | not measured |
 | `Map_LoadHeader` | `$C7B0` | checked | 12 | 11 of 11 | not measured |
 | `Level_DrawStartColumns` | `$C71D` | checked | 12 | 11 of 11 | not measured |
@@ -307,6 +314,27 @@ RAM-identical in replace mode.
 | `Bg_SnapFeet` | `$D4D6` | checked | 12 | 11 of 11 | not measured |
 | `Level_TileEdit` | `$F574` | checked | 9 | - | not measured |
 | `Chr_StreamRow` | `$C42C` | checked | 12 | 11 of 11 | not measured |
+| `Nmi_Handler` | `$C000` | claimed (decomp/system): the NMI has no site form yet | - | - | - |
+| `Ppu_NmiOff` | `$C183` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
+| `Ppu_NmiOn` | `$C18D` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
+| `Ppu_Blank` | `$C197` | checked | 12 | - | not measured |
+| `Ppu_Unblank` | `$C1A1` | checked | 12 | - | not measured |
+| `Input_ReadControllers` | `$C1AB` | checked | 12 | - | not measured |
+| `Ppu_FillNametable` | `$C203` | checked | 12 | - | not measured |
+| `Mem_FillPages` | `$C24F` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
+| `Oam_Clear` | `$C267` | checked | 12 | - | not measured |
+| `Palette_FadeIn` (task code) | `$C279` | checked | 12 | - | not measured |
+| `Palette_FadeOut` (task code) | `$C282` | checked | 12 | - | not measured |
+| `Palette_FadeWait` (resume point after `task_yield`) | `$C2B2` | checked | 12 | - | not measured |
+| `Random_Next` | `$C2E6` | checked | 12 | - | not measured |
+| `Chr_LoadList` | `$C301` | checked | 12 | - | not measured |
+| `Palette_LoadScene` | `$F76D` | checked (pokes only) | 0 | ending | not measured |
+| `Bank_Select` | `$FFDE` | checked | 12 | - | not measured |
+| `Bank_SelectTemp` | `$FFE0` | checked | 12 | - | not measured |
+| `Oam_Build` | bank 5 `$8000` | checked | 12 | - | not measured |
+| `Text_DrawStrings` | bank 5 `$BAB0` | checked | 12 | - | not measured |
+| `Sound_Update` | bank 3 `$8000` | checked | 12 | - | not measured |
+| `Sound_Play` | bank 3 `$8003` | checked | 12 | - | not measured |
 | `Hud_Reset` | `$D60A` | checked | 12 | - | not measured |
 | `Land_ApplyTables` | `$D9CA` | checked | 12 | - | not measured |
 | `Land_LoadPalette` | `$D9F5` | checked | 12 | - | not measured |
@@ -334,20 +362,22 @@ hands off to them. The flow has 21 sites: 7 entries that original code reaches a
 
 Not decompiled yet, and still run as the original from the C:
 
-- Through `Decomp_Call`: the background probe `$D120` and its snaps `$D49A`/`$D4B2`/`$D4C8`/`$D4D6`
-  (decompiled in `collision.c`, but `player.c` still calls their originals), one probe point
-  `$D350` (where `Player_ContactV` can fall through to) and the HP refill `$F812` (decompiled in
-  `objects.c` as `Hud_RefillHp`, but `player.c` still calls the original). The walls move `$F0F8`
-  and the climbing steps `$F192`/`$F1A8` are C in `objcommon.c`, and `player.c` calls that C.
+- Through `Decomp_Call`: one probe point `$D350` (where `Player_ContactV` falls through to, with
+  its own entry registers and carry result) and the HP refill `$F812` (decompiled in `objects.c` as
+  `Hud_RefillHp`, but `player.c` still calls the original). The background probe `$D120` and its
+  snaps `$D49A`/`$D4B2`/`$D4C8`/`$D4D6` are the C of `collision.c`, the walls move `$F0F8` and the
+  climbing steps `$F192`/`$F1A8` the C of `objcommon.c`, and `player.c` calls that C directly.
 - Through `Decomp_RunOriginal`: `Player_Update` in modes 15 (`$ED05`, message or item) and 16
-  (`$EF62`, treasure), and every call that reaches the row change at `$E8C0`.
+  (`$EF62`, treasure), and every call that reaches the row change: that call runs as the original,
+  which then reaches `Player_RowChange` at its own site.
 
 **Coverage of Scrooge's code.** His own code in the fixed bank is `$E2FE-$EFE1` (3,300 bytes).
-The decompiled routines cover `$E2FE-$ED04` except the row change `$E8C0-$E8EA`: 2,524 bytes or
-76%. With the collision and movement helpers he shares with other objects (`$D120-$D4E5` and
-`$F0F8-$F233`, 1,281 bytes, of which the contact tests `$D202-$D34F` are decompiled) it is 2,858
-of 4,581 bytes, 62%. By routine, 36 of the 49 routines his code runs are C (73%): the 36 rows
-above against the 13 listed as not decompiled.
+The decompiled routines cover `$E2FE-$ED04`: 2,567 bytes or 78%. With the collision and movement
+helpers he shares with other objects (`$D120-$D4E5` and `$F0F8-$F233`, 1,281 bytes, of which the
+probe, its snaps and the contact tests `$D120-$D4E5` and the climbing steps `$F192-$F1BD` are
+decompiled) it is 3,577 of 4,581 bytes, 78%. By routine, 44 of the 49 routines his code runs are C
+(90%): the 37 `Player_*`, motion and sound rows above, the probe with its four snaps and the two
+climbing steps, against the 5 listed as not decompiled.
 The motion (`$F234-$F2C6` but `$F298`) and sound (`$F752`) primitives are decompiled too, and they
 also serve every other object.
 
@@ -359,9 +389,7 @@ the tile edit `$F574` and the background probe with its snaps
 scroll (`$E9`), the tile-edit metatile helper `$F697` and the room transitions, which the flow's
 task code runs.
 
-**Next routines, in order:** the row change `$E8C0` and modes 15 and 16 with the flow's task
-hand-off, then `player.c` calling the C of the background probe and its snaps instead of their
-originals.
+**Next routines:** modes 15 and 16 with the flow's task hand-off.
 
 ### Objects
 

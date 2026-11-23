@@ -246,6 +246,8 @@ POKES = [
         },
         ['Obj_Thief', 'Obj_StealMoney'],
     ),
+    # the ending flag ($AC): the frame loop starts the ending, whose first scene loads its palettes ($E08F)
+    ('ending', {0xAC: 0x01}, ['Palette_LoadScene']),
 ]
 
 # name, route, options, routines that must be compared
