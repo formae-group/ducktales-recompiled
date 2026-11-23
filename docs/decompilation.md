@@ -13,6 +13,11 @@ port's own files and all switched off by default:
   use, written as C on the API. Each replaces the recompiled routine at its entry, and
   each is checked against the original on every call of every route.
 
+The routines run only in the cycle host (`build/headless`, and `ducktales_cycle.exe` of a window
+build). The game as players run it, `ducktales.exe` of `build/windows`, is the native runtime's
+player by default (`DUCKTALES_PLAYER=native`), which does not link `src/decomp/`
+([native-runtime.md](native-runtime.md#the-player-build)).
+
 Addresses are named only in `src/game/ducktales_symbols.h`. Status words (verified, code,
 hypothesis) are used as in [memory-map.md](memory-map.md). Code addresses are in bank 7 (the fixed
 bank).
@@ -552,6 +557,34 @@ Not decompiled yet: the other 46 kinds, among them the bosses (their hit routine
 `EVENT_BOSS_HIT`, so a C boss has to raise it itself), the spawner (bank 6 `$AE20-$AF61`), the tile
 edit `$F506` (through `Decomp_Call`). The movers and the climbing steps test the
 background through the C of the probe `$D120` and its snaps (`collision.c`).
+
+### Progress
+
+`tools/decomp_progress.py` gives one number: the PRG bytes the 12 routes and the 19 poke cases
+execute on the original (quick_verify's golden coverage, and `decomp_pokes.cover` beside it, which
+`--record-pokes` writes), counted once with each instruction's length, and the share of them
+inside routines with C. A `DecompRoutine` has no end field: the script derives each routine's code
+from the ROM by following fall-through, branches and `JMP` from its entry up to `RTS`, `RTI`, an
+indirect jump or another routine's entry, and counts as C the routines only C reaches; the
+script's docstring gives every rule. `--rev` reads the C of another branch against the same
+coverage.
+
+On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **54.0%, 12,981 of 24,061 executed
+bytes**, in 190 routines.
+
+| Group | Files | Routines | Executed bytes | Share |
+|---|---|---|---|---|
+| player | `player.c`, `motion.c`, `sound.c` | 37 | 2,843 | 11.8% |
+| objects | `objects.c`, `objcommon.c` | 62 | 4,167 | 17.3% |
+| flow | `flow.c` | 58 | 1,568 | 6.5% |
+| level | `level.c`, `collision.c` | 17 | 1,755 | 7.3% |
+| system | `system.c`, `sprites.c`, `audio.c` | 16 | 2,648 | 11.0% |
+
+114 of those bytes are also run by original routines (shared tails). `Input_ReadControllers` is
+not counted: replace mode gives every call to the original. The largest routines still original
+are the object kinds of bank 6 that `Obj_UpdateAll` hands to the original (`$A6D3` 469 bytes,
+`$A8D6` 466, `$A065` 367, `$AAE1` 342), bank 5 `$80BE` (381, under the entry `$8003`), Land Select
+`$D630` (316) and the NMI `$C000` (308).
 
 ### Adding a routine
 
