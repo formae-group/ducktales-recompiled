@@ -25,6 +25,9 @@
  * the duty sequence and the envelope, $400B sets the linear counter's reload
  * flag, $400F restarts the noise envelope, $4015 clears disabled length
  * counters, $4017 restarts the sequencer.
+ *
+ * native_audio_set_mute drops channels from the mix only (mods that play a
+ * file in place of the driver's channels): every channel keeps running.
  */
 #include "native/native_audio.h"
 
@@ -210,8 +213,17 @@ static void accumulate(double span)
     s.noise_wait -= left;
 }
 
+static uint8_t s_mute;
+
+void native_audio_set_mute(uint8_t mask) { s_mute = mask & 0x0F; }
+
 static int16_t emit(void)
 {
+    for (int ch = 0; ch < 4; ch++) {
+        if (s_mute >> ch & 1) {
+            s.sum[ch] = 0;
+        }
+    }
     double p = (s.sum[0] + s.sum[1]) / s.fill, t = (3 * s.sum[2] + 2 * s.sum[3]) / s.fill + s.dmc_level;
     double level = (p > 0 ? 95.52 / (8128.0 / p + 100) : 0) + (t > 0 ? 163.67 / (24329.0 / t + 100) : 0);
     double hp = s.hp90_a * (s.hp90_out + level - s.hp90_in);

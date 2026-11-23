@@ -2,7 +2,7 @@
  * app_mods.c - the mod catalogue, its settings, loading, and the tile and
  * palette replacements (app_mods.h, docs/mods.md).
  *
- *   settings   config.ini [Mods] Enabled = on|off (default on) and
+ *   settings   config.ini [Mods] Enabled = on|off (default off) and
  *              Order = id:on, id:off, ... top first; ids no longer present
  *              are kept at the end of Order so a mod taken out and put back
  *              keeps its place
@@ -55,7 +55,7 @@ typedef struct {
 
 static char s_folders[MAX_FOLDERS][1024];
 static int s_folder_count;
-static bool s_enabled = true;
+static bool s_enabled = false;
 static OrderItem s_order[MAX_MODS];
 static int s_order_count;
 static AppMod s_mods[MAX_MODS];
@@ -237,9 +237,28 @@ void app_mods_add_folder(const char *dir, bool create)
 
 const char *app_mods_folder(void) { return s_folder_count ? s_folders[0] : ""; }
 
+void app_mods_use_player_folders(const char *config_path)
+{
+    char dir[1024];
+    if (config_path) {
+        app_mods_read_config(config_path);
+    }
+    if (app_data_dir(dir, sizeof dir - 8)) {
+        strcat(dir, "\\mods");
+        char moved[MAX_FOLDERS][1024];
+        int n = s_folder_count;
+        memcpy(moved, s_folders, sizeof moved);
+        s_folder_count = 0;
+        app_mods_add_folder(dir, true);
+        for (int i = 0; i < n; i++) {
+            app_mods_add_folder(moved[i], false);
+        }
+    }
+}
+
 static const char *const OPTION_NAME[APP_MODS_OPTION_COUNT] = { "--mods", "--mods-dir", "--mods-order", "--mods-dump" };
 static const char *const OPTION_HELP[APP_MODS_OPTION_COUNT] = {
-    "on|off: load the mods (default: config.ini [Mods] Enabled in the window, on headless)",
+    "on|off: load the mods (default: config.ini [Mods] Enabled in the window, off headless)",
     "DIR: also read mods from DIR (docs/mods.md)",
     "ID:on|off,...: the mods' order and switches for this run, top first",
     "DIR: write every tile drawn, once, as DIR/<key>.png (templates for tile mods)",

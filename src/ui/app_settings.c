@@ -186,6 +186,12 @@ void app_settings_changed(void)
     s_changed = true;
 }
 
+const char *app_settings_path(void)
+{
+    ensure_loaded();
+    return s_path;
+}
+
 void app_settings_commit(void)
 {
     if (s_unsaved) save_now();

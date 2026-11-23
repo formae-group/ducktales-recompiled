@@ -164,13 +164,15 @@ def main():
     with tempfile.TemporaryDirectory() as t:
         tmp = Path(t)
 
-        def run(name, mods=None, order=None, frames=1500, every=300, hashes=False, wav=False, extra=()):
+        def run(name, mods=None, order=None, frames=1500, every=300, hashes=False, wav=False, extra=(), on=True):
             out = tmp / name
             out.mkdir()
             cmd = [exe, ROM, '--frames', str(frames), '--input', route, '--present-out', out / 'p.png',
                    '--present-every', str(every)]
             if mods:
                 cmd += ['--mods-dir', mods]
+                if on:
+                    cmd += ['--mods', 'on']
             if order:
                 cmd += ['--mods-order', order]
             if hashes:
@@ -192,7 +194,7 @@ def main():
         check(frames == [300, 1500], 'the presented pictures of frames 300 and 1500 are written', str(sorted(base)))
 
         dump = tmp / 'dump'
-        run('dump', every=1500, extra=('--mods-dump', dump))
+        run('dump', every=1500, extra=('--mods', 'on', '--mods-dump', dump))
         keys = sorted(dump.glob('*.png'))
         check(len(keys) > 20, f'--mods-dump wrote the tiles drawn ({len(keys)} templates)')
 
@@ -239,6 +241,11 @@ def main():
         check('1 loaded' in log, 'the mod with a palette, a tile and a music replacement loads', log)
         check((all_dir / 'hash.txt').read_bytes() == (base_dir / 'hash.txt').read_bytes(),
               'per-frame machine hashes (trace, RAM, picture, registers, cycles, hardware) equal the run without mods, frames 0-1500')
+
+        off_dir, off, log = run('off', mods['all'], hashes=True, on=False)
+        check('1 loaded' not in log and off[300] == base[300] and off[1500] == base[1500]
+              and (off_dir / 'hash.txt').read_bytes() == (base_dir / 'hash.txt').read_bytes(),
+              'mods are off by default: the same folder without --mods on changes neither the pictures nor the hashes', log)
 
         # 2. palettes
         folder('inv', ('inverse', {'palettes/global.pal': inverted}))

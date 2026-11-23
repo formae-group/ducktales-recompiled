@@ -59,6 +59,8 @@ void app_menu_prefs_set(const AppMenuPrefs *p);
 void app_settings_changed(void);
 /* Write config.ini now if anything changed (the menu calls it on close). */
 void app_settings_commit(void);
+/* The config.ini this run reads and writes. */
+const char *app_settings_path(void);
 
 /* ---- the menu (app_ui.cpp) ---- */
 bool app_is_menu_key(int scancode);

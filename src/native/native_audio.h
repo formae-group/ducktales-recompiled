@@ -37,6 +37,10 @@ void native_audio_reset(int sample_rate);
  * sample_rate / 60.0988 per frame on average. */
 size_t native_audio_frame(const NativeFrame *frame, int16_t *out, size_t max);
 
+/* Channels left out of the mix from now on (bit 0 pulse 1, 1 pulse 2, 2
+ * triangle, 3 noise); they keep running, only their sound is dropped. */
+void native_audio_set_mute(uint8_t mask);
+
 #ifdef __cplusplus
 }
 #endif

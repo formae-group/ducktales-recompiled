@@ -73,6 +73,11 @@ void app_mods_write_settings(FILE *f);
 bool app_mods_enabled(void);
 void app_mods_set_enabled(bool on);
 
+/* The window's setup: [Mods] from config_path, and the data folder's mods
+ * folder (created if missing) as the first folder. Headless and off-screen
+ * runs never call it, so they read only --mods-dir. */
+void app_mods_use_player_folders(const char *config_path);
+
 /* ---- command-line options (both hosts) ---- */
 
 /* --mods on|off, --mods-dir DIR, --mods-order ID:on|off,..., --mods-dump DIR. */

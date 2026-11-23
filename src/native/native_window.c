@@ -64,6 +64,7 @@
 #include "game/enhancements.h"
 #include "host/ducktales_host.h"
 #include "host/ducktales_sprites.h"
+#include "mods/app_mods.h"
 #include "ui/app_ui.h"
 
 #include "cpu6502.h"
@@ -113,10 +114,14 @@ static uint8_t *read_file(const char *path, size_t *size)
     return data;
 }
 
+static uint8_t s_frame_mute;
+
 static void power_on(void)
 {
     native_power_on();
     dt_sprites_forget();
+    app_mods_reset();
+    s_frame_mute = 0;
     ducktales_host_apply_no_slowdown(ducktales_host_no_slowdown());
     if (ducktales_host_no_slowdown())
         printf("[ducktales] No slowdown: the native runtime holds VBlank until each frame's logic is done\n");
@@ -127,9 +132,24 @@ static void run_frame(uint8_t pad0, uint8_t pad1)
 {
     native_set_controller(0, pad0);
     native_set_controller(1, pad1);
+    uint8_t mute = app_mods_audio_mute();
     native_run_frame();
     native_present_frame(native_last_frame());
     dt_sprites_frame_end();
+    s_frame_mute = mute;
+    if (app_mods_audio_active()) {
+        app_mods_audio_frame_end(native_cpu_ram());
+    }
+}
+
+/* The frame's sound: the synth with the channels the mods took muted, then
+ * their files mixed in (mods/app_mods.h). */
+static size_t frame_sound(int16_t *pcm, size_t cap, int rate)
+{
+    native_audio_set_mute(s_frame_mute);
+    size_t n = native_audio_frame(native_last_frame(), pcm, cap);
+    app_mods_audio_mix(pcm, n, rate);
+    return n;
 }
 
 /* What the window shows (ui/app_present.h, or the plain picture) for a
@@ -162,9 +182,40 @@ static uint64_t machine_hash(void)
     return h ^ native_cycle_count();
 }
 
-static int run_off_screen(long frames, const char *input, int lag, const char *present_out, long present_every,
-                          long state_check)
+static void wav_header(FILE *f, uint32_t samples)
 {
+    uint32_t bytes = samples * 2, rate = AUDIO_RATE, byte_rate = AUDIO_RATE * 2;
+    fseek(f, 0, SEEK_SET);
+    fwrite("RIFF", 1, 4, f);
+    uint32_t riff = 36 + bytes;
+    fwrite(&riff, 4, 1, f);
+    fwrite("WAVEfmt ", 1, 8, f);
+    const uint32_t fmt_size = 16;
+    const uint16_t pcm = 1, channels = 1, align = 2, bits = 16;
+    fwrite(&fmt_size, 4, 1, f);
+    fwrite(&pcm, 2, 1, f);
+    fwrite(&channels, 2, 1, f);
+    fwrite(&rate, 4, 1, f);
+    fwrite(&byte_rate, 4, 1, f);
+    fwrite(&align, 2, 1, f);
+    fwrite(&bits, 2, 1, f);
+    fwrite("data", 1, 4, f);
+    fwrite(&bytes, 4, 1, f);
+}
+
+static int run_off_screen(long frames, const char *input, int lag, const char *present_out, long present_every,
+                          long state_check, const char *wav_out)
+{
+    FILE *wav = wav_out ? fopen(wav_out, "wb") : NULL;
+    uint32_t wav_samples = 0;
+    if (wav_out && !wav) {
+        fprintf(stderr, "cannot write %s\n", wav_out);
+        return 2;
+    }
+    if (wav) {
+        wav_header(wav, 0);
+        native_audio_reset(AUDIO_RATE);
+    }
     enum { CHECK_FRAMES = 300 };
     static uint64_t first[CHECK_FRAMES];
     uint8_t *state = NULL;
@@ -180,6 +231,11 @@ static int run_off_screen(long frames, const char *input, int lag, const char *p
         uint8_t held[2];
         native_route_frame(&route, frame, held);
         run_frame(held[0], held[1]);
+        if (wav) {
+            int16_t pcm[4096];
+            size_t n = frame_sound(pcm, sizeof pcm / sizeof pcm[0], AUDIO_RATE);
+            wav_samples += (uint32_t)fwrite(pcm, sizeof pcm[0], n, wav);
+        }
         if (state_check >= 0 && frame == state_check) {
             state_size = native_state_save(NULL, 0);
             state = (uint8_t *)malloc(state_size);
@@ -222,6 +278,10 @@ static int run_off_screen(long frames, const char *input, int lag, const char *p
     for (int e = 0; e < DT_ENH_COUNT; e++)
         printf(" %s=%llu", dt_enh_info((DtEnh)e)->key, (unsigned long long)dt_enh_applied((DtEnh)e));
     printf("\n");
+    if (wav) {
+        wav_header(wav, wav_samples);
+        fclose(wav);
+    }
     return check_mismatch > 0 ? 1 : 0;
 }
 
@@ -316,7 +376,11 @@ static void load_state(void)
             snprintf(why, sizeof why, "the state does not fit this build");
     }
     free(data);
-    if (!why[0]) dt_sprites_forget();
+    if (!why[0]) {
+        dt_sprites_forget();
+        app_mods_reset();
+        s_frame_mute = 0;
+    }
     note(why[0] ? "STATE NOT LOADED" : "STATE LOADED", why[0] ? why : NULL);
 }
 
@@ -587,8 +651,7 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
         bool fast = st.shortcut[CYC_SC_FAST_FORWARD];
 
         int16_t pcm[4096];
-        const NativeFrame *f = native_last_frame();
-        size_t n = native_audio_frame(f, pcm, sizeof pcm / sizeof pcm[0]);
+        size_t n = frame_sound(pcm, sizeof pcm / sizeof pcm[0], dev ? have.freq : AUDIO_RATE);
         size_t queued = dev ? SDL_GetQueuedAudioSize(dev) / sizeof pcm[0] : 0;
         if (dev && n && !fast && s_set.audio_enabled && queued < (size_t)have.freq / 10) {
             size_t low = (size_t)have.samples + n;
@@ -648,17 +711,18 @@ static int usage(const char *self)
             "       [--present-out FILE [--present-every N]]\n"
             "       [--frames N [--input ROUTE] [--lag none|faithful] [--state-check FRAME]]\n"
             "       [--jump-scale N] [--no-damage on|off] [--infinite-time on|off] [--infinite-lives on|off]\n"
-            "       [--start-lives 0-9|off] [--no-sprite-flicker on|off]\n",
+            "       [--start-lives 0-9|off] [--no-sprite-flicker on|off] [--wav-out FILE]\n"
+            "       [--mods on|off] [--mods-dir DIR] [--mods-order ID:on|off,...] [--mods-dump DIR]\n",
             self);
     return 2;
 }
 
 int ducktales_host_main(int argc, char **argv)
 {
-    const char *rom = NULL, *present_out = NULL, *input = NULL, *config = NULL;
+    const char *rom = NULL, *present_out = NULL, *input = NULL, *config = NULL, *wav_out = NULL;
     long exit_after = -1, present_every = 1, frames = -1, state_check = -1;
     int lag = -1;
-    bool hidden = false, uncapped = false;
+    bool hidden = false, uncapped = false, mod_ok = false;
     struct { const char *name, *value; } game[16];
     int game_n = 0;
     for (int i = 1; i < argc; i++) {
@@ -673,6 +737,14 @@ int ducktales_host_main(int argc, char **argv)
         else if (!strcmp(a, "--frames") && v) frames = atol(argv[++i]);
         else if (!strcmp(a, "--input") && v) input = argv[++i];
         else if (!strcmp(a, "--state-check") && v) state_check = atol(argv[++i]);
+        else if (!strcmp(a, "--wav-out") && v) wav_out = argv[++i];
+        else if (!strncmp(a, "--mods", 6) && v && app_mods_option(a, v, &mod_ok)) {
+            i++;
+            if (!mod_ok) {
+                fprintf(stderr, "%s %s: invalid value\n", a, v);
+                return 2;
+            }
+        }
         else if (!strcmp(a, "--lag") && v && !strcmp(v, "none")) lag = NATIVE_LAG_NONE, i++;
         else if (!strcmp(a, "--lag") && v && !strcmp(v, "faithful")) lag = NATIVE_LAG_FAITHFUL, i++;
         else if (a[0] == '-' && v && game_n < 16 && game_option_name(a))
@@ -693,9 +765,14 @@ int ducktales_host_main(int argc, char **argv)
         free(image);
         return 2;
     }
+    bool off_screen = frames >= 0;
+    if (!off_screen) {
+        app_mods_use_player_folders(config ? config : cyc_settings_default_path());
+    }
+    size_t prg_at = 16 + ((image[6] & 4) ? 512 : 0), prg_size = (size_t)image[4] * 0x4000;
+    app_mods_start(prg_at + prg_size <= size ? image + prg_at : NULL, prg_at + prg_size <= size ? prg_size : 0);
     free(image);
     if (!native_hooks_init()) return 2;
-    bool off_screen = frames >= 0;
     if (!off_screen) {
         snprintf(s_set_path, sizeof s_set_path, "%s", config ? config : cyc_settings_default_path());
         static const CycSettingsGame GAME = { NULL, game_load, game_save };
@@ -711,7 +788,8 @@ int ducktales_host_main(int argc, char **argv)
             return 2;
         }
     }
-    if (off_screen) return run_off_screen(frames, input, lag, present_out, present_every, state_check);
+    dt_sprites_mods_changed();
+    if (off_screen) return run_off_screen(frames, input, lag, present_out, present_every, state_check, wav_out);
     power_on();
     return run_window(hidden, uncapped, exit_after, present_out, present_every);
 }
