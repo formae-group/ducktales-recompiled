@@ -266,6 +266,14 @@ addr = 0xC42C
 length = 8
 crc32 = 0xC14ABEE7
 
+# Row_Scroll (task code; the row change $E8C0 in player.c hands off to it, and its
+# site also stops the isolated runs of that task code)
+[[mod_function_hook]]
+id = "ducktales.decomp.C976"
+addr = 0xC976
+length = 8
+crc32 = 0x51C43FB5
+
 # The row scroll's step routines, reached through its pointers at $CA2A.
 
 # Row_DrawStep
@@ -497,13 +505,6 @@ id = "ducktales.decomp.stop.BE00.4"
 addr = 0xBE00
 length = 8
 crc32 = 0xB8A217BC
-
-# The row scroll the row change ($E8C0, src/decomp/player.c) hands off to.
-[[mod_function_hook]]
-id = "ducktales.decomp.stop.C976"
-addr = 0xC976
-length = 8
-crc32 = 0x51C43FB5
 
 # What the message box ($ED05, src/decomp/player.c) hands off to besides task_wait:
 # the scene set-up of message $0B, the block draw of message $06 and the pause text.

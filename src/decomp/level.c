@@ -887,6 +887,127 @@ static void Row_LeftStep(void)
     gStreamPos &= 7;
 }
 
+/* ---- the row scroll ----
+ *
+ * $C976, task code: the row change ($E8C0) hands off to it. Over 60 frames
+ * it moves the $2006 address the NMI writes after the sprite-0 split
+ * ($ED/$EE, while $E9 is set) and Scrooge's Y, runs one step routine a frame
+ * (above, or the sprite CHR stream $C42C) and rebuilds the sprites. It keeps
+ * $26 and $2C on the stack throughout, and ends with the object spawner. */
+
+#define gRowFrame   RAM_U8(DT_ADDR_ROW_SCROLL_FRAME)
+#define gSplitAddr  RAM_U8(DT_ADDR_ROW_SCROLL_ADDR)
+#define gSplitAddrH RAM_U8(DT_ADDR_ROW_SCROLL_ADDR_HI)
+#define ROW_FRAMES  0x3C
+#define ROW_LOCALS  2 /* $26 and $2C */
+
+static void Row_Call(Regs *r, uint16_t routine)
+{
+    *r = Decomp_Call(routine, r->a, r->x, r->y);
+}
+
+static void Row_SelectBank(Regs *r, uint8_t bank)
+{
+    Decomp_SelectBank(bank);
+    r->a = r->x = bank;
+}
+
+static void Row_Yield(uint16_t resume)
+{
+    Decomp_Handoff(DT_CODE_TASK_YIELD, resume, OUT_X | OUT_Y);
+}
+
+/* $C99D: one frame: Scrooge's Y and, on even frames, the split address
+ * move (wrapping once at the side's frame); then the frame's step routine,
+ * which returns to $C9FB. */
+static void Row_Frame(Regs *r)
+{
+    uint8_t side = gRowSide;
+    gObjects->y[P_] += rom((uint16_t)(DT_CODE_ROW_Y_STEP + side));
+    uint8_t step = gRowFrame & 7;
+    Decomp_Push(step);
+    if (!(step & 1)) {
+        bool wrapped = false;
+        if (gRowFrame == rom((uint16_t)(DT_CODE_ROW_WRAP_FRAME + side))) {
+            gSplitAddr = rom((uint16_t)(DT_CODE_ROW_ADDR_WRAP + side));
+            gSplitAddrH = (gSplitAddrH & 0x24) | rom((uint16_t)(DT_CODE_ROW_ADDR_WRAP + 1 + side));
+            wrapped = gSplitAddrH != 0;
+        }
+        if (!wrapped) {
+            unsigned lo = gSplitAddr + rom((uint16_t)(DT_CODE_ROW_ADDR_STEP + side));
+            gSplitAddr = (uint8_t)lo;
+            gSplitAddrH = (uint8_t)(gSplitAddrH + rom((uint16_t)(DT_CODE_ROW_ADDR_STEP + 1 + side)) + (lo >> 8));
+            gObjects->y[P_] += rom((uint16_t)(DT_CODE_ROW_Y_EXTRA + side));
+        }
+    }
+    uint8_t index = (uint8_t)((Decomp_Pull() << 1) + rom((uint16_t)(DT_CODE_ROW_STEP_BASE + side)));
+    gScratch0 = rom((uint16_t)(DT_CODE_ROW_STEPS + index));
+    gScratch1 = rom((uint16_t)(DT_CODE_ROW_STEPS + 1 + index));
+    r->a = (uint8_t)(DT_CODE_ROW_SCROLL_STEPPED - 1);
+    r->x = side;
+    r->y = index;
+    Decomp_Handoff(gPointer, DT_CODE_ROW_SCROLL_STEPPED, OUT_A | OUT_X | OUT_Y);
+}
+
+static void Row_Scroll(Regs *r)
+{
+    Decomp_Enter(DT_CODE_ROW_SCROLL, r->a, r->x, r->y);
+    uint8_t side = gPadHeld & 0x04;
+    gRowSide = side;
+    gRowScroll = 0x0C;
+    Decomp_Push(gStreamPos);
+    Decomp_Push(gStreamPage);
+    gStreamPos = rom((uint16_t)(DT_CODE_ROW_FIRST_POS + side));
+    gRowFrame = 0;
+    gChrStream = 0;
+    r->a = 0;
+    r->x = side;
+    Row_Call(r, DT_CODE_CLEAR_OBJECTS);
+    Row_Call(r, DT_CODE_OAM_CLEAR);
+    Row_Yield(DT_CODE_ROW_SCROLL_FRAME);
+}
+
+static void Row_ScrollFrame(Regs *r)
+{
+    Decomp_Enter(DT_CODE_ROW_SCROLL_FRAME, r->a, r->x, r->y);
+    Row_Frame(r);
+}
+
+/* $C9FB: after the step, the sprites, and the next frame. */
+static void Row_ScrollStepped(Regs *r)
+{
+    Decomp_Enter(DT_CODE_ROW_SCROLL_STEPPED, r->a, r->x, r->y);
+    Row_Call(r, DT_CODE_OAM_CLEAR);
+    Row_SelectBank(r, DT_SPR_BANK);
+    Row_Call(r, DT_B5_BUILD_OAM);
+    Row_Yield(DT_CODE_ROW_SCROLL_NEXT);
+}
+
+/* $CA09: the next frame, or the end: $26 and $2C back, the object spawner
+ * reset and run. */
+static void Row_ScrollNext(Regs *r)
+{
+    Decomp_Enter(DT_CODE_ROW_SCROLL_NEXT, r->a, r->x, r->y);
+    if (++gRowFrame != ROW_FRAMES) {
+        Row_Frame(r);
+        return;
+    }
+    gStreamPage = Decomp_Pull();
+    gStreamPos = Decomp_Pull();
+    Row_SelectBank(r, DT_BANK_OBJECTS);
+    Row_Call(r, DT_B6_SPAWN_RESET);
+    Decomp_Handoff(DT_B6_SPAWN, DT_CODE_ROW_SCROLL_END, 0);
+}
+
+/* $CA22: the split address no longer written; the palette uploaded. */
+static void Row_ScrollEnd(Regs *r)
+{
+    Decomp_Enter(DT_CODE_ROW_SCROLL_END, r->a, r->x, r->y);
+    gRowScroll = 0;
+    r->y = 1;
+    RAM_U8(DT_ADDR_PALETTE_REQUEST) = r->y;
+}
+
 /* ---- site adapters ---- */
 
 static void Run_MapLoadHeader(Regs *r)
@@ -1020,5 +1141,10 @@ const DecompRoutine gLevelRoutines[] = {
     { DT_CODE_ROW_LAST_STEP, "ducktales.decomp.CA8B", "Row_LastStep", Run_RowLastStep, OUT_HW },
     { DT_CODE_ROW_RIGHT_STEP, "ducktales.decomp.CB5A", "Row_RightStep", Run_RowRightStep, OUT_HW },
     { DT_CODE_ROW_LEFT_STEP, "ducktales.decomp.CB6E", "Row_LeftStep", Run_RowLeftStep, OUT_HW },
+    { DT_CODE_ROW_SCROLL, "ducktales.decomp.C976", "Row_Scroll", Row_Scroll, 0, true, 0, false },
+    { DT_CODE_ROW_SCROLL_FRAME, NULL, "Row_ScrollFrame", Row_ScrollFrame, 0, true, ROW_LOCALS, true },
+    { DT_CODE_ROW_SCROLL_STEPPED, NULL, "Row_ScrollStepped", Row_ScrollStepped, 0, true, ROW_LOCALS, true },
+    { DT_CODE_ROW_SCROLL_NEXT, NULL, "Row_ScrollNext", Row_ScrollNext, 0, true, ROW_LOCALS, true },
+    { DT_CODE_ROW_SCROLL_END, NULL, "Row_ScrollEnd", Row_ScrollEnd, 0, true, 0, true },
 };
 const int gLevelRoutineCount = sizeof gLevelRoutines / sizeof gLevelRoutines[0];

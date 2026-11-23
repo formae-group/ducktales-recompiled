@@ -339,6 +339,11 @@ RAM-identical in replace mode.
 | `Bg_SnapFeet` | `$D4D6` | checked | 12 | 11 of 11 | not measured |
 | `Level_TileEdit` | `$F574` | checked | 9 | - | not measured |
 | `Chr_StreamRow` | `$C42C` | checked | 12 | 11 of 11 | not measured |
+| `Row_Scroll` (task code) | `$C976` | checked | 6 | - | not measured |
+| `Row_ScrollFrame` (task code) | `$C99D` | checked | 6 | - | not measured |
+| `Row_ScrollStepped` (task code) | `$C9FB` | checked | 6 | - | not measured |
+| `Row_ScrollNext` (task code) | `$CA09` | checked | 6 | - | not measured |
+| `Row_ScrollEnd` (task code) | `$CA22` | checked | 6 | - | not measured |
 | `Row_DrawStep` | `$CA4A` | checked | 6 | - | not measured |
 | `Row_KeptStep` | `$CA4E` | checked | 6 | - | not measured |
 | `Row_LastStep` | `$CA8B` | checked | 4 | - | not measured |
