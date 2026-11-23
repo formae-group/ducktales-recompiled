@@ -10,14 +10,15 @@
  * C; the others run the original handler through Decomp_CallP.
  *
  * Decompiled kinds: the Amazon's enemies (1-5, 7, $0A, $0C, $0D) and its
- * swinging hold ($0E), blocks (8) and launched blocks (9), defeated enemies
- * ($0B), the lift ($0F), pickups ($13) with what taking each item does,
- * hidden items ($14), chests ($15), doors ($2F) and talking characters
- * ($35). Inner routines are plain C calls; only the dispatch, the handlers
- * the first batch added and the shared movers have hook sites, because
- * NESRecomp registers at most 128. Not decompiled yet and run through Decomp_Call: the tile edit
- * $F506, the background probe $D120 with its snaps (in objcommon.c) and the
- * climbing step $F1A8.
+ * swinging hold ($0E), the Himalayas' dangler (6), Transylvania's swooper
+ * ($11), blocks (8) and launched blocks (9), beaten enemies ($0B), the lift
+ * ($0F), pickups ($13) with what taking each item does, hidden items
+ * ($14), chests ($15), doors ($2F) and talking characters ($35). Inner
+ * routines are plain C calls; only the dispatch, the first handlers and
+ * the shared movers have hook sites (NESRecomp registers at most 128).
+ * Not decompiled yet and run through Decomp_Call: the tile edit $F506, the
+ * background probe $D120 with its snaps (in objcommon.c) and the climbing
+ * step $F1A8.
  */
 #include "decomp/decomp.h"
 #include "decomp/motion.h"
@@ -44,6 +45,7 @@
 #define SFX_CRAWLER  0x27
 #define SFX_WATCHER  0x2A
 #define SFX_FLYER    0x2B
+#define SFX_SWOOP    0x30
 
 #define gObjCursor        RAM_U8(DT_ADDR_OBJ_CURSOR)
 #define gScratch0         RAM_U8(DT_ADDR_SCRATCH0)
@@ -1197,6 +1199,97 @@ static void Obj_Swing(uint8_t x)
     gObjects->worldPage[P_] = gObjects->worldPage[x];
 }
 
+/* Kind 6 ($84E5): an enemy that climbs up at 2 px a frame to the ceiling,
+ * waits there while Scrooge is within $31 px, then drops at 3 px a frame
+ * to Y $B0 or to Scrooge's height and climbs back ($96 frames later). Hit:
+ * pose $11, beaten. */
+static void Obj_Dangler(uint8_t x)
+{
+    if (!OnScreen(x)) {
+        gObjects->state[x] = 0;
+        return;
+    }
+    if (gObjects->unk_0690[x] != 0) {
+        gObjects->action[x] = 0x11;
+        Obj_Defeat(x);
+        return;
+    }
+    if (Step(x) == 0) {
+        gObjects->timer[x] = 0;
+        gObjects->state[x]++;
+    }
+    if (!(gObjects->state[x] & 2)) {
+        Obj_SetVelocityY(x, 0x0200);
+        x = Decomp_Call(DT_CODE_CLIMB_UP, 0x27, x, 0).x;
+        if (!(gProbeHits & 1)) return;
+        if (Obj_DistanceX(x) >= 0x32) gObjects->timer[x] = 0;
+        else if (gObjects->timer[x] == 0) gObjects->state[x]++;
+        else gObjects->timer[x]--;
+        return;
+    }
+    Obj_SetVelocityY(x, 0x0300);
+    Obj_MoveDown(x);
+    if (gObjects->y[x] < 0xB0 && Obj_DistanceY(x) >= 0x18) return;
+    gObjects->state[x]--;
+    gObjects->timer[x] = 0x96;
+}
+
+/* Kind $11 ($9430): a flyer that starts within $5F px of Scrooge (pose $85
+ * at once), drops at 3 px a frame to 16 px below his height, then weaves
+ * through 14 motion entries ($9544; every other pass the second half slows
+ * to 8 frames a step), rising again whenever it is $20 px above him. In
+ * pose $85 a hit beats it. */
+static void Obj_Swooper(uint8_t x)
+{
+    if (gObjects->action[x] == 0x85 && gObjects->unk_0690[x] != 0) {
+        Obj_Defeat(x);
+        return;
+    }
+    if (!OnScreen(x)) {
+        gObjects->state[x] = 0;
+        gObjects->flags[x] = 0;
+        gHeldSlot = 0x3C;
+        return;
+    }
+    if (Step(x) == 0) {
+        if (gObjects->action[x] != 0x85) {
+            if (Obj_DistanceX(x) >= 0x60) return;
+            Sound_Request(SFX_SWOOP, x);
+        }
+        gObjects->state[x]++;
+        gObjects->timer[x] = 0;
+        gObjects->unk_06C0[x] = 0;
+        gObjects->unk_06D0[x] = 0;
+        Obj_SetVelocityY(x, 0x0300);
+        Obj_FaceScrooge(x);
+        if (!(gObjects->dir[x] & OBJ_DIR_LEFT)) gObjects->flags[x] |= OBJ_FLAG_FACING_RIGHT;
+    }
+    (void)Obj_TouchScrooge(x);
+    if (!(gObjects->state[x] & 2)) {
+        if (gObjects->y[x] >= gObjects->y[P_] && (uint8_t)(gObjects->y[x] - gObjects->y[P_]) >= 0x10) gObjects->state[x]++;
+        Obj_MoveDown(x);
+        return;
+    }
+    if (gObjects->timer[x] == 0) {
+        Obj_SetMotionIndex(x, Rom((uint16_t)(DT_CODE_SWOOPER_PATH + gObjects->unk_06C0[x])));
+        if (gObjects->speed[x] & 0x80) Obj_SetSpeed(x, (uint16_t)-Obj_GetSpeed(x));
+        gObjects->timer[x] = (gObjects->unk_06C0[x] >= 7 && (gObjects->unk_06D0[x] & 1)) ? 8 : 3;
+        if (++gObjects->unk_06C0[x] == 0x0E) {
+            gObjects->unk_06C0[x] = 0;
+            gObjects->unk_06D0[x]++;
+        }
+    }
+    bool tick = true;
+    if (!(gObjects->state[x] & 1)) {
+        if (gObjects->y[P_] >= gObjects->y[x] && (uint8_t)(gObjects->y[P_] - gObjects->y[x]) >= 0x20) gObjects->state[x]++;
+        else tick = false;
+    }
+    if (tick) gObjects->timer[x]--;
+    Obj_MoveDown(x);
+    if (gObjects->dir[x] & OBJ_DIR_LEFT) Obj_MoveLeft(x);
+    else Obj_MoveRight(x);
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -1219,6 +1312,7 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
     case OBJ_KIND_THROWER: Obj_Thrower(slot); break;
     case OBJ_KIND_SHOT: Obj_Shot(slot); break;
     case OBJ_KIND_WATCHER: Obj_Watcher(slot); break;
+    case OBJ_KIND_DANGLER: Obj_Dangler(slot); break;
     case OBJ_KIND_SNAPPER: Obj_Snapper(slot); break;
     case OBJ_KIND_BLOCK: Obj_Block(slot, kind); break;
     case OBJ_KIND_THROWN: Obj_Thrown(slot); break;
@@ -1228,6 +1322,7 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
     case OBJ_KIND_FLYER: Obj_Flyer(slot); break;
     case OBJ_KIND_SWING: Obj_Swing(slot); break;
     case OBJ_KIND_LIFT: Obj_Lift(slot); break;
+    case OBJ_KIND_SWOOPER: Obj_Swooper(slot); break;
     case OBJ_KIND_PICKUP: Obj_Pickup(slot); break;
     case OBJ_KIND_HIDDEN_ITEM: Obj_HiddenItem(slot); break;
     case OBJ_KIND_CHEST: Obj_Chest(slot); break;

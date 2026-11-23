@@ -33,6 +33,7 @@ extern "C" {
 #define OBJ_KIND_THROWER     0x03   /* enemy: walks, hops, throws a shot (code) */
 #define OBJ_KIND_SHOT        0x04   /* kind 3's shot (code) */
 #define OBJ_KIND_WATCHER     0x05   /* enemy: stays, faces Scrooge (code) */
+#define OBJ_KIND_DANGLER     0x06   /* enemy: climbs to the ceiling, drops on Scrooge (code) */
 #define OBJ_KIND_SNAPPER     0x07   /* plant that catches Scrooge (code) */
 #define OBJ_KIND_BLOCK       0x08   /* block: solid to other objects, launched or opened by the cane (code) */
 #define OBJ_KIND_THROWN      0x09   /* a launched block (code) */
@@ -42,6 +43,7 @@ extern "C" {
 #define OBJ_KIND_FLYER       0x0D   /* enemy: weaving flyer (code) */
 #define OBJ_KIND_SWING       0x0E   /* swinging hold Scrooge grabs with Up (code) */
 #define OBJ_KIND_LIFT        0x0F   /* platform that rises and sinks (code) */
+#define OBJ_KIND_SWOOPER     0x11   /* enemy: drops to Scrooge's height and weaves (code) */
 #define OBJ_KIND_PICKUP      0x13   /* an item Scrooge takes by touching it (code) */
 #define OBJ_KIND_HIDDEN_ITEM 0x14   /* an item that appears when touched (code) */
 #define OBJ_KIND_CHEST       0x15   /* a chest the cane opens (code) */

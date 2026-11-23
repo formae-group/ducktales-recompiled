@@ -8,8 +8,9 @@ port's own files and all switched off by default:
 - **Game events** (`include/ducktales/events.h`, `src/game/events.c`): verified code sites where mod
   code can react to, or cancel, something the game does. The enhancements are handlers of these
   events.
-- **Decompiled routines** (`src/decomp/`): Scrooge's per-frame code and the motion and sound
-  primitives it uses, written as C on the API. Each replaces the recompiled routine at its entry, and
+- **Decompiled routines** (`src/decomp/`): Scrooge's per-frame code, the object system (the per-frame
+  dispatch, the shared object helpers and 19 object kinds) and the motion and sound primitives they
+  use, written as C on the API. Each replaces the recompiled routine at its entry, and
   each is checked against the original on every call of every route.
 
 Addresses are named only in `src/game/ducktales_symbols.h`. Status words (verified, code,
@@ -99,7 +100,9 @@ option is not given.
 
 The C of a routine always runs on a private image of CPU RAM taken at the routine's entry. In check
 mode "agree" means: all of CPU RAM except the stack below the routine's return address (dead after
-its RTS), plus the registers of the routine's contract.
+its RTS), plus the registers of the routine's contract. The stack ends at `$0160` (`STACK_FLOOR`):
+page 1 below it is game data (the master palette `$0100-$011F`, the consumed-record bits
+`$0120-$013F`, the HUD time group `$0140-$015F`), which is compared and stored like any other RAM.
 
 **Timing in replace mode.** A hook that handles a routine returns in zero guest time, and the
 NESRecomp API has no call that charges cycles. A replaced routine that takes no time makes the game
@@ -200,6 +203,71 @@ the contact tests `$D202`/`$D291`, the climbing steps and the walls move, the Se
 modes 15 and 16 and the row change. Those last three wait for frames, so they need a C form of
 `task_yield` before they can leave `Decomp_RunOriginal`. After that comes `death_or_warp` (`$DC3E`,
 called from the frame loop at `$DBAD`) and the frame loop itself.
+
+### Objects
+
+`src/decomp/objects.c` (bank 6) and `src/decomp/objcommon.c` (fixed bank) decompile the object
+system. The frame loop maps bank 6 and calls `Obj_UpdateAll` (`$8000`) at `$DB78`, its only
+caller. It loads the objects' gravity (`$EF = $40`), then walks slots 1-15 with the cursor in `$4A`
+and, for every slot whose status `$0700` has bit 7 set, jumps to the handler of its kind (`$0710`)
+through the 67-entry table at `$802C`/`$806F` with the return address `$8022` pushed. The C keeps the
+cursor in RAM because a handler could change it, writes the jump vector into `$00/$01` as the
+original does, and enters an original handler with A = `$22`, X = slot, Y = kind and the loop's
+flags (`Decomp_CallP`): a handler that adds without `CLC` (the Amazon boss's random step at
+`$A664`) sees the carry of the caller for slot 1 and of the loop's `CPX #$10` after it.
+
+Object layout used by the handlers (all slots, `objects.h`): `$0700` bit 7 live, bit 5 world X, bit 4
+hidden, bits 0-3 the handler's step; `$0600` bit 7 on screen (set by the sprite builder, required by
+every contact test), bit 6 facing right, bit 3 freed at the end of the animation, bit 1 blink;
+`$06B0`/`$06C0` per-kind timers; `$07D0` hitbox (bits 0-6 index the half-height table `$F498` and
+half-width table `$F4B8`, bits 4-6 harmful); `$07E0` direction (bit 0 right); `$07F0` the land record
+the slot came from. A hit by Scrooge's cane or a thrown block counts in `$0690`; a handler that sees
+it non-zero is beaten.
+
+**Contact with Scrooge.** `Obj_TouchScrooge` (`$F436`) is the test every kind uses: a slot on
+screen touches him when the vertical distance is below its half-height (8 px more when he crouches)
+and the world-X distance at most its half-width. A harmful hitbox then starts his knock-back
+(mode 6) unless `$7D` is running; during the power-up (`$75`) the object takes a hit instead.
+Scrooge's own side, `$D202`/`$D291`, is still original (see above).
+
+**Contracts.**
+
+| Routine | In | Out | Notes |
+|---|---|---|---|
+| `Obj_UpdateAll` | P | X | X = 16 when it returns; the timer after it passes X to a sound request, which keeps it in `$00` |
+| `Obj_TouchScrooge` | X = slot | X, C | C clear = contact; Y = hitbox index when the slot is on screen |
+| `Obj_WalkRight`, `Obj_WalkLeft`, `Obj_Fall`, `Obj_Rise` | A = first probe, Y = probe count - 1, X = slot | X | X is what the probe returned |
+| every handler (`Obj_Block` ... `Obj_Talker`) | X = slot (and Y = kind for `Obj_Block`, passed to the tile edit) | none | |
+
+**Routines with a hook site** (15; NESRecomp registers at most 128 sites in all). Every other routine
+in the two files is a plain C function, checked through the routine that calls it (at least the
+dispatch, whose check compares the whole object update every frame).
+
+| Routine | Address | Status | Routes | What it does |
+|---|---|---|---|---|
+{SITES}
+
+**Object kinds decompiled** (19 of 67). A kind runs as C whenever the dispatch runs, so its check is
+`Obj_UpdateAll`'s on every frame where a slot of that kind is live; "Routes" counts the routes where
+one is (from `--dt-ram-log`).
+
+| Kind | Handler | Name | What it is | Routes |
+|---|---|---|---|---|
+{KINDS}
+
+Inner routines written as C: the debris and break (`$88DF`/`$88E4`), opening a block (`$8A11`,
+`$8A32`), launching and hitting a block (`$86B5`, `$86F7`, `$870D`), the thrown block's hit test
+(`$80C1`), showing an item and turning back into a block (`$8CAC`, `$8CE1`), taking a pickup
+(`$8B21` with the seven item actions at `$8B71-$8BE7`, the extra HP dot `$8B38` and treasures
+`$8C13`), the money adder `$8BBF` and its cap `$F83F`, the HP refills `$F812`/`$8B82`, a beaten enemy
+and its drop (`$8932`, `$89DA`), the motion table `$818A`, the two free-slot searches (`$F7BE`,
+`$80B3`), the block-object tests `$F332`/`$F3B7`, `$F179` (free a slot), `$F270`/`$F284`/`$F298`
+(vertical moves), `$F312` (speed by index), `$F6BD` (face Scrooge), `$F7CC`/`$F7DA` (distances),
+`$F7F0` (mark the record consumed) and `$F822` (Difficult poses).
+
+Not decompiled yet: the other 48 kinds, among them the bosses (their hit routine `$F6D7` raises
+`EVENT_BOSS_HIT`, so a C boss has to raise it itself), the spawner (bank 6 `$AE20-$AF61`), the tile
+edit `$F506` and the climbing step `$F1A8` (both through `Decomp_Call`).
 
 ### Adding a routine
 

@@ -265,6 +265,7 @@
 #define DT_CODE_FLYER_PATH       0x9215  /* kind $0D: motion index by step, 14 entries */
 #define DT_CODE_SWING_PATH       0x92ED  /* kind $0E: motion index by step, bit 7 = long step, 36 entries */
 #define DT_CODE_SWING_FRAMES     0x9311  /* kind $0E: frames per step, short and long */
+#define DT_CODE_SWOOPER_PATH     0x9544  /* kind $11: motion index by step, 14 entries */
 #define DT_CODE_KIND_LIFT        0x9093  /* kind $0F */
 #define DT_CODE_KIND_TALKER      0xFDF5  /* kind $35 (fixed bank) */
 
