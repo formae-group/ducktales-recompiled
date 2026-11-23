@@ -318,9 +318,9 @@ extra channels do not exist and the samples are the same as before, bit for bit
 The port follows the driver's quirks, because the voices are checked against it: `$8514` loads the
 tremolo level through `$E4`, which a repeated-pitch note leaves pointing past the record and an
 effect command leaves at the low byte of its handler's address, so the level comes from whatever RAM
-byte that is; a negative vibrato step of 0 adds `$FF00`. Two things are not modelled: songs with
-`$D7` of 2 or more (the game never sets it), and a song re-selecting the instrument it already has
-while an effect holds the channel is found only through the stream walk.
+byte that is; a negative vibrato step of 0 adds `$FF00`. Not modelled: songs with `$D7` of 2 or more
+(the game never sets it), and an effect channel that starts and ends within one update, which the
+music voice does not cover since the channel belongs to the music at both frame ends.
 
 ## Catalogue
 

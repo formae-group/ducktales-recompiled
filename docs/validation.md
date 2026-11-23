@@ -249,6 +249,65 @@ normal length. After plugging the synth in: `tests/window_smoke.py --build build
 costs about 0.2 ms a frame: `ducktales_native` ran `full_moon` at 1,336 frames a second with
 `--wav-out` and 1,885 without, on the same idle machine.
 
+## Extra voices
+
+The two native-player sound options ([audio.md](audio.md#extra-voices)), on branch `audio/native`.
+
+**Off is unchanged.** WAVs recorded before any code change were compared with the same runs on
+the finished code, with both options off. They were byte-identical: `ducktales.exe --lag faithful
+--wav-out` and `ducktales_native --lag faithful --wav-out` on `amazon_intro` (5,092 frames) and
+`full_moon` (11,000), and `ducktales_native` on the Land Select scenarios below (`--sound-request
+350:13+15`, `350:05+13`, `350:13`, 471 frames). With both on, the player's WAV equals
+`ducktales_native`'s on `amazon_intro`.
+
+**They only read the machine.** With both options on and the synth running, `tests/native_routes.py
+--voices on` finds RAM, cycles and registers identical to the cycle host on every frame of
+`amazon_intro`, `full_moon` and `full_amazon`, as `--voices off` does (PPU memories differ on
+the same 14, 13 and 24 frames either way, the known `$2007` store lag). The player's
+`--state-check 3000` with both on: identical over 300 frames. `tests/verify_routes.py` passes
+`amazon_intro` and `full_moon` (100.0% native cycles). `tests/enhancements_test.py`,
+`tests/window_smoke.py` (the Audio page with the two toggles), `tests/package_test.py` and
+`tests/native_player_test.py` (60 of 60 pictures identical on `full_amazon` and `full_moon`) pass.
+
+**The ports follow the driver.** A temporary check, which was not committed, replayed each step of
+the port against the real driver on eight routes (`amazon_intro`, `full_amazon`, `full_moon`,
+`full_himalayas`, `full_transylvania`, `full_african_mines`, `african_mines_easy`,
+`transylvania_intro`). It started each frame from the RAM of the frame before, ran the port's
+update, and compared the result with the driver's RAM and APU writes:
+- **Effects.** `$E0-$E3`, the mask, the priority, `+$10-$1E` of each owned channel, and the final
+  register values and high-byte writes matched on 23,233 of 23,234 effect frames, 2,826 of them
+  effect starts. The one miss is a start frame in `transylvania_intro`.
+- **Music.** The same voice was run on 224,452 channel updates of channels no effect held. It
+  differed on 93 of them. The ones inspected (`amazon_intro`, `full_moon`, `full_amazon`) were
+  of two kinds:
+  - the first update after power-on or after the game's reset clears RAM;
+  - a channel an effect took and gave back within one frame, so it was held by no effect at either
+    end of the frame.
+
+  Three driver details were found and ported during the check: the instrument command found by the
+  stream walk, the triplet frame that ticks twice and reads its note on the second tick, and the
+  tremolo level read through `$E4`.
+
+**What they add** (pulse 2 alone, `--audio-channels 2`). This is the RMS of each 800-sample block
+from the first frame after the request (`--sound-request 350:IDS` on `amazon_intro`, music 5
+playing). "Added" is the RMS of the option-on minus option-off signal.
+
+| Frame | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `$13+$15`, off | 1025 | 1210 | 854 | 1454 | 1875 | 1218 | 1125 | 1434 | 933 | 747 | 954 | 616 | 335 | 430 | 701 | 833 | 832 |
+| `$13+$15`, OverlapEffects | 1586 | 2035 | 1977 | 1871 | 2133 | 1890 | 1355 | 1298 | 1824 | 1966 | 2003 | 1224 | 744 | 932 | 1045 | 942 | 832 |
+| added (`$15`) | 1365 | 1721 | 1830 | 1187 | 1328 | 1802 | 1836 | 1081 | 1558 | 1872 | 1817 | 1094 | 680 | 830 | 816 | 479 | 0 |
+| `$05+$13`, off | 1025 | 1210 | 854 | 1454 | 1875 | 1218 | 1125 | 1434 | 933 | 747 | 954 | 624 | 335 | 430 | 701 | 832 | 832 |
+| `$05+$13`, MusicUnderEffects | 1025 | 1210 | 854 | 1454 | 1875 | 1218 | 1125 | 1434 | 933 | 919 | 1208 | 883 | 884 | 937 | 920 | 832 | 832 |
+| added (pulse 2's music) | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 636 | 771 | 818 | 818 | 804 | 470 | 0 | 0 |
+| `$13`, MusicUnderEffects added | 743 | 743 | 775 | 776 | 677 | 781 | 761 | 769 | 766 | 793 | 473 | 670 | 813 | 810 | 499 | 0 | 0 |
+
+Off, `$15` is silent: the driver drops it. With OverlapEffects it sounds for the 16 frames `$13`
+lasts and stops with it. In `$05+$13` the restarted song's pulse 2 rests for its first 9 frames,
+then the music under `$13` is heard until `$13` gives the channel back. With `$13` alone over the
+running song, the music is heard from the first frame. From frame 15 or 16 on, the rows are equal:
+the channel is the music's again.
+
 ## Not verified
 
 - The release package on a clean Windows installation without the Visual C++ redistributable: the
@@ -261,6 +320,8 @@ costs about 0.2 ms a frame: `ducktales_native` ran `full_moon` at 1,336 frames a
   independent reference so far.
 - The native player's window by eye, F8/F9 by hand, and
   `HudSplit = original` against the cycle build.
+- The extra voices by ear in the player's window, and `$37` (all four channels) under music; only
+  off-screen runs were made.
 - The native synth by ear in the player's window (only hidden and off-screen runs were made);
   Launchpad ride music `$0B`; effects alone are covered only where routes trigger them (the
   "no music" row and the effects inside the music rows).
