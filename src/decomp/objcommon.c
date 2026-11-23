@@ -4,7 +4,7 @@
  *
  * The movers (Obj_WalkRight/Left, Obj_Fall, Obj_Rise) move a slot with the
  * motion primitives, test the background probes $40.. against the collision
- * map through the original probe $D120 and its snaps, and push the slot out
+ * map through the probe $D120 and its snaps (collision.c), and push the slot out
  * of the block objects (kind 8) it overlaps. A slot moved off the world
  * (past page $FF or below page 0, or past the bottom of the screen while
  * falling) is despawned. Obj_TouchScrooge is the contact test between a slot
@@ -14,6 +14,7 @@
  * half-widths, read at run time. The scratch bytes $00-$04 are left as the
  * original leaves them.
  */
+#include "decomp/collision.h"
 #include "decomp/decomp.h"
 #include "decomp/motion.h"
 #include "decomp/objcommon.h"
@@ -184,11 +185,11 @@ uint8_t Obj_WalkRight(uint8_t slot, uint8_t first, uint8_t count)
         Obj_Despawn(slot);
         return slot;
     }
-    Regs r = Decomp_Call(DT_CODE_BG_PROBE, 0, slot, count);
+    Bg_Probe(slot);
     if (gProbeHits & 1) {
-        r = Decomp_Call(DT_CODE_SNAP_RIGHT, r.a, r.x, r.y);
+        Bg_SnapRight(slot);
     }
-    uint8_t x = r.x;
+    uint8_t x = slot;
     gObjects->flags[x] |= OBJ_FLAG_FACING_RIGHT;
     if (gObjects->kind[x] == OBJ_KIND_24 && x != 0) {
         return x;
@@ -211,11 +212,11 @@ uint8_t Obj_WalkLeft(uint8_t slot, uint8_t first, uint8_t count)
         Obj_Despawn(slot);
         return slot;
     }
-    Regs r = Decomp_Call(DT_CODE_BG_PROBE, 0, slot, count);
+    Bg_Probe(slot);
     if (gProbeHits & 1) {
-        r = Decomp_Call(DT_CODE_SNAP_LEFT, r.a, r.x, r.y);
+        Bg_SnapLeft(slot);
     }
-    uint8_t x = r.x;
+    uint8_t x = slot;
     gObjects->flags[x] &= (uint8_t)~OBJ_FLAG_FACING_RIGHT;
     if (PushedByBlocks(x)) {
         Obj_SetWorldX(x, (uint16_t)(Obj_GetWorldX(x) + gContactDepth));
@@ -225,12 +226,12 @@ uint8_t Obj_WalkLeft(uint8_t slot, uint8_t first, uint8_t count)
 
 /* $F298: Y -= velocity, then the background probes. True when the move
  * did not borrow (the carry the original keeps across the probe). */
-static bool Obj_MoveYProbe(uint8_t slot, Regs *r)
+static bool Obj_MoveYProbe(uint8_t slot)
 {
     uint16_t y = (uint16_t)(gObjects->y[slot] << 8 | gObjects->yFrac[slot]);
     bool carry = y >= Obj_GetVelocityY(slot);
     Obj_ApplyVelocityY(slot);
-    *r = Decomp_Call(DT_CODE_BG_PROBE, 0, (uint8_t)slot, gProbeCount);
+    Bg_Probe(slot);
     return carry;
 }
 
@@ -248,15 +249,14 @@ uint8_t Obj_Fall(uint8_t slot, uint8_t first, uint8_t count)
     gProbeFirst = first;
     gProbeCount = count;
     Obj_ApplyGravity(slot);
-    Regs r;
-    bool off = Obj_MoveYProbe(slot, &r);
-    uint8_t x = r.x;
+    bool off = Obj_MoveYProbe(slot);
+    uint8_t x = slot;
     if (off) {
         Obj_Despawn(x);
         return x;
     }
     if (gProbeHits & 1) {
-        x = Decomp_Call(DT_CODE_SNAP_FEET, r.a, r.x, r.y).x;
+        Bg_SnapFeet(x);
     } else {
         if (!LandsOnBlocks(x)) {
             return x;
@@ -274,12 +274,11 @@ uint8_t Obj_Rise(uint8_t slot, uint8_t first, uint8_t count)
     Decomp_Enter(DT_CODE_OBJ_RISE, first, slot, count);
     gProbeFirst = first;
     gProbeCount = count;
-    Regs r;
-    (void)Obj_MoveYProbe(slot, &r);
-    uint8_t x = r.x;
+    (void)Obj_MoveYProbe(slot);
+    uint8_t x = slot;
     Obj_ApplyGravity(x);
     if (gProbeHits & 1) {
-        x = Decomp_Call(DT_CODE_SNAP_HEAD, r.a, r.x, r.y).x;
+        Bg_SnapHead(x);
     } else {
         if (!LandsOnBlocks(x)) {
             return x;

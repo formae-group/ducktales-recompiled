@@ -13,12 +13,11 @@
  * swinging hold ($0E), the Himalayas' dangler (6), Transylvania's swooper
  * ($11), blocks (8) and launched blocks (9), beaten enemies ($0B), the lift
  * ($0F), pickups ($13) with what taking each item does, hidden items
- * ($14), chests ($15), doors ($2F) and talking characters ($35). Inner
- * routines are plain C calls; only the dispatch, the first handlers and
- * the shared movers have hook sites (NESRecomp registers at most 128).
- * Not decompiled yet and run through Decomp_Call: the tile edit $F506, the
- * background probe $D120 with its snaps (in objcommon.c) and the climbing
- * step $F1A8.
+ * ($14), chests ($15), doors ($2F) and talking characters ($35). Every
+ * routine starts with Decomp_Enter and the C calls it as plain C; only
+ * those original code also calls have a hook site (the dispatch, the
+ * movers and the helpers original handlers call). Not decompiled yet and
+ * run through Decomp_Call: the tile edit $F506 and the climbing step $F1A8.
  */
 #include "decomp/decomp.h"
 #include "decomp/motion.h"
