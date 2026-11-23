@@ -25,14 +25,17 @@ typedef struct {
 static inline uint64_t native_fnv1a(const uint8_t *p, size_t n, uint8_t mask)
 {
     uint64_t h = 0xCBF29CE484222325ull;
-    for (size_t i = 0; i < n; i++) h = (h ^ (uint8_t)(p[i] & mask)) * 0x100000001B3ull;
+    for (size_t i = 0; i < n; i++) {
+        h = (h ^ (uint8_t)(p[i] & mask)) * 0x100000001B3ull;
+    }
     return h;
 }
 
 static inline void native_hash_line(FILE *f, long frame, const NativeHashInput *in)
 {
-    fprintf(f, "%ld ram=%016llX nt=%016llX pal=%016llX oam=%016llX chr=%016llX cycles=%llu "
-               "PC=%04X A=%02X X=%02X Y=%02X S=%02X P=%02X\n",
+    fprintf(f,
+            "%ld ram=%016llX nt=%016llX pal=%016llX oam=%016llX chr=%016llX cycles=%llu "
+            "PC=%04X A=%02X X=%02X Y=%02X S=%02X P=%02X\n",
             frame, (unsigned long long)native_fnv1a(in->ram, 0x800, 0xFF),
             (unsigned long long)native_fnv1a(in->ciram, 0x800, 0xFF),
             (unsigned long long)native_fnv1a(in->palette, 32, 0x3F),

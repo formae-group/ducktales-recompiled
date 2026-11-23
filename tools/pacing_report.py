@@ -17,6 +17,7 @@ count is an irregular frame (a visible hitch). The model is the average over
 (a 60 Hz display with VSync on) is shown one refresh per picture whatever the
 model says.
 """
+
 import argparse
 import math
 import re
@@ -31,14 +32,16 @@ def main():
     lines = open(a.stem + '.csv').read().split()
     head = lines[0].split(',')
     freq, period = int(head[1]), float(head[3]) * 1000
-    rows = [tuple(map(int, line.split(','))) for line in lines[1:]][a.skip:]
+    rows = [tuple(map(int, line.split(','))) for line in lines[1:]][a.skip :]
     shown = [r[2] for r in rows]
     iv = [(b - s) * 1000 / freq for s, b in zip(shown, shown[1:])]
     skipped = sum(1 for x in iv if x == 0)
     iv = [x for x in iv if x > 0]
     print(f'{len(rows)} loops, period {period:.4f} ms, presents skipped {skipped}')
-    print(f'picture interval mean {statistics.mean(iv):.3f} sd {statistics.pstdev(iv):.3f} '
-          f'min {min(iv):.2f} max {max(iv):.2f} ms; >20 ms {sum(1 for x in iv if x > 20)}, <13 ms {sum(1 for x in iv if x < 13)}')
+    print(
+        f'picture interval mean {statistics.mean(iv):.3f} sd {statistics.pstdev(iv):.3f} '
+        f'min {min(iv):.2f} max {max(iv):.2f} ms; >20 ms {sum(1 for x in iv if x > 20)}, <13 ms {sum(1 for x in iv if x < 13)}'
+    )
     t = []
     for s in shown:
         if not t or s != t[-1]:
@@ -59,9 +62,11 @@ def main():
             if m:
                 work.append(float(m.group(1)))
                 present.append(float(m.group(2)))
-        work, present = work[a.skip:], present[a.skip:]
-        print(f'work before the present mean {statistics.mean(work):.2f} max {max(work):.2f} ms; '
-              f'SDL_RenderPresent mean {statistics.mean(present):.2f} max {max(present):.2f} ms')
+        work, present = work[a.skip :], present[a.skip :]
+        print(
+            f'work before the present mean {statistics.mean(work):.2f} max {max(work):.2f} ms; '
+            f'SDL_RenderPresent mean {statistics.mean(present):.2f} max {max(present):.2f} ms'
+        )
     except (OSError, statistics.StatisticsError):
         pass
 

@@ -25,16 +25,25 @@
  * the duty sequence and the envelope, $400B sets the linear counter's reload
  * flag, $400F restarts the noise envelope, $4015 clears disabled length
  * counters, $4017 restarts the sequencer.
+ *
+ * The extra voices (native_voices.h) get APUs of their own: the music under
+ * an effect in apu[1], the second effect in apu[2]. Their register writes are
+ * played where the driver's update starts (the frame's $4015 write), only
+ * the channels a voice holds are heard, and their outputs join the console's
+ * in the same mixer. With both voices off apu[0] is all there is.
  */
 #include "native/native_audio.h"
+
+#include "native/native_runtime.h"
+#include "native/native_voices.h"
 
 #include <string.h>
 
 #define NA_CPU_HZ (21477272.0 / 12.0)
 
 static const uint8_t length_table[32] = {
-    10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14,
-    12, 16, 24, 18, 48, 20, 96, 22, 192, 24, 72, 26, 16, 28, 32, 30,
+    10, 254, 20, 2,  40, 4,  80, 6,  160, 8,  60, 10, 14, 12, 26, 14,
+    12, 16,  24, 18, 48, 20, 96, 22, 192, 24, 72, 26, 16, 28, 32, 30,
 };
 static const uint16_t noise_periods[16] = {
     4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068,
@@ -47,9 +56,8 @@ typedef struct {
     uint8_t start, divider, decay;
 } NaEnvelope;
 
-static struct {
-    double cps, fill, sum[4];
-    double hp90_a, hp440_a, lp_a, hp90_in, hp90_out, hp440_in, hp440_out, lp_out;
+typedef struct {
+    double sum[4];
     uint8_t reg[16], len[4], enabled;
     uint16_t pulse_period[2];
     uint8_t pulse_step[2];
@@ -63,11 +71,32 @@ static struct {
     uint16_t noise_lfsr;
     double noise_wait;
     uint8_t dmc_level;
+} NaApu;
+
+static struct {
+    double cps, fill;
+    double hp90_a, hp440_a, lp_a, hp90_in, hp90_out, hp440_in, hp440_out, lp_out;
+    NaApu apu[3];
+    int apus;        /* 1, or 3 while an extra voice is on */
+    uint8_t live[3]; /* channels of each APU that are heard */
     double seq_pos;
     uint8_t five_step, seq_next;
     uint8_t tri_levels[32];
     uint16_t tri_prefix[33];
 } s;
+
+static bool s_music_under_effects, s_overlap_effects;
+static unsigned s_channels = 0x0F;
+
+static void apu_power_on(NaApu *a)
+{
+    memset(a, 0, sizeof *a);
+    a->noise_lfsr = 1;
+    a->noise_wait = noise_periods[0];
+    a->pulse_wait[0] = a->pulse_wait[1] = 2;
+    a->tri_wait = 1;
+    a->tri_out = 15;
+}
 
 void native_audio_reset(int sample_rate)
 {
@@ -78,21 +107,31 @@ void native_audio_reset(int sample_rate)
     s.hp90_a = rc90 / (rc90 + dt);
     s.hp440_a = rc440 / (rc440 + dt);
     s.lp_a = dt / (rc14k + dt);
-    s.noise_lfsr = 1;
-    s.noise_wait = noise_periods[0];
-    s.pulse_wait[0] = s.pulse_wait[1] = 2;
-    s.tri_wait = 1;
-    s.tri_out = 15;
+    apu_power_on(&s.apu[0]);
+    s.apus = 1;
+    s.live[0] = 0x0F;
+    native_voices_reset();
     for (int k = 0; k < 32; k++) {
         s.tri_levels[k] = (uint8_t)(k < 16 ? 15 - k : k - 16);
         s.tri_prefix[k + 1] = (uint16_t)(s.tri_prefix[k] + s.tri_levels[k]);
     }
 }
 
-static int sweep_target(int ch)
+void native_audio_voices(bool music_under_effects, bool overlap_effects)
 {
-    uint16_t period = s.pulse_period[ch];
-    uint8_t r = s.reg[1 + 4 * ch];
+    s_music_under_effects = music_under_effects;
+    s_overlap_effects = overlap_effects;
+}
+
+void native_audio_channels(unsigned mask)
+{
+    s_channels = mask & 0x0F;
+}
+
+static int sweep_target(const NaApu *a, int ch)
+{
+    uint16_t period = a->pulse_period[ch];
+    uint8_t r = a->reg[1 + 4 * ch];
     int change = period >> (r & 7);
     if (r & 0x08) {
         int target = period - change - (ch == 0 ? 1 : 0);
@@ -101,7 +140,10 @@ static int sweep_target(int ch)
     return period + change;
 }
 
-static uint8_t envelope_volume(const NaEnvelope *e, uint8_t reg) { return (reg & 0x10) ? (reg & 15) : e->decay; }
+static uint8_t envelope_volume(const NaEnvelope *e, uint8_t reg)
+{
+    return (reg & 0x10) ? (reg & 15) : e->decay;
+}
 
 static void clock_envelope(NaEnvelope *e, uint8_t reg)
 {
@@ -111,8 +153,11 @@ static void clock_envelope(NaEnvelope *e, uint8_t reg)
         e->divider = reg & 15;
     } else if (e->divider == 0) {
         e->divider = reg & 15;
-        if (e->decay) e->decay--;
-        else if (reg & 0x20) e->decay = 15;
+        if (e->decay) {
+            e->decay--;
+        } else if (reg & 0x20) {
+            e->decay = 15;
+        }
     } else {
         e->divider--;
     }
@@ -120,35 +165,51 @@ static void clock_envelope(NaEnvelope *e, uint8_t reg)
 
 static void quarter_frame(void)
 {
-    clock_envelope(&s.env[0], s.reg[0]);
-    clock_envelope(&s.env[1], s.reg[4]);
-    clock_envelope(&s.env[2], s.reg[12]);
-    if (s.tri_reload) s.tri_linear = s.reg[8] & 0x7F;
-    else if (s.tri_linear) s.tri_linear--;
-    if (!(s.reg[8] & 0x80)) s.tri_reload = 0;
+    for (int i = 0; i < s.apus; i++) {
+        NaApu *a = &s.apu[i];
+        clock_envelope(&a->env[0], a->reg[0]);
+        clock_envelope(&a->env[1], a->reg[4]);
+        clock_envelope(&a->env[2], a->reg[12]);
+        if (a->tri_reload) {
+            a->tri_linear = a->reg[8] & 0x7F;
+        } else if (a->tri_linear) {
+            a->tri_linear--;
+        }
+        if (!(a->reg[8] & 0x80)) {
+            a->tri_reload = 0;
+        }
+    }
 }
 
 static void half_frame(void)
 {
     static const uint8_t halt_bit[4] = { 0x20, 0x20, 0x80, 0x20 };
     static const uint8_t halt_reg[4] = { 0, 4, 8, 12 };
-    for (int ch = 0; ch < 4; ch++)
-        if (s.len[ch] && !(s.reg[halt_reg[ch]] & halt_bit[ch])) s.len[ch]--;
-    for (int ch = 0; ch < 2; ch++) {
-        uint8_t r = s.reg[1 + 4 * ch];
-        int target = sweep_target(ch);
-        if (s.sweep_divider[ch] == 0 && (r & 0x80) && (r & 7) && s.pulse_period[ch] >= 8 && target <= 0x7FF)
-            s.pulse_period[ch] = (uint16_t)target;
-        if (s.sweep_divider[ch] == 0 || s.sweep_reload[ch]) {
-            s.sweep_divider[ch] = (r >> 4) & 7;
-            s.sweep_reload[ch] = 0;
-        } else {
-            s.sweep_divider[ch]--;
+    for (int i = 0; i < s.apus; i++) {
+        NaApu *a = &s.apu[i];
+        for (int ch = 0; ch < 4; ch++) {
+            if (a->len[ch] && !(a->reg[halt_reg[ch]] & halt_bit[ch])) {
+                a->len[ch]--;
+            }
+        }
+        for (int ch = 0; ch < 2; ch++) {
+            uint8_t r = a->reg[1 + 4 * ch];
+            int target = sweep_target(a, ch);
+            if (a->sweep_divider[ch] == 0 && (r & 0x80) && (r & 7) && a->pulse_period[ch] >= 8 && target <= 0x7FF) {
+                a->pulse_period[ch] = (uint16_t)target;
+            }
+            if (a->sweep_divider[ch] == 0 || a->sweep_reload[ch]) {
+                a->sweep_divider[ch] = (r >> 4) & 7;
+                a->sweep_reload[ch] = 0;
+            } else {
+                a->sweep_divider[ch]--;
+            }
         }
     }
 }
 
-static double cycle_sum(const uint8_t *levels, const uint16_t *prefix, unsigned n, unsigned from, unsigned long long steps)
+static double cycle_sum(const uint8_t *levels, const uint16_t *prefix, unsigned n, unsigned from,
+                        unsigned long long steps)
 {
     unsigned long long to = from + steps;
     return (double)(to / n) * prefix[n] + prefix[to % n] - prefix[from];
@@ -178,41 +239,78 @@ static double sequence(const uint8_t *levels, const uint16_t *prefix, unsigned n
     return sum;
 }
 
-static void accumulate(double span)
+static void accumulate_apu(NaApu *a, uint8_t live, double span)
 {
     for (int ch = 0; ch < 2; ch++) {
-        uint8_t r = s.reg[4 * ch], levels[8];
-        uint8_t volume = (s.len[ch] && s.pulse_period[ch] >= 8 && sweep_target(ch) <= 0x7FF) ? envelope_volume(&s.env[ch], r) : 0;
-        for (int k = 0; k < 8; k++) levels[k] = (uint8_t)(((duty_bits[r >> 6] >> (7 - k)) & 1) * volume);
+        if (!(live >> ch & 1)) {
+            continue;
+        }
+        uint8_t r = a->reg[4 * ch], levels[8];
+        uint8_t volume = (a->len[ch] && a->pulse_period[ch] >= 8 && sweep_target(a, ch) <= 0x7FF)
+                             ? envelope_volume(&a->env[ch], r)
+                             : 0;
+        for (int k = 0; k < 8; k++) {
+            levels[k] = (uint8_t)(((duty_bits[r >> 6] >> (7 - k)) & 1) * volume);
+        }
         uint16_t prefix[9] = { 0 };
-        for (int k = 0; k < 8; k++) prefix[k + 1] = (uint16_t)(prefix[k] + levels[k]);
-        s.sum[ch] += sequence(levels, prefix, 8, &s.pulse_step[ch], &s.pulse_wait[ch], 2.0 * (s.pulse_period[ch] + 1), 1, span);
+        for (int k = 0; k < 8; k++) {
+            prefix[k + 1] = (uint16_t)(prefix[k] + levels[k]);
+        }
+        a->sum[ch] += sequence(levels, prefix, 8, &a->pulse_step[ch], &a->pulse_wait[ch],
+                               2.0 * (a->pulse_period[ch] + 1), 1, span);
     }
-    double tri = sequence(s.tri_levels, s.tri_prefix, 32, &s.tri_step, &s.tri_wait, s.tri_period + 1.0,
-                          s.len[2] && s.tri_linear, span);
-    if (s.tri_period >= 2) {
-        s.sum[2] += tri;
-        s.tri_out = s.tri_levels[s.tri_step];
-    } else {
-        s.sum[2] += s.tri_out * span;
+    if (live & 4) {
+        double tri = sequence(s.tri_levels, s.tri_prefix, 32, &a->tri_step, &a->tri_wait, a->tri_period + 1.0,
+                              a->len[2] && a->tri_linear, span);
+        if (a->tri_period >= 2) {
+            a->sum[2] += tri;
+            a->tri_out = s.tri_levels[a->tri_step];
+        } else {
+            a->sum[2] += a->tri_out * span;
+        }
     }
-    uint8_t volume = s.len[3] ? envelope_volume(&s.env[2], s.reg[12]) : 0;
-    unsigned tap = (s.reg[14] & 0x80) ? 6 : 1;
+    if (!(live & 8)) {
+        return;
+    }
+    uint8_t volume = a->len[3] ? envelope_volume(&a->env[2], a->reg[12]) : 0;
+    unsigned tap = (a->reg[14] & 0x80) ? 6 : 1;
     double left = span;
-    while (s.noise_wait <= left) {
-        if (!(s.noise_lfsr & 1)) s.sum[3] += volume * s.noise_wait;
-        left -= s.noise_wait;
-        unsigned feedback = (s.noise_lfsr ^ (s.noise_lfsr >> tap)) & 1;
-        s.noise_lfsr = (uint16_t)((s.noise_lfsr >> 1) | (feedback << 14));
-        s.noise_wait = noise_periods[s.reg[14] & 15];
+    while (a->noise_wait <= left) {
+        if (!(a->noise_lfsr & 1)) {
+            a->sum[3] += volume * a->noise_wait;
+        }
+        left -= a->noise_wait;
+        unsigned feedback = (a->noise_lfsr ^ (a->noise_lfsr >> tap)) & 1;
+        a->noise_lfsr = (uint16_t)((a->noise_lfsr >> 1) | (feedback << 14));
+        a->noise_wait = noise_periods[a->reg[14] & 15];
     }
-    if (!(s.noise_lfsr & 1)) s.sum[3] += volume * left;
-    s.noise_wait -= left;
+    if (!(a->noise_lfsr & 1)) {
+        a->sum[3] += volume * left;
+    }
+    a->noise_wait -= left;
+}
+
+static void accumulate(double span)
+{
+    for (int i = 0; i < s.apus; i++) {
+        accumulate_apu(&s.apu[i], s.live[i], span);
+    }
 }
 
 static int16_t emit(void)
 {
-    double p = (s.sum[0] + s.sum[1]) / s.fill, t = (3 * s.sum[2] + 2 * s.sum[3]) / s.fill + s.dmc_level;
+    double sum[4];
+    for (int ch = 0; ch < 4; ch++) {
+        sum[ch] = s_channels >> ch & 1 ? s.apu[0].sum[ch] : 0;
+    }
+    double p = (sum[0] + sum[1]) / s.fill, t = (3 * sum[2] + 2 * sum[3]) / s.fill + s.apu[0].dmc_level;
+    for (int i = 1; i < s.apus; i++) {
+        for (int ch = 0; ch < 4; ch++) {
+            sum[ch] = s_channels >> ch & 1 ? s.apu[i].sum[ch] : 0;
+        }
+        p += (sum[0] + sum[1]) / s.fill;
+        t += (3 * sum[2] + 2 * sum[3]) / s.fill;
+    }
     double level = (p > 0 ? 95.52 / (8128.0 / p + 100) : 0) + (t > 0 ? 163.67 / (24329.0 / t + 100) : 0);
     double hp = s.hp90_a * (s.hp90_out + level - s.hp90_in);
     s.hp90_in = level;
@@ -222,10 +320,16 @@ static int16_t emit(void)
     s.hp440_out = hp2;
     s.lp_out += s.lp_a * (hp2 - s.lp_out);
     double v = s.lp_out * 30000.0;
-    if (v > 32767) v = 32767;
-    if (v < -32768) v = -32768;
+    if (v > 32767) {
+        v = 32767;
+    }
+    if (v < -32768) {
+        v = -32768;
+    }
     s.fill = 0;
-    memset(s.sum, 0, sizeof s.sum);
+    for (int i = 0; i < s.apus; i++) {
+        memset(s.apu[i].sum, 0, sizeof s.apu[i].sum);
+    }
     return (int16_t)v;
 }
 
@@ -233,13 +337,17 @@ static void render(double span, int16_t *out, size_t max, size_t *n)
 {
     while (span > 0) {
         double take = s.cps - s.fill;
-        if (take > span) take = span;
+        if (take > span) {
+            take = span;
+        }
         accumulate(take);
         s.fill += take;
         span -= take;
         if (s.fill >= s.cps - 1e-9) {
             int16_t v = emit();
-            if (*n < max) out[*n] = v;
+            if (*n < max) {
+                out[*n] = v;
+            }
             ++*n;
         }
     }
@@ -258,7 +366,9 @@ static void advance(double span, int16_t *out, size_t max, size_t *n)
         span -= to_clock;
         s.seq_pos = seq_points[s.five_step][s.seq_next];
         quarter_frame();
-        if (s.seq_next == 1 || s.seq_next == 3) half_frame();
+        if (s.seq_next == 1 || s.seq_next == 3) {
+            half_frame();
+        }
         if (++s.seq_next == 4) {
             s.seq_next = 0;
             s.seq_pos -= seq_period[s.five_step];
@@ -266,77 +376,158 @@ static void advance(double span, int16_t *out, size_t max, size_t *n)
     }
 }
 
-static void length_load(int ch, uint8_t value)
+static void length_load(NaApu *a, int ch, uint8_t value)
 {
-    if (s.enabled >> ch & 1) s.len[ch] = length_table[value >> 3];
+    if (a->enabled >> ch & 1) {
+        a->len[ch] = length_table[value >> 3];
+    }
 }
 
-static void reg_write(uint16_t addr, uint8_t value)
+static void reg_write(NaApu *a, uint16_t addr, uint8_t value)
 {
-    if (addr <= 0x400F) s.reg[addr & 15] = value;
+    if (addr <= 0x400F) {
+        a->reg[addr & 15] = value;
+    }
     switch (addr) {
-    case 0x4001:
-    case 0x4005: s.sweep_reload[(addr - 0x4001) / 4] = 1; break;
-    case 0x4002:
-    case 0x4006: {
-        uint16_t *p = &s.pulse_period[(addr - 0x4002) / 4];
-        *p = (uint16_t)((*p & 0x700) | value);
-        break;
-    }
-    case 0x4003:
-    case 0x4007: {
-        int ch = (addr - 0x4003) / 4;
-        length_load(ch, value);
-        s.pulse_period[ch] = (uint16_t)((s.pulse_period[ch] & 0xFF) | ((value & 7) << 8));
-        s.pulse_step[ch] = 0;
-        s.env[ch].start = 1;
-        break;
-    }
-    case 0x400A: s.tri_period = (uint16_t)((s.tri_period & 0x700) | value); break;
-    case 0x400B:
-        length_load(2, value);
-        s.tri_period = (uint16_t)((s.tri_period & 0xFF) | ((value & 7) << 8));
-        s.tri_reload = 1;
-        break;
-    case 0x400F:
-        length_load(3, value);
-        s.env[2].start = 1;
-        break;
-    case 0x4011: s.dmc_level = value & 0x7F; break;
-    case 0x4015:
-        s.enabled = value & 0x0F;
-        for (int ch = 0; ch < 4; ch++)
-            if (!(s.enabled >> ch & 1)) s.len[ch] = 0;
-        break;
-    case 0x4017:
-        s.five_step = (value & 0x80) != 0;
-        s.seq_pos = 0;
-        s.seq_next = 0;
-        if (s.five_step) {
-            quarter_frame();
-            half_frame();
+        case 0x4001:
+        case 0x4005:
+            a->sweep_reload[(addr - 0x4001) / 4] = 1;
+            break;
+        case 0x4002:
+        case 0x4006: {
+            uint16_t *p = &a->pulse_period[(addr - 0x4002) / 4];
+            *p = (uint16_t)((*p & 0x700) | value);
+            break;
         }
-        break;
-    default: break;
+        case 0x4003:
+        case 0x4007: {
+            int ch = (addr - 0x4003) / 4;
+            length_load(a, ch, value);
+            a->pulse_period[ch] = (uint16_t)((a->pulse_period[ch] & 0xFF) | ((value & 7) << 8));
+            a->pulse_step[ch] = 0;
+            a->env[ch].start = 1;
+            break;
+        }
+        case 0x400A:
+            a->tri_period = (uint16_t)((a->tri_period & 0x700) | value);
+            break;
+        case 0x400B:
+            length_load(a, 2, value);
+            a->tri_period = (uint16_t)((a->tri_period & 0xFF) | ((value & 7) << 8));
+            a->tri_reload = 1;
+            break;
+        case 0x400F:
+            length_load(a, 3, value);
+            a->env[2].start = 1;
+            break;
+        case 0x4011:
+            a->dmc_level = value & 0x7F;
+            break;
+        case 0x4015:
+            a->enabled = value & 0x0F;
+            for (int ch = 0; ch < 4; ch++) {
+                if (!(a->enabled >> ch & 1)) {
+                    a->len[ch] = 0;
+                }
+            }
+            break;
+        case 0x4017:
+            s.five_step = (value & 0x80) != 0;
+            s.seq_pos = 0;
+            s.seq_next = 0;
+            if (s.five_step) {
+                quarter_frame();
+                half_frame();
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+/* The extra voices' writes for this frame, and which of their channels are
+ * heard from now on. */
+static void play_voices(const NativeVoiceFrame *v)
+{
+    for (int i = 0; i < 2; i++) {
+        s.live[1 + i] = v->live[i];
+        for (uint32_t k = 0; k < v->count[i]; k++) {
+            reg_write(&s.apu[1 + i], v->writes[i][k].addr, v->writes[i][k].value);
+        }
     }
 }
 
 size_t native_audio_frame(const NativeFrame *frame, int16_t *out, size_t max)
 {
     double length = frame->cycles, now = 0;
-    if (frame->held_cycles && frame->held_cycles < frame->cycles) length -= frame->held_cycles;
+    if (frame->held_cycles && frame->held_cycles < frame->cycles) {
+        length -= frame->held_cycles;
+    }
     double scale = frame->cycles ? length / frame->cycles : 1.0;
     size_t n = 0;
+    static NativeVoiceFrame voices;
+    bool extra = s_music_under_effects || s_overlap_effects;
+    uint32_t voices_at = UINT32_MAX;
+    if (extra) {
+        if (s.apus == 1) {
+            for (int i = 1; i < 3; i++) {
+                apu_power_on(&s.apu[i]);
+                reg_write(&s.apu[i], 0x4015, 0x0F);
+                reg_write(&s.apu[i], 0x4001, 0x08);
+                reg_write(&s.apu[i], 0x4005, 0x08);
+                s.live[i] = 0;
+            }
+            s.apus = 3;
+            native_voices_reset();
+        }
+        size_t prg_size;
+        const uint8_t *prg = native_prg(&prg_size);
+        native_voices_frame(frame->frame, native_cpu_ram(), prg, prg_size, s_music_under_effects, s_overlap_effects,
+                            &voices);
+        voices_at = 0;
+        for (uint32_t i = 0; i < frame->apu_write_count; i++) {
+            if (frame->apu_writes[i].addr == 0x4015) {
+                voices_at = i;
+                break;
+            }
+        }
+    } else {
+        s.apus = 1;
+    }
     for (uint32_t i = 0; i < frame->apu_write_count; i++) {
         const NativeRegWrite *w = &frame->apu_writes[i];
         double at = w->cycle * scale;
-        if (at > length) at = length;
+        if (at > length) {
+            at = length;
+        }
         if (at > now) {
             advance(at - now, out, max, &n);
             now = at;
         }
-        reg_write(w->addr, w->value);
+        if (i == voices_at) {
+            play_voices(&voices);
+        }
+        reg_write(&s.apu[0], w->addr, w->value);
     }
-    if (length > now) advance(length - now, out, max, &n);
+    if (voices_at == frame->apu_write_count) {
+        play_voices(&voices);
+    }
+    if (length > now) {
+        advance(length - now, out, max, &n);
+    }
     return n < max ? n : max;
+}
+
+void native_audio_wav_header(FILE *f, int sample_rate, uint32_t samples)
+{
+    uint32_t rate = (uint32_t)sample_rate, bytes = samples * 2, riff = 36 + bytes, fmt = 16, byte_rate = rate * 2;
+    uint16_t pcm = 1, channels = 1, align = 2, bits = 16;
+    long at = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    fwrite("RIFF", 1, 4, f), fwrite(&riff, 4, 1, f), fwrite("WAVEfmt ", 1, 8, f), fwrite(&fmt, 4, 1, f);
+    fwrite(&pcm, 2, 1, f), fwrite(&channels, 2, 1, f), fwrite(&rate, 4, 1, f), fwrite(&byte_rate, 4, 1, f);
+    fwrite(&align, 2, 1, f), fwrite(&bits, 2, 1, f), fwrite("data", 1, 4, f), fwrite(&bytes, 4, 1, f);
+    if (at > 44) {
+        fseek(f, at, SEEK_SET);
+    }
 }

@@ -23,18 +23,35 @@
 #include <string.h>
 
 #define MAX_JUMP_EVENTS 32
-#define MAX_POKES 64
+#define MAX_POKES       64
 
 static FILE *s_log;
 static unsigned long s_every = 1;
-static struct { unsigned long frame; int percent; } s_jump_at[MAX_JUMP_EVENTS];
+
+static struct {
+    unsigned long frame;
+    int percent;
+} s_jump_at[MAX_JUMP_EVENTS];
+
 static int s_jump_at_n;
-static struct { unsigned long frame; DtEnh e; int value; } s_enh_at[MAX_JUMP_EVENTS];
+
+static struct {
+    unsigned long frame;
+    DtEnh e;
+    int value;
+} s_enh_at[MAX_JUMP_EVENTS];
+
 static int s_enh_at_n;
 static unsigned long s_reset_at[MAX_JUMP_EVENTS];
 static int s_reset_at_n;
 static FILE *s_sprite_log;
-static struct { unsigned long frame; uint16_t addr; uint8_t value; } s_poke_at[MAX_POKES];
+
+static struct {
+    unsigned long frame;
+    uint16_t addr;
+    uint8_t value;
+} s_poke_at[MAX_POKES];
+
 static int s_poke_at_n;
 static FILE *s_events_log, *s_ram_log;
 
@@ -55,23 +72,37 @@ static void report(void)
     for (int e = 0; e < DT_ENH_COUNT; e++) {
         char v[16];
         fprintf(f, "dt-diag: %s=%s applied=%llu\n", dt_enh_info((DtEnh)e)->key,
-                dt_enh_format((DtEnh)e, dt_enh_get((DtEnh)e), v, sizeof v), (unsigned long long)dt_enh_applied((DtEnh)e));
+                dt_enh_format((DtEnh)e, dt_enh_get((DtEnh)e), v, sizeof v),
+                (unsigned long long)dt_enh_applied((DtEnh)e));
     }
     DtSpritesStats sp;
     dt_sprites_stats(&sp);
-    fprintf(f, "dt-diag: %s=%s composed=%llu reused=%llu fallback=%llu declined=%llu hud_restored=%llu leftover=%llu lines_over_8=%llu beyond_63=%llu\n",
+    fprintf(f,
+            "dt-diag: %s=%s composed=%llu reused=%llu fallback=%llu declined=%llu hud_restored=%llu leftover=%llu "
+            "lines_over_8=%llu beyond_63=%llu\n",
             DT_SPRITES_KEY, dt_sprites_get() ? "on" : "off", (unsigned long long)sp.composed,
-            (unsigned long long)sp.reused, (unsigned long long)sp.fallback, (unsigned long long)sp.declined, (unsigned long long)sp.hud_restored,
-            (unsigned long long)sp.leftover, (unsigned long long)sp.lines_over_8, (unsigned long long)sp.beyond_63);
-    for (int e = 0; e < EVENT_COUNT; e++)
-        fprintf(f, "dt-diag: event %s raised=%llu\n", Events_Name((EventId)e), (unsigned long long)Events_Raised((EventId)e));
+            (unsigned long long)sp.reused, (unsigned long long)sp.fallback, (unsigned long long)sp.declined,
+            (unsigned long long)sp.hud_restored, (unsigned long long)sp.leftover, (unsigned long long)sp.lines_over_8,
+            (unsigned long long)sp.beyond_63);
+    for (int e = 0; e < EVENT_COUNT; e++) {
+        fprintf(f, "dt-diag: event %s raised=%llu\n", Events_Name((EventId)e),
+                (unsigned long long)Events_Raised((EventId)e));
+    }
     fflush(f);
-    if (s_events_log && s_events_log != stdout) fclose(s_events_log);
-    if (s_ram_log) fclose(s_ram_log);
+    if (s_events_log && s_events_log != stdout) {
+        fclose(s_events_log);
+    }
+    if (s_ram_log) {
+        fclose(s_ram_log);
+    }
     s_events_log = s_ram_log = NULL;
-    if (s_log && s_log != stdout) fclose(s_log);
+    if (s_log && s_log != stdout) {
+        fclose(s_log);
+    }
     dt_sprites_set_log(NULL);
-    if (s_sprite_log && s_sprite_log != stdout) fclose(s_sprite_log);
+    if (s_sprite_log && s_sprite_log != stdout) {
+        fclose(s_sprite_log);
+    }
     s_sprite_log = NULL;
     s_log = NULL;
 }
@@ -95,7 +126,9 @@ bool dt_diag_option(const char *name, const char *value)
         unsigned long frame;
         int percent;
         if (s_jump_at_n >= MAX_JUMP_EVENTS || sscanf(value, "%lu:%d", &frame, &percent) != 2 ||
-            percent < DT_JUMP_SCALE_MIN || percent > DT_JUMP_SCALE_MAX) return false;
+            percent < DT_JUMP_SCALE_MIN || percent > DT_JUMP_SCALE_MAX) {
+            return false;
+        }
         s_jump_at[s_jump_at_n].frame = frame;
         s_jump_at[s_jump_at_n].percent = percent;
         s_jump_at_n++;
@@ -104,10 +137,14 @@ bool dt_diag_option(const char *name, const char *value)
     if (!strcmp(name, "--dt-enh-at")) {
         unsigned long frame;
         char key[32], text[16];
-        if (s_enh_at_n >= MAX_JUMP_EVENTS || sscanf(value, "%lu:%31[^=]=%15s", &frame, key, text) != 3) return false;
+        if (s_enh_at_n >= MAX_JUMP_EVENTS || sscanf(value, "%lu:%31[^=]=%15s", &frame, key, text) != 3) {
+            return false;
+        }
         for (int e = 0; e < DT_ENH_COUNT; e++) {
             int v;
-            if (strcmp(key, dt_enh_info((DtEnh)e)->key) || !dt_enh_parse((DtEnh)e, text, &v)) continue;
+            if (strcmp(key, dt_enh_info((DtEnh)e)->key) || !dt_enh_parse((DtEnh)e, text, &v)) {
+                continue;
+            }
             s_enh_at[s_enh_at_n].frame = frame;
             s_enh_at[s_enh_at_n].e = (DtEnh)e;
             s_enh_at[s_enh_at_n].value = v;
@@ -118,8 +155,12 @@ bool dt_diag_option(const char *name, const char *value)
     }
     if (!strcmp(name, "--dt-events-log")) {
         s_events_log = !strcmp(value, "-") ? stdout : fopen(value, "w");
-        if (!s_events_log) return false;
-        for (int e = 0; e < EVENT_COUNT; e++) Events_On((EventId)e, log_event, NULL);
+        if (!s_events_log) {
+            return false;
+        }
+        for (int e = 0; e < EVENT_COUNT; e++) {
+            Events_On((EventId)e, log_event, NULL);
+        }
         return true;
     }
     if (!strcmp(name, "--dt-ram-log")) {
@@ -129,8 +170,10 @@ bool dt_diag_option(const char *name, const char *value)
     if (!strcmp(name, "--dt-poke-at")) {
         unsigned long frame;
         unsigned addr, v;
-        if (s_poke_at_n >= MAX_POKES || sscanf(value, "%lu:%x=%x", &frame, &addr, &v) != 3 || addr >= 0x800 || v > 0xFF)
+        if (s_poke_at_n >= MAX_POKES || sscanf(value, "%lu:%x=%x", &frame, &addr, &v) != 3 || addr >= 0x800 ||
+            v > 0xFF) {
             return false;
+        }
         s_poke_at[s_poke_at_n].frame = frame;
         s_poke_at[s_poke_at_n].addr = (uint16_t)addr;
         s_poke_at[s_poke_at_n].value = (uint8_t)v;
@@ -138,7 +181,9 @@ bool dt_diag_option(const char *name, const char *value)
         return true;
     }
     if (!strcmp(name, "--dt-reset-at")) {
-        if (s_reset_at_n >= MAX_JUMP_EVENTS) return false;
+        if (s_reset_at_n >= MAX_JUMP_EVENTS) {
+            return false;
+        }
         s_reset_at[s_reset_at_n++] = strtoul(value, NULL, 10);
         return true;
     }
@@ -148,19 +193,34 @@ bool dt_diag_option(const char *name, const char *value)
 void dt_diag_power_on(void)
 {
     static bool once;
-    if (!once) { once = true; atexit(report); }
+    if (!once) {
+        once = true;
+        atexit(report);
+    }
 }
 
 void dt_diag_frame_begin(void)
 {
-    for (int i = 0; i < s_jump_at_n; i++)
-        if (s_jump_at[i].frame == cyc_ring_frame) dt_jump_set_scale(s_jump_at[i].percent);
-    for (int i = 0; i < s_enh_at_n; i++)
-        if (s_enh_at[i].frame == cyc_ring_frame) dt_enh_set(s_enh_at[i].e, s_enh_at[i].value);
-    for (int i = 0; i < s_reset_at_n; i++)
-        if (s_reset_at[i] == cyc_ring_frame) dt_soft_reset();
-    for (int i = 0; i < s_poke_at_n; i++)
-        if (s_poke_at[i].frame == cyc_ring_frame) cyc_mod_poke(s_poke_at[i].addr, s_poke_at[i].value);
+    for (int i = 0; i < s_jump_at_n; i++) {
+        if (s_jump_at[i].frame == cyc_ring_frame) {
+            dt_jump_set_scale(s_jump_at[i].percent);
+        }
+    }
+    for (int i = 0; i < s_enh_at_n; i++) {
+        if (s_enh_at[i].frame == cyc_ring_frame) {
+            dt_enh_set(s_enh_at[i].e, s_enh_at[i].value);
+        }
+    }
+    for (int i = 0; i < s_reset_at_n; i++) {
+        if (s_reset_at[i] == cyc_ring_frame) {
+            dt_soft_reset();
+        }
+    }
+    for (int i = 0; i < s_poke_at_n; i++) {
+        if (s_poke_at[i].frame == cyc_ring_frame) {
+            cyc_mod_poke(s_poke_at[i].addr, s_poke_at[i].value);
+        }
+    }
 }
 
 void dt_diag_frame_end(void)
@@ -173,9 +233,13 @@ void dt_diag_frame_end(void)
         int w, h;
         cyc_render_present(&w, &h);
     }
-    if (!s_log) return;
+    if (!s_log) {
+        return;
+    }
     unsigned long frame = cyc_ring_frame - 1;
-    if (frame % s_every) return;
+    if (frame % s_every) {
+        return;
+    }
     DtState s;
     char line[256];
     dt_state_decode(cyc_cpu_ram(), &s);

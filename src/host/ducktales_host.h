@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-int  ducktales_host_saved_value(DtEnh e);
+int ducktales_host_saved_value(DtEnh e);
 void ducktales_host_set_saved_value(DtEnh e, int value);
 /* [Game] NoSpriteFlicker as config.ini keeps it (host/ducktales_sprites.h). */
 bool ducktales_host_saved_sprites(void);
@@ -39,6 +39,18 @@ void ducktales_host_set_no_slowdown(bool on);
 /* Each runtime's own No slowdown: the cycle host's extra scanlines
  * (ducktales_host.c) or the native runtime's lag mode (native_window.c). */
 void ducktales_host_apply_no_slowdown(bool on);
+
+/* The native player's extra voices (config.ini [Audio] MusicUnderEffects and
+ * OverlapEffects, the Audio page; native/native_voices.h), both off by
+ * default. NESRecomp's settings file hands the game only its [Game] keys, so
+ * these two are read from the file by ducktales_host_load_audio_settings and
+ * written as an [Audio] block after the [Game] keys. Every host keeps them;
+ * only the native player plays them. */
+bool ducktales_host_music_under_effects(void);
+void ducktales_host_set_music_under_effects(bool on);
+bool ducktales_host_overlap_effects(void);
+void ducktales_host_set_overlap_effects(bool on);
+void ducktales_host_load_audio_settings(const char *path);
 
 /* An enhancement or sprite option (--jump-scale 150, --no-sprite-flicker off):
  * true if the name is one of them, *ok whether the value was accepted. */

@@ -6,7 +6,13 @@
 #include <string.h>
 
 static int failures;
-#define CHECK(c) do { if (!(c)) { printf("FAIL %s:%d %s\n", __FILE__, __LINE__, #c); failures++; } } while (0)
+#define CHECK(c)                                               \
+    do {                                                       \
+        if (!(c)) {                                            \
+            printf("FAIL %s:%d %s\n", __FILE__, __LINE__, #c); \
+            failures++;                                        \
+        }                                                      \
+    } while (0)
 
 static void hud(uint8_t *ram, int dots, int lost)
 {
@@ -52,7 +58,9 @@ int main(void)
     dt_state_decode(ram, &s);
     CHECK(s.hp == 1 && s.hp_max == 4);
 
-    for (int i = 0; i < DT_MONEY_DIGIT_COUNT; i++) ram[DT_ADDR_MONEY_DIGITS + i] = (uint8_t)(i + 1);
+    for (int i = 0; i < DT_MONEY_DIGIT_COUNT; i++) {
+        ram[DT_ADDR_MONEY_DIGITS + i] = (uint8_t)(i + 1);
+    }
     CHECK(dt_money(ram, &s.money) && s.money == 1234560);
     ram[DT_ADDR_MONEY_DIGITS] = 0x30;
     CHECK(!dt_money(ram, &s.money));

@@ -36,29 +36,32 @@ extern "C" {
 #endif
 
 /* ---- native_bus.c ---- */
-typedef enum { NATIVE_LAG_NONE, NATIVE_LAG_FAITHFUL } NativeLagMode;
+typedef enum {
+    NATIVE_LAG_NONE,
+    NATIVE_LAG_FAITHFUL
+} NativeLagMode;
 
 /* How the VBlank that ended a frame was placed. */
 typedef enum {
-    NATIVE_DEFER_NONE,     /* not held back */
-    NATIVE_DEFER_IDLE,     /* held until the scheduler's idle scan */
-    NATIVE_DEFER_POLL,     /* released early: the program polled $2002 */
-    NATIVE_DEFER_CAP,      /* released at NATIVE_DEFER_CAP_CYCLES */
+    NATIVE_DEFER_NONE, /* not held back */
+    NATIVE_DEFER_IDLE, /* held until the scheduler's idle scan */
+    NATIVE_DEFER_POLL, /* released early: the program polled $2002 */
+    NATIVE_DEFER_CAP,  /* released at NATIVE_DEFER_CAP_CYCLES */
 } NativeDeferEnd;
 
 /* NATIVE_LAG_NONE holds VBlank back at most this long (one frame). */
 #define NATIVE_DEFER_CAP_CYCLES 29781u
 
 typedef struct {
-    bool     nmi;              /* the NMI was enabled as VBlank began */
-    bool     picture;          /* ... and background or sprites were shown */
-    bool     lag;              /* VBlank found a task still running */
-    uint32_t deferred_cycles;  /* CPU cycles VBlank was held back */
+    bool nmi;                 /* the NMI was enabled as VBlank began */
+    bool picture;             /* ... and background or sprites were shown */
+    bool lag;                 /* VBlank found a task still running */
+    uint32_t deferred_cycles; /* CPU cycles VBlank was held back */
     NativeDeferEnd defer_end;
     /* A lag that ended during this frame: the frame whose VBlank it missed
      * (-1: none) and the CPU cycles of task work after that VBlank, the
      * NMI handler's cycles excluded. */
-    int32_t  overrun_frame;
+    int32_t overrun_frame;
     uint32_t overrun_cycles;
 } NativeLagFrame;
 
@@ -94,7 +97,7 @@ bool native_poke(uint16_t addr, uint8_t value);
  * (and writes nothing when out is NULL or cap too small); load refuses a
  * blob of another size or an impossible one. */
 size_t native_state_save(uint8_t *out, size_t cap);
-bool   native_state_load(const uint8_t *in, size_t size);
+bool native_state_load(const uint8_t *in, size_t size);
 
 /* ---- native_hooks.c: game.toml hook sites (cyc_hooks.h) ---- */
 /* Bind the plugins registered with mod_function_hooks.h to the program's
@@ -105,17 +108,17 @@ bool native_hooks_due(uint16_t pc);
 void native_hooks_fire(uint16_t pc);
 
 /* ---- native_video.c ---- */
-void    video_power_on(void);
-void    video_advance(uint64_t dots);
-bool    video_nmi_level(void);
+void video_power_on(void);
+void video_advance(uint64_t dots);
+bool video_nmi_level(void);
 uint8_t video_read(uint16_t addr, uint64_t cycle);
-void    video_write(uint16_t addr, uint8_t value, uint64_t cycle);
-void    video_oam_dma(uint8_t page, const uint8_t data[256], uint64_t cycle);
-void    video_frame_begin(uint32_t frame, uint64_t cycle);
-void    video_frame_end(uint64_t cycle);
-void    video_log_apu(uint16_t addr, uint8_t value, uint64_t cycle);
-size_t  video_state_save(uint8_t *out, size_t cap);
-bool    video_state_load(const uint8_t *in, size_t size);
+void video_write(uint16_t addr, uint8_t value, uint64_t cycle);
+void video_oam_dma(uint8_t page, const uint8_t data[256], uint64_t cycle);
+void video_frame_begin(uint32_t frame, uint64_t cycle);
+void video_frame_end(uint64_t cycle);
+void video_log_apu(uint16_t addr, uint8_t value, uint64_t cycle);
+size_t video_state_save(uint8_t *out, size_t cap);
+bool video_state_load(const uint8_t *in, size_t size);
 
 /* ---- native_bus.c, called by native_video.c ---- */
 bool native_vblank_deferred(bool picture_on);

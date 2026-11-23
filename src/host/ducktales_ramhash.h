@@ -8,15 +8,34 @@
 
 #if DUCKTALES_WINDOW
 #define DT_RAMHASH_OPTIONS
-static inline bool dt_ramhash_open(const char *path) { (void)path; return false; }
-static inline bool dt_laglog_open(const char *path) { (void)path; return false; }
-static inline void dt_ramhash_power_on(void) {}
-static inline void dt_ramhash_state_loaded(void) {}
-static inline void dt_ramhash_frame_end(void) {}
+
+static inline bool dt_ramhash_open(const char *path)
+{
+    (void)path;
+    return false;
+}
+
+static inline bool dt_laglog_open(const char *path)
+{
+    (void)path;
+    return false;
+}
+
+static inline void dt_ramhash_power_on(void)
+{
+}
+
+static inline void dt_ramhash_state_loaded(void)
+{
+}
+
+static inline void dt_ramhash_frame_end(void)
+{
+}
 #else
-#define DT_RAMHASH_OPTIONS \
+#define DT_RAMHASH_OPTIONS                                                                           \
     { "--ram-hash-out", true, "per-frame CPU RAM/PPU memory hashes, cycles and registers to FILE" }, \
-    { "--lag-log", true, "per-frame lag (game task still running at VBlank) to FILE" },
+        { "--lag-log", true, "per-frame lag (game task still running at VBlank) to FILE" },
 bool dt_ramhash_open(const char *path);
 bool dt_laglog_open(const char *path);
 void dt_ramhash_power_on(void);

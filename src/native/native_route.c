@@ -9,17 +9,28 @@
 
 static uint8_t parse_buttons(const char *s)
 {
-    static const struct { const char *name; uint8_t bit; } NAMES[] = {
-        { "A", 0x80 }, { "B", 0x40 }, { "SELECT", 0x20 }, { "START", 0x10 },
-        { "UP", 0x08 }, { "DOWN", 0x04 }, { "LEFT", 0x02 }, { "RIGHT", 0x01 },
+    static const struct {
+        const char *name;
+        uint8_t bit;
+    } NAMES[] = {
+        { "A", 0x80 },  { "B", 0x40 },    { "SELECT", 0x20 }, { "START", 0x10 },
+        { "UP", 0x08 }, { "DOWN", 0x04 }, { "LEFT", 0x02 },   { "RIGHT", 0x01 },
     };
+
     uint8_t b = 0;
     while (*s) {
-        while (*s == '+' || *s == ' ' || *s == '\t') s++;
+        while (*s == '+' || *s == ' ' || *s == '\t') {
+            s++;
+        }
         size_t n = strcspn(s, "+ \t\r\n");
-        if (!n) break;
-        for (size_t i = 0; i < sizeof NAMES / sizeof NAMES[0]; i++)
-            if (strlen(NAMES[i].name) == n && !strncmp(s, NAMES[i].name, n)) b |= NAMES[i].bit;
+        if (!n) {
+            break;
+        }
+        for (size_t i = 0; i < sizeof NAMES / sizeof NAMES[0]; i++) {
+            if (strlen(NAMES[i].name) == n && !strncmp(s, NAMES[i].name, n)) {
+                b |= NAMES[i].bit;
+            }
+        }
         s += n;
     }
     return b;
@@ -37,14 +48,24 @@ bool native_route_load(NativeRoute *r, const char *path)
     char line[256];
     while (fgets(line, sizeof line, f)) {
         char *p = line, *end;
-        while (*p == ' ' || *p == '\t') p++;
-        if (*p == '#') continue;
+        while (*p == ' ' || *p == '\t') {
+            p++;
+        }
+        if (*p == '#') {
+            continue;
+        }
         long frame = strtol(p, &end, 10);
-        if (end == p) continue;
+        if (end == p) {
+            continue;
+        }
         p = end;
-        while (*p == ' ' || *p == '\t') p++;
+        while (*p == ' ' || *p == '\t') {
+            p++;
+        }
         uint8_t port = 0;
-        if (p[0] >= '1' && p[0] <= '2' && p[1] == ':') port = (uint8_t)(p[0] - '1'), p += 2;
+        if (p[0] >= '1' && p[0] <= '2' && p[1] == ':') {
+            port = (uint8_t)(p[0] - '1'), p += 2;
+        }
         if (r->count == cap) {
             cap = cap ? cap * 2 : 256;
             r->steps = (NativeRouteStep *)realloc(r->steps, cap * sizeof *r->steps);

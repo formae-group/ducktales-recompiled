@@ -31,29 +31,44 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - The player build on the native runtime: `ducktales.exe` runs the recompiled game on the native
   bus, draws it with the native renderer and keeps the menu, settings, bindings, presentation, No
   sprite flicker, enhancements, fast-forward and full screen of the cycle build; F8/F9 save and load
-  the native machine state. Sound goes through a synth seam that plays silence until the native
-  synth lands. `-DDUCKTALES_PLAYER=native|cycle` chooses the runtime; the cycle host build is
-  `ducktales_cycle.exe`. `tests/native_player_test.py` compares its picture with the cycle build's.
+  the native machine state. Sound comes from the native synth. `-DDUCKTALES_PLAYER=native|cycle`
+  chooses the runtime; the cycle host build is `ducktales_cycle.exe`. `tests/native_player_test.py`
+  compares its picture with the cycle build's.
 - The native player keeps its pace with an unfocused window on Windows: no power throttling, the
   frame loop in the MMCSS Games class, a 1 ms timer, and an audio queue that stretches a late frame's
   samples instead of running dry.
 - Native synth for the native runtime (`src/native/native_audio.c`): plays each frame's APU
   register writes without emulating the APU cycle by cycle; `ducktales_native --wav-out` records
   it, and `tests/audio_compare.py` compares it with the cycle host's APU per route and per track.
+- Two sound options for the native player, both off by default (Settings, Audio; `[Audio]
+  MusicUnderEffects` and `OverlapEffects`): *Keep music under sound effects* plays the music part
+  an effect takes over on an extra channel, and *Overlapping sound effects* plays an effect the
+  driver drops or cuts off on a second effect voice. Both are computed from the sound driver's RAM
+  and the ROM's sound data and only mixed in; with both off the sound is unchanged sample for sample.
 - Differential verification against the TriCNES reference machine on 12 routes, including all five
   lands played to their LAND CLEAR screens, at four CPU/PPU alignments, with the oracle's results
   cached between runs.
 - Mesen2 differential harness, sprite, enhancement and window smoke tests.
+- Handwritten C for parts of the game loop and HUD, including death, respawn and the timer.
+  The cycle host can check or run these routines; the default still runs the recompiled code.
 - Reverse-engineering references: memory map, functions, Scrooge's movement, game state, levels,
   rendering pipeline and sound driver.
 
 ### Changed
 
+- One code layout for every C, C++ and Python source: `.clang-format` (4 spaces, 120 columns,
+  braces always, no one-line statements) and Black, applied by `tools/format.py` (`--check` to
+  verify). The machine and every hash are unchanged.
 - The menu and the first-run screen are drawn by [formae-ui](https://gitlab.com/formae/formae-ui)
   0.1.0 (`external/formae-ui`), Formae's menu library extracted from them for the next ports. Their
   look and behaviour are unchanged: the 16 self-test PNGs are pixel-identical.
 - The application icon is now original artwork, a treasure chest.
 - The window build links the static MSVC runtime, so players need no Visual C++ redistributable.
+- The game keeps running behind the open menu on the native player, as in other PC ports; Settings,
+  General, *Pause game while menu is open* (`[Game] MenuPausesGame`, off by default) stops it, and
+  the Reset and Quit questions always pause it.
+- The window build is a Windows program: no console window opens beside the game. Started from a
+  terminal, it prints there; pipes and redirections work as before.
 - The README was rewritten as a technical overview with the supported ROM's hashes.
 - The pause menu no longer shows help and hint text.
 

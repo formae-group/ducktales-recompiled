@@ -1,7 +1,7 @@
 # Native runtime: the shipped build without a cycle-level host
 
 Status as of 2026-11-22: the player build. `ducktales.exe` in a window build runs the recompiled
-program on the native runtime, draws it with the native renderer and plays it through the synth seam
+program on the native runtime, draws it with the native renderer and plays it through the native synth
 ([The player build](#the-player-build)); the cycle host build is kept as `ducktales_cycle.exe` for
 verification. `ducktales_native` (`-DDUCKTALES_NATIVE=ON`) is the headless prototype the route
 comparison below runs.

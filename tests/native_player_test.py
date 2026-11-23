@@ -19,6 +19,7 @@ other executables.
     py -3 -I tests/native_player_test.py --build build/windows [--routes full_amazon ...]
                                          [--frames 3000] [--every 50] [--keep DIR]
 """
+
 import argparse
 import shutil
 import struct
@@ -35,8 +36,8 @@ def read_png(path):
     data = path.read_bytes()
     pos, idat, w = 8, b'', 0
     while pos < len(data):
-        n, kind = struct.unpack('>I4s', data[pos:pos + 8])
-        body = data[pos + 8:pos + 8 + n]
+        n, kind = struct.unpack('>I4s', data[pos : pos + 8])
+        body = data[pos + 8 : pos + 8 + n]
         if kind == b'IHDR':
             w, h, depth, ctype = struct.unpack('>IIBB', body[:10])
             bpp = {2: 3, 6: 4}[ctype]
@@ -48,7 +49,7 @@ def read_png(path):
     rows, prev, i = [], bytearray(stride), 0
     for _ in range(h):
         f = raw[i]
-        line = bytearray(raw[i + 1:i + 1 + stride])
+        line = bytearray(raw[i + 1 : i + 1 + stride])
         i += 1 + stride
         for x in range(stride):
             a = line[x - bpp] if x >= bpp else 0
@@ -79,7 +80,7 @@ def differing(a, b):
         if ra[y] == rb[y]:
             continue
         for x in range(wa):
-            if ra[y][x * bpa:x * bpa + 3] != rb[y][x * bpb:x * bpb + 3]:
+            if ra[y][x * bpa : x * bpa + 3] != rb[y][x * bpb : x * bpb + 3]:
                 n += 1
                 lines.add(y)
     return n, sorted(lines)
@@ -109,10 +110,20 @@ def main():
                 shutil.rmtree(d)
             d.mkdir(parents=True)
             route_file = str(ROOT / 'tests' / 'routes' / f'{route}.txt')
-            common = ['--frames', str(args.frames), '--input', route_file, '--config', str(d / 'x.ini'),
-                      '--present-every', str(args.every)]
-            runs = ((native, ['--lag', 'faithful', '--present-out', str(d / 'n.png')]),
-                    (cycle, ['--extra-scanlines', '0', '--present-out', str(d / 'c.png')]))
+            common = [
+                '--frames',
+                str(args.frames),
+                '--input',
+                route_file,
+                '--config',
+                str(d / 'x.ini'),
+                '--present-every',
+                str(args.every),
+            ]
+            runs = (
+                (native, ['--lag', 'faithful', '--present-out', str(d / 'n.png')]),
+                (cycle, ['--extra-scanlines', '0', '--present-out', str(d / 'c.png')]),
+            )
             for exe, extra in runs:
                 p = subprocess.run([str(exe), args.rom, *common, *extra], capture_output=True, text=True, timeout=3600)
                 if p.returncode != 0:
@@ -136,8 +147,10 @@ def main():
                 else:
                     diffs.append(f'{n.name[2:-4]}: {r[0]} pixels on lines {r[1][:8]}')
             ok = pics and not diffs
-            print(f'{"PASS" if ok else "FAIL"}  {route}: {same} of {len(pics)} pictures identical '
-                  f'(frames 0-{args.frames - 1}, every {args.every})')
+            print(
+                f'{"PASS" if ok else "FAIL"}  {route}: {same} of {len(pics)} pictures identical '
+                f'(frames 0-{args.frames - 1}, every {args.every})'
+            )
             for line in diffs[:20]:
                 print('      ' + line)
             failed += not ok

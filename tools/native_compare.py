@@ -11,6 +11,7 @@ Prints, for each field, how many frames match and the first frame that does
 not, then the first --list differing frames. Exit code 0 only when every
 selected field matches on every frame both files have.
 """
+
 import argparse
 import sys
 
@@ -57,8 +58,11 @@ def main():
             bad.append((fc, diff, c, d))
     print(f'frames compared: {n} (cycle {len(cyc)}, native {len(nat)})')
     for k in fields:
-        print(f'  {k:6s} {match[k]:6d}/{n} match' + (f', first difference at frame {first[k]}' if first[k] is not None else ''))
-    for fc, diff, c, d in bad[:a.list]:
+        print(
+            f'  {k:6s} {match[k]:6d}/{n} match'
+            + (f', first difference at frame {first[k]}' if first[k] is not None else '')
+        )
+    for fc, diff, c, d in bad[: a.list]:
         print(f'frame {fc}: ' + ' '.join(f'{k}={c.get(k)}/{d.get(k)}' for k in diff))
     print('IDENTICAL' if not bad and n else f'DIFFERENT on {len(bad)} frames')
     sys.exit(0 if not bad and n else 1)

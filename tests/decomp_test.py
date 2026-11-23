@@ -1,14 +1,16 @@
 """Decompilation checks (src/decomp/, docs/decompilation.md).
 
   check    every route runs with --decomp check: at every call of every
-           decompiled routine the original runs in an isolated call and the C
+           decompiled routine (from a site or from another routine's C,
+           decomp.c) the original runs in an isolated call and the C
            on the same state, and RAM (the dead stack excepted) and the
            routine's contract registers must agree; the first difference stops
            the run (exit 3). Prints how often each routine was called,
            compared, or given to the original routine.
   replace  (needs --dev-build) every route runs stock and with
            --decomp replace, both with --dt-ram-log, and CPU RAM outside
-           page 1 must be equal after every frame. Page 1 is compared where
+           the stack ($0161-$01FF) must be equal after every frame. The stack
+           is compared where
            both runs sit in the game's scheduler with every task yielded
            (S = $FF): there the main task's live stack (above its saved S up
            to its base $BF) must be equal. The rest of page 1 holds what
@@ -28,6 +30,7 @@
 DUCKTALES_DECOMP=check py -3 -I tests/verify_routes.py runs the oracle comparison with
 the checks on.
 """
+
 import argparse
 import concurrent.futures
 import re
@@ -41,10 +44,13 @@ RAM = 0x800
 IDLE_S = 0xFF
 TASKS = 0x80
 MAIN_TASK_BASE = 0xBF
-LINE = re.compile(r'^decomp: mode=\S+ routine=(\S+) addr=\$([0-9A-F]{4}) calls=(\d+) compared=(\d+) original=(\d+)$', re.M)
+STACK = 0x161  # page 1 below this is data: palette, consumed-record bits, HUD time (game-over box to $0160)
+LINE = re.compile(
+    r'^decomp: mode=\S+ routine=(\S+) addr=\$([0-9A-F]{4}) calls=(\d+) compared=(\d+) original=(\d+)$', re.M
+)
 
 POKE_ROUTE = ROOT / 'tests' / 'routes' / 're_amazon_moves.txt'
-POKE_FRAME = 1700   # Scrooge on the ground in the Amazon
+POKE_FRAME = 1700  # Scrooge on the ground in the Amazon
 POKE_FRAMES = 220
 # name, {address: value} stored before POKE_FRAME (or {frame: {...}}), routines that must be compared
 POKES = [
@@ -83,8 +89,12 @@ def route_case(route):
 def poke_case(name, pokes, want):
     if not all(isinstance(v, dict) for v in pokes.values()):
         pokes = {POKE_FRAME: pokes}
-    extra = [arg for frame, at in pokes.items() for addr, value in at.items()
-             for arg in ('--dt-poke-at', f'{frame}:{addr:X}={value:02X}')]
+    extra = [
+        arg
+        for frame, at in pokes.items()
+        for addr, value in at.items()
+        for arg in ('--dt-poke-at', f'{frame}:{addr:X}={value:02X}')
+    ]
     return {'name': name, 'route': POKE_ROUTE, 'frames': POKE_FRAME + POKE_FRAMES, 'extra': extra, 'want': want}
 
 
@@ -135,7 +145,7 @@ def replace_case(exe, rom, case, tmp):
             idle += 1
             if a[TASKS]:
                 live = range(0x101 + a[TASKS + 2], 0x100 + MAIN_TASK_BASE + 1)
-        diff = [i for i in range(RAM) if a[i] != b[i] and (not 0x100 <= i < 0x200 or i in live)]
+        diff = [i for i in range(RAM) if a[i] != b[i] and (not STACK <= i < 0x200 or i in live)]
         if diff:
             shown = ' '.join(f'${i:04X}:{a[i]:02X}/{b[i]:02X}' for i in diff[:12])
             result = f'frame {frame}: {shown}'
@@ -166,8 +176,10 @@ def run_checks(pool, exe, rom, cases, label, failed):
 def run_replaces(pool, exe, rom, cases, label, failed):
     with tempfile.TemporaryDirectory(dir=ROOT / 'captures' if (ROOT / 'captures').is_dir() else None) as tmp:
         for name, result, frames in pool.map(lambda c: replace_case(exe, rom, c, tmp), cases):
-            print(f'{label:8s} {name:24s} {"PASS" if result is None else "FAIL"}  frames={frames}'
-                  + ('' if result is None else f'  first difference: {result}'))
+            print(
+                f'{label:8s} {name:24s} {"PASS" if result is None else "FAIL"}  frames={frames}'
+                + ('' if result is None else f'  first difference: {result}')
+            )
             if result is not None:
                 failed.append(f'{label} {name}')
 

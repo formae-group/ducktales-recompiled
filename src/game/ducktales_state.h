@@ -25,25 +25,25 @@ typedef enum {
 
 typedef struct {
     DtDifficulty difficulty;
-    uint32_t money;          /* as the HUD shows it, trailing 0 included */
-    bool     money_valid;    /* every digit byte is 0-9 or the blank tile */
-    uint8_t  hp;             /* full HP dots */
-    uint8_t  hp_max;         /* dots before the end record; 0 when the HUD is not set up */
-    uint8_t  lives;          /* extra lives (0-9) */
-    uint8_t  scrooge_x;      /* screen X of slot 0 */
-    uint8_t  scrooge_y;      /* screen Y of slot 0 */
-    int16_t  scrooge_vy;     /* slot 0 vertical velocity, 8.8 fixed point, up positive */
-    uint8_t  pad_held;       /* DT_PAD_* bits */
-    uint8_t  pad_new;
+    uint32_t money;     /* as the HUD shows it, trailing 0 included */
+    bool money_valid;   /* every digit byte is 0-9 or the blank tile */
+    uint8_t hp;         /* full HP dots */
+    uint8_t hp_max;     /* dots before the end record; 0 when the HUD is not set up */
+    uint8_t lives;      /* extra lives (0-9) */
+    uint8_t scrooge_x;  /* screen X of slot 0 */
+    uint8_t scrooge_y;  /* screen Y of slot 0 */
+    int16_t scrooge_vy; /* slot 0 vertical velocity, 8.8 fixed point, up positive */
+    uint8_t pad_held;   /* DT_PAD_* bits */
+    uint8_t pad_new;
 } DtState;
 
 const char *dt_difficulty_name(DtDifficulty d);
 DtDifficulty dt_difficulty(const uint8_t *ram);
-bool     dt_money(const uint8_t *ram, uint32_t *money);
-void     dt_hp(const uint8_t *ram, uint8_t *hp, uint8_t *hp_max);
-uint8_t  dt_lives(const uint8_t *ram);
-int16_t  dt_slot_vy(const uint8_t *ram, unsigned slot);
-void     dt_state_decode(const uint8_t *ram, DtState *out);
+bool dt_money(const uint8_t *ram, uint32_t *money);
+void dt_hp(const uint8_t *ram, uint8_t *hp, uint8_t *hp_max);
+uint8_t dt_lives(const uint8_t *ram);
+int16_t dt_slot_vy(const uint8_t *ram, unsigned slot);
+void dt_state_decode(const uint8_t *ram, DtState *out);
 
 /* One line of text ("diff=Normal money=2000 hp=3/3 ..."), for logs. */
 int dt_state_format(const DtState *s, char *out, int cap);
