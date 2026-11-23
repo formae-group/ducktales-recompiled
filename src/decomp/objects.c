@@ -3139,6 +3139,15 @@ static void Obj_MoonBoss(uint8_t x, bool carry)
     }
 }
 
+/* Kind $33 ($ADB9): an object that does nothing until a hit beats it. */
+static void Obj_Target(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_TARGET, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0) {
+        Obj_Defeat(x);
+    }
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -3283,6 +3292,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_PICKPOCKET:
             Obj_Pickpocket(slot);
+            break;
+        case OBJ_KIND_TARGET:
+            Obj_Target(slot);
             break;
         case OBJ_KIND_TALKER:
             Obj_Talker(slot);
@@ -3558,6 +3570,11 @@ static void Run_MoonBoss(Regs *r)
     Obj_MoonBoss(r->x, r->p & P_C);
 }
 
+static void Run_Target(Regs *r)
+{
+    Obj_Target(r->x);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -3727,6 +3744,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_TARGET, NULL, "Obj_Target", Run_Target, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_MOON_BOSS, NULL, "Obj_MoonBoss", Run_MoonBoss, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_HIMALAYAS_BOSS, NULL, "Obj_HimalayasBoss", Run_HimalayasBoss, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_MINES_BOSS, NULL, "Obj_MinesBoss", Run_MinesBoss, 0, .bank = DT_BANK_OBJECTS },

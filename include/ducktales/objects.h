@@ -71,6 +71,7 @@ extern "C" {
 #define OBJ_KIND_THIEF           0x30 /* enemy: paces, takes money on contact (code) */
 #define OBJ_KIND_SHORT_THIEF     0x31 /* kind $30 with a shorter span (code) */
 #define OBJ_KIND_PICKPOCKET      0x32 /* enemy: walks at Scrooge, takes money on contact (code) */
+#define OBJ_KIND_TARGET          0x33 /* an object only a hit affects: it is beaten (code) */
 #define OBJ_KIND_TALKER          0x35 /* a character that shows a message (code) */
 #define OBJ_KIND_MOVING_PLATFORM 0x39 /* a platform that carries Scrooge (code) */
 #define OBJ_KIND_KEY_SPOT        0x41 /* a spot that needs the land's key item (code) */

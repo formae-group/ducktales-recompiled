@@ -271,6 +271,12 @@ POKES = [
     ),
     # the ending flag ($AC): the frame loop starts the ending, whose first scene loads its palettes ($E08F)
     ('ending', {0xAC: 0x01}, ['Palette_LoadScene']),
+    # kind $33 that a blow has hit: it is beaten
+    (
+        'target-hit',
+        {0x709: 0xA1, 0x719: 0x33, 0x649: 0xB4, 0x729: 0x70, 0x739: 0x00, 0x609: 0x80, 0x699: 0x01},
+        ['Obj_Target', 'Obj_Defeat'],
+    ),
 ]
 
 # name, route, options, routines that must be compared
