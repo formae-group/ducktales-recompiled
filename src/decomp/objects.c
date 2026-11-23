@@ -438,7 +438,7 @@ static void Obj_Thrown(uint8_t x)
 }
 
 /* $F83F: money is capped at 9,999,990 (the four high digits set to 9). */
-static void Money_Max(void)
+void Money_Max(void)
 {
     Decomp_Enter(DT_CODE_MONEY_MAX, 0, 0, 0);
     for (int i = 3; i >= 0; i--) {

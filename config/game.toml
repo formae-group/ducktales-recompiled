@@ -143,6 +143,20 @@ addr = 0xE8C0
 length = 8
 crc32 = 0x7F4AD69A
 
+# Player_Message (task code, src/decomp/player.c)
+[[mod_function_hook]]
+id = "ducktales.decomp.ED05"
+addr = 0xED05
+length = 8
+crc32 = 0x721CC2F3
+
+# Player_Treasure (task code, src/decomp/player.c)
+[[mod_function_hook]]
+id = "ducktales.decomp.EF62"
+addr = 0xEF62
+length = 8
+crc32 = 0x833A3BEA
+
 # Player_PitDeath
 [[mod_function_hook]]
 id = "ducktales.decomp.EBB4"
@@ -488,6 +502,32 @@ id = "ducktales.decomp.stop.C976"
 addr = 0xC976
 length = 8
 crc32 = 0x51C43FB5
+
+# What the message box ($ED05) and the treasure ($EF62, src/decomp/player.c) hand
+# off to: task_wait, the scene draw of message $0B and the block draw of message $06.
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.FFA5"
+addr = 0xFFA5
+length = 8
+crc32 = 0x0FCE60E7
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.DFED"
+addr = 0xDFED
+length = 8
+crc32 = 0x0971742F
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.D068"
+addr = 0xD068
+length = 8
+crc32 = 0x4E032F44
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.B580.5"
+addr = 0xB580
+length = 8
+crc32 = 0xC9C9C1ED
 
 # END game flow
 

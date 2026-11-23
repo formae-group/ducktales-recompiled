@@ -36,3 +36,4 @@ void Obj_MarkConsumed(uint8_t slot);
 void Obj_DifficultAction(uint8_t slot);
 void Obj_SetSpeedIndex(uint8_t slot, uint8_t index);
 bool Obj_FindFreeSlot(uint8_t *slot);
+void Money_Max(void);
