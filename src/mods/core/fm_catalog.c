@@ -474,7 +474,8 @@ static void read_mod(FmMod *m)
             snprintf(m->error, sizeof m->error,
                      "mod.toml: id \"%s\" must be 1-63 characters of a-z, 0-9, '-', '_' or '.'.", m->id);
         } else if (!m->name[0] || !m->version[0] || !game[0] || !target[0]) {
-            snprintf(m->error, sizeof m->error, "mod.toml: name, version, game and %s are required.", s_game.target_key);
+            snprintf(m->error, sizeof m->error, "mod.toml: name, version, game and %s are required.",
+                     s_game.target_key);
         } else if (strcmp(game, s_game.name)) {
             snprintf(m->error, sizeof m->error, "Made for \"%s\", not %s.", game, s_game.name);
         } else {
