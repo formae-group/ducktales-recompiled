@@ -83,6 +83,7 @@ POKES = [
     ('mode12-page7', {0x39: 0x0C, 0x780: 0x00, 0x730: 0x07}, ['Player_Mode12']),
     ('invulnerable-held', {0x7D: 0x90, 0x75: 0x80}, ['Player_Update']),
     ('slippery', {POKE_FRAME + 10 * i: {0x71: 0x01} for i in range(20)}, ['Player_Walk']),
+    ('hud-total', {0xAB: 0x01}, ['Hud_RefreshTotal']),
 ]
 
 # name, route, options, routines that must be compared

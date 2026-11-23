@@ -176,6 +176,37 @@ too and are not counted.
   (a row scroll, a message box), which an isolated call cannot run. Those calls are counted as
   "original" and are not compared.
 
+### Task code
+
+The game runs its main flow as a task: the title, Land Select, the land load and the frame loop
+wait for frames (`task_yield` `$FFAC`), switch banks and drive the PPU, none of which an isolated
+call can do. `flow.c` decompiles that code as **task code** (`DecompRoutine.task`):
+
+- A task routine's C ends in one of two ways: it returns (RTS), or it hands off to original code
+  that runs for real: `Decomp_Handoff(routine, resume, uses)` is a JSR (resume 0: a JMP), and
+  `Decomp_Push`/`Decomp_Pull`/`Decomp_PushReturn` keep the task's stack as the original keeps it
+  (frame counters, the land and row around a redraw). `Decomp_SelectBank` and `Decomp_Store` make
+  the device writes the C needs (the mapper, `$2000`), for real in replace mode.
+- Its C starts at a site (original code reaches it: `$D4E6` from the scheduler's `JMP ($93)`, `$D79B`
+  from Land Select, `$DB36` after each frame, `$DD52` from the scenes), from another task routine's
+  C (a plain C call), or at a **resume point** (`DecompRoutine.resume`): the address an RTS returns
+  to after the original a hand-off reached. Resume points have no site: the RTS observer
+  (`cyc_mod_set_return_hook`) sees every RTS and starts the C when it lands on one. On the routes
+  no interrupt is pending at any of them.
+- Check mode runs the original from the same point in an isolated call with hooks allowed. It
+  enters through an RTS (`$FFAB`) whose return the observer moves to the start, at the routine's
+  true S, with the isolated call's return address in place of the routine's own (at S + locals
+  + 1). When the C hands off, the original stops where it reaches the same routine at the same
+  depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`, 14 of
+  them). Check compares RAM, the stack down to that depth, the registers the hand-off uses and the
+  number of device writes.
+- Replace mode stores the C's results, makes its device writes, spends the original's cycles up to
+  the stop (without the entry RTS) and jumps there. A call that would run into VBlank or past the
+  frame end goes to the original, as for the other routines: the NMI steps state the task code
+  uses (the random generator, the scratch bytes).
+- A task routine called from another's C is not checked on its own: the caller's comparison covers
+  it up to the hand-off. Its calls are counted.
+
 ### Calling contract
 
 The adapter of each routine (`Run_*` in the C files, used at its site and by the inner check) maps
@@ -205,7 +236,10 @@ leave the jump vector in `$00/$01` as the original's loop does.
 | `Bg_SnapRight`, `Bg_SnapLeft`, `Bg_SnapHead`, `Bg_SnapFeet` | X = slot | X | X is kept |
 | `Level_TileEdit` | X = slot | hardware | |
 | `Level_DrawStartColumns`, `Level_DrawScreen`, `Vram_FlushTileEdits`, `Chr_StreamRow` | none | hardware | |
-| `Boss_CheckTrigger` | none | none | the arena start runs as the original (`Decomp_RunOriginal`): it scrolls the row |
+| `Hud_Reset` | none | none | |
+| `Land_ApplyTables`, `Land_LoadPalette` | X = palette set (palette) | X, Y | Land Select and the title read X and Y after them |
+| `Timer_Tick`, `Hud_RefreshMoney`, `Hud_RefreshTotal` | none | none | called from the frame loop's C |
+| task code (`flow.c`) | the registers at the site or resume point | at each hand-off, the registers its target reads | see Task code |
 
 ### Routines
 
@@ -263,16 +297,32 @@ RAM-identical in replace mode.
 | `Bg_SnapLeft` | `$D4B2` | checked | 11 | - | not measured |
 | `Bg_SnapHead` | `$D4C8` | checked | 9 | - | not measured |
 | `Bg_SnapFeet` | `$D4D6` | checked | 12 | 11 of 11 | not measured |
-| `Boss_CheckTrigger` | `$CF93` | checked | 12 | 11 of 11 | not measured; the arena start (5 calls) runs as the original |
 | `Level_TileEdit` | `$F574` | checked | 9 | - | not measured |
 | `Chr_StreamRow` | `$C42C` | checked | 12 | 11 of 11 | not measured |
+| `Hud_Reset` | `$D60A` | checked | 12 | - | not measured |
+| `Land_ApplyTables` | `$D9CA` | checked | 12 | - | not measured |
+| `Land_LoadPalette` | `$D9F5` | checked | 12 | - | not measured |
+| `Timer_Tick` | `$E28C` | checked | 12 | - | not measured |
+| `Hud_RefreshMoney` | `$DE6C` | checked | 10 | - | not measured |
+| `Hud_RefreshTotal` | `$DEA3` | checked | 0 | hud-total | not measured |
+| `MainTask` and `Title_*` (13 resume points) | `$D4E6-$D609` | checked | 12 | - | not measured |
+| `BossTrigger` (2 resume points) | `$CF93-$D04C` | checked | 12 (the arena scroll in 4) | - | not measured; the Transylvania redirect to Land Select |
+| `LandLoad` (12 resume points) | `$D79B-$D8A5` | checked | 12 | - | not measured |
+| `FrameLoop` and its resume points | `$DB36-$DC3D` | checked | 12 | - | not measured; the scene request (`$DBC5`) |
+| `DeathOrWarp`, `Death_*` and `Respawn_*` | `$DC3E`, `$DD4E`, `$DD52` | checked | 10 | - | not measured |
+| `DeathPause` | `$DD23` | checked | 10 | - | not measured |
+| `GameOver` | `$DEB9` | checked | 4 | - | not measured |
+| `LandExit` | `$DF08` | checked | 5 | - | not measured; the exit after a scene |
 
-**Claimed, in progress** (branch `decomp/flow`, `src/decomp/flow.c`): the game flow of the main task in the fixed
-bank, `$D4E6-$E353` and the boss trigger `$CF93-$D04C`: title and difficulty select (`$D4E6`), Land Select and the
-banking of money (`$D630`, `$D8D9`), land load (`$D79B`) and the per-land tables (`$D9CA`), the frame loop (`$DB36`)
-with pause and the boss checkpoint (`$DC04`), death and warps (`$DC3E`, `$DD23`, `$DD4E`), the HUD refreshes
-(`$DE6C`, `$DEA3`), game over (`$DEB9`), land exit and scenes (`$DF08`, `$DF27`), the ending (`$E054`, `$E1AF`) and
-the HUD timer `timer_tick` (`$E28C`).
+**Game flow** (branch `decomp/flow`, `src/decomp/flow.c`): the main task's flow in the fixed bank,
+`$D4E6-$E353`, and the boss trigger `$CF93-$D04C`. Decompiled: the title and difficulty select
+(`$D4E6-$D620`), the land load (`$D79B-$D8A5`), the per-land tables and palettes (`$D9CA-$DA0F`),
+the frame loop with pause, the boss checkpoint, death, warps, respawn, game over and land exit
+(`$DB36-$DF26`), the HUD timer (`$E28C-$E2FD`) and the boss trigger with the arena scroll
+(`$CF93-$D04C`): 1,961 of the 3,880 bytes, or 51% (tables inside the ranges included). Not yet: Land
+Select and the banking of money (`$D630-$D79A`, `$D8A6-$D9C9`), the scenes and the ending
+(`$DF27-$E28B`) and the Select refill `$E2FE` (Scrooge's), which still run as the original: the flow
+hands off to them. The flow has 21 sites: 7 entries that original code reaches and 14 stop sites.
 
 Not decompiled yet, and still run as the original from the C:
 
@@ -291,7 +341,7 @@ are decompiled too, and they also serve every other object.
 **Level routines** (`level.c`, `collision.c`): the camera `$EFE2-$F0E0`, the column streaming
 `$C7C5-$C969`, the map header `$C7B0`, the start and Land Select draws `$C71D-$C7AF`, the block
 decoding `$CCBD-$CE56`, the queue uploads `$C139-$C182`, the row's sprite CHR stream `$C42C-$C507`,
-the boss trigger `$CF93`, the tile edit `$F574` and the background probe with its snaps
+the tile edit `$F574` and the background probe with its snaps
 `$D120-$D4E5`. Branch coverage of these two files was not measured. Not decompiled yet: the row
 scroll (`$E9`), the tile-edit metatile helper `$F697` and the room transitions, which the flow's
 task code runs.
