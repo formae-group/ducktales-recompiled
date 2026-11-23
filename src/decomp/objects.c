@@ -59,6 +59,7 @@
 #define SFX_BOSS_HOP     0x22
 #define SFX_BOSS_LAND    0x1E
 #define SFX_BOSS_TURN    0x23
+#define SFX_LAUNCH       0x28
 
 #define gObjCursor        RAM_U8(DT_ADDR_OBJ_CURSOR)
 #define gScratch0         RAM_U8(DT_ADDR_SCRATCH0)
@@ -3148,6 +3149,34 @@ static void Obj_Target(uint8_t x)
     }
 }
 
+/* Kind $34 ($ADC1): a launcher. Touched (not while Scrooge is knocked back
+ * or dying), it throws him into mode 12 with speed $0400 and vertical
+ * velocity $0728 (sound $28) and plays its animation (frame timer 7, then
+ * held at its end with $80). */
+static void Obj_Launcher(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_LAUNCHER, 0x22, x, gObjects->kind[x]);
+    if (gPlayerMode == PLAYER_MODE_KNOCKBACK || gPlayerMode == PLAYER_MODE_DEATH) {
+        return;
+    }
+    if (Step(x) == 0) {
+        gObjects->animTimer[x] = 0;
+        if (!Obj_TouchScrooge(x)) {
+            return;
+        }
+        gPlayerMode = PLAYER_MODE_12;
+        gObjects->state[x]++;
+        gObjects->animTimer[x] = 7;
+        Obj_SetSpeed(P_, 0x0400);
+        Obj_SetVelocityY(P_, 0x0728);
+        gObjects->vdir[P_] = 0;
+        Sound_Request(SFX_LAUNCH, x);
+    }
+    if ((gObjects->animTimer[x] | gObjects->animFrame[x]) == 0) {
+        gObjects->animTimer[x] = 0x80;
+    }
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -3295,6 +3324,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_TARGET:
             Obj_Target(slot);
+            break;
+        case OBJ_KIND_LAUNCHER:
+            Obj_Launcher(slot);
             break;
         case OBJ_KIND_TALKER:
             Obj_Talker(slot);
@@ -3575,6 +3607,11 @@ static void Run_Target(Regs *r)
     Obj_Target(r->x);
 }
 
+static void Run_Launcher(Regs *r)
+{
+    Obj_Launcher(r->x);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -3744,6 +3781,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_LAUNCHER, NULL, "Obj_Launcher", Run_Launcher, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_TARGET, NULL, "Obj_Target", Run_Target, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_MOON_BOSS, NULL, "Obj_MoonBoss", Run_MoonBoss, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_HIMALAYAS_BOSS, NULL, "Obj_HimalayasBoss", Run_HimalayasBoss, 0, .bank = DT_BANK_OBJECTS },
