@@ -2120,6 +2120,35 @@ static void Obj_MovingPlatform(uint8_t x)
     gObjects->hitbox[x] = 0x84;
 }
 
+/* Kind $1F ($9DF7): an enemy that paces 1 px a frame, right first for 22
+ * frames, then turning every 32, facing its way. A hit beats it. */
+static void Obj_Pacer(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_PACER, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0) {
+        Obj_Defeat(x);
+        return;
+    }
+    if (Step(x) == 0) {
+        Obj_SetSpeed(x, 0x0100);
+        gObjects->timer[x] = 0x16;
+        gObjects->state[x]++;
+        gObjects->dir[x] = OBJ_DIR_RIGHT;
+    }
+    (void)Obj_TouchScrooge(x);
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        gObjects->flags[x] |= OBJ_FLAG_FACING_RIGHT;
+        Obj_MoveRight(x);
+    } else {
+        gObjects->flags[x] &= (uint8_t)~OBJ_FLAG_FACING_RIGHT;
+        Obj_MoveLeft(x);
+    }
+    if (--gObjects->timer[x] == 0) {
+        gObjects->dir[x] ^= 3;
+        gObjects->timer[x] = 0x20;
+    }
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -2206,6 +2235,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_LEAPER:
             Obj_Leaper(slot);
+            break;
+        case OBJ_KIND_PACER:
+            Obj_Pacer(slot);
             break;
         case OBJ_KIND_BOBBER:
             Obj_Bobber(slot);
@@ -2406,6 +2438,11 @@ static void Run_MovingPlatform(Regs *r)
     Obj_MovingPlatform(r->x);
 }
 
+static void Run_Pacer(Regs *r)
+{
+    Obj_Pacer(r->x);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -2575,6 +2612,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_PACER, NULL, "Obj_Pacer", Run_Pacer, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_MOVING_PLATFORM, NULL, "Obj_MovingPlatform", Run_MovingPlatform, 0 },
     { DT_CODE_KIND_KEY_SPOT, NULL, "Obj_KeySpot", Run_KeySpot, 0 },
     { DT_CODE_KIND_BLOCK_DWELLER, NULL, "Obj_BlockDweller", Run_BlockDweller, 0, .bank = DT_BANK_OBJECTS },
