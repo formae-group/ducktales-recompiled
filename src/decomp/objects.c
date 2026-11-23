@@ -2088,6 +2088,38 @@ static void Obj_KeySpot(uint8_t x)
     }
 }
 
+/* Kind $39 (fixed bank $FE69): a platform that moves 48 frames at a time
+ * by a cycle of four directions, carrying Scrooge 1 px a frame its way while
+ * he touches it (hitbox $8A for the test, $84 after). */
+static void Obj_MovingPlatform(uint8_t x)
+{
+    static const uint8_t dirs[4] = { OBJ_DIR_LEFT, OBJ_DIR_RIGHT, OBJ_DIR_RIGHT, OBJ_DIR_LEFT };
+
+    Decomp_Enter(DT_CODE_KIND_MOVING_PLATFORM, 0x22, x, gObjects->kind[x]);
+    if (Step(x) == 0) {
+        gObjects->timer[x] = 0;
+        gObjects->unk_06C0[x] = 0;
+        Obj_SetSpeed(x, 0x0100);
+        gObjects->state[x]++;
+    }
+    if (gObjects->unk_06C0[x] == 0) {
+        gObjects->dir[x] = dirs[gObjects->timer[x] & 3];
+        gObjects->unk_06C0[x] = 0x30;
+        gObjects->timer[x]++;
+    }
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        Obj_MoveRight(x);
+    } else {
+        Obj_MoveLeft(x);
+    }
+    gObjects->unk_06C0[x]--;
+    gObjects->hitbox[x] = 0x8A;
+    if (Obj_TouchScrooge(x)) {
+        Obj_SetWorldX(P_, (uint16_t)(Obj_GetWorldX(P_) + ((gObjects->dir[x] & OBJ_DIR_LEFT) ? 0xFFFF : 1)));
+    }
+    gObjects->hitbox[x] = 0x84;
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -2192,6 +2224,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_TALKER:
             Obj_Talker(slot);
+            break;
+        case OBJ_KIND_MOVING_PLATFORM:
+            Obj_MovingPlatform(slot);
             break;
         case OBJ_KIND_KEY_SPOT:
             Obj_KeySpot(slot);
@@ -2366,6 +2401,11 @@ static void Run_KeySpot(Regs *r)
     Obj_KeySpot(r->x);
 }
 
+static void Run_MovingPlatform(Regs *r)
+{
+    Obj_MovingPlatform(r->x);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -2535,6 +2575,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_MOVING_PLATFORM, NULL, "Obj_MovingPlatform", Run_MovingPlatform, 0 },
     { DT_CODE_KIND_KEY_SPOT, NULL, "Obj_KeySpot", Run_KeySpot, 0 },
     { DT_CODE_KIND_BLOCK_DWELLER, NULL, "Obj_BlockDweller", Run_BlockDweller, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_DWELLER_LINK_BLOCK, NULL, "Obj_DwellerLinkBlock", Run_DwellerLinkBlock, 0, .bank = DT_BANK_OBJECTS },
