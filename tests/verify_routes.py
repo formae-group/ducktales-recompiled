@@ -16,6 +16,7 @@ the frame count and the alignment, so a completed oracle run is kept in
 
     py -3 -I tests/verify_routes.py --build build/headless
 """
+
 import argparse
 import concurrent.futures
 import hashlib
@@ -59,8 +60,9 @@ def main():
     ap.add_argument('--rom', default=str(ROOT / 'roms' / 'DuckTales (USA).nes'))
     ap.add_argument('--routes', nargs='*', help='route files (default: tests/routes/*.txt)')
     ap.add_argument('--align', type=int, nargs='+', default=[0, 1, 2, 3])
-    ap.add_argument('--min-native', type=float, default=99.9,
-                    help='minimum percentage of CPU cycles executed by recompiled code')
+    ap.add_argument(
+        '--min-native', type=float, default=99.9, help='minimum percentage of CPU cycles executed by recompiled code'
+    )
     ap.add_argument('--out', default=str(ROOT / 'build' / 'verify'))
     ap.add_argument('--cache', default=str(ROOT / 'build' / 'verify-cache'), help='oracle hash cache')
     ap.add_argument('--no-cache', action='store_true', help='run the oracle even when a cached run exists')
@@ -127,23 +129,33 @@ def main():
                     matched = False
                     report.append(f'alignment {align} {mode}: ERROR {errors[key]} (see {hashes[key]}.log)')
             if not errors[(route.stem, align, 'native')]:
-                natives += [float(m) for m in re.findall(r'mode=native .*\(([\d.]+)%\)',
-                                                         results[(route.stem, align, 'native')][1])]
-            for mode, other, with_hw in (('native', 'oracle', False), ('interp', 'oracle', False),
-                                         ('interp', 'native', True)):
+                natives += [
+                    float(m)
+                    for m in re.findall(r'mode=native .*\(([\d.]+)%\)', results[(route.stem, align, 'native')][1])
+                ]
+            for mode, other, with_hw in (
+                ('native', 'oracle', False),
+                ('interp', 'oracle', False),
+                ('interp', 'native', True),
+            ):
                 if errors[(route.stem, align, mode)] or errors[(route.stem, align, other)]:
                     continue
-                diff = cv.first_difference(str(hashes[(route.stem, align, other)]),
-                                           str(hashes[(route.stem, align, mode)]), with_hw)
+                diff = cv.first_difference(
+                    str(hashes[(route.stem, align, other)]), str(hashes[(route.stem, align, mode)]), with_hw
+                )
                 if diff:
                     matched = False
                     frame, x, y = diff
-                    report.append(f'alignment {align}: {mode} differs from {other} at frame {frame}\n'
-                                  f'  {other}: {x}\n  {mode}:  {y}')
+                    report.append(
+                        f'alignment {align}: {mode} differs from {other} at frame {frame}\n'
+                        f'  {other}: {x}\n  {mode}:  {y}'
+                    )
         ok = matched and natives and min(natives) >= args.min_native
         oracle_src = 'cached' if all((route.stem, a) in cached for a in args.align) else 'run'
-        print(f'{route.stem:24s} {"PASS" if ok else "FAIL"}  native={min(natives) if natives else 0:.1f}%  '
-              f'oracle/interp match={"yes" if matched else "NO"}  oracle={oracle_src}')
+        print(
+            f'{route.stem:24s} {"PASS" if ok else "FAIL"}  native={min(natives) if natives else 0:.1f}%  '
+            f'oracle/interp match={"yes" if matched else "NO"}  oracle={oracle_src}'
+        )
         if not ok:
             failed.append(route.stem)
             print('\n'.join(report))

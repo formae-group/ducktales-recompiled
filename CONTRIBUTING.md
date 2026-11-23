@@ -92,7 +92,11 @@ not verify in its *Not verified* section.
 ## Style
 
 - C for `src/game`, `src/host`, `src/native` and `src/ui`; C++ only in `src/ui/app_ui.cpp`.
-- Four-space indentation, CRLF line endings, matching the surrounding file.
+- Four-space indentation, CRLF line endings, 120 columns, braces on every `if` and loop, no
+  one-line functions or statements. `.clang-format` describes the C and C++ layout and
+  `[tool.black]` in `pyproject.toml` the Python one; `py -3 tools/format.py` applies both and
+  `py -3 tools/format.py --check` must list nothing before a commit. The pinned tools are
+  `py -3 -m pip install --user clang-format==23.1.5 black==26.10.1`. `external/` is never formatted.
 - Each file opens with a header comment that says what it is for and which settings or options it
   owns. Do not add comments inside function bodies.
 - Use the existing prefixes: `dt_` / `Dt` for game code, `app_` for the application layer.

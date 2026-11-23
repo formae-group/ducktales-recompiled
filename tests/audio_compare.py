@@ -39,6 +39,7 @@ noise floor (docs/validation.md gives the numbers).
 Needs numpy. WAVs, RAM dumps and hash files go to captures/audio_compare and are deleted
 unless --keep is given.
 """
+
 import argparse
 import subprocess
 import sys
@@ -54,13 +55,34 @@ RATE = 48000
 SPF = 800
 CPU_HZ = 21477272.0 / 12.0
 QUIET = 150.0
-DEFAULT_ROUTES = ['amazon_intro', 'transylvania_intro', 'african_mines_intro', 'himalayas_intro', 'moon_intro',
-                  'full_amazon', 'full_transylvania', 'full_african_mines', 'full_himalayas', 'full_moon']
+DEFAULT_ROUTES = [
+    'amazon_intro',
+    'transylvania_intro',
+    'african_mines_intro',
+    'himalayas_intro',
+    'moon_intro',
+    'full_amazon',
+    'full_transylvania',
+    'full_african_mines',
+    'full_himalayas',
+    'full_moon',
+]
 LIMITS = {'level': (0.5, 2.0), 'spectral': (3.0, 7.0), 'pitch': (3.0, None)}
 CHANNELS = ['pulse1', 'pulse2', 'triangle']
-TRACKS = {0x00: 'The Amazon', 0x01: 'Transylvania', 0x02: 'African Mines', 0x03: 'The Himalayas', 0x04: 'The Moon',
-          0x05: 'Land Select', 0x06: 'Boss fight', 0x07: 'Title', 0x08: 'Invincibility', 0x09: 'Game over',
-          0x0A: 'Death', 0x0B: 'Launchpad ride'}
+TRACKS = {
+    0x00: 'The Amazon',
+    0x01: 'Transylvania',
+    0x02: 'African Mines',
+    0x03: 'The Himalayas',
+    0x04: 'The Moon',
+    0x05: 'Land Select',
+    0x06: 'Boss fight',
+    0x07: 'Title',
+    0x08: 'Invincibility',
+    0x09: 'Game over',
+    0x0A: 'Death',
+    0x0B: 'Launchpad ride',
+}
 
 
 def route_frames(path):
@@ -80,19 +102,81 @@ def record(route, args, exe, native):
     out = Path(args.out)
     frames = str(route_frames(route))
     base = out / route.stem
-    files = {k: Path(f'{base}.{k}') for k in ('apu.wav', 'native.wav', 'cycle.txt', 'native.txt', 'ram.bin',
-                                              'apu1.wav')}
+    files = {
+        k: Path(f'{base}.{k}') for k in ('apu.wav', 'native.wav', 'cycle.txt', 'native.txt', 'ram.bin', 'apu1.wav')
+    }
     if not (args.reuse and files['apu.wav'].exists()):
-        subprocess.run([str(exe), args.rom, '--input', str(route), '--frames', frames, '--wav-out', str(files['apu.wav']),
-                        '--ram-hash-out', str(files['cycle.txt'])], capture_output=True, check=True)
+        subprocess.run(
+            [
+                str(exe),
+                args.rom,
+                '--input',
+                str(route),
+                '--frames',
+                frames,
+                '--wav-out',
+                str(files['apu.wav']),
+                '--ram-hash-out',
+                str(files['cycle.txt']),
+            ],
+            capture_output=True,
+            check=True,
+        )
     if args.floor and not (args.reuse and files['apu1.wav'].exists()):
-        subprocess.run([str(exe), args.rom, '--input', str(route), '--frames', frames, '--align', '1',
-                        '--wav-out', str(files['apu1.wav'])], capture_output=True, check=True)
-    subprocess.run([str(native), args.rom, '--input', str(route), '--frames', frames, '--lag', 'faithful',
-                    '--wav-out', str(files['native.wav']), '--ram-hash-out', str(files['native.txt']),
-                    '--ram-dump', str(files['ram.bin'])], capture_output=True, check=True)
-    same = subprocess.run([sys.executable, '-I', str(COMPARE), str(files['cycle.txt']), str(files['native.txt']),
-                           '--fields', 'ram,cycles', '--list', '0'], capture_output=True, text=True).returncode == 0
+        subprocess.run(
+            [
+                str(exe),
+                args.rom,
+                '--input',
+                str(route),
+                '--frames',
+                frames,
+                '--align',
+                '1',
+                '--wav-out',
+                str(files['apu1.wav']),
+            ],
+            capture_output=True,
+            check=True,
+        )
+    subprocess.run(
+        [
+            str(native),
+            args.rom,
+            '--input',
+            str(route),
+            '--frames',
+            frames,
+            '--lag',
+            'faithful',
+            '--wav-out',
+            str(files['native.wav']),
+            '--ram-hash-out',
+            str(files['native.txt']),
+            '--ram-dump',
+            str(files['ram.bin']),
+        ],
+        capture_output=True,
+        check=True,
+    )
+    same = (
+        subprocess.run(
+            [
+                sys.executable,
+                '-I',
+                str(COMPARE),
+                str(files['cycle.txt']),
+                str(files['native.txt']),
+                '--fields',
+                'ram,cycles',
+                '--list',
+                '0',
+            ],
+            capture_output=True,
+            text=True,
+        ).returncode
+        == 0
+    )
     return route, files, same
 
 
@@ -169,10 +253,12 @@ def pitch_errors(apu, nat, periods):
     pads = {name: np.concatenate([np.zeros(size), sig, np.zeros(size)]) for name, sig in (('apu', apu), ('nat', nat))}
     offsets = np.arange(size)
     for start in range(0, len(want), 256):
-        idx = want[start:start + 256]
+        idx = want[start : start + 256]
         base = idx * SPF + SPF // 2 + size // 2
-        spec = {name: np.abs(np.fft.rfft(pad[base[:, None] + offsets[None, :]] * win, n=nfft, axis=1))
-                for name, pad in pads.items()}
+        spec = {
+            name: np.abs(np.fft.rfft(pad[base[:, None] + offsets[None, :]] * win, n=nfft, axis=1))
+            for name, pad in pads.items()
+        }
         for row, f in enumerate(idx):
             floor = 20 * np.log10(np.median(spec['apu'][row]) + 1e-9)
             for ch, cname in enumerate(CHANNELS):
@@ -191,16 +277,26 @@ def analyse(route, files, same, other='native.wav'):
     apu, nat = read_wav(files['apu.wav']), read_wav(files[other])
     ram = np.fromfile(files['ram.bin'], dtype=np.uint8).reshape(-1, 0x800)
     frames = min(len(apu) // SPF, len(nat) // SPF, len(ram))
-    apu, nat, ram = apu[:frames * SPF], nat[:frames * SPF], ram[:frames]
+    apu, nat, ram = apu[: frames * SPF], nat[: frames * SPF], ram[:frames]
     a, n = apu.reshape(frames, SPF), nat.reshape(frames, SPF)
-    ra, rn = np.sqrt((a ** 2).mean(1)), np.sqrt((n ** 2).mean(1))
+    ra, rn = np.sqrt((a**2).mean(1)), np.sqrt((n**2).mean(1))
     level = np.abs(20 * np.log10((rn + 1) / (ra + 1)))
     edges = band_edges()
-    lsd = np.sqrt(((band_energies(framed(apu, frames, 2048), edges) -
-                    band_energies(framed(nat, frames, 2048), edges)) ** 2).mean(1))
+    lsd = np.sqrt(
+        ((band_energies(framed(apu, frames, 2048), edges) - band_energies(framed(nat, frames, 2048), edges)) ** 2).mean(
+            1
+        )
+    )
     music = np.where(ram[:, 0xD0] & 0x0F, ram[:, 0xC5].astype(int), -1)
-    return {'route': route.stem, 'same': same, 'audible': ra > QUIET, 'level': level, 'lsd': lsd,
-            'track': music, 'pitch': pitch_errors(apu, nat, channel_periods(ram))}
+    return {
+        'route': route.stem,
+        'same': same,
+        'audible': ra > QUIET,
+        'level': level,
+        'lsd': lsd,
+        'track': music,
+        'pitch': pitch_errors(apu, nat, channel_periods(ram)),
+    }
 
 
 def stats(values):
@@ -240,8 +336,15 @@ def summarize(groups):
         lsd = np.concatenate([p['lsd'][p['audible']] for p in parts])
         pitch = {c: stats([e for p in parts for e in p['pitch'][c]]) for c in CHANNELS}
         counts = {c: sum(len(p['pitch'][c]) for p in parts) for c in CHANNELS}
-        row = {'name': name, 'frames': len(aud), 'audible': int(aud.sum()), 'level': stats(lev),
-               'spectral': stats(lsd), 'pitch': pitch, 'counts': counts}
+        row = {
+            'name': name,
+            'frames': len(aud),
+            'audible': int(aud.sum()),
+            'level': stats(lev),
+            'spectral': stats(lsd),
+            'pitch': pitch,
+            'counts': counts,
+        }
         rows.append(row)
     return rows
 
@@ -255,13 +358,18 @@ def judge(rows, floors=None):
 
 def print_rows(title, rows):
     print('\n' + title)
-    print(f'{"":24} {"frames":>7} {"audible":>7}  {"level dB":>13}  {"spectral dB":>13}  ' +
-          '  '.join(f'{c + " cents (n)":>24}' for c in CHANNELS) + '  result')
+    print(
+        f'{"":24} {"frames":>7} {"audible":>7}  {"level dB":>13}  {"spectral dB":>13}  '
+        + '  '.join(f'{c + " cents (n)":>24}' for c in CHANNELS)
+        + '  result'
+    )
     for r in rows:
         pitch = '  '.join(f'{fmt(r["pitch"][c]) + " (" + str(r["counts"][c]) + ")":>24}' for c in CHANNELS)
         result = ('pass' if r['ok'] else 'FAIL') if 'ok' in r else ''
-        print(f'{r["name"]:24} {r["frames"]:7} {r["audible"]:7}  {fmt(r["level"]):>13}  {fmt(r["spectral"]):>13}  '
-              f'{pitch}  {result}')
+        print(
+            f'{r["name"]:24} {r["frames"]:7} {r["audible"]:7}  {fmt(r["level"]):>13}  {fmt(r["spectral"]):>13}  '
+            f'{pitch}  {result}'
+        )
 
 
 def track_slice(res, track):
@@ -275,12 +383,26 @@ def track_name(t):
 
 
 def groups(results):
-    route_rows = summarize([(r['route'], [{'audible': r['audible'], 'level': r['level'], 'lsd': r['lsd'],
-                                           'pitch': {c: [e for _, e in r['pitch'][c]] for c in CHANNELS}}])
-                            for r in results])
+    route_rows = summarize(
+        [
+            (
+                r['route'],
+                [
+                    {
+                        'audible': r['audible'],
+                        'level': r['level'],
+                        'lsd': r['lsd'],
+                        'pitch': {c: [e for _, e in r['pitch'][c]] for c in CHANNELS},
+                    }
+                ],
+            )
+            for r in results
+        ]
+    )
     tracks = sorted({int(t) for r in results for t in np.unique(r['track'])})
-    track_rows = summarize([(track_name(t), [track_slice(r, t) for r in results if (r['track'] == t).any()])
-                            for t in tracks])
+    track_rows = summarize(
+        [(track_name(t), [track_slice(r, t) for r in results if (r['track'] == t).any()]) for t in tracks]
+    )
     return route_rows, track_rows, tracks
 
 
@@ -293,9 +415,14 @@ def main():
     ap.add_argument('--jobs', type=int, default=2)
     ap.add_argument('--out', default=str(ROOT / 'captures' / 'audio_compare'))
     ap.add_argument('--keep', action='store_true')
-    ap.add_argument('--reuse', action='store_true', help='keep an existing cycle-host WAV instead of recording it again')
-    ap.add_argument('--floor', action='store_true',
-                    help='also record the cycle host at CPU/PPU alignment 1 and report APU vs APU as the noise floor')
+    ap.add_argument(
+        '--reuse', action='store_true', help='keep an existing cycle-host WAV instead of recording it again'
+    )
+    ap.add_argument(
+        '--floor',
+        action='store_true',
+        help='also record the cycle host at CPU/PPU alignment 1 and report APU vs APU as the noise floor',
+    )
     args = ap.parse_args()
     exe = ROOT / args.build / args.config / 'ducktales.exe'
     native = ROOT / args.build / args.config / 'ducktales_native.exe'
@@ -311,14 +438,22 @@ def main():
         if not args.keep:
             for f in files.values():
                 f.unlink(missing_ok=True)
-    print('Native runtime vs cycle host (RAM and cycles on every frame): ' +
-          ', '.join(r['route'] + (' same' if r['same'] else ' DIFFERENT') for r in results))
+    print(
+        'Native runtime vs cycle host (RAM and cycles on every frame): '
+        + ', '.join(r['route'] + (' same' if r['same'] else ' DIFFERENT') for r in results)
+    )
     print('Columns: median / p95 of |difference|; level and spectral over audible frames.')
     route_rows, track_rows, tracks = groups(results)
     floor_routes, floor_tracks = groups(floors)[:2] if floors else (None, None)
     if floors:
-        keep = [i for i, row in enumerate(floor_routes) if row['level'] and row['spectral'] and
-                row['level'][0] <= LIMITS['level'][0] and row['spectral'][0] <= LIMITS['spectral'][0]]
+        keep = [
+            i
+            for i, row in enumerate(floor_routes)
+            if row['level']
+            and row['spectral']
+            and row['level'][0] <= LIMITS['level'][0]
+            and row['spectral'][0] <= LIMITS['spectral'][0]
+        ]
         print('Noise floor used from: ' + (', '.join(floors[i]['route'] for i in keep) or 'no route'))
         floor_routes = [floor_routes[i] for i in keep]
         floor_tracks = groups([floors[i] for i in keep])[1] if keep else []

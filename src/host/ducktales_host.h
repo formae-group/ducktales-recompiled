@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-int  ducktales_host_saved_value(DtEnh e);
+int ducktales_host_saved_value(DtEnh e);
 void ducktales_host_set_saved_value(DtEnh e, int value);
 /* [Game] NoSpriteFlicker as config.ini keeps it (host/ducktales_sprites.h). */
 bool ducktales_host_saved_sprites(void);

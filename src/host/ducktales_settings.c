@@ -37,7 +37,10 @@ static bool s_no_slowdown = true;
 static bool s_no_slowdown = false;
 #endif
 
-bool ducktales_host_no_slowdown(void) { return s_no_slowdown; }
+bool ducktales_host_no_slowdown(void)
+{
+    return s_no_slowdown;
+}
 
 void ducktales_host_set_no_slowdown(bool on)
 {
@@ -47,8 +50,12 @@ void ducktales_host_set_no_slowdown(bool on)
 
 static void saved_init(void)
 {
-    if (s_saved_ready) return;
-    for (int e = 0; e < DT_ENH_COUNT; e++) s_saved[e] = dt_enh_info((DtEnh)e)->stock;
+    if (s_saved_ready) {
+        return;
+    }
+    for (int e = 0; e < DT_ENH_COUNT; e++) {
+        s_saved[e] = dt_enh_info((DtEnh)e)->stock;
+    }
     s_saved_ready = true;
 }
 
@@ -64,9 +71,15 @@ void ducktales_host_set_saved_value(DtEnh e, int value)
     s_saved[e] = value;
 }
 
-bool ducktales_host_saved_sprites(void) { return s_saved_sprites; }
+bool ducktales_host_saved_sprites(void)
+{
+    return s_saved_sprites;
+}
 
-void ducktales_host_set_saved_sprites(bool on) { s_saved_sprites = on; }
+void ducktales_host_set_saved_sprites(bool on)
+{
+    s_saved_sprites = on;
+}
 
 void ducktales_host_load_game_setting(const char *key, const char *value)
 {
@@ -85,14 +98,20 @@ void ducktales_host_load_game_setting(const char *key, const char *value)
     if (!strcmp(key, "NoSlowdown")) {
         static const char *ON[] = { "on", "1", "true", "yes" }, *OFF[] = { "off", "0", "false", "no" };
         for (int i = 0; i < 4; i++) {
-            if (!strcmp(value, ON[i])) s_no_slowdown = true;
-            if (!strcmp(value, OFF[i])) s_no_slowdown = false;
+            if (!strcmp(value, ON[i])) {
+                s_no_slowdown = true;
+            }
+            if (!strcmp(value, OFF[i])) {
+                s_no_slowdown = false;
+            }
         }
         return;
     }
     for (int e = 0; e < DT_ENH_COUNT; e++) {
         const DtEnhInfo *in = dt_enh_info((DtEnh)e);
-        if (strcmp(key, in->key)) continue;
+        if (strcmp(key, in->key)) {
+            continue;
+        }
         int v;
         if (!dt_enh_parse((DtEnh)e, value, &v)) {
             char stock[16];
@@ -105,7 +124,9 @@ void ducktales_host_load_game_setting(const char *key, const char *value)
         return;
     }
 #if DUCKTALES_WINDOW
-    if (!app_present_load(key, value)) app_ui_load_game_setting(key, value);
+    if (!app_present_load(key, value)) {
+        app_ui_load_game_setting(key, value);
+    }
 #endif
 }
 
@@ -127,7 +148,9 @@ void ducktales_host_write_game_settings(FILE *f)
 bool ducktales_host_game_option(const char *name, const char *value, bool *ok)
 {
     for (int e = 0; e < DT_ENH_COUNT; e++) {
-        if (strcmp(name, dt_enh_info((DtEnh)e)->option)) continue;
+        if (strcmp(name, dt_enh_info((DtEnh)e)->option)) {
+            continue;
+        }
         int v;
         *ok = dt_enh_parse((DtEnh)e, value, &v) && dt_enh_set((DtEnh)e, v);
         return true;
@@ -135,7 +158,9 @@ bool ducktales_host_game_option(const char *name, const char *value, bool *ok)
     if (!strcmp(name, DT_SPRITES_OPTION)) {
         bool on;
         *ok = dt_sprites_parse(value, &on);
-        if (*ok) dt_sprites_set(on);
+        if (*ok) {
+            dt_sprites_set(on);
+        }
         return true;
     }
     return false;

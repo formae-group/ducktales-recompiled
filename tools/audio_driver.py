@@ -12,18 +12,18 @@ Output is for local investigation and is not committed (it is derived from the R
 The simulator follows the code at bank 3 $86AC-$892B (music channels) and
 $856B-$8698 (effect stream) and counts frames of one driver tick per NMI.
 """
+
 import argparse
 import math
 import re
 from pathlib import Path
 
-TABLE = 0x8A40          # 2-byte pointers, one per sound id
-PERIODS = 0x897B        # 2-byte APU periods indexed by transpose + pitch
+TABLE = 0x8A40  # 2-byte pointers, one per sound id
+PERIODS = 0x897B  # 2-byte APU periods indexed by transpose + pitch
 LEN = (0x896B, 0x8973)  # note lengths by bits 5-7 of a note byte: plain, dotted
 CHANNELS = ('pulse1', 'pulse2', 'triangle', 'noise')
 SHORT = ('sq1', 'sq2', 'tri', 'noi')
-MUSIC_CMDS = ('tempo', 'slide', 'duty', 'volume', 'loop', 'transpose', 'dotted',
-              'fade-env', 'instrument', 'end')
+MUSIC_CMDS = ('tempo', 'slide', 'duty', 'volume', 'loop', 'transpose', 'dotted', 'fade-env', 'instrument', 'end')
 SFX_CMDS = ('wait', 'slide', 'duty', 'volume', 'loop', 'vibrato/env', 'end')
 NOTE_NAMES = ('C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B')
 
@@ -33,8 +33,8 @@ class Bank3:
         data = Path(path).read_bytes()
         if data[:4] != b'NES\x1a':
             raise SystemExit('not an iNES image')
-        self.prg = data[16:16 + data[4] * 0x4000]
-        self.b3 = self.prg[3 * 0x4000:4 * 0x4000]
+        self.prg = data[16 : 16 + data[4] * 0x4000]
+        self.b3 = self.prg[3 * 0x4000 : 4 * 0x4000]
 
     def byte(self, a):
         return self.b3[a - 0x8000]
@@ -56,10 +56,15 @@ class Bank3:
         b0 = self.byte(h)
         if b0 & 0x0F:
             ptrs = [self.word(h + 1 + 2 * c) for c in range(4)]
-            return {'addr': h, 'kind': 'music', 'prio': b0 & 0x0F, 'mask': 0xF,
-                    'streams': ptrs, 'inst': self.word(h + 9)}
-        return {'addr': h, 'kind': 'sfx', 'prio': b0 >> 4, 'mask': self.byte(h + 1) & 0x0F,
-                'streams': [h + 2]}
+            return {
+                'addr': h,
+                'kind': 'music',
+                'prio': b0 & 0x0F,
+                'mask': 0xF,
+                'streams': ptrs,
+                'inst': self.word(h + 9),
+            }
+        return {'addr': h, 'kind': 'sfx', 'prio': b0 >> 4, 'mask': self.byte(h + 1) & 0x0F, 'streams': [h + 2]}
 
 
 def note_name(rom, index):
@@ -278,12 +283,17 @@ def cmd_table(rom):
                     parts.append('%s ends %d' % (SHORT[c.ch], c.ended))
                 else:
                     parts.append('%s ?' % SHORT[c.ch])
-            print('%02X  %04X  music  %d   all four, inst table %04X   %s' %
-                  (sid, addr, h['prio'], h['inst'], ', '.join(parts)))
+            print(
+                '%02X  %04X  music  %d   all four, inst table %04X   %s'
+                % (sid, addr, h['prio'], h['inst'], ', '.join(parts))
+            )
         else:
             s = simulate_sfx(rom, h)
-            length = ('%d' % s['frames']) if s['frames'] else (
-                'loops forever (jump at frame %s)' % s['looped'] if s['looped'] is not None else 'open')
+            length = (
+                ('%d' % s['frames'])
+                if s['frames']
+                else ('loops forever (jump at frame %s)' % s['looped'] if s['looped'] is not None else 'open')
+            )
             print('%02X  %04X  sfx    %d   %-28s %s' % (sid, addr, h['prio'], chan_names(h['mask']), length))
 
 
@@ -292,8 +302,7 @@ def cmd_decode(rom, sid, only):
     log = []
     if h['kind'] == 'music':
         for c in simulate_music(rom, h, log=log):
-            print('%s: %d notes, events %s, loop %s, end %s' %
-                  (CHANNELS[c.ch], c.notes, c.events, c.looped, c.ended))
+            print('%s: %d notes, events %s, loop %s, end %s' % (CHANNELS[c.ch], c.notes, c.events, c.looped, c.ended))
     else:
         print('sfx prio %d channels %s: %s' % (h['prio'], chan_names(h['mask']), simulate_sfx(rom, h, log=log)))
     for line in log:
@@ -308,12 +317,15 @@ def bank_addr(rom, off):
 
 def cmd_xref(rom):
     prg = rom.prg
-    for name, pat in (('$F752 music_request (sets $C5)', b'\x20\x52\xf7'),
-                      ('$F754 sound_request', b'\x20\x54\xf7'),
-                      ('$F756', b'\x20\x56\xf7'), ('$8003 direct', b'\x20\x03\x80')):
+    for name, pat in (
+        ('$F752 music_request (sets $C5)', b'\x20\x52\xf7'),
+        ('$F754 sound_request', b'\x20\x54\xf7'),
+        ('$F756', b'\x20\x56\xf7'),
+        ('$8003 direct', b'\x20\x03\x80'),
+    ):
         for m in re.finditer(re.escape(pat), prg):
             bank, a = bank_addr(rom, m.start())
-            p = prg[m.start() - 2:m.start()]
+            p = prg[m.start() - 2 : m.start()]
             imm = '#$%02X' % p[1] if p[0] == 0xA9 else 'A computed'
             print('%-32s %d:%04X  %s' % (name, bank, a, imm))
 
@@ -323,7 +335,7 @@ def cmd_apu(rom):
     modes = {0x8C: 'STY', 0x8D: 'STA', 0x8E: 'STX', 0x99: 'STA ,Y', 0x9D: 'STA ,X'}
     for m in re.finditer(rb'[\x8c\x8d\x8e\x99\x9d][\x00-\x17]\x40', prg):
         bank, a = bank_addr(rom, m.start())
-        p = prg[m.start() - 2:m.start()]
+        p = prg[m.start() - 2 : m.start()]
         imm = ' value #$%02X' % p[1] if p[0] in (0xA9, 0xA2, 0xA0) else ''
         print('%d:%04X  %s $40%02X%s' % (bank, a, modes[prg[m.start()]], prg[m.start() + 1], imm))
 
@@ -340,8 +352,12 @@ def main():
     sub.add_parser('apu')
     a = ap.parse_args()
     rom = Bank3(a.rom)
-    {'table': lambda: cmd_table(rom), 'decode': lambda: cmd_decode(rom, a.id, a.ch),
-     'xref': lambda: cmd_xref(rom), 'apu': lambda: cmd_apu(rom)}[a.cmd]()
+    {
+        'table': lambda: cmd_table(rom),
+        'decode': lambda: cmd_decode(rom, a.id, a.ch),
+        'xref': lambda: cmd_xref(rom),
+        'apu': lambda: cmd_apu(rom),
+    }[a.cmd]()
 
 
 if __name__ == '__main__':

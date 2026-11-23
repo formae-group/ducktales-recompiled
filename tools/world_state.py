@@ -7,6 +7,7 @@ position, HUD time, money, total, lives, treasure and item flags, and the
 transition/exit requests. --changes prints a line only when one of the decoded
 fields (other than camera, position and time) changes.
 """
+
 import argparse
 import sys
 from pathlib import Path
