@@ -74,6 +74,7 @@ Run the checks that cover what you touched before submitting:
 |---|---|
 | Game code, seeds, native runtime (every commit) | `py -3 -I tests/quick_verify.py --build build/headless` |
 | Hooks, host, runtime integration (every commit) | `py -3 -I tests/quick_verify.py --build build/headless --runtime cycle` |
+| Decompiled routines | `py -3 -I tests/decomp_test.py --build build/headless --dev-build build/headless-dev` |
 | Nightly, a release | `py -3 -I tests/verify_routes.py --build build/headless` |
 | Enhancements | `py -3 -I tests/enhancements_test.py --build build/headless --dev-build build/headless-dev` |
 | Sprite presentation | `py -3 -I tests/sprites_test.py --build build/headless --dev-build build/headless-dev` |
@@ -89,6 +90,9 @@ Checks come in two tiers ([docs/validation.md](docs/validation.md#fast-verificat
   `--from-state auto --span 600` starts them from a save state just before it. The native runtime
   (the default, about 11 s for all 12 routes with `--jobs 4`) runs the generated code on its own bus; it does not run
   the host's hooks and enhancements, so check those with `--runtime cycle` (about 3.5 min).
+  `tests/decomp_test.py` takes the same `--changed` ranges, with `--from-state` and `--span`, to
+  check one decompiled routine from the golden states; the full run is the gate before a merge.
+  `tools/test_slot.py -- <command>` queues heavy runs so that at most two run at once.
 - **Nightly and before a release**, not per branch per change,
   `verify_routes.py` must report native, interpreter and oracle equality on every frame of every
   route at all four alignments, with 100% of CPU cycles in recompiled code (3 h 18 min with `--jobs 3` and no oracle cache). The oracle's
