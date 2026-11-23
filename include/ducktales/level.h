@@ -17,30 +17,30 @@
 extern "C" {
 #endif
 
-#define gMapGrid          Ram_GetU16(DT_ADDR_MAP_GRID, DT_ADDR_MAP_GRID + 1)
-#define gStreamPage       RAM_U8(DT_ADDR_STREAM_PAGE)
-#define gCameraXPrev      RAM_U8(DT_ADDR_CAMERA_X_PREV)
-#define gCameraDelta      RAM_U8(DT_ADDR_CAMERA_DELTA)
-#define gScreenData       Ram_GetU16(DT_ADDR_SCREEN_DATA, DT_ADDR_SCREEN_DATA + 1)
-#define gBlockAttr        RAM_U8(DT_ADDR_BLOCK_ATTR)
-#define gBlockClasses     RAM_U8(DT_ADDR_BLOCK_CLASSES)
-#define gTilesetBank      RAM_U8(DT_ADDR_TILESET_BANK)
-#define gBank             RAM_U8(DT_ADDR_BANK)
-#define gBlanked          RAM_U8(DT_ADDR_BLANKED)
-#define gRowScroll        RAM_U8(DT_ADDR_ROW_SCROLL)
-#define gScene            RAM_U8(DT_ADDR_SCENE)              /* hypothesis */
-#define gSceneScroll      RAM_U8(DT_ADDR_SCENE_SCROLL)       /* hypothesis */
-#define gHimalayasOpen    RAM_U8(DT_ADDR_HIMALAYAS_OPEN)     /* hypothesis */
-#define gVramQueueReady   RAM_U8(DT_ADDR_VRAM_QUEUE_READY)
-#define gTileEditReady    RAM_U8(DT_ADDR_TILE_EDIT_READY)
-#define gVramQueue        (&RAM_U8(DT_ADDR_VRAM_QUEUE))
-#define gTileEditQueue    (&RAM_U8(DT_ADDR_TILE_EDIT_QUEUE))
-#define gTileBuffer       (&RAM_U8(DT_ADDR_TILE_BUFFER))     /* 4 rows of 4 tiles */
-#define gAttrShadow       (&RAM_U8(DT_ADDR_ATTR_SHADOW))     /* 64 bytes per nametable */
-#define gCollisionMap     (&RAM_U8(DT_ADDR_COLLISION_MAP))   /* one byte per block, 64 per nametable */
+#define gMapGrid        Ram_GetU16(DT_ADDR_MAP_GRID, DT_ADDR_MAP_GRID + 1)
+#define gStreamPage     RAM_U8(DT_ADDR_STREAM_PAGE)
+#define gCameraXPrev    RAM_U8(DT_ADDR_CAMERA_X_PREV)
+#define gCameraDelta    RAM_U8(DT_ADDR_CAMERA_DELTA)
+#define gScreenData     Ram_GetU16(DT_ADDR_SCREEN_DATA, DT_ADDR_SCREEN_DATA + 1)
+#define gBlockAttr      RAM_U8(DT_ADDR_BLOCK_ATTR)
+#define gBlockClasses   RAM_U8(DT_ADDR_BLOCK_CLASSES)
+#define gTilesetBank    RAM_U8(DT_ADDR_TILESET_BANK)
+#define gBank           RAM_U8(DT_ADDR_BANK)
+#define gBlanked        RAM_U8(DT_ADDR_BLANKED)
+#define gRowScroll      RAM_U8(DT_ADDR_ROW_SCROLL)
+#define gScene          RAM_U8(DT_ADDR_SCENE)          /* hypothesis */
+#define gSceneScroll    RAM_U8(DT_ADDR_SCENE_SCROLL)   /* hypothesis */
+#define gHimalayasOpen  RAM_U8(DT_ADDR_HIMALAYAS_OPEN) /* hypothesis */
+#define gVramQueueReady RAM_U8(DT_ADDR_VRAM_QUEUE_READY)
+#define gTileEditReady  RAM_U8(DT_ADDR_TILE_EDIT_READY)
+#define gVramQueue      (&RAM_U8(DT_ADDR_VRAM_QUEUE))
+#define gTileEditQueue  (&RAM_U8(DT_ADDR_TILE_EDIT_QUEUE))
+#define gTileBuffer     (&RAM_U8(DT_ADDR_TILE_BUFFER))   /* 4 rows of 4 tiles */
+#define gAttrShadow     (&RAM_U8(DT_ADDR_ATTR_SHADOW))   /* 64 bytes per nametable */
+#define gCollisionMap   (&RAM_U8(DT_ADDR_COLLISION_MAP)) /* one byte per block, 64 per nametable */
 
-#define MAP_NO_SCREEN     0xFF
-#define QUEUE_END         0x80    /* a PPU address high byte with bit 7 ends a queue */
+#define MAP_NO_SCREEN 0xFF
+#define QUEUE_END     0x80 /* a PPU address high byte with bit 7 ends a queue */
 
 /* The screen id in cell index of the current map's grid (the grid is ROM). */
 static inline uint8_t Map_Cell(uint8_t index)

@@ -49,16 +49,26 @@ static uint64_t s_generation = 1, s_composed;
 
 /* ---- the lines ---- */
 
-static uint16_t inc_x(uint16_t v) { return (v & 31) == 31 ? (uint16_t)((v & ~31u) ^ 0x0400) : (uint16_t)(v + 1); }
+static uint16_t inc_x(uint16_t v)
+{
+    return (v & 31) == 31 ? (uint16_t)((v & ~31u) ^ 0x0400) : (uint16_t)(v + 1);
+}
 
 static uint16_t inc_y(uint16_t v)
 {
-    if ((v & 0x7000) != 0x7000) return (uint16_t)(v + 0x1000);
+    if ((v & 0x7000) != 0x7000) {
+        return (uint16_t)(v + 0x1000);
+    }
     v &= (uint16_t)~0x7000u;
     unsigned y = (v >> 5) & 31;
-    if (y == 29) { y = 0; v ^= 0x0800; }
-    else if (y == 31) y = 0;
-    else y++;
+    if (y == 29) {
+        y = 0;
+        v ^= 0x0800;
+    } else if (y == 31) {
+        y = 0;
+    } else {
+        y++;
+    }
     return (uint16_t)((v & ~0x03E0u) | (y << 5));
 }
 
@@ -67,57 +77,76 @@ typedef struct {
     uint8_t x, w, ctrl, mask;
 } Scroll;
 
-static bool rendering(const Scroll *s) { return (s->mask & 0x18) != 0; }
+static bool rendering(const Scroll *s)
+{
+    return (s->mask & 0x18) != 0;
+}
 
 static void dot_event(Scroll *s, unsigned dot)
 {
-    if (!rendering(s)) return;
-    if ((dot >= 8 && dot <= 256 && !(dot & 7)) || dot == 328 || dot == 336) s->v = inc_x(s->v);
-    if (dot == 256) s->v = inc_y(s->v);
-    if (dot == 257) s->v = (uint16_t)((s->v & ~0x041Fu) | (s->t & 0x041Fu));
+    if (!rendering(s)) {
+        return;
+    }
+    if ((dot >= 8 && dot <= 256 && !(dot & 7)) || dot == 328 || dot == 336) {
+        s->v = inc_x(s->v);
+    }
+    if (dot == 256) {
+        s->v = inc_y(s->v);
+    }
+    if (dot == 257) {
+        s->v = (uint16_t)((s->v & ~0x041Fu) | (s->t & 0x041Fu));
+    }
 }
 
 static void reg_write(Scroll *s, uint16_t addr, uint8_t value)
 {
     switch (addr) {
-    case 0x2000:
-        s->ctrl = value;
-        s->t = (uint16_t)((s->t & 0x73FF) | ((value & 3) << 10));
-        break;
-    case 0x2001:
-        s->mask = value;
-        break;
-    case 0x2002:
-        s->w = 0;
-        break;
-    case 0x2005:
-        if (!s->w) {
-            s->x = value & 7;
-            s->t = (uint16_t)((s->t & 0x7FE0) | (value >> 3));
-        } else {
-            s->t = (uint16_t)((s->t & 0x0C1F) | ((value & 0xF8) << 2) | ((value & 7) << 12));
-        }
-        s->w ^= 1;
-        break;
-    case 0x2006:
-        if (!s->w) s->t = (uint16_t)((s->t & 0x00FF) | ((value & 0x3F) << 8));
-        else s->v = s->t = (uint16_t)((s->t & 0x7F00) | value);
-        s->w ^= 1;
-        break;
-    case 0x2007:
-        if (rendering(s)) s->v = inc_y(inc_x(s->v));
-        else s->v = (uint16_t)((s->v + ((s->ctrl & 0x04) ? 32 : 1)) & 0x7FFF);
-        break;
-    default:
-        break;
+        case 0x2000:
+            s->ctrl = value;
+            s->t = (uint16_t)((s->t & 0x73FF) | ((value & 3) << 10));
+            break;
+        case 0x2001:
+            s->mask = value;
+            break;
+        case 0x2002:
+            s->w = 0;
+            break;
+        case 0x2005:
+            if (!s->w) {
+                s->x = value & 7;
+                s->t = (uint16_t)((s->t & 0x7FE0) | (value >> 3));
+            } else {
+                s->t = (uint16_t)((s->t & 0x0C1F) | ((value & 0xF8) << 2) | ((value & 7) << 12));
+            }
+            s->w ^= 1;
+            break;
+        case 0x2006:
+            if (!s->w) {
+                s->t = (uint16_t)((s->t & 0x00FF) | ((value & 0x3F) << 8));
+            } else {
+                s->v = s->t = (uint16_t)((s->t & 0x7F00) | value);
+            }
+            s->w ^= 1;
+            break;
+        case 0x2007:
+            if (rendering(s)) {
+                s->v = inc_y(inc_x(s->v));
+            } else {
+                s->v = (uint16_t)((s->v + ((s->ctrl & 0x04) ? 32 : 1)) & 0x7FFF);
+            }
+            break;
+        default:
+            break;
     }
 }
 
 static void replay_lines(const NativeFrame *f)
 {
-    Scroll s = { f->start_regs.v, f->start_regs.t, f->start_regs.fine_x, f->start_regs.w, f->start_regs.ctrl,
-                 f->start_regs.mask };
-    if (rendering(&s)) s.v = inc_x(inc_x(s.t));
+    Scroll s = { f->start_regs.v, f->start_regs.t,    f->start_regs.fine_x,
+                 f->start_regs.w, f->start_regs.ctrl, f->start_regs.mask };
+    if (rendering(&s)) {
+        s.v = inc_x(inc_x(s.t));
+    }
     uint32_t next = 0;
     for (unsigned y = 0; y < NV_HEIGHT; y++) {
         CycLine *l = &s_lines[y];
@@ -129,10 +158,14 @@ static void replay_lines(const NativeFrame *f)
         unsigned dot = 2;
         for (; next < f->ppu_write_count && f->ppu_writes[next].scanline == y; next++) {
             const NativeRegWrite *w = &f->ppu_writes[next];
-            for (; dot <= w->dot && dot <= 340; dot++) dot_event(&s, dot);
+            for (; dot <= w->dot && dot <= 340; dot++) {
+                dot_event(&s, dot);
+            }
             reg_write(&s, w->addr, w->value);
         }
-        for (; dot <= 340; dot++) dot_event(&s, dot);
+        for (; dot <= 340; dot++) {
+            dot_event(&s, dot);
+        }
     }
 }
 
@@ -158,12 +191,30 @@ void native_present_frame(const NativeFrame *f)
 
 /* ---- cyc_core.h, cyc_render.h ---- */
 
-const CycLine *cyc_frame_lines(void) { return s_lines; }
-const uint8_t *cyc_frame_bg_opaque(void) { return s_bg; }
-const uint32_t *cyc_frame_argb(void) { return s_argb; }
-const uint8_t *cyc_cpu_ram(void) { return native_cpu_ram(); }
+const CycLine *cyc_frame_lines(void)
+{
+    return s_lines;
+}
 
-static const CycLine *line(int y) { return &s_lines[y < 0 ? 0 : y > 239 ? 239 : y]; }
+const uint8_t *cyc_frame_bg_opaque(void)
+{
+    return s_bg;
+}
+
+const uint32_t *cyc_frame_argb(void)
+{
+    return s_argb;
+}
+
+const uint8_t *cyc_cpu_ram(void)
+{
+    return native_cpu_ram();
+}
+
+static const CycLine *line(int y)
+{
+    return &s_lines[y < 0 ? 0 : y > 239 ? 239 : y];
+}
 
 int cyc_render_line_scroll_x(int y)
 {
@@ -178,15 +229,45 @@ int cyc_render_line_scroll_y(int y)
     return (int)(((l->v >> 11) & 1u) * 240u + ((l->v >> 5) & 31u) * 8u + ((l->v >> 12) & 7u));
 }
 
-uint16_t cyc_render_line_bg_table(int y) { return (line(y)->ctrl & 0x10) ? 0x1000 : 0; }
-uint16_t cyc_render_line_sprite_table(int y) { return (line(y)->ctrl & 0x08) ? 0x1000 : 0; }
-bool cyc_render_line_sprite16(int y) { return (line(y)->ctrl & 0x20) != 0; }
-uint8_t cyc_render_line_mask(int y) { return line(y)->mask; }
+uint16_t cyc_render_line_bg_table(int y)
+{
+    return (line(y)->ctrl & 0x10) ? 0x1000 : 0;
+}
 
-const uint8_t *cyc_render_oam(void) { return s_mem.oam; }
-uint8_t cyc_render_chr(uint16_t a) { return s_mem.chr[a & 0x1FFF]; }
-uint8_t cyc_render_nametable(uint16_t a) { return s_mem.ciram[(a & 0x3FF) | (a & 0x400)]; }
-uint8_t cyc_render_palette(int entry) { return s_mem.palette[entry & 31] & 0x3F; }
+uint16_t cyc_render_line_sprite_table(int y)
+{
+    return (line(y)->ctrl & 0x08) ? 0x1000 : 0;
+}
+
+bool cyc_render_line_sprite16(int y)
+{
+    return (line(y)->ctrl & 0x20) != 0;
+}
+
+uint8_t cyc_render_line_mask(int y)
+{
+    return line(y)->mask;
+}
+
+const uint8_t *cyc_render_oam(void)
+{
+    return s_mem.oam;
+}
+
+uint8_t cyc_render_chr(uint16_t a)
+{
+    return s_mem.chr[a & 0x1FFF];
+}
+
+uint8_t cyc_render_nametable(uint16_t a)
+{
+    return s_mem.ciram[(a & 0x3FF) | (a & 0x400)];
+}
+
+uint8_t cyc_render_palette(int entry)
+{
+    return s_mem.palette[entry & 31] & 0x3F;
+}
 
 uint32_t cyc_render_color(int entry)
 {
@@ -205,35 +286,64 @@ void cyc_render_set_compositor(CycCompositorFn fn, void *user)
     s_generation++;
 }
 
-bool cyc_render_has_compositor(void) { return s_fn != NULL; }
+bool cyc_render_has_compositor(void)
+{
+    return s_fn != NULL;
+}
 
 void cyc_render_set_stock_compositing(bool enabled)
 {
-    if (enabled != s_stock) s_generation++;
+    if (enabled != s_stock) {
+        s_generation++;
+    }
     s_stock = enabled;
 }
 
-bool cyc_render_stock_compositing(void) { return s_stock; }
-int cyc_render_native_origin(int width) { return width <= NV_WIDTH ? 0 : (width - NV_WIDTH) / 2; }
-void cyc_render_capture_background(bool enabled) { s_capture = enabled; }
+bool cyc_render_stock_compositing(void)
+{
+    return s_stock;
+}
+
+int cyc_render_native_origin(int width)
+{
+    return width <= NV_WIDTH ? 0 : (width - NV_WIDTH) / 2;
+}
+
+void cyc_render_capture_background(bool enabled)
+{
+    s_capture = enabled;
+}
 
 bool cyc_render_background(uint32_t *out)
 {
-    if (!s_capture) return false;
+    if (!s_capture) {
+        return false;
+    }
     memcpy(out, s_background, sizeof s_background);
     return true;
 }
 
-void cyc_render_frame_done(void) { s_generation++; }
-uint64_t cyc_render_generation(void) { return s_generation; }
+void cyc_render_frame_done(void)
+{
+    s_generation++;
+}
+
+uint64_t cyc_render_generation(void)
+{
+    return s_generation;
+}
 
 const uint32_t *cyc_render_present(int *width, int *height)
 {
     *width = NV_WIDTH;
     *height = NV_HEIGHT;
-    if (!s_stock || !s_fn) return s_argb;
+    if (!s_stock || !s_fn) {
+        return s_argb;
+    }
     if (s_composed != s_generation) {
-        for (int i = 0; i < NV_WIDTH * NV_HEIGHT; i++) s_canvas[i] = 0xFF000000u;
+        for (int i = 0; i < NV_WIDTH * NV_HEIGHT; i++) {
+            s_canvas[i] = 0xFF000000u;
+        }
         s_painted = s_fn(s_canvas, NV_WIDTH, NV_HEIGHT, 0, s_argb, s_user) != 0;
         s_composed = s_generation;
     }
@@ -249,13 +359,22 @@ uint8_t cyc_mod_peek(uint16_t addr)
     return v;
 }
 
-bool cyc_mod_peek_ok(uint16_t addr, uint8_t *value) { return native_peek(addr, value); }
-bool cyc_mod_poke(uint16_t addr, uint8_t value) { return native_poke(addr, value); }
+bool cyc_mod_peek_ok(uint16_t addr, uint8_t *value)
+{
+    return native_peek(addr, value);
+}
+
+bool cyc_mod_poke(uint16_t addr, uint8_t value)
+{
+    return native_poke(addr, value);
+}
 
 size_t cyc_mod_copy_cart_payload(uint8_t *out, size_t capacity)
 {
     size_t size;
     const uint8_t *prg = native_prg(&size);
-    if (out && prg && capacity >= size) memcpy(out, prg, size);
+    if (out && prg && capacity >= size) {
+        memcpy(out, prg, size);
+    }
     return prg ? size : 0;
 }

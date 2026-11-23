@@ -38,8 +38,8 @@
 bool hw_frame_done;
 bool hw_frame_end_hit;
 bool hw_observe_hit;
-int  hw_observe_line = -1;
-int  hw_dma_stalls;
+int hw_observe_line = -1;
+int hw_dma_stalls;
 bool hw_prg_modified;
 bool hw_prg_data_modified;
 HwNativeInterval hw_native_interval;
@@ -60,9 +60,10 @@ static uint64_t cycles;
  * INSN format, so the two traces line up on the CPU cycle number. */
 void cyc_trace_instruction(uint16_t pc, uint8_t a, uint8_t x, uint8_t y, uint8_t s, uint8_t p)
 {
-    if (cyc_trace_file)
+    if (cyc_trace_file) {
         fprintf((FILE *)cyc_trace_file, "%llu INSN PC=%04X A=%02X X=%02X Y=%02X S=%02X P=%02X\n",
                 (unsigned long long)cycles, pc, a, x, y, s, p);
+    }
 }
 
 static uint8_t ram[0x800];
@@ -76,10 +77,10 @@ static uint8_t buttons[2], shift[2], strobe;
 static uint32_t frame_number;
 static uint64_t fallback_instructions, unmodeled_reads;
 
-#define SCHEDULER_PASS     0xFF38u
-#define SCHEDULER_START    0xFF6Au
-#define SCHEDULER_RESUME   0xFF7Cu
-#define NMI_RTI            0xC138u
+#define SCHEDULER_PASS   0xFF38u
+#define SCHEDULER_START  0xFF6Au
+#define SCHEDULER_RESUME 0xFF7Cu
+#define NMI_RTI          0xC138u
 
 static NativeLagMode lag_mode;
 static NativeLagFrame lag_cur, lag_last;
@@ -143,21 +144,48 @@ void native_power_on(void)
     cpu_power_on();
 }
 
-void native_set_lag_mode(NativeLagMode mode) { lag_mode = mode; }
-const NativeLagFrame *native_last_lag(void) { return &lag_last; }
-const uint32_t *native_nmi_writes(void) { return nmi_writes; }
-const uint32_t *native_task_reads(void) { return task_reads; }
-void native_set_step_hook(void (*hook)(void)) { step_hook = hook; }
-void native_set_latch_hook(void (*hook)(uint8_t buttons[2])) { latch_hook = hook; }
+void native_set_lag_mode(NativeLagMode mode)
+{
+    lag_mode = mode;
+}
+
+const NativeLagFrame *native_last_lag(void)
+{
+    return &lag_last;
+}
+
+const uint32_t *native_nmi_writes(void)
+{
+    return nmi_writes;
+}
+
+const uint32_t *native_task_reads(void)
+{
+    return task_reads;
+}
+
+void native_set_step_hook(void (*hook)(void))
+{
+    step_hook = hook;
+}
+
+void native_set_latch_hook(void (*hook)(uint8_t buttons[2]))
+{
+    latch_hook = hook;
+}
 
 bool native_vblank_deferred(bool picture_on)
 {
-    if (lag_mode != NATIVE_LAG_NONE || !task_running || !picture_on || defer_released) return false;
+    if (lag_mode != NATIVE_LAG_NONE || !task_running || !picture_on || defer_released) {
+        return false;
+    }
     if (!deferring) {
         deferring = true;
         defer_start = cycles;
     }
-    if (cycles - defer_start < NATIVE_DEFER_CAP_CYCLES) return true;
+    if (cycles - defer_start < NATIVE_DEFER_CAP_CYCLES) {
+        return true;
+    }
     defer_released = true;
     lag_cur.defer_end = NATIVE_DEFER_CAP;
     return false;
@@ -168,7 +196,9 @@ bool native_vblank_deferred(bool picture_on)
  * PPU that is not moving, so VBlank is released. */
 bool native_vblank_poll(void)
 {
-    if (!deferring || defer_released || ++defer_polls < 2) return false;
+    if (!deferring || defer_released || ++defer_polls < 2) {
+        return false;
+    }
     defer_released = true;
     lag_cur.defer_end = NATIVE_DEFER_POLL;
     return true;
@@ -180,7 +210,9 @@ void native_vblank_taken(bool nmi_enabled, bool picture_on)
     lag_cur.picture = picture_on;
     lag_cur.lag = nmi_enabled && task_running;
     lag_cur.deferred_cycles = deferring ? (uint32_t)(cycles - defer_start) : 0;
-    if (deferring && !defer_released) lag_cur.defer_end = NATIVE_DEFER_IDLE;
+    if (deferring && !defer_released) {
+        lag_cur.defer_end = NATIVE_DEFER_IDLE;
+    }
     if (lag_cur.lag && !overrun_open) {
         overrun_open = true;
         overrun_frame = (int32_t)frame_number;
@@ -198,27 +230,60 @@ static void observe(uint16_t addr, HwCycleKind kind)
         nmi_entry = cycles;
         in_nmi = nmi_seen = true;
     }
-    if (k != HW_FETCH) return;
+    if (k != HW_FETCH) {
+        return;
+    }
     if (addr == NMI_RTI) {
         overrun_nmi += cycles + 6 - nmi_entry;
         in_nmi = false;
     }
-    if (addr == SCHEDULER_START || addr == SCHEDULER_RESUME) task_running = true;
-    if (addr != SCHEDULER_PASS || !task_running) return;
+    if (addr == SCHEDULER_START || addr == SCHEDULER_RESUME) {
+        task_running = true;
+    }
+    if (addr != SCHEDULER_PASS || !task_running) {
+        return;
+    }
     task_running = false;
-    if (step_hook) step_hook();
-    if (!overrun_open) return;
+    if (step_hook) {
+        step_hook();
+    }
+    if (!overrun_open) {
+        return;
+    }
     overrun_open = false;
     lag_cur.overrun_frame = overrun_frame;
     lag_cur.overrun_cycles = (uint32_t)(cycles - overrun_vblank - overrun_nmi);
 }
 
-void native_set_controller(int port, uint8_t value) { buttons[port & 1] = value; }
-const uint8_t *native_cpu_ram(void) { return ram; }
-uint64_t native_cycle_count(void) { return cycles; }
-uint32_t native_frame_number(void) { return frame_number; }
-uint64_t native_fallback_instructions(void) { return fallback_instructions; }
-uint64_t native_unmodeled_reads(void) { return unmodeled_reads; }
+void native_set_controller(int port, uint8_t value)
+{
+    buttons[port & 1] = value;
+}
+
+const uint8_t *native_cpu_ram(void)
+{
+    return ram;
+}
+
+uint64_t native_cycle_count(void)
+{
+    return cycles;
+}
+
+uint32_t native_frame_number(void)
+{
+    return frame_number;
+}
+
+uint64_t native_fallback_instructions(void)
+{
+    return fallback_instructions;
+}
+
+uint64_t native_unmodeled_reads(void)
+{
+    return unmodeled_reads;
+}
 
 const uint8_t *native_prg(size_t *size)
 {
@@ -234,15 +299,21 @@ static inline uint8_t prg_byte(uint16_t addr)
 
 bool native_peek(uint16_t addr, uint8_t *value)
 {
-    if (addr < 0x2000) *value = ram[addr & 0x7FF];
-    else if (addr >= 0x8000 && prg) *value = prg_byte(addr);
-    else return false;
+    if (addr < 0x2000) {
+        *value = ram[addr & 0x7FF];
+    } else if (addr >= 0x8000 && prg) {
+        *value = prg_byte(addr);
+    } else {
+        return false;
+    }
     return true;
 }
 
 bool native_poke(uint16_t addr, uint8_t value)
 {
-    if (addr >= 0x2000) return false;
+    if (addr >= 0x2000) {
+        return false;
+    }
     ram[addr & 0x7FF] = value;
     return true;
 }
@@ -254,11 +325,31 @@ unsigned hw_prg_bank4(uint16_t addr)
     unsigned slot = (addr >> 12) & 3;
     return (addr >= 0xC000 ? prg_banks - 1 : prg_bank) * 4 + slot;
 }
-unsigned hw_prg_bank(uint16_t addr) { return hw_prg_bank4(addr) >> 1; }
-bool hw_prg_is_stable(void) { return true; }
-bool hw_prg_is_rom(uint16_t addr) { return addr >= 0x8000; }
-bool hw_irq_line(void) { return false; }
-bool hw_native_prepare(void) { return false; }
+
+unsigned hw_prg_bank(uint16_t addr)
+{
+    return hw_prg_bank4(addr) >> 1;
+}
+
+bool hw_prg_is_stable(void)
+{
+    return true;
+}
+
+bool hw_prg_is_rom(uint16_t addr)
+{
+    return addr >= 0x8000;
+}
+
+bool hw_irq_line(void)
+{
+    return false;
+}
+
+bool hw_native_prepare(void)
+{
+    return false;
+}
 
 static inline void end_cycle(void)
 {
@@ -282,7 +373,9 @@ static void sprite_dma(void)
     dma_pending = false;
     video_oam_dma(dma_page, data, cycles);
     unsigned stall = (cycles & 1) ? 513 : 514;
-    for (unsigned i = 0; i < stall; i++) end_cycle();
+    for (unsigned i = 0; i < stall; i++) {
+        end_cycle();
+    }
     data_bus = data[255];
     hw_dma_stalls = (int)stall;
 }
@@ -295,7 +388,9 @@ void hw_cycle_start(uint16_t addr, HwCycleKind kind)
         video_advance(0);
         cpu_nmi_input(video_nmi_level());
     }
-    if (dma_pending && (kind == HW_READ || kind == HW_FETCH)) sprite_dma();
+    if (dma_pending && (kind == HW_READ || kind == HW_FETCH)) {
+        sprite_dma();
+    }
 }
 
 void hw_cycle_finish(bool instruction_done)
@@ -307,7 +402,9 @@ void hw_cycle_finish(bool instruction_done)
 static uint8_t controller_read(int port)
 {
     uint8_t bit = strobe ? (buttons[port] >> 7) & 1 : (shift[port] >> 7) & 1;
-    if (!strobe) shift[port] = (uint8_t)(shift[port] << 1 | 1);
+    if (!strobe) {
+        shift[port] = (uint8_t)(shift[port] << 1 | 1);
+    }
     return bit;
 }
 
@@ -315,14 +412,21 @@ uint8_t hw_read(uint16_t addr)
 {
     if (addr < 0x2000) {
         data_bus = ram[addr & 0x7FF];
-        if (nmi_seen && !in_nmi) task_reads[addr & 0x7FF]++;
-    }
-    else if (addr < 0x4000) {
-        if ((addr & 7) == 4 || (addr & 7) == 7) unmodeled_reads++;
+        if (nmi_seen && !in_nmi) {
+            task_reads[addr & 0x7FF]++;
+        }
+    } else if (addr < 0x4000) {
+        if ((addr & 7) == 4 || (addr & 7) == 7) {
+            unmodeled_reads++;
+        }
         data_bus = video_read(addr, cycles);
-    } else if (addr >= 0x8000) data_bus = prg_byte(addr);
-    else if (addr == 0x4016 || addr == 0x4017) data_bus = (uint8_t)((data_bus & 0xE0) | controller_read(addr & 1));
-    else if (addr == 0x4015) unmodeled_reads++;
+    } else if (addr >= 0x8000) {
+        data_bus = prg_byte(addr);
+    } else if (addr == 0x4016 || addr == 0x4017) {
+        data_bus = (uint8_t)((data_bus & 0xE0) | controller_read(addr & 1));
+    } else if (addr == 0x4015) {
+        unmodeled_reads++;
+    }
     return data_bus;
 }
 
@@ -342,22 +446,29 @@ void hw_write(uint16_t addr, uint8_t value)
 {
     if (addr < 0x2000) {
         ram[addr & 0x7FF] = value;
-        if (in_nmi) nmi_writes[addr & 0x7FF]++;
-    }
-    else if (addr < 0x4000) video_write(addr, value, cycles);
-    else if (addr == 0x4014) {
+        if (in_nmi) {
+            nmi_writes[addr & 0x7FF]++;
+        }
+    } else if (addr < 0x4000) {
+        video_write(addr, value, cycles);
+    } else if (addr == 0x4014) {
         dma_pending = true;
         dma_page = value;
     } else if (addr == 0x4016) {
         if ((strobe & 1) && !(value & 1)) {
             uint8_t latched[2] = { buttons[0], buttons[1] };
-            if (latch_hook) latch_hook(latched);
+            if (latch_hook) {
+                latch_hook(latched);
+            }
             shift[0] = latched[0];
             shift[1] = latched[1];
         }
         strobe = value & 1;
-    } else if (addr < 0x4018) video_log_apu(addr, value, cycles);
-    else if (addr >= 0x8000) prg_bank = value & (prg_banks - 1);
+    } else if (addr < 0x4018) {
+        video_log_apu(addr, value, cycles);
+    } else if (addr >= 0x8000) {
+        prg_bank = value & (prg_banks - 1);
+    }
     data_bus = value;
 }
 
@@ -367,14 +478,18 @@ void native_run_frame(void)
 {
     video_frame_begin(frame_number, cycles);
     hw_frame_done = false;
-    if (cpu.power_on) cpu_power_on_sequence();
+    if (cpu.power_on) {
+        cpu_power_on_sequence();
+    }
     while (!hw_frame_done) {
         if (cyc_hooks_armed) {
             cyc_hook_hit = false;
             if (native_hooks_due(cpu.pc)) {
                 uint16_t at = cpu.pc;
                 native_hooks_fire(at);
-                if (cpu.pc == at) cyc_hook_passed = at;
+                if (cpu.pc == at) {
+                    cyc_hook_passed = at;
+                }
                 continue;
             }
         }
@@ -398,22 +513,24 @@ void native_run_frame(void)
 /* ---- save states ---- */
 
 typedef struct {
-    uint8_t  ram[0x800];
+    uint8_t ram[0x800];
     uint64_t cycles, fallback_instructions, unmodeled_reads;
     uint64_t defer_start, overrun_vblank, overrun_nmi, nmi_entry;
     uint32_t prg_bank, frame_number, defer_polls;
-    int32_t  overrun_frame;
-    uint8_t  data_bus, dma_pending, dma_page, strobe;
-    uint8_t  buttons[2], shift[2];
-    uint8_t  task_running, deferring, defer_released, overrun_open, in_nmi, nmi_seen;
+    int32_t overrun_frame;
+    uint8_t data_bus, dma_pending, dma_page, strobe;
+    uint8_t buttons[2], shift[2];
+    uint8_t task_running, deferring, defer_released, overrun_open, in_nmi, nmi_seen;
     NativeLagFrame lag_cur, lag_last;
-    Cpu6502  cpu;
+    Cpu6502 cpu;
 } BusState;
 
 size_t native_state_save(uint8_t *out, size_t cap)
 {
     size_t video = video_state_save(NULL, 0), need = sizeof(BusState) + video;
-    if (!out || cap < need) return need;
+    if (!out || cap < need) {
+        return need;
+    }
     BusState s;
     memset(&s, 0, sizeof s);
     memcpy(s.ram, ram, sizeof ram);
@@ -450,10 +567,14 @@ size_t native_state_save(uint8_t *out, size_t cap)
 
 bool native_state_load(const uint8_t *in, size_t size)
 {
-    if (size != native_state_save(NULL, 0)) return false;
+    if (size != native_state_save(NULL, 0)) {
+        return false;
+    }
     BusState s;
     memcpy(&s, in, sizeof s);
-    if (s.prg_bank >= prg_banks || !video_state_load(in + sizeof s, size - sizeof s)) return false;
+    if (s.prg_bank >= prg_banks || !video_state_load(in + sizeof s, size - sizeof s)) {
+        return false;
+    }
     memcpy(ram, s.ram, sizeof ram);
     cycles = s.cycles;
     fallback_instructions = s.fallback_instructions;

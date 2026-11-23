@@ -39,25 +39,32 @@
 #define P_V 0x40
 #define P_N 0x80
 
-typedef struct Regs { uint8_t a, x, y, p; } Regs;
+typedef struct Regs {
+    uint8_t a, x, y, p;
+} Regs;
 
 /* Which registers the routine's callers use after it returns. */
 #define OUT_A 0x01
 #define OUT_X 0x02
 #define OUT_Y 0x04
-#define OUT_P 0x08   /* N, V, Z and C */
-#define OUT_HW 0x10  /* writes the PPU or the mapper (Decomp_BusWrite): check also compares
+#define OUT_P 0x08 /* N, V, Z and C */
+#define OUT_HW \
+    0x10 /* writes the PPU or the mapper (Decomp_BusWrite): check also compares
                         CIRAM, palette, CHR RAM and the PRG bank, replace replays the writes */
 
 typedef struct DecompRoutine {
     uint16_t addr;
-    const char *site_id;    /* the site where original code calls it; NULL when only C does */
+    const char *site_id; /* the site where original code calls it; NULL when only C does */
     const char *name;
-    void (*run)(Regs *r);   /* in: the registers at entry; out: at its RTS */
+    void (*run)(Regs *r); /* in: the registers at entry; out: at its RTS */
     uint8_t out;
 } DecompRoutine;
 
-typedef enum DecompMode { DECOMP_OFF, DECOMP_CHECK, DECOMP_REPLACE } DecompMode;
+typedef enum DecompMode {
+    DECOMP_OFF,
+    DECOMP_CHECK,
+    DECOMP_REPLACE
+} DecompMode;
 
 bool Decomp_SetMode(DecompMode mode);
 DecompMode Decomp_Mode(void);
@@ -95,19 +102,29 @@ static inline uint8_t Flags_NZ(uint8_t p, uint8_t v)
 {
     return (uint8_t)((p & ~(P_N | P_Z)) | (v & 0x80) | (v ? 0 : P_Z));
 }
+
 /* A + M + C as ADC computes it (binary mode); *p gets N, V, Z, C. */
 static inline uint8_t Alu_Adc(uint8_t a, uint8_t m, uint8_t *p)
 {
     unsigned sum = (unsigned)a + m + (*p & P_C);
     uint8_t r = (uint8_t)sum;
     uint8_t q = Flags_NZ(*p, r) & (uint8_t)~(P_C | P_V);
-    if (sum > 0xFF) q |= P_C;
-    if (~(a ^ m) & (a ^ r) & 0x80) q |= P_V;
+    if (sum > 0xFF) {
+        q |= P_C;
+    }
+    if (~(a ^ m) & (a ^ r) & 0x80) {
+        q |= P_V;
+    }
     *p = q;
     return r;
 }
+
 /* A - M - !C as SBC computes it (binary mode). */
-static inline uint8_t Alu_Sbc(uint8_t a, uint8_t m, uint8_t *p) { return Alu_Adc(a, (uint8_t)~m, p); }
+static inline uint8_t Alu_Sbc(uint8_t a, uint8_t m, uint8_t *p)
+{
+    return Alu_Adc(a, (uint8_t)~m, p);
+}
+
 /* The flags of CMP: N, Z, C. */
 static inline uint8_t Flags_Cmp(uint8_t p, uint8_t a, uint8_t m)
 {

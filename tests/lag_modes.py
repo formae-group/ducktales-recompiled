@@ -24,6 +24,7 @@ and reports:
 
     py -3 -I tests/lag_modes.py --build build/headless [--routes R ...]
 """
+
 import argparse
 import re
 import subprocess
@@ -43,7 +44,9 @@ ALLOWED = {
     **{a: 'sound request queue ($C7 index, $C8-$CF slots) drained by the NMI' for a in range(0xC7, 0xD0)},
     **{a: 'sound engine state (bank 3, run by the NMI)' for a in range(0x370, 0x3F0)},
 }
-LINE = re.compile(r'(\d+) nmi=(\d) pic=(\d) lag=(\d) held=(\d+) end=(\S+) land=(\w+) row=(\w+) screen=(\w+)(?: overrun=(\d+):(\d+))?')
+LINE = re.compile(
+    r'(\d+) nmi=(\d) pic=(\d) lag=(\d) held=(\d+) end=(\S+) land=(\w+) row=(\w+) screen=(\w+)(?: overrun=(\d+):(\d+))?'
+)
 
 
 def route_frames(path):
@@ -58,8 +61,17 @@ def read_lag(path):
     frames, overrun = [], {}
     for line in path.read_text().splitlines():
         m = LINE.match(line)
-        f = dict(frame=int(m[1]), nmi=m[2] == '1', pic=m[3] == '1', lag=m[4] == '1', held=int(m[5]), end=m[6],
-                 land=int(m[7], 16), row=int(m[8], 16), screen=int(m[9], 16))
+        f = dict(
+            frame=int(m[1]),
+            nmi=m[2] == '1',
+            pic=m[3] == '1',
+            lag=m[4] == '1',
+            held=int(m[5]),
+            end=m[6],
+            land=int(m[7], 16),
+            row=int(m[8], 16),
+            screen=int(m[9], 16),
+        )
         if m[10]:
             overrun[int(m[10])] = int(m[11])
         frames.append(f)
@@ -68,18 +80,47 @@ def read_lag(path):
 
 def read_steps(path):
     data = path.read_bytes()
-    return [data[i:i + 0x800] for i in range(0, len(data), 0x800)]
+    return [data[i : i + 0x800] for i in range(0, len(data), 0x800)]
 
 
 def run(native, rom, route, out):
     n = str(route_frames(route))
     base = [str(native), rom, '--frames', n]
     s = out / route.stem
-    subprocess.run(base + ['--input', str(route), '--lag', 'faithful', '--lag-log', f'{s}.faithful.lag', '--latch-log',
-                           f'{s}.latch', '--step-dump', f'{s}.faithful.steps', '--nmi-audit', f'{s}.audit'],
-                   capture_output=True, check=True)
-    subprocess.run(base + ['--latch-input', f'{s}.latch', '--lag', 'none', '--lag-log', f'{s}.replay.lag',
-                           '--step-dump', f'{s}.replay.steps'], capture_output=True, check=True)
+    subprocess.run(
+        base
+        + [
+            '--input',
+            str(route),
+            '--lag',
+            'faithful',
+            '--lag-log',
+            f'{s}.faithful.lag',
+            '--latch-log',
+            f'{s}.latch',
+            '--step-dump',
+            f'{s}.faithful.steps',
+            '--nmi-audit',
+            f'{s}.audit',
+        ],
+        capture_output=True,
+        check=True,
+    )
+    subprocess.run(
+        base
+        + [
+            '--latch-input',
+            f'{s}.latch',
+            '--lag',
+            'none',
+            '--lag-log',
+            f'{s}.replay.lag',
+            '--step-dump',
+            f'{s}.replay.steps',
+        ],
+        capture_output=True,
+        check=True,
+    )
     return route
 
 
@@ -97,15 +138,19 @@ def report(route, out):
     print(f'== {route.stem}: {len(faithful)} frames')
     over = [overrun.get(f['frame'], 0) for f in play]
     if play:
-        print(f'  faithful: {len(play)} gameplay lag frames, {sum(over)} cycles over budget in all '
-              f'(mean {sum(over) // len(over)}, max {max(over)}; a frame has 29781)')
+        print(
+            f'  faithful: {len(play)} gameplay lag frames, {sum(over)} cycles over budget in all '
+            f'(mean {sum(over) // len(over)}, max {max(over)}; a frame has 29781)'
+        )
         by = defaultdict(list)
         for f, o in zip(play, over):
             by[where(f)].append((f['frame'], o))
         for w, items in sorted(by.items(), key=lambda kv: kv[1][0][0]):
             os_ = [o for _, o in items]
-            print(f'    {w:34s} {len(items):3d} frames ({items[0][0]}-{items[-1][0]})  over: max {max(os_)}, '
-                  f'mean {sum(os_) // len(os_)}')
+            print(
+                f'    {w:34s} {len(items):3d} frames ({items[0][0]}-{items[-1][0]})  over: max {max(os_)}, '
+                f'mean {sum(os_) // len(os_)}'
+            )
     else:
         print('  faithful: no gameplay lag')
     runs = sum(1 for i, f in enumerate(blank) if i == 0 or blank[i - 1]['frame'] != f['frame'] - 1)
@@ -115,9 +160,16 @@ def report(route, out):
     ends = defaultdict(int)
     for f in held:
         ends[f['end']] += 1
-    print(f'  no-slowdown: {len(left)} gameplay lag frames left; VBlank held on {len(held)} frames'
-          + (f" (max {max(f['held'] for f in held)} cycles, " + ', '.join(f'{k} {v}' for k, v in sorted(ends.items())) + ')'
-             if held else ''))
+    print(
+        f'  no-slowdown: {len(left)} gameplay lag frames left; VBlank held on {len(held)} frames'
+        + (
+            f" (max {max(f['held'] for f in held)} cycles, "
+            + ', '.join(f'{k} {v}' for k, v in sorted(ends.items()))
+            + ')'
+            if held
+            else ''
+        )
+    )
     if left:
         ok = False
         print('    left at frames ' + ' '.join(str(f['frame']) for f in left[:20]))
@@ -140,10 +192,15 @@ def report(route, out):
             first.setdefault(0x7FF - byte, k)
             x &= ~(0xFF << (8 * byte))
     bad = {a: k for a, k in first.items() if a not in ALLOWED}
-    print(f'  logic steps compared: {n} ({len(a_steps)} faithful, {len(b_steps)} no-slowdown); '
-          f'{len(private)} NMI-only bytes and the stack ignored')
+    print(
+        f'  logic steps compared: {n} ({len(a_steps)} faithful, {len(b_steps)} no-slowdown); '
+        f'{len(private)} NMI-only bytes and the stack ignored'
+    )
     if first:
-        print('    differ (first step): ' + ' '.join(f'${a:03X}@{k}' for a, k in sorted(first.items(), key=lambda t: t[1])))
+        print(
+            '    differ (first step): '
+            + ' '.join(f'${a:03X}@{k}' for a, k in sorted(first.items(), key=lambda t: t[1]))
+        )
     if bad:
         ok = False
         print('    NOT ALLOWED: ' + ' '.join(f'${a:03X}' for a in sorted(bad)))

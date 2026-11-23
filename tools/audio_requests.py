@@ -15,6 +15,7 @@ instruction that called $F752/$F754 (the INSN record before the entry), its X re
 (the object slot for object code) with that slot's $0620 type at the end of the frame,
 and the PRG bank last written to the bank register in that frame.
 """
+
 import tempfile
 import argparse
 import subprocess
@@ -46,8 +47,18 @@ def main():
     first_seen = {}
     for lo in range(a.first, a.frames, a.chunk):
         hi = min(lo + a.chunk, a.frames) - 1
-        cmd = [a.exe, a.rom, '--frames', str(hi + 1), '--input', a.route,
-               '--frame-log', str(log), '--frame-log-frames', '%d:%d' % (lo, hi)]
+        cmd = [
+            a.exe,
+            a.rom,
+            '--frames',
+            str(hi + 1),
+            '--input',
+            a.route,
+            '--frame-log',
+            str(log),
+            '--frame-log-frames',
+            '%d:%d' % (lo, hi),
+        ]
         if a.load_state:
             cmd += ['--load-state', a.load_state]
         subprocess.run(cmd, check=True, capture_output=True)
@@ -60,9 +71,10 @@ def main():
                 for sid in new:
                     counts[sid] = counts.get(sid, 0) + 1
                     first_seen.setdefault(sid, (frame, bytes(ram)))
-                print('%6d  %s  C5=%02X F6=%02X 39=%02X 0620=%02X E6=%02X' % (
-                    frame, ' '.join('%02X' % s for s in new), ram[0xC5], ram[0xF6], ram[0x39],
-                    ram[0x620], ram[0xE6]))
+                print(
+                    '%6d  %s  C5=%02X F6=%02X 39=%02X 0620=%02X E6=%02X'
+                    % (frame, ' '.join('%02X' % s for s in new), ram[0xC5], ram[0xF6], ram[0x39], ram[0x620], ram[0xE6])
+                )
             prev = ram
         log.unlink()
     print('totals: ' + ' '.join('%02X:%d' % kv for kv in sorted(counts.items())))
@@ -71,14 +83,27 @@ def main():
             for pc, x, bank, req in callers(a, frame):
                 if req == sid:
                     where = '7:%04X' % pc if pc >= 0xC000 else '%s:%04X' % (bank, pc)
-                    print('caller %02X  frame %d  %s  X=%02X  $0620+X=%02X' % (sid, frame, where, x, ram[0x620 + (x & 15)]))
+                    print(
+                        'caller %02X  frame %d  %s  X=%02X  $0620+X=%02X'
+                        % (sid, frame, where, x, ram[0x620 + (x & 15)])
+                    )
 
 
 def callers(a, frame):
     with tempfile.TemporaryDirectory() as tmp:
         trace = Path(tmp) / 'trace.txt'
-        cmd = [a.exe, a.rom, '--frames', str(frame + 1), '--input', a.route,
-               '--trace-frame', str(frame), '--trace-out', str(trace)]
+        cmd = [
+            a.exe,
+            a.rom,
+            '--frames',
+            str(frame + 1),
+            '--input',
+            a.route,
+            '--trace-frame',
+            str(frame),
+            '--trace-out',
+            str(trace),
+        ]
         if a.load_state:
             cmd += ['--load-state', a.load_state]
         subprocess.run(cmd, check=True, capture_output=True)

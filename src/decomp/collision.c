@@ -31,17 +31,20 @@
 #define gProbeCount    RAM_U8(DT_ADDR_PROBE_COUNT)
 #define gProbeClass(i) RAM_U8(DT_ADDR_PROBE_CLASS + (i))
 
-#define CLASS_SOLID    1
-#define CLASS_SPECIAL  3
-#define FLAG_BEHIND    0x04    /* $0600 bit 2: drawn behind the background */
-#define HAZARD_SPIKES  6       /* hypothesis: what $70 asks of Scrooge's code */
-#define HAZARD_POGO    7
-#define HAZARD_PIT     8
-#define PIT_Y          0xD0
-#define POINT_POGO_FEET 0x07   /* the probe points the hazards look at */
+#define CLASS_SOLID     1
+#define CLASS_SPECIAL   3
+#define FLAG_BEHIND     0x04 /* $0600 bit 2: drawn behind the background */
+#define HAZARD_SPIKES   6    /* hypothesis: what $70 asks of Scrooge's code */
+#define HAZARD_POGO     7
+#define HAZARD_PIT      8
+#define PIT_Y           0xD0
+#define POINT_POGO_FEET 0x07 /* the probe points the hazards look at */
 #define POINT_POGO_TIP  0x0A
 
-static uint8_t rom(uint16_t addr) { return Game_ReadRom(addr); }
+static uint8_t rom(uint16_t addr)
+{
+    return Game_ReadRom(addr);
+}
 
 /* $D350: the collision class (0-3) under probe point "point" of the object
  * in slot. A point left of page 0 is empty; one above the row is solid and
@@ -53,29 +56,40 @@ static uint8_t Bg_ClassAt(int slot, uint8_t point)
     unsigned x = (unsigned)gObjects->worldX[slot] + dx;
     gProbeX = (uint8_t)x;
     gProbePage = (uint8_t)(gObjects->worldPage[slot] + gScratch2 + (x >> 8));
-    if (gProbePage & 0x80) return 0;
+    if (gProbePage & 0x80) {
+        return 0;
+    }
     gProbeQuadrant = gProbeX >> 4 & 1;
     gProbeCell = gProbeX >> 5 & 7;
     uint8_t dy = rom((uint16_t)(DT_CODE_PROBE_DY + point));
     gScratch2 = (dy & 0x80) ? 0xFF : 0;
     unsigned y = (unsigned)gObjects->y[slot] + dy;
     gProbeY = (uint8_t)y;
-    if ((uint8_t)(gMapRow + gScratch2 + (y >> 8)) != gMapRow) return gScratch2 & 1;
+    if ((uint8_t)(gMapRow + gScratch2 + (y >> 8)) != gMapRow) {
+        return gScratch2 & 1;
+    }
     uint8_t row = (uint8_t)(gProbeY >> 2);
     gProbeCell |= (uint8_t)((row & 0x38) | rom((uint16_t)(DT_CODE_PROBE_PAGE_BIT + (gProbePage & 1))));
     gProbeQuadrant |= row >> 1 & 2;
     return gCollisionMap[gProbeCell] >> 2 * gProbeQuadrant & 3;
 }
 
-static uint8_t Bg_Solid(void) { return gProbeHits |= CLASS_SOLID; }
+static uint8_t Bg_Solid(void)
+{
+    return gProbeHits |= CLASS_SOLID;
+}
 
 /* $D1BF: a pit: Scrooge below PIT_Y asks for the pit death. Other objects
  * end the probe: the original tests the value left in A, the handler's high
  * byte, which is odd. */
 static uint8_t Bg_PitTile(int slot, uint8_t left)
 {
-    if (slot != PLAYER_SLOT) return left;
-    if (gObjects->y[PLAYER_SLOT] >= PIT_Y) gPlayerHazard = HAZARD_PIT;
+    if (slot != PLAYER_SLOT) {
+        return left;
+    }
+    if (gObjects->y[PLAYER_SLOT] >= PIT_Y) {
+        gPlayerHazard = HAZARD_PIT;
+    }
     return 0;
 }
 
@@ -83,8 +97,12 @@ static uint8_t Bg_PitTile(int slot, uint8_t left)
  * in $71; when the count wraps to 0 the tile acts as a pit instead. */
 static uint8_t Bg_SlipperyTile(int slot)
 {
-    if (slot != PLAYER_SLOT || gProbeCount != 1) return Bg_Solid();
-    if (++gPlayerSlippery) return Bg_Solid();
+    if (slot != PLAYER_SLOT || gProbeCount != 1) {
+        return Bg_Solid();
+    }
+    if (++gPlayerSlippery) {
+        return Bg_Solid();
+    }
     return Bg_PitTile(slot, 0);
 }
 
@@ -99,29 +117,33 @@ static uint8_t Bg_SpecialTile(int slot)
     uint16_t handler = (uint16_t)(gScratch1 << 8 | gScratch0);
     bool scrooge = slot == PLAYER_SLOT;
     switch (handler) {
-    case DT_CODE_SPECIAL_MARK:
-        gObjects->flags[slot] |= FLAG_BEHIND;
-        return gObjects->flags[slot];
-    case DT_CODE_SPECIAL_MARK_SLIPPERY:
-        gObjects->flags[slot] |= FLAG_BEHIND;
-        return scrooge ? Bg_SlipperyTile(slot) : Bg_Solid();
-    case DT_CODE_SPECIAL_HAZARD6:
-        if (scrooge && !(gPlayerPower | gPlayerInvulnerable) &&
-            (gObjects->action[PLAYER_SLOT] != PLAYER_ACTION_POGO || gProbeFirst == POINT_POGO_TIP) && gProbeCount == 1)
-            gPlayerHazard = HAZARD_SPIKES;
-        return Bg_Solid();
-    case DT_CODE_SPECIAL_HAZARD7:
-        if (!scrooge || gProbeFirst != POINT_POGO_FEET || gObjects->action[PLAYER_SLOT] != PLAYER_ACTION_POGO) return Bg_Solid();
-        return gPlayerHazard = HAZARD_POGO;
-    case DT_CODE_SPECIAL_SLIPPERY:
-        return Bg_SlipperyTile(slot);
-    case DT_CODE_SPECIAL_PIT:
-        return Bg_PitTile(slot, (uint8_t)(handler >> 8));
-    case DT_CODE_SPECIAL_SOLID:
-        return Bg_Solid();
-    default:
-        Decomp_RunOriginal();
-        return 1;
+        case DT_CODE_SPECIAL_MARK:
+            gObjects->flags[slot] |= FLAG_BEHIND;
+            return gObjects->flags[slot];
+        case DT_CODE_SPECIAL_MARK_SLIPPERY:
+            gObjects->flags[slot] |= FLAG_BEHIND;
+            return scrooge ? Bg_SlipperyTile(slot) : Bg_Solid();
+        case DT_CODE_SPECIAL_HAZARD6:
+            if (scrooge && !(gPlayerPower | gPlayerInvulnerable) &&
+                (gObjects->action[PLAYER_SLOT] != PLAYER_ACTION_POGO || gProbeFirst == POINT_POGO_TIP) &&
+                gProbeCount == 1) {
+                gPlayerHazard = HAZARD_SPIKES;
+            }
+            return Bg_Solid();
+        case DT_CODE_SPECIAL_HAZARD7:
+            if (!scrooge || gProbeFirst != POINT_POGO_FEET || gObjects->action[PLAYER_SLOT] != PLAYER_ACTION_POGO) {
+                return Bg_Solid();
+            }
+            return gPlayerHazard = HAZARD_POGO;
+        case DT_CODE_SPECIAL_SLIPPERY:
+            return Bg_SlipperyTile(slot);
+        case DT_CODE_SPECIAL_PIT:
+            return Bg_PitTile(slot, (uint8_t)(handler >> 8));
+        case DT_CODE_SPECIAL_SOLID:
+            return Bg_Solid();
+        default:
+            Decomp_RunOriginal();
+            return 1;
     }
 }
 
@@ -137,9 +159,13 @@ void Bg_Probe(int slot)
         uint8_t cls = Bg_ClassAt(slot, gProbeFirst);
         gProbeClass(gProbeCount) = cls;
         uint8_t tested = cls == CLASS_SPECIAL ? Bg_SpecialTile(slot) : (gProbeHits |= cls);
-        if (slot != PLAYER_SLOT && (tested & 1)) return;
+        if (slot != PLAYER_SLOT && (tested & 1)) {
+            return;
+        }
         gProbeFirst++;
-        if ((int8_t)--gProbeCount < 0) return;
+        if ((int8_t)--gProbeCount < 0) {
+            return;
+        }
     }
 }
 
@@ -175,11 +201,30 @@ void Bg_SnapFeet(int slot)
 
 /* ---- site adapters: X = slot, which callers keep using ---- */
 
-static void Run_Probe(Regs *r) { Bg_Probe(r->x); }
-static void Run_SnapRight(Regs *r) { Bg_SnapRight(r->x); }
-static void Run_SnapLeft(Regs *r) { Bg_SnapLeft(r->x); }
-static void Run_SnapHead(Regs *r) { Bg_SnapHead(r->x); }
-static void Run_SnapFeet(Regs *r) { Bg_SnapFeet(r->x); }
+static void Run_Probe(Regs *r)
+{
+    Bg_Probe(r->x);
+}
+
+static void Run_SnapRight(Regs *r)
+{
+    Bg_SnapRight(r->x);
+}
+
+static void Run_SnapLeft(Regs *r)
+{
+    Bg_SnapLeft(r->x);
+}
+
+static void Run_SnapHead(Regs *r)
+{
+    Bg_SnapHead(r->x);
+}
+
+static void Run_SnapFeet(Regs *r)
+{
+    Bg_SnapFeet(r->x);
+}
 
 const DecompRoutine gCollisionRoutines[] = {
     { DT_CODE_BG_PROBE, "ducktales.decomp.D120", "Bg_Probe", Run_Probe, OUT_X | OUT_HW },

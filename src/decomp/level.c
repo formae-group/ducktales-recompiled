@@ -26,41 +26,44 @@
 
 #define P_ PLAYER_SLOT
 
-#define gScratch0      RAM_U8(DT_ADDR_SCRATCH0)
-#define gScratch1      RAM_U8(DT_ADDR_SCRATCH1)
-#define gScratch2      RAM_U8(DT_ADDR_SCRATCH2)
-#define gScratch3      RAM_U8(DT_ADDR_SCRATCH3)
-#define gScratch0F     RAM_U8(DT_ADDR_SCRATCH0F)
-#define gScratch8      RAM_U8(DT_ADDR_TEMP08)          /* tile edit: replacement entry */
-#define gScratch9      RAM_U8(DT_ADDR_TEMP09)
-#define gScratch0A     RAM_U8(DT_ADDR_TEMP09 + 1)
-#define gScratch0B     RAM_U8(DT_ADDR_TEMP09 + 2)
-#define gTileEditEnd   RAM_U8(DT_ADDR_TILE_EDIT_END)
-#define gChrStream     RAM_U8(DT_ADDR_CHR_STREAM)
-#define gChrBank       RAM_U8(DT_ADDR_CHR_BANK)
-#define gChrRecord     RAM_U8(DT_ADDR_CHR_RECORD)
-#define gChrOffset     RAM_U8(DT_ADDR_CHR_OFFSET)
-#define gChrPages      RAM_U8(DT_ADDR_CHR_PAGES)
-#define CHR_CHUNK      0x40
-#define gSteps         RAM_U8(DT_ADDR_STEPS)
-#define gQueueEnd      RAM_U8(DT_ADDR_QUEUE_END)
-#define gBlockCell     RAM_U8(DT_ADDR_TARGET_X)        /* row * 8 + column of the decoded block */
-#define gTargetX       RAM_U8(DT_ADDR_TARGET_X)
-#define gTargetPage    RAM_U8(DT_ADDR_TARGET_PAGE)
-#define gTargetScreen  RAM_U8(DT_ADDR_TARGET_SCREEN)
-#define gDrawSteps     RAM_U8(DT_ADDR_TARGET_PAGE)     /* steps left of a start draw, minus one */
-#define gPointer       Ram_GetU16(DT_ADDR_SCRATCH0, DT_ADDR_SCRATCH1)
+#define gScratch0     RAM_U8(DT_ADDR_SCRATCH0)
+#define gScratch1     RAM_U8(DT_ADDR_SCRATCH1)
+#define gScratch2     RAM_U8(DT_ADDR_SCRATCH2)
+#define gScratch3     RAM_U8(DT_ADDR_SCRATCH3)
+#define gScratch0F    RAM_U8(DT_ADDR_SCRATCH0F)
+#define gScratch8     RAM_U8(DT_ADDR_TEMP08) /* tile edit: replacement entry */
+#define gScratch9     RAM_U8(DT_ADDR_TEMP09)
+#define gScratch0A    RAM_U8(DT_ADDR_TEMP09 + 1)
+#define gScratch0B    RAM_U8(DT_ADDR_TEMP09 + 2)
+#define gTileEditEnd  RAM_U8(DT_ADDR_TILE_EDIT_END)
+#define gChrStream    RAM_U8(DT_ADDR_CHR_STREAM)
+#define gChrBank      RAM_U8(DT_ADDR_CHR_BANK)
+#define gChrRecord    RAM_U8(DT_ADDR_CHR_RECORD)
+#define gChrOffset    RAM_U8(DT_ADDR_CHR_OFFSET)
+#define gChrPages     RAM_U8(DT_ADDR_CHR_PAGES)
+#define CHR_CHUNK     0x40
+#define gSteps        RAM_U8(DT_ADDR_STEPS)
+#define gQueueEnd     RAM_U8(DT_ADDR_QUEUE_END)
+#define gBlockCell    RAM_U8(DT_ADDR_TARGET_X) /* row * 8 + column of the decoded block */
+#define gTargetX      RAM_U8(DT_ADDR_TARGET_X)
+#define gTargetPage   RAM_U8(DT_ADDR_TARGET_PAGE)
+#define gTargetScreen RAM_U8(DT_ADDR_TARGET_SCREEN)
+#define gDrawSteps    RAM_U8(DT_ADDR_TARGET_PAGE) /* steps left of a start draw, minus one */
+#define gPointer      Ram_GetU16(DT_ADDR_SCRATCH0, DT_ADDR_SCRATCH1)
 
-#define LAST_BLOCK_ROW     0x38    /* cells at or past this are the half block row at the bottom */
-#define SCROLL_EDGE_RIGHT  0xF0    /* Scrooge's X when the camera stops at a row end */
-#define SCROLL_EDGE_LEFT   0x10
-#define CAMERA_CENTER      0x80
-#define STREAM_COLUMNS     0x40    /* steps per screen: 8 block columns of 8 block rows */
-#define QUEUE_ENTRY        7       /* a 4-tile entry: address high, low, count - 1, 4 tiles */
-#define ATTR_TABLE_HI      0x23
-#define ATTR_TABLE_LO      0xC0
+#define LAST_BLOCK_ROW    0x38 /* cells at or past this are the half block row at the bottom */
+#define SCROLL_EDGE_RIGHT 0xF0 /* Scrooge's X when the camera stops at a row end */
+#define SCROLL_EDGE_LEFT  0x10
+#define CAMERA_CENTER     0x80
+#define STREAM_COLUMNS    0x40 /* steps per screen: 8 block columns of 8 block rows */
+#define QUEUE_ENTRY       7    /* a 4-tile entry: address high, low, count - 1, 4 tiles */
+#define ATTR_TABLE_HI     0x23
+#define ATTR_TABLE_LO     0xC0
 
-static uint8_t rom(uint16_t addr) { return Game_ReadRom(addr); }
+static uint8_t rom(uint16_t addr)
+{
+    return Game_ReadRom(addr);
+}
 
 /* $FFDE bank_select: map PRG bank at $8000 and remember it in $E7. */
 static void Bank_Select(uint8_t bank)
@@ -75,8 +78,9 @@ void Map_LoadHeader(uint8_t map)
     Decomp_Enter(DT_CODE_MAP_HEADER, 0, map, 0);
     gMapRows = rom((uint16_t)(DT_CODE_MAP_ROWS + map));
     gMapStride = rom((uint16_t)(DT_CODE_MAP_STRIDE + map));
-    Ram_SetU16(DT_ADDR_MAP_GRID, DT_ADDR_MAP_GRID + 1,
-               (uint16_t)(rom((uint16_t)(DT_CODE_MAP_GRID_LO + map)) | rom((uint16_t)(DT_CODE_MAP_GRID_HI + map)) << 8));
+    Ram_SetU16(
+        DT_ADDR_MAP_GRID, DT_ADDR_MAP_GRID + 1,
+        (uint16_t)(rom((uint16_t)(DT_CODE_MAP_GRID_LO + map)) | rom((uint16_t)(DT_CODE_MAP_GRID_HI + map)) << 8));
 }
 
 /* $CE2C: ($22) = the data of the screen in grid cell index: bank 4,
@@ -101,7 +105,9 @@ static void Level_BlockPointer(void)
     uint16_t screen = gScreenData;
     uint8_t ninthBits = rom((uint16_t)(screen + DT_SCREEN_NINTH_BITS + (gScratch0 & 7)));
     unsigned block = rom((uint16_t)(screen + gBlockCell));
-    if (ninthBits & rom((uint16_t)(DT_CODE_NINTH_BIT_MASK + (gBlockCell & 7)))) block |= 0x100;
+    if (ninthBits & rom((uint16_t)(DT_CODE_NINTH_BIT_MASK + (gBlockCell & 7)))) {
+        block |= 0x100;
+    }
     Ram_SetU16(DT_ADDR_SCRATCH0, DT_ADDR_SCRATCH1, (uint16_t)(DT_BLOCK_BASE + block * 4));
 }
 
@@ -118,14 +124,24 @@ static void Level_DrawMetatile(uint8_t offset, uint8_t metatile)
 static uint8_t Level_Substitute(int quadrant, uint8_t metatile)
 {
     if (gLand == LAND_MOON) {
-        if (!(gProgressA1 & 0x80) || gStreamScreen != 0x27 || gBlockCell < 0x20) return metatile;
+        if (!(gProgressA1 & 0x80) || gStreamScreen != 0x27 || gBlockCell < 0x20) {
+            return metatile;
+        }
         uint8_t column = gStreamPos & 0x38;
-        if (column == 0x18 && (quadrant & 1)) return 0xD6;
-        if (column == 0x20 && !(quadrant & 1)) return 0xD7;
+        if (column == 0x18 && (quadrant & 1)) {
+            return 0xD6;
+        }
+        if (column == 0x20 && !(quadrant & 1)) {
+            return 0xD7;
+        }
         return metatile;
     }
-    if (gLand != LAND_HIMALAYAS || !gHimalayasOpen || gStreamScreen != 0x28) return metatile;
-    if (gBlockCell != 0x21 && gBlockCell != 0x29) return metatile;
+    if (gLand != LAND_HIMALAYAS || !gHimalayasOpen || gStreamScreen != 0x28) {
+        return metatile;
+    }
+    if (gBlockCell != 0x21 && gBlockCell != 0x29) {
+        return metatile;
+    }
     gBlockAttr = 0;
     gBlockClasses = 0;
     return 0x88;
@@ -159,7 +175,9 @@ static void Level_DecodeBlock(void)
             gScratch0F = (uint8_t)((attr >> 4 & 3) << 2 * quadrant);
             gBlockAttr |= (uint8_t)((attr & 3) << 2 * quadrant);
             gBlockClasses |= gScratch0F;
-            if (!gRowScroll) metatile = Level_Substitute(quadrant, metatile);
+            if (!gRowScroll) {
+                metatile = Level_Substitute(quadrant, metatile);
+            }
         }
         Level_DrawMetatile(gScratch3, metatile);
     }
@@ -175,7 +193,9 @@ uint8_t Level_MetatileAt(uint8_t x)
     uint8_t bank = gBank;
     uint8_t screen = gScratch3;
     uint8_t row = gMapRow;
-    while ((int8_t)--row >= 0) screen += gMapStride;
+    while ((int8_t)--row >= 0) {
+        screen += gMapStride;
+    }
     Level_ScreenPointer(screen);
     uint8_t cell = gBlockCell;
     gBlockCell = gProbeCell & 0x3F;
@@ -196,7 +216,9 @@ static void Vram_Upload(uint16_t queue)
     uint8_t i = 0;
     do {
         uint8_t hi = RAM_U8(queue + i);
-        if (hi & QUEUE_END) return;
+        if (hi & QUEUE_END) {
+            return;
+        }
         Decomp_BusWrite(DT_PPU_ADDR, hi);
         Decomp_BusWrite(DT_PPU_ADDR, RAM_U8(queue + i + 1));
         uint8_t count = RAM_U8(queue + i + 2);
@@ -227,8 +249,11 @@ static void Vram_FlushTileEdits(void)
 static void Vram_EndQueue(unsigned end)
 {
     gVramQueue[end] = 0xFF;
-    if (gBlanked) Vram_FlushQueue();
-    else gVramQueueReady = 0xFF;
+    if (gBlanked) {
+        Vram_FlushQueue();
+    } else {
+        gVramQueueReady = 0xFF;
+    }
 }
 
 /* $C7FB: the next step in the direction of the last move ($38). A change of
@@ -243,7 +268,9 @@ static void Scroll_Advance(void)
         step = gStreamDir & 2;
         uint8_t pos = (uint8_t)(gStreamPos + rom((uint16_t)(DT_CODE_STREAM_STEP + step)));
         gStreamPos = pos & 0x3F;
-        if (!(pos & 0xC0)) return;
+        if (!(pos & 0xC0)) {
+            return;
+        }
     }
     gStreamPage += rom((uint16_t)(DT_CODE_STREAM_STEP + step));
     gStreamScreen += rom((uint16_t)(DT_CODE_STREAM_STEP + step));
@@ -277,8 +304,9 @@ static uint8_t Scroll_QueueBlock(void)
     gScratch0 = 0xFF;
     uint8_t attrAt = 4 * QUEUE_ENTRY;
     if (gLand <= LAND_MOON && !(gStreamPage & 1) && row == 1) {
-        for (uint8_t k = 0; k < 2 * QUEUE_ENTRY; k++)
+        for (uint8_t k = 0; k < 2 * QUEUE_ENTRY; k++) {
             gVramQueue[(uint8_t)(gQueueEnd + k)] = gVramQueue[(uint8_t)(gQueueEnd + k) + 2 * QUEUE_ENTRY];
+        }
         gBlockAttr &= 0xF0;
         attrAt = 2 * QUEUE_ENTRY;
     } else if (gBlockCell >= LAST_BLOCK_ROW) {
@@ -315,7 +343,9 @@ void Scroll_StreamBlocks(void)
             }
             gQueueEnd = (uint8_t)(at + 4);
         } else if (!--gSteps) {
-            if (gQueueEnd) Vram_EndQueue(gQueueEnd);
+            if (gQueueEnd) {
+                Vram_EndQueue(gQueueEnd);
+            }
             return;
         }
         Scroll_Advance();
@@ -328,11 +358,15 @@ void Scroll_StreamBlocks(void)
 static void Scroll_Stream(void)
 {
     uint8_t moved = (uint8_t)(gCameraX - gCameraXPrev);
-    if (moved & 0x80) moved = (uint8_t)-moved;
+    if (moved & 0x80) {
+        moved = (uint8_t)-moved;
+    }
     gCameraDelta = moved;
     uint8_t carried = (gPlayerMoveDir & 2) ? (uint8_t)(~gCameraXPrev & 3) : (uint8_t)(gCameraXPrev & 3);
     gSteps = (uint8_t)(carried + moved) >> 2;
-    if (!gSteps) return;
+    if (!gSteps) {
+        return;
+    }
     gQueueEnd = 0;
     Scroll_Advance();
     Scroll_StreamBlocks();
@@ -366,7 +400,9 @@ static void Camera_ScrollRight(void)
         Camera_MoveTo(gTargetX);
     } else {
         gCameraX = 0;
-        if (gObjects->worldX[P_] > SCROLL_EDGE_RIGHT) gObjects->worldX[P_] = SCROLL_EDGE_RIGHT;
+        if (gObjects->worldX[P_] > SCROLL_EDGE_RIGHT) {
+            gObjects->worldX[P_] = SCROLL_EDGE_RIGHT;
+        }
         gCameraPage = gTargetPage;
         gCameraScreen = gTargetScreen;
     }
@@ -383,7 +419,9 @@ static void Camera_ScrollLeft(void)
         Camera_MoveTo(gTargetX);
     } else {
         gCameraX = 0;
-        if (gObjects->worldX[P_] <= SCROLL_EDGE_LEFT) gObjects->worldX[P_] = SCROLL_EDGE_LEFT;
+        if (gObjects->worldX[P_] <= SCROLL_EDGE_LEFT) {
+            gObjects->worldX[P_] = SCROLL_EDGE_LEFT;
+        }
     }
     Scroll_Stream();
 }
@@ -401,20 +439,28 @@ static void Camera_FollowScript(void)
     uint8_t screenX = (uint8_t)(gObjects->worldX[P_] - gCameraX);
     int push = -1;
     if (gPadHeld & DT_PAD_RIGHT) {
-        if (screenX >= SCROLL_EDGE_RIGHT) push = 0;
+        if (screenX >= SCROLL_EDGE_RIGHT) {
+            push = 0;
+        }
     } else if (gPadHeld & DT_PAD_LEFT) {
-        if (screenX < SCROLL_EDGE_LEFT) push = 3;
+        if (screenX < SCROLL_EDGE_LEFT) {
+            push = 3;
+        }
     }
     if (push >= 0) {
-        uint32_t x = (uint32_t)gObjects->worldPage[P_] << 16 | (uint32_t)gObjects->worldX[P_] << 8 | gObjects->xFrac[P_];
+        uint32_t x = (uint32_t)gObjects->worldPage[P_] << 16 | (uint32_t)gObjects->worldX[P_] << 8 |
+                     gObjects->xFrac[P_];
         uint32_t by = (uint32_t)rom((uint16_t)(DT_CODE_SCRIPT_PUSH + push + 2)) << 16 |
-                      (uint32_t)rom((uint16_t)(DT_CODE_SCRIPT_PUSH + push + 1)) << 8 | rom((uint16_t)(DT_CODE_SCRIPT_PUSH + push));
+                      (uint32_t)rom((uint16_t)(DT_CODE_SCRIPT_PUSH + push + 1)) << 8 |
+                      rom((uint16_t)(DT_CODE_SCRIPT_PUSH + push));
         x += by;
         gObjects->xFrac[P_] = (uint8_t)x;
         gObjects->worldX[P_] = (uint8_t)(x >> 8);
         gObjects->worldPage[P_] = (uint8_t)(x >> 16);
     }
-    if (!(gCameraX | gCameraPage)) return;
+    if (!(gCameraX | gCameraPage)) {
+        return;
+    }
     gPlayerMoveDir = DT_PAD_LEFT;
     Scroll_Stream();
 }
@@ -428,10 +474,14 @@ void Camera_Update(void)
         Camera_FollowScript();
         return;
     }
-    if (!(gPlayerMoveDir & 3)) return;
+    if (!(gPlayerMoveDir & 3)) {
+        return;
+    }
     gPlayerMoveDir = DT_PAD_RIGHT;
     uint8_t offset = (uint8_t)(gObjects->worldX[P_] - gCameraX - CAMERA_CENTER);
-    if (!offset) return;
+    if (!offset) {
+        return;
+    }
     gCameraDelta = offset;
     if (!(offset & 0x80)) {
         Camera_ScrollRight();
@@ -454,7 +504,9 @@ static void Level_DrawStartColumns(void)
         uint8_t left = (uint8_t)(gStreamScreen - 1);
         if (Map_Cell(left) != MAP_NO_SCREEN) {
             layout++;
-            if ((uint8_t)(left - 1) != gMapStride && Map_Cell((uint8_t)(gStreamScreen + 1)) != MAP_NO_SCREEN) layout++;
+            if ((uint8_t)(left - 1) != gMapStride && Map_Cell((uint8_t)(gStreamScreen + 1)) != MAP_NO_SCREEN) {
+                layout++;
+            }
         }
     }
     gDrawSteps = rom((uint16_t)(DT_CODE_START_STEPS + layout));
@@ -514,8 +566,12 @@ static void Level_PlaceFromEntry(void)
     for (;;) {
         gSteps = 1;
         gQueueEnd = 0;
-        if (Map_Cell(gStreamScreen) != MAP_NO_SCREEN) Scroll_StreamBlocks();
-        if ((int8_t)--gDrawSteps < 0) return;
+        if (Map_Cell(gStreamScreen) != MAP_NO_SCREEN) {
+            Scroll_StreamBlocks();
+        }
+        if ((int8_t)--gDrawSteps < 0) {
+            return;
+        }
         gStreamPos = (uint8_t)((gStreamPos + 1) & (STREAM_COLUMNS - 1));
         if (!gStreamPos) {
             gStreamScreen++;
@@ -531,17 +587,22 @@ static void Level_PlaceFromEntry(void)
 static void Chr_StreamRow(void)
 {
     Decomp_Enter(DT_CODE_ROW_CHR_STREAM, 0, 0, 0);
-    if (gChrStream & 0x80) return;
+    if (gChrStream & 0x80) {
+        return;
+    }
     uint8_t row = (uint8_t)(rom((uint16_t)(DT_CODE_ROW_CHR_BASE + gLand)) + gMapRow);
     if (!gChrStream) {
         uint8_t list = rom((uint16_t)(DT_CODE_ROW_CHR_LIST + row));
         if (list & 0x80) {
             list &= 0x7F;
-            if (gCameraPage >= (gLand == LAND_MOON ? 3 : 4)) list++;
+            if (gCameraPage >= (gLand == LAND_MOON ? 3 : 4)) {
+                list++;
+            }
         }
         gChrStream++;
-        Ram_SetU16(DT_ADDR_CHR_LIST, DT_ADDR_CHR_LIST + 1,
-                   (uint16_t)(rom((uint16_t)(DT_CODE_CHR_LIST_LO + list)) | rom((uint16_t)(DT_CODE_CHR_LIST_HI + list)) << 8));
+        Ram_SetU16(
+            DT_ADDR_CHR_LIST, DT_ADDR_CHR_LIST + 1,
+            (uint16_t)(rom((uint16_t)(DT_CODE_CHR_LIST_LO + list)) | rom((uint16_t)(DT_CODE_CHR_LIST_HI + list)) << 8));
         gChrRecord = 0;
         RAM_U8(DT_ADDR_CHR_SOURCE) = 0;
         RAM_U8(DT_ADDR_CHR_TARGET) = 0;
@@ -569,7 +630,9 @@ static void Chr_StreamRow(void)
     }
     Bank_Select(gChrBank);
     uint16_t source = Ram_GetU16(DT_ADDR_CHR_SOURCE, DT_ADDR_CHR_SOURCE + 1);
-    for (uint8_t i = 0; i < CHR_CHUNK; i++) gVramQueue[3 + i] = rom((uint16_t)(source + (uint8_t)(gChrOffset + i)));
+    for (uint8_t i = 0; i < CHR_CHUNK; i++) {
+        gVramQueue[3 + i] = rom((uint16_t)(source + (uint8_t)(gChrOffset + i)));
+    }
     gChrOffset += CHR_CHUNK;
     uint16_t target = Ram_GetU16(DT_ADDR_CHR_TARGET, DT_ADDR_CHR_TARGET + 1);
     gVramQueue[2] = CHR_CHUNK - 1;
@@ -578,7 +641,9 @@ static void Chr_StreamRow(void)
     Ram_SetU16(DT_ADDR_CHR_TARGET, DT_ADDR_CHR_TARGET + 1, (uint16_t)(target + CHR_CHUNK));
     if (!gChrOffset) {
         RAM_U8(DT_ADDR_CHR_SOURCE + 1)++;
-        if ((int8_t)--gChrPages < 0) gChrStream--;
+        if ((int8_t)--gChrPages < 0) {
+            gChrStream--;
+        }
     }
     Vram_EndQueue(3 + CHR_CHUNK);
 }
@@ -592,10 +657,15 @@ static void Boss_CheckTrigger(void)
 {
     Decomp_Enter(DT_CODE_BOSS_TRIGGER, 0, 0, 0);
     uint8_t land = gLand;
-    if (gMapRow != rom((uint16_t)(DT_CODE_BOSS_ROW + land))) return;
+    if (gMapRow != rom((uint16_t)(DT_CODE_BOSS_ROW + land))) {
+        return;
+    }
     uint8_t dir = rom((uint16_t)(DT_CODE_BOSS_SCROLL + land)) & 2;
-    uint16_t ahead = (uint16_t)(rom((uint16_t)(DT_CODE_BOSS_LOOK_AHEAD + dir)) | rom((uint16_t)(DT_CODE_BOSS_LOOK_AHEAD + dir + 1)) << 8);
-    if ((uint8_t)((Obj_GetWorldX(P_) + ahead) >> 8) != rom((uint16_t)(DT_CODE_BOSS_PAGE + land))) return;
+    uint16_t ahead = (uint16_t)(rom((uint16_t)(DT_CODE_BOSS_LOOK_AHEAD + dir)) |
+                                rom((uint16_t)(DT_CODE_BOSS_LOOK_AHEAD + dir + 1)) << 8);
+    if ((uint8_t)((Obj_GetWorldX(P_) + ahead) >> 8) != rom((uint16_t)(DT_CODE_BOSS_PAGE + land))) {
+        return;
+    }
     if (land == LAND_TRANSYLVANIA && (gTreasures & 0x1F) != 0x1F && (gTreasures & 0x02)) {
         gLandRedirect = 0x80;
         return;
@@ -628,7 +698,8 @@ static void Level_TileEdit(int slot)
     q[10] = hi | 3;
     uint8_t quadrant = (uint8_t)((y >> 3 & 2) | (x >> 4 & 1));
     gTargetPage = quadrant;
-    q[1] = (uint8_t)(rom((uint16_t)(DT_CODE_TILE_EDIT_LO + blockRow)) | (x >> 3 & 0x1E) | rom((uint16_t)(DT_CODE_TILE_EDIT_HALF + quadrant)));
+    q[1] = (uint8_t)(rom((uint16_t)(DT_CODE_TILE_EDIT_LO + blockRow)) | (x >> 3 & 0x1E) |
+                     rom((uint16_t)(DT_CODE_TILE_EDIT_HALF + quadrant)));
     q[6] = q[1] | 0x20;
     uint8_t cell = (uint8_t)((page & 1) << 6 | (y >> 2 & 0x38) | (x >> 5 & 7));
     gBlockCell = cell;
@@ -651,20 +722,85 @@ static void Level_TileEdit(int slot)
 
 /* ---- site adapters ---- */
 
-static void Run_MapLoadHeader(Regs *r) { Map_LoadHeader(r->x); }
-static void Run_StreamBlocks(Regs *r) { (void)r; Scroll_StreamBlocks(); }
-static void Run_DrawStartColumns(Regs *r) { (void)r; Level_DrawStartColumns(); }
-static void Run_DrawScreen(Regs *r) { (void)r; Level_DrawScreen(); }
-static void Run_PlaceFromEntry(Regs *r) { (void)r; Level_PlaceFromEntry(); }
-static void Run_VramFlush(Regs *r) { (void)r; Vram_FlushQueue(); }
-static void Run_TileEditFlush(Regs *r) { (void)r; Vram_FlushTileEdits(); }
-static void Run_ScreenPointer(Regs *r) { Level_ScreenPointer(r->y); }
-static void Run_DecodeBlock(Regs *r) { (void)r; Level_DecodeBlock(); }
-static void Run_MetatileAt(Regs *r) { r->a = Level_MetatileAt(r->x); }
-static void Run_CameraUpdate(Regs *r) { (void)r; Camera_Update(); }
-static void Run_BossCheckTrigger(Regs *r) { (void)r; Boss_CheckTrigger(); }
-static void Run_TileEdit(Regs *r) { Level_TileEdit(r->x); }
-static void Run_ChrStreamRow(Regs *r) { (void)r; Chr_StreamRow(); }
+static void Run_MapLoadHeader(Regs *r)
+{
+    Map_LoadHeader(r->x);
+}
+
+static void Run_StreamBlocks(Regs *r)
+{
+    (void)r;
+    Scroll_StreamBlocks();
+}
+
+static void Run_DrawStartColumns(Regs *r)
+{
+    (void)r;
+    Level_DrawStartColumns();
+}
+
+static void Run_DrawScreen(Regs *r)
+{
+    (void)r;
+    Level_DrawScreen();
+}
+
+static void Run_PlaceFromEntry(Regs *r)
+{
+    (void)r;
+    Level_PlaceFromEntry();
+}
+
+static void Run_VramFlush(Regs *r)
+{
+    (void)r;
+    Vram_FlushQueue();
+}
+
+static void Run_TileEditFlush(Regs *r)
+{
+    (void)r;
+    Vram_FlushTileEdits();
+}
+
+static void Run_ScreenPointer(Regs *r)
+{
+    Level_ScreenPointer(r->y);
+}
+
+static void Run_DecodeBlock(Regs *r)
+{
+    (void)r;
+    Level_DecodeBlock();
+}
+
+static void Run_MetatileAt(Regs *r)
+{
+    r->a = Level_MetatileAt(r->x);
+}
+
+static void Run_CameraUpdate(Regs *r)
+{
+    (void)r;
+    Camera_Update();
+}
+
+static void Run_BossCheckTrigger(Regs *r)
+{
+    (void)r;
+    Boss_CheckTrigger();
+}
+
+static void Run_TileEdit(Regs *r)
+{
+    Level_TileEdit(r->x);
+}
+
+static void Run_ChrStreamRow(Regs *r)
+{
+    (void)r;
+    Chr_StreamRow();
+}
 
 const DecompRoutine gLevelRoutines[] = {
     { DT_CODE_MAP_HEADER, "ducktales.decomp.C7B0", "Map_LoadHeader", Run_MapLoadHeader, OUT_X },

@@ -8,8 +8,8 @@
 #include "ducktales/ram.h"
 
 /* Scratch bytes of a probed point, read by the metatile lookup. */
-#define gProbeQuadrant RAM_U8(DT_ADDR_STEPS)       /* quadrant: bit 0 right half, bit 1 lower half */
-#define gProbeCell     RAM_U8(DT_ADDR_QUEUE_END)   /* collision map index: page bit 6, row * 8 + column */
+#define gProbeQuadrant RAM_U8(DT_ADDR_STEPS)     /* quadrant: bit 0 right half, bit 1 lower half */
+#define gProbeCell     RAM_U8(DT_ADDR_QUEUE_END) /* collision map index: page bit 6, row * 8 + column */
 #define gProbeX        RAM_U8(DT_ADDR_PROBE_X)
 #define gProbeY        RAM_U8(DT_ADDR_PROBE_Y)
 

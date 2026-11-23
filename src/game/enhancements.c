@@ -14,31 +14,35 @@
 
 static const DtEnhInfo INFO[DT_ENH_COUNT] = {
     [DT_ENH_JUMP_SCALE] = { "JumpScale", "--jump-scale", "Jump height",
-        "Scrooge's jump take-off speed in percent (100 = original)",
-        DT_ENH_KIND_PERCENT, DT_JUMP_SCALE_MIN, DT_JUMP_SCALE_MAX, DT_JUMP_SCALE_STOCK, 5 },
+                            "Scrooge's jump take-off speed in percent (100 = original)", DT_ENH_KIND_PERCENT,
+                            DT_JUMP_SCALE_MIN, DT_JUMP_SCALE_MAX, DT_JUMP_SCALE_STOCK, 5 },
     [DT_ENH_NO_DAMAGE] = { "NoDamage", "--no-damage", "No damage",
-        "Hits still knock Scrooge back but never cost health",
-        DT_ENH_KIND_TOGGLE, 0, 1, 0, 1 },
+                           "Hits still knock Scrooge back but never cost health", DT_ENH_KIND_TOGGLE, 0, 1, 0, 1 },
     [DT_ENH_INFINITE_TIME] = { "InfiniteTime", "--infinite-time", "Infinite time",
-        "The level timer stops counting down",
-        DT_ENH_KIND_TOGGLE, 0, 1, 0, 1 },
+                               "The level timer stops counting down", DT_ENH_KIND_TOGGLE, 0, 1, 0, 1 },
     [DT_ENH_INFINITE_LIVES] = { "InfiniteLives", "--infinite-lives", "Infinite lives",
-        "Losing a life never lowers the lives counter",
-        DT_ENH_KIND_TOGGLE, 0, 1, 0, 1 },
+                                "Losing a life never lowers the lives counter", DT_ENH_KIND_TOGGLE, 0, 1, 0, 1 },
     [DT_ENH_START_LIVES] = { "StartLives", "--start-lives", "Extra lives at start",
-        "Extra lives for a new game, 0-9 (off = original, 2); applies from the next new game",
-        DT_ENH_KIND_COUNT_OR_OFF, -1, 9, -1, 1 },
+                             "Extra lives for a new game, 0-9 (off = original, 2); applies from the next new game",
+                             DT_ENH_KIND_COUNT_OR_OFF, -1, 9, -1, 1 },
 };
 
 static int s_value[DT_ENH_COUNT] = { DT_JUMP_SCALE_STOCK, 0, 0, 0, -1 };
 static uint64_t s_applied[DT_ENH_COUNT];
 
-const DtEnhInfo *dt_enh_info(DtEnh e) { return e < DT_ENH_COUNT ? &INFO[e] : NULL; }
+const DtEnhInfo *dt_enh_info(DtEnh e)
+{
+    return e < DT_ENH_COUNT ? &INFO[e] : NULL;
+}
 
 bool dt_enh_parse(DtEnh e, const char *text, int *out)
 {
-    if (e >= DT_ENH_COUNT || !text) return false;
-    while (*text == ' ' || *text == '\t') text++;
+    if (e >= DT_ENH_COUNT || !text) {
+        return false;
+    }
+    while (*text == ' ' || *text == '\t') {
+        text++;
+    }
     char word[16];
     size_t n = 0;
     while (text[n] && text[n] != ' ' && text[n] != '\t' && text[n] != '\r' && text[n] != '\n' && n + 1 < sizeof word) {
@@ -46,32 +50,52 @@ bool dt_enh_parse(DtEnh e, const char *text, int *out)
         n++;
     }
     word[n] = 0;
-    for (const char *rest = text + n; *rest; rest++)
-        if (*rest != ' ' && *rest != '\t' && *rest != '\r' && *rest != '\n') return false;
+    for (const char *rest = text + n; *rest; rest++) {
+        if (*rest != ' ' && *rest != '\t' && *rest != '\r' && *rest != '\n') {
+            return false;
+        }
+    }
     const DtEnhInfo *in = &INFO[e];
     if (in->kind == DT_ENH_KIND_TOGGLE) {
         static const char *on[] = { "1", "on", "true", "yes" }, *off[] = { "0", "off", "false", "no" };
         for (int i = 0; i < 4; i++) {
-            if (!strcmp(word, on[i])) { *out = 1; return true; }
-            if (!strcmp(word, off[i])) { *out = 0; return true; }
+            if (!strcmp(word, on[i])) {
+                *out = 1;
+                return true;
+            }
+            if (!strcmp(word, off[i])) {
+                *out = 0;
+                return true;
+            }
         }
         return false;
     }
-    if (in->kind == DT_ENH_KIND_COUNT_OR_OFF && !strcmp(word, "off")) { *out = in->stock; return true; }
+    if (in->kind == DT_ENH_KIND_COUNT_OR_OFF && !strcmp(word, "off")) {
+        *out = in->stock;
+        return true;
+    }
     char *end;
     long v = strtol(word, &end, 10);
-    if (end == word || *end || v < in->min || v > in->max) return false;
+    if (end == word || *end || v < in->min || v > in->max) {
+        return false;
+    }
     *out = (int)v;
     return true;
 }
 
 const char *dt_enh_format(DtEnh e, int value, char *buf, unsigned cap)
 {
-    if (e >= DT_ENH_COUNT) return "";
+    if (e >= DT_ENH_COUNT) {
+        return "";
+    }
     const DtEnhInfo *in = &INFO[e];
-    if (in->kind == DT_ENH_KIND_TOGGLE) snprintf(buf, cap, "%s", value ? "on" : "off");
-    else if (in->kind == DT_ENH_KIND_COUNT_OR_OFF && value == in->stock) snprintf(buf, cap, "off");
-    else snprintf(buf, cap, "%d", value);
+    if (in->kind == DT_ENH_KIND_TOGGLE) {
+        snprintf(buf, cap, "%s", value ? "on" : "off");
+    } else if (in->kind == DT_ENH_KIND_COUNT_OR_OFF && value == in->stock) {
+        snprintf(buf, cap, "off");
+    } else {
+        snprintf(buf, cap, "%d", value);
+    }
     return buf;
 }
 
@@ -94,7 +118,9 @@ static EventResult infinite_time(EventId id, void *user)
 {
     (void)id;
     (void)user;
-    if (gTickFrames == 1) s_applied[DT_ENH_INFINITE_TIME]++;
+    if (gTickFrames == 1) {
+        s_applied[DT_ENH_INFINITE_TIME]++;
+    }
     return EVENT_CANCEL;
 }
 
@@ -104,7 +130,9 @@ static EventResult infinite_lives(EventId id, void *user)
 {
     (void)id;
     (void)user;
-    if (gLives == 0xFF) return EVENT_CONTINUE;
+    if (gLives == 0xFF) {
+        return EVENT_CONTINUE;
+    }
     s_applied[DT_ENH_INFINITE_LIVES]++;
     return EVENT_CANCEL;
 }
@@ -120,7 +148,10 @@ static EventResult start_lives(EventId id, void *user)
     return EVENT_CONTINUE;
 }
 
-static const struct { EventId event; EventHandler fn; } HANDLER[DT_ENH_COUNT] = {
+static const struct {
+    EventId event;
+    EventHandler fn;
+} HANDLER[DT_ENH_COUNT] = {
     [DT_ENH_NO_DAMAGE] = { EVENT_PLAYER_DAMAGED, no_damage },
     [DT_ENH_INFINITE_TIME] = { EVENT_TIMER_TICK, infinite_time },
     [DT_ENH_INFINITE_LIVES] = { EVENT_LIFE_LOST, infinite_lives },
@@ -129,21 +160,33 @@ static const struct { EventId event; EventHandler fn; } HANDLER[DT_ENH_COUNT] = 
 
 bool dt_enh_set(DtEnh e, int value)
 {
-    if (e >= DT_ENH_COUNT || value < INFO[e].min || value > INFO[e].max) return false;
-    if (e == DT_ENH_JUMP_SCALE && !dt_jump_set_scale(value)) return false;
+    if (e >= DT_ENH_COUNT || value < INFO[e].min || value > INFO[e].max) {
+        return false;
+    }
+    if (e == DT_ENH_JUMP_SCALE && !dt_jump_set_scale(value)) {
+        return false;
+    }
     s_value[e] = value;
     if (HANDLER[e].fn) {
-        if (value != INFO[e].stock) Events_On(HANDLER[e].event, HANDLER[e].fn, NULL);
-        else Events_Off(HANDLER[e].event, HANDLER[e].fn, NULL);
+        if (value != INFO[e].stock) {
+            Events_On(HANDLER[e].event, HANDLER[e].fn, NULL);
+        } else {
+            Events_Off(HANDLER[e].event, HANDLER[e].fn, NULL);
+        }
     }
     return true;
 }
 
-int dt_enh_get(DtEnh e) { return e < DT_ENH_COUNT ? s_value[e] : 0; }
+int dt_enh_get(DtEnh e)
+{
+    return e < DT_ENH_COUNT ? s_value[e] : 0;
+}
 
 uint64_t dt_enh_applied(DtEnh e)
 {
-    if (e == DT_ENH_JUMP_SCALE) return dt_jump_rescaled();
+    if (e == DT_ENH_JUMP_SCALE) {
+        return dt_jump_rescaled();
+    }
     return e < DT_ENH_COUNT ? s_applied[e] : 0;
 }
 

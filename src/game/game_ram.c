@@ -19,7 +19,11 @@ uint8_t *gRam;
 
 #define MAX_DEPTH 8
 
-static struct { uint8_t *image; bool live; } s_stack[MAX_DEPTH];
+static struct {
+    uint8_t *image;
+    bool live;
+} s_stack[MAX_DEPTH];
+
 static int s_depth;
 static uint8_t s_live_image[GAME_RAM_SIZE];
 
@@ -53,23 +57,36 @@ void GameRam_Begin(void)
 
 void GameRam_End(void)
 {
-    if (!s_depth) return;
+    if (!s_depth) {
+        return;
+    }
     if (s_stack[s_depth - 1].live) {
         const uint8_t *live = cyc_cpu_ram();
-        for (uint16_t a = 0; a < GAME_RAM_SIZE; a++)
-            if (s_live_image[a] != live[a]) cyc_mod_poke(a, s_live_image[a]);
+        for (uint16_t a = 0; a < GAME_RAM_SIZE; a++) {
+            if (s_live_image[a] != live[a]) {
+                cyc_mod_poke(a, s_live_image[a]);
+            }
+        }
     }
     pop();
 }
 
-void GameRam_Enter(uint8_t *image) { push(image, false); }
+void GameRam_Enter(uint8_t *image)
+{
+    push(image, false);
+}
 
 void GameRam_Leave(void)
 {
-    if (s_depth) pop();
+    if (s_depth) {
+        pop();
+    }
 }
 
-bool GameRam_Open(void) { return s_depth > 0; }
+bool GameRam_Open(void)
+{
+    return s_depth > 0;
+}
 
 static uint8_t *s_prg;
 static size_t s_prg_size;
@@ -77,9 +94,13 @@ static int s_view_bank = -1;
 
 static bool load_prg(void)
 {
-    if (s_prg) return true;
+    if (s_prg) {
+        return true;
+    }
     size_t size = cyc_mod_copy_cart_payload(NULL, 0);
-    if (size < 0x4000 || !(s_prg = malloc(size))) return false;
+    if (size < 0x4000 || !(s_prg = malloc(size))) {
+        return false;
+    }
     cyc_mod_copy_cart_payload(s_prg, size);
     s_prg_size = size & ~(size_t)0x3FFF;
     return true;
@@ -87,19 +108,31 @@ static bool load_prg(void)
 
 uint8_t Game_ReadRom(uint16_t addr)
 {
-    if (s_view_bank >= 0 && addr >= 0x8000 && addr < 0xC000)
+    if (s_view_bank >= 0 && addr >= 0x8000 && addr < 0xC000) {
         return s_prg[(size_t)s_view_bank * 0x4000 + (addr - 0x8000)];
+    }
     return cyc_mod_peek(addr);
 }
 
 void Game_MapperWrite(uint16_t addr, uint8_t value)
 {
-    if (addr < 0x8000 || !load_prg()) return;
+    if (addr < 0x8000 || !load_prg()) {
+        return;
+    }
     s_view_bank = (int)((value & Game_ReadRom(addr)) % (s_prg_size / 0x4000));
 }
 
-void Game_ResetRomView(void) { s_view_bank = -1; }
+void Game_ResetRomView(void)
+{
+    s_view_bank = -1;
+}
 
-int Game_RomView(void) { return s_view_bank; }
+int Game_RomView(void)
+{
+    return s_view_bank;
+}
 
-void Game_SetRomView(int bank) { s_view_bank = bank; }
+void Game_SetRomView(int bank)
+{
+    s_view_bank = bank;
+}
