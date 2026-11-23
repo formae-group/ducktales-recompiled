@@ -18,7 +18,6 @@ and fails if any pixel differs anywhere but the split line, or (with
 """
 
 import argparse
-import os
 import re
 import subprocess
 import sys
@@ -26,7 +25,6 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-BELOW_NORMAL = 0x00004000
 
 
 def route_frames(path):
@@ -49,8 +47,7 @@ def run(exe, rom, route, out):
         '--native-render-check',
         str(report),
     ]
-    flags = BELOW_NORMAL if os.name == 'nt' else 0
-    p = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True, creationflags=flags)
+    p = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
     text = report.read_text() if report.exists() else ''
     m = re.search(r'^summary (.*)$', text, re.M)
     if p.returncode != 0 or not m:

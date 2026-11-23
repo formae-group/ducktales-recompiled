@@ -92,6 +92,7 @@ static void ensure_loaded(void)
     }
     cyc_settings_default(&s_cfg);
     cyc_settings_load(&s_cfg, s_path, NULL, &GAME_KEYS);
+    ducktales_host_load_audio_settings(s_path);
     s_launch = s_cfg;
     /* the host turns the FDS Disk shortcut off for a cartridge (cyc_sdl.c) */
     s_launch.bind.shortcut_off |= 1u << CYC_SC_DISK;

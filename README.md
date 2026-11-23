@@ -40,8 +40,9 @@ ROM-derived code locally.
   and Lua 5.4 scripts react to the game's events in a sandbox. Off by default and ordered in the
   Mod Menu; asset mods never touch the machine. See [docs/mods.md](docs/mods.md).
 - **A start on decompilation.** A typed C API over the game's RAM, game events for mods, and
-  Scrooge's per-frame routines decompiled to C, checked against the original on every call
-  (`--decomp check`) and able to run in its place (`--decomp replace`). Off by default.
+  C versions of Scrooge's per-frame routines and parts of the game loop and HUD. The cycle host can
+  compare them with the original (`--decomp check`) or run them in its place
+  (`--decomp replace`). Off by default.
 
 ## Supported ROM
 
@@ -130,11 +131,19 @@ choose a cell and press the new key or button: Escape cancels and Delete clears.
 | | Frame pacing | Auto, VSync, steady | `[Game] FramePacing` |
 | | No sprite flicker | On (default), off | `[Game] NoSpriteFlicker` |
 | Settings, Audio | Master volume | 0% to 100% | `[Audio] Volume` |
+| | Keep music under sound effects (native player only) | On, off (default) | `[Audio] MusicUnderEffects` |
+| | Overlapping sound effects (native player only) | On, off (default) | `[Audio] OverlapEffects` |
 | Settings, Controls | Player 1 keyboard and controller bindings, Menu shortcut | | `[Keyboard.*]`, `[Gamepad.*]` |
 | Settings, Gameplay | No slowdown | On (default), off | `[Game] NoSlowdown` |
 | Settings, Mods | Enable mods, the mod list (order and switches), Open mods folder, Rescan | Off (default), on | `[Mods] Enabled`, `[Mods] Order` |
 | Enhancements, Gameplay | The enhancements below | | `[Game]` |
 | Enhancements, Restore defaults | Restore the original game | | |
+
+The two sound options bring back what the console's four channels drop: the music part a sound
+effect takes over (39 of the 40 effects take pulse 2 and/or noise), and an effect the sound driver
+ignores or cuts off for a newer one. They play on extra channels of the native player's synth and
+change nothing in the game; `ducktales_cycle.exe` keeps them in `config.ini` but plays the console's
+sound only ([docs/audio.md](docs/audio.md#extra-voices)).
 
 Frame pacing applies at the next launch: *Auto* uses VSync on displays up to 70 Hz and a steady
 present hold above that. Measurements are in [docs/presentation.md](docs/presentation.md). The About

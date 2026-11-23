@@ -78,9 +78,10 @@
 #define DT_PAD_RIGHT  0x01
 
 /* Page 1 below this is data, not stack: the master palette $0100-$011F, the
- * consumed-record bits $0120-$013F and the HUD time group $0140-$015F
+ * consumed-record bits $0120-$013F and the HUD time group $0140-$015F, which
+ * the game-over box ($DEB9, 33 bytes) replaces up to its end mark at $0160
  * (verified, memory-map.md, game-state.md). */
-#define DT_ADDR_STACK_FLOOR 0x0160
+#define DT_ADDR_STACK_FLOOR 0x0161
 
 /* ---- object tables: one 16-byte row per attribute, column = slot ----
  * Slot 0 is Scrooge (docs/memory-map.md "Object tables", docs/player.md). */
@@ -223,6 +224,137 @@
 #define DT_CODE_APPLY_GRAVITY    0xF2B5 /* vertical velocity -= gravity (X = slot) */
 #define DT_CODE_MUSIC_REQUEST    0xF752 /* remember the music id in $C5, then queue it */
 #define DT_CODE_SOUND_REQUEST    0xF754 /* queue a sound id in the request ring */
+
+/* ---- game flow (docs/game-state.md, docs/levels.md, docs/rendering.md;
+ * decompiled in src/decomp/flow.c) ---- */
+#define DT_ADDR_SCRATCH4           0x0004 /* scratch: block steps for $C830 (verified, rendering.md) */
+#define DT_ADDR_SCRATCH5           0x0005 /* scratch: VRAM queue offset for $C830 (code) */
+#define DT_ADDR_SCRATCH10          0x0010 /* scratch: counters and pointers of the flow code (code) */
+#define DT_ADDR_SCRATCH11          0x0011 /* scratch: screens left to draw at a respawn (code) */
+#define DT_ADDR_PALETTE_REQUEST    0x0018 /* the NMI uploads $0300-$031F when set (verified) */
+#define DT_ADDR_VRAM_PENDING       0x0019 /* the NMI draws the $0400 queue when set (verified) */
+#define DT_ADDR_TILE_EDIT_PENDING  0x001A /* the NMI draws the $0440 queue when set (verified) */
+#define DT_ADDR_STREAM_PAGE        0x002C /* page of the screen being streamed (verified) */
+#define DT_ADDR_PREV_CAMERA_X      0x0025 /* previous frame's $F2 (verified) */
+#define DT_ADDR_UNK_2E             0x002E /* cleared every frame by the frame loop (code; meaning unknown) */
+#define DT_ADDR_UNK_4F             0x004F /* cleared at land load, respawn and scenes (code; meaning unknown) */
+#define DT_ADDR_ROW_CHR_STATE      0x0050 /* row sprite-CHR stream state, negative = done (verified) */
+#define DT_ADDR_UNK_5B             0x005B /* cleared every frame by the frame loop (code; meaning unknown) */
+#define DT_ADDR_TILE_EDIT_OFFSET   0x005C /* write offset of the $0440 queue (verified) */
+#define DT_ADDR_LAND_LEFT          0x005D /* land left: back to Land Select (verified) */
+#define DT_ADDR_HUD_MONEY_DIRTY    0x0074 /* the frame loop redraws the money when set (code) */
+#define DT_ADDR_SCENE              0x0078 /* special scene request: bit 7 + scene (verified) */
+#define DT_ADDR_HUD_TOTAL_DIRTY    0x00AB /* the frame loop redraws TOTAL when set (code) */
+#define DT_ADDR_NO_SPRITE_DMA      0x0098 /* the NMI skips sprite DMA while non-zero (verified) */
+#define DT_ADDR_PPU_OFF            0x00E8 /* the NMI skips its PPU block while non-zero (verified) */
+#define DT_ADDR_ROW_SCROLL         0x00E9 /* vertical row scroll running (hypothesis) */
+#define DT_ADDR_HUD_SPLIT          0x00EA /* sprite-0 HUD split, $40 in play (verified) */
+#define DT_ADDR_ROW_SCROLL_ADDR    0x00ED /* mid-frame $2006 low byte of the row scroll (hypothesis) */
+#define DT_ADDR_TILESET_BANK       0x00F7 /* bank of the land's blocks and metatiles (verified) */
+#define DT_ADDR_BG_OFF_BELOW_SPLIT 0x00F8 /* background off below the split (verified, code) */
+#define DT_ADDR_HUD_MONEY_PACKET   0x0320 /* VRAM packet of the money: PPU address, count, digits (verified) */
+#define DT_HUD_MONEY_PACKET_LEN    12
+#define DT_ADDR_HUD_TOTAL_PACKET   0x0330 /* VRAM packet of TOTAL (verified) */
+#define DT_HUD_TOTAL_PACKET_LEN    13
+#define DT_ADDR_VRAM_QUEUE         0x0400 /* VRAM update queue (verified) */
+#define DT_ADDR_PALETTE            0x0100 /* palette as loaded; $0300 is what the NMI uploads (verified) */
+#define DT_ADDR_PALETTE_SHOWN      0x0300
+#define DT_TIME_TILE_UP0           0x1E /* the time box's time-out word, three tiles (verified) */
+#define DT_TIME_TILE_UP1           0x19
+#define DT_TIME_TILE_UP2           0x24
+
+/* Code of the flow and what it calls (bank 7 unless a bank is named). */
+#define DT_CODE_RESET          0xFEE0
+#define DT_CODE_TASK_YIELD     0xFFAC /* wait one frame */
+#define DT_CODE_TASK_WAIT      0xFFA5 /* wait X frames */
+#define DT_CODE_RTS            0xFFAB /* task_wait's RTS: the entry of task code's isolated runs */
+#define DT_CODE_BANK_SELECT    0xFFDE
+#define DT_CODE_BANK_TABLE     0xFFE5 /* bus-conflict table: bank n is written at $FFE5 + n */
+#define DT_CODE_SCREEN_OFF     0xC197 /* $E8++, rendering off */
+#define DT_CODE_SCREEN_ON      0xC1A1 /* $E8--, rendering on */
+#define DT_CODE_NT_FILL        0xC203
+#define DT_CODE_OAM_CLEAR      0xC267
+#define DT_CODE_FADE_IN        0xC279
+#define DT_CODE_FADE_OUT       0xC282
+#define DT_CODE_RANDOM         0xC2E6 /* steps the generator at $C0 (code) */
+#define DT_CODE_CHR_LOAD       0xC301
+#define DT_CODE_ROW_CHR_STREAM 0xC42C
+#define DT_CODE_DRAW_START     0xC71D
+#define DT_CODE_DRAW_SCREEN    0xC78F
+#define DT_CODE_MAP_HEADER     0xC7B0
+#define DT_CODE_STREAM_BLOCK   0xC830
+#define DT_CODE_CAMERA_UPDATE  0xEFE2
+#define DT_CODE_CLEAR_OBJECTS  0xF2C7 /* clears slots 1-15 (code) */
+#define DT_CODE_HP_REFILL      0xF812 /* every HP dot full, $5F = 0 (code) */
+#define DT_BANK_SPRITES        5
+#define DT_B5_BUILD_OAM        0x8000
+#define DT_B5_PAUSE_TEXT       0xB580 /* pause or message text into the VRAM queue (code) */
+#define DT_BANK_OBJECTS        6
+#define DT_B6_OBJECTS          0x8000 /* every object's per-frame code */
+#define DT_B6_SPAWN_RESET      0xAE60
+#define DT_B6_SPAWN            0xAEA0
+
+#define DT_CODE_BOSS_TRIGGER  0xCF93
+#define DT_CODE_LAND_SELECT   0xD630
+#define DT_CODE_LAND_LOAD     0xD79B
+#define DT_CODE_LAND_TABLES   0xD9CA
+#define DT_CODE_LAND_PALETTE  0xD9F5 /* X = palette set * 16 */
+#define DT_CODE_HUD_TEMPLATE  0xD60A
+#define DT_CODE_FRAME_LOOP    0xDB36
+#define DT_CODE_DEATH_OR_WARP 0xDC3E
+#define DT_CODE_DEATH_PAUSE   0xDD23
+#define DT_CODE_RESPAWN_PLACE 0xDD4E
+#define DT_CODE_RESPAWN_ENTRY 0xDD52 /* A = entry */
+#define DT_CODE_HUD_MONEY     0xDE6C
+#define DT_CODE_HUD_TOTAL     0xDEA3
+#define DT_CODE_GAME_OVER     0xDEB9
+#define DT_CODE_LAND_EXIT     0xDF08
+#define DT_CODE_SCENE         0xDF27
+#define DT_CODE_ENDING        0xE1AF
+#define DT_CODE_TIMER_TICK    0xE28C
+
+/* Where the flow's task code resumes after a call (the address after the JSR). */
+#define DT_FLOW_AFTER_ENDING       0xDB3D
+#define DT_FLOW_AFTER_PLAYER       0xDB6F
+#define DT_FLOW_AFTER_OBJECTS      0xDB7B
+#define DT_FLOW_AFTER_CAMERA       0xDB8C
+#define DT_FLOW_AFTER_BOSS_TRIGGER 0xDB8F
+#define DT_FLOW_AFTER_DEATH        0xDBB0
+#define DT_FLOW_FRAME_SPRITES      0xDBC5 /* also after a scene */
+#define DT_FLOW_AFTER_SPAWN        0xDBE4
+#define DT_FLOW_NEXT_FRAME         0xDC29
+#define DT_FLOW_DEATH_FADE         0xDC68
+#define DT_FLOW_DEATH_BLANK        0xDC6B
+#define DT_FLOW_DEATH_PLACE        0xDC81
+#define DT_FLOW_DEATH_PLACED       0xDC84
+#define DT_FLOW_DEATH_ROW_CHR      0xDCBD
+#define DT_FLOW_DEATH_SHOWN        0xDCD8
+#define DT_FLOW_DEATH_FADE_IN      0xDCDB
+#define DT_FLOW_DEATH_RESUME       0xDCE2
+#define DT_FLOW_DEATH_SPAWNED      0xDD14
+#define DT_FLOW_DEATH_DONE         0xDD1C
+#define DT_FLOW_DEATH_PAUSE_NEXT   0xDD42
+#define DT_FLOW_RESPAWN_DRAWN      0xDDAB
+#define DT_FLOW_GAME_OVER_NEXT     0xDEDE
+#define DT_FLOW_LAND_EXIT_NEXT     0xDF1E
+
+/* Tables the flow reads from the ROM (bank 7). */
+#define DT_DATA_LAND_TILESET      0xDA10 /* per land: tileset bank */
+#define DT_DATA_LAND_SCREEN       0xDA19 /* per land: start screen index */
+#define DT_DATA_LAND_ROW          0xDA22 /* per land: start row */
+#define DT_DATA_LAND_START_X      0xDA2B /* per land: Scrooge's start X */
+#define DT_DATA_PALETTES          0xDA34 /* 16 background colours per land or screen */
+#define DT_DATA_SPRITE_PALETTE    0xDAC4 /* 16 sprite colours */
+#define DT_DATA_HUD_MONEY         0xDAD4 /* the money packet's start value */
+#define DT_DATA_HUD_TOTAL         0xDAE0 /* the TOTAL packet's start value */
+#define DT_DATA_HUD_HP            0xDAED /* the HP dot records */
+#define DT_HUD_HP_TEMPLATE_LEN    21
+#define DT_DATA_LAND_TIME         0xDB2C /* per land: start time hundreds and tens */
+#define DT_DATA_CHECKPOINT_ROW    0xDC2C /* per land: boss-checkpoint row and page */
+#define DT_DATA_CHECKPOINT_PAGE   0xDC35
+#define DT_DATA_RESPAWN           0xDDC1 /* 9-byte respawn and warp entries (levels.md) */
+#define DT_DATA_GAME_OVER_SPRITES 0xDEE7
+#define DT_GAME_OVER_SPRITES_LEN  33
 
 /* ---- hook sites of the event system (src/game/events.c) ----
  * config/game.toml declares each with a length/crc32 content key, so another

@@ -48,7 +48,9 @@
  * --frames N [--input ROUTE] [--lag none|faithful] [--present-out FILE
  * [--present-every N]] writes the picture the window would show (at 1x, the
  * presentation settings at their defaults) after every Nth frame, named as
- * the cycle host's --present-out names them, for tests/native_player_test.py.
+ * the cycle host's --present-out names them, for tests/native_player_test.py;
+ * --wav-out FILE writes the synth's sound as 48 kHz mono 16-bit PCM, before
+ * the window's volume and queue stretching.
  * --state-check F saves the machine after frame F, runs 300 frames, loads the
  * state and runs them again, and reports whether CPU RAM, the cycle count and
  * the video memories matched on every one. The summary line lists how often
@@ -153,16 +155,6 @@ static void run_frame(uint8_t pad0, uint8_t pad1)
     app_mods_scripts_frame();
 }
 
-/* The frame's sound: the synth with the channels the mods took muted, then
- * their files mixed in (mods/app_mods.h). */
-static size_t frame_sound(int16_t *pcm, size_t cap, int rate)
-{
-    native_audio_set_mute(s_frame_mute);
-    size_t n = native_audio_frame(native_last_frame(), pcm, cap);
-    app_mods_audio_mix(pcm, n, rate);
-    return n;
-}
-
 /* What the window shows (ui/app_present.h, or the plain picture) for a
  * drawable of out_w x out_h; 0 x 0 for the picture at 1x. */
 static const uint32_t *picture(int *w, int *h)
@@ -184,6 +176,27 @@ static void numbered_path(char *out, size_t cap, const char *base, long frame)
 
 /* ---- off screen: a route, the pictures to files ---- */
 
+/* --music-under-effects / --overlap-effects for this run, else -1: the saved
+ * [Audio] value (ducktales_host.h). */
+static int s_voice_override[2] = { -1, -1 };
+
+static void apply_voices(void)
+{
+    native_audio_voices(s_voice_override[0] >= 0 ? s_voice_override[0] != 0 : ducktales_host_music_under_effects(),
+                        s_voice_override[1] >= 0 ? s_voice_override[1] != 0 : ducktales_host_overlap_effects());
+}
+
+/* The frame's sound: the synth and its extra voices with the channels the
+ * mods took muted, then their files mixed in (mods/app_mods.h). */
+static size_t frame_sound(int16_t *pcm, size_t cap, int rate)
+{
+    apply_voices();
+    native_audio_set_mute(s_frame_mute);
+    size_t n = native_audio_frame(native_last_frame(), pcm, cap);
+    app_mods_audio_mix(pcm, n, rate);
+    return n;
+}
+
 static uint64_t machine_hash(void)
 {
     uint64_t h = 1469598103934665603ull;
@@ -198,41 +211,9 @@ static uint64_t machine_hash(void)
     return h ^ native_cycle_count();
 }
 
-static void wav_header(FILE *f, uint32_t samples)
-{
-    uint32_t bytes = samples * 2, rate = AUDIO_RATE, byte_rate = AUDIO_RATE * 2;
-    fseek(f, 0, SEEK_SET);
-    fwrite("RIFF", 1, 4, f);
-    uint32_t riff = 36 + bytes;
-    fwrite(&riff, 4, 1, f);
-    fwrite("WAVEfmt ", 1, 8, f);
-    const uint32_t fmt_size = 16;
-    const uint16_t pcm = 1, channels = 1, align = 2, bits = 16;
-    fwrite(&fmt_size, 4, 1, f);
-    fwrite(&pcm, 2, 1, f);
-    fwrite(&channels, 2, 1, f);
-    fwrite(&rate, 4, 1, f);
-    fwrite(&byte_rate, 4, 1, f);
-    fwrite(&align, 2, 1, f);
-    fwrite(&bits, 2, 1, f);
-    fwrite("data", 1, 4, f);
-    fwrite(&bytes, 4, 1, f);
-}
-
 static int run_off_screen(long frames, const char *input, int lag, const char *present_out, long present_every,
                           long state_check, const char *wav_out)
 {
-    FILE *wav = wav_out ? fopen(wav_out, "wb") : NULL;
-    uint32_t wav_samples = 0;
-    if (wav_out && !wav) {
-        fprintf(stderr, "cannot write %s\n", wav_out);
-        return 2;
-    }
-    if (wav) {
-        wav_header(wav, 0);
-        native_audio_reset(AUDIO_RATE);
-    }
-
     enum {
         CHECK_FRAMES = 300
     };
@@ -248,6 +229,16 @@ static int run_off_screen(long frames, const char *input, int lag, const char *p
     if (input && !native_route_load(&route, input)) {
         return 2;
     }
+    FILE *wav = wav_out ? fopen(wav_out, "wb") : NULL;
+    if (wav_out && !wav) {
+        fprintf(stderr, "cannot write %s\n", wav_out);
+        return 2;
+    }
+    uint32_t wav_samples = 0;
+    if (wav) {
+        native_audio_reset(AUDIO_RATE);
+        native_audio_wav_header(wav, AUDIO_RATE, 0);
+    }
     power_on();
     if (lag >= 0) {
         native_set_lag_mode((NativeLagMode)lag);
@@ -257,9 +248,10 @@ static int run_off_screen(long frames, const char *input, int lag, const char *p
         native_route_frame(&route, frame, held);
         run_frame(held[0], held[1]);
         if (wav) {
-            int16_t pcm[4096];
-            size_t n = frame_sound(pcm, sizeof pcm / sizeof pcm[0], AUDIO_RATE);
-            wav_samples += (uint32_t)fwrite(pcm, sizeof pcm[0], n, wav);
+            static int16_t pcm[NATIVE_AUDIO_MAX_FRAME_SAMPLES];
+            size_t n = frame_sound(pcm, NATIVE_AUDIO_MAX_FRAME_SAMPLES, AUDIO_RATE);
+            fwrite(pcm, sizeof pcm[0], n, wav);
+            wav_samples += (uint32_t)n;
         }
         if (state_check >= 0 && frame == state_check) {
             state_size = native_state_save(NULL, 0);
@@ -307,6 +299,10 @@ static int run_off_screen(long frames, const char *input, int lag, const char *p
             }
         }
     }
+    if (wav) {
+        native_audio_wav_header(wav, AUDIO_RATE, wav_samples);
+        fclose(wav);
+    }
     printf("native player: frames=%ld cycles=%llu fallback_instructions=%llu unmodeled_reads=%llu\n", frames,
            (unsigned long long)native_cycle_count(), (unsigned long long)native_fallback_instructions(),
            (unsigned long long)native_unmodeled_reads());
@@ -315,10 +311,6 @@ static int run_off_screen(long frames, const char *input, int lag, const char *p
         printf(" %s=%llu", dt_enh_info((DtEnh)e)->key, (unsigned long long)dt_enh_applied((DtEnh)e));
     }
     printf("\n");
-    if (wav) {
-        wav_header(wav, wav_samples);
-        fclose(wav);
-    }
     return check_mismatch > 0 ? 1 : 0;
 }
 
@@ -878,9 +870,10 @@ static int usage(const char *self)
     fprintf(stderr,
             "usage: %s ROM [--hidden] [--exit-after N] [--config FILE] [--uncapped]\n"
             "       [--present-out FILE [--present-every N]]\n"
-            "       [--frames N [--input ROUTE] [--lag none|faithful] [--state-check FRAME]]\n"
+            "       [--frames N [--input ROUTE] [--lag none|faithful] [--state-check FRAME] [--wav-out FILE]]\n"
             "       [--jump-scale N] [--no-damage on|off] [--infinite-time on|off] [--infinite-lives on|off]\n"
-            "       [--start-lives 0-9|off] [--no-sprite-flicker on|off] [--wav-out FILE]\n"
+            "       [--start-lives 0-9|off] [--no-sprite-flicker on|off]\n"
+            "       [--music-under-effects on|off] [--overlap-effects on|off]\n"
             "       [--mods on|off] [--mods-dir DIR] [--mods-order ID:on|off,...] [--mods-dump DIR]\n",
             self);
     return 2;
@@ -928,6 +921,9 @@ int ducktales_host_main(int argc, char **argv)
                 fprintf(stderr, "%s %s: invalid value\n", a, v);
                 return 2;
             }
+        } else if ((!strcmp(a, "--music-under-effects") || !strcmp(a, "--overlap-effects")) && v &&
+                   (!strcmp(v, "on") || !strcmp(v, "off"))) {
+            s_voice_override[a[2] == 'o'] = !strcmp(argv[++i], "on");
         } else if (!strcmp(a, "--lag") && v && !strcmp(v, "none")) {
             lag = NATIVE_LAG_NONE, i++;
         } else if (!strcmp(a, "--lag") && v && !strcmp(v, "faithful")) {
@@ -970,6 +966,7 @@ int ducktales_host_main(int argc, char **argv)
         static const CycSettingsGame GAME = { NULL, game_load, game_save };
         cyc_settings_default(&s_set);
         cyc_settings_load(&s_set, s_set_path, stderr, &GAME);
+        ducktales_host_load_audio_settings(s_set_path);
         s_set.bind.shortcut_off |= 1u << CYC_SC_DISK;
     }
     for (int g = 0; g < game_n; g++) {
