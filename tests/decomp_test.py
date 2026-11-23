@@ -61,6 +61,13 @@ LINE = re.compile(
     r'^decomp: mode=\S+ routine=(\S+) addr=\$([0-9A-F]{4}) calls=(\d+) compared=(\d+) original=(\d+)$', re.M
 )
 
+SYMBOLS = {}
+for _name, _addr in re.findall(
+    r'^#define DT_ADDR_(\w+)\s+0x([0-9A-Fa-f]{4})', (ROOT / 'src' / 'game' / 'ducktales_symbols.h').read_text(), re.M
+):
+    SYMBOLS[int(_addr, 16)] = SYMBOLS[int(_addr, 16)] + '/' + _name if int(_addr, 16) in SYMBOLS else _name
+NAMED = re.compile(r'\$([0-9A-F]{4})(?= original)')
+
 POKE_ROUTE = ROOT / 'tests' / 'routes' / 're_amazon_moves.txt'
 POKE_FRAME = 1700  # Scrooge on the ground in the Amazon
 POKE_FRAMES = 220
@@ -170,7 +177,11 @@ def run(exe, rom, case, extra):
 def check_case(exe, rom, case):
     p = run(exe, rom, case, ['--decomp', 'check'])
     stats = {(m[0], m[1]): tuple(map(int, m[2:])) for m in LINE.findall(p.stdout)}
-    err = [l for l in p.stderr.splitlines() if l.startswith('[decomp]')]
+    err = [
+        NAMED.sub(lambda m: f'${m[1]} {SYMBOLS.get(int(m[1], 16), "")}'.rstrip(), l)
+        for l in p.stderr.splitlines()
+        if l.startswith('[decomp]')
+    ]
     compared = {name for (name, _), s in stats.items() if s[1]}
     err += [f'{name} was not compared' for name in case['want'] if name not in compared]
     return case['name'], p.returncode == 0 and bool(stats) and not err, stats, err
@@ -206,7 +217,9 @@ def replace_case(exe, rom, case, tmp):
                 live = range(0x101 + a[TASKS + 2], 0x100 + MAIN_TASK_BASE + 1)
         diff = [i for i in range(RAM) if a[i] != b[i] and (not STACK <= i < 0x200 or i in live)]
         if diff:
-            shown = ' '.join(f'${i:04X}:{a[i]:02X}/{b[i]:02X}' for i in diff[:12])
+            shown = ' '.join(
+                f'${i:04X}{"(" + SYMBOLS[i] + ")" if i in SYMBOLS else ""}:{a[i]:02X}/{b[i]:02X}' for i in diff[:12]
+            )
             result = f'frame {frame}: {shown}'
     for log in logs:
         log.unlink()

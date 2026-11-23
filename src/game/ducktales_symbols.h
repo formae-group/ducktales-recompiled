@@ -423,3 +423,113 @@
  * (docs/decompilation.md "Events"). */
 #define DT_SITE_BOSS_HIT    0xF6DD
 #define DT_SITE_BOSS_HIT_ID "ducktales.event.boss-hit"
+
+/* Levels: map and screen decoding, column streaming, the VRAM queues, the
+ * camera and the background probe (docs/levels.md, docs/rendering.md,
+ * src/decomp/level.c and collision.c). */
+#define DT_ADDR_SCRATCH2         0x0002
+#define DT_ADDR_SCRATCH3         0x0003 /* also the buffer offset of the block quadrant being decoded (code) */
+#define DT_ADDR_STEPS            0x0004 /* stream steps left; quadrant of a probed point (code) */
+#define DT_ADDR_QUEUE_END        0x0005 /* end of the $0400 queue being written; cell of a probed point (code) */
+#define DT_ADDR_PROBE_X          0x0006 /* world X low of the last probed point (code) */
+#define DT_ADDR_PROBE_Y          0x0007 /* Y of the last probed point (code) */
+#define DT_ADDR_SCRATCH0F        0x000F
+#define DT_ADDR_TARGET_X         0x0010 /* camera target X / block cell row * 8 + column (code) */
+#define DT_ADDR_TARGET_PAGE      0x0011 /* camera target page / steps left of a start draw (code) */
+#define DT_ADDR_TARGET_SCREEN    0x0012 /* camera target screen index (code) */
+#define DT_ADDR_VRAM_QUEUE_READY 0x0019 /* non-zero: the NMI uploads the $0400 queue (verified) */
+#define DT_ADDR_TILE_EDIT_READY  0x001A /* non-zero: the NMI uploads the $0440 queue (verified) */
+#define DT_ADDR_SCREEN_DATA      0x0022 /* pointer to the screen's 72 bytes in bank 4 (verified) */
+#define DT_ADDR_CAMERA_X_PREV    0x0025 /* camera X low of the previous frame (verified) */
+#define DT_ADDR_BLOCK_ATTR       0x0027 /* attribute byte of the decoded block (verified) */
+#define DT_ADDR_BLOCK_CLASSES    0x0028 /* collision byte of the decoded block (verified) */
+#define DT_ADDR_STREAM_PAGE      0x002C /* page of the streamed screen, $24 & 7 (verified) */
+#define DT_ADDR_CAMERA_DELTA     0x002E /* camera movement in pixels (code) */
+#define DT_ADDR_SCENE            0x0078 /* scene number; bit 1 = camera moved by script (hypothesis) */
+#define DT_ADDR_SCENE_SCROLL     0x0079 /* bit 7: the scripted camera scrolls left (hypothesis) */
+#define DT_ADDR_HIMALAYAS_OPEN   0x00A2 /* non-zero: the Himalayas substitution is drawn (hypothesis) */
+#define DT_ADDR_BLANKED          0x00E8 /* non-zero: rendering is off, queues are uploaded at once (verified) */
+#define DT_ADDR_ROW_SCROLL       0x00E9 /* non-zero during the vertical row scroll (code) */
+#define DT_ADDR_TILESET_BANK     0x00F7 /* PRG bank of blocks and metatiles (verified) */
+#define DT_ADDR_TILE_BUFFER      0x03F0 /* 4x4 tiles of the decoded block (verified) */
+#define DT_ADDR_VRAM_QUEUE       0x0400 /* VRAM update queue: PPU address high, low, count - 1, bytes (verified) */
+#define DT_ADDR_TILE_EDIT_QUEUE  0x0440 /* tile edit queue, same format (verified) */
+#define DT_ADDR_ATTR_SHADOW      0x0500 /* attribute tables of both nametables (verified) */
+#define DT_ADDR_COLLISION_MAP    0x0580 /* collision class bytes of both nametables (verified) */
+
+#define DT_PPU_ADDR          0x2006
+#define DT_PPU_DATA          0x2007
+#define DT_SCREEN_BANK       4      /* PRG bank of the screens (verified) */
+#define DT_SCREEN_BASE       0x8000 /* screen id * 72 from here (verified) */
+#define DT_SCREEN_NINTH_BITS 0x40   /* offset of the 9th block bits in a screen (verified) */
+#define DT_BLOCK_BASE        0xB300 /* block * 4 from here in the tileset bank (verified) */
+#define DT_METATILE_TILES    0xBB00 /* four 256-byte tables: top-left, top-right, bottom-left, bottom-right */
+#define DT_METATILE_ATTR     0xBF00 /* palette bits 0-1, collision class bits 4-5 (verified) */
+
+#define DT_CODE_MAP_ROWS         0xCE57 /* rows per map */
+#define DT_CODE_MAP_STRIDE       0xCE61 /* row stride per map */
+#define DT_CODE_MAP_GRID_LO      0xCF7F /* grid pointer per map, low bytes */
+#define DT_CODE_MAP_GRID_HI      0xCF89
+#define DT_CODE_NINTH_BIT_MASK   0xCE20 /* bit of block column n in the 9th-bit byte */
+#define DT_CODE_QUADRANT_OFFSET  0xCE28 /* buffer offset of quadrant n in $03F0 */
+#define DT_CODE_QUEUE_TILE_LO    0xCCAD /* PPU address low of block row n */
+#define DT_CODE_QUEUE_TILE_HI    0xCCB5 /* PPU address high of block row n */
+#define DT_CODE_QUEUE_QUADRANT   0xC96E /* queue offset of quadrant n's top tiles */
+#define DT_CODE_STREAM_STEP      0xC96A /* step of $26 and $24: right, right x2, left, left x2 */
+#define DT_CODE_START_STEPS      0xC786 /* start draw: steps - 1, first $26, screen offset (3 tables of 3) */
+#define DT_CODE_START_FIRST_POS  0xC789
+#define DT_CODE_START_SCREEN     0xC78C
+#define DT_CODE_CAMERA_PAGE_STEP 0xF0E2 /* camera target page carry: 0 right, $FF left (index $38 & 2) */
+#define DT_CODE_SCRIPT_PUSH      0xF0E5 /* scripted camera: push of 24-bit world X at the screen edges */
+#define DT_CODE_PROBE_DX         0xD433 /* probe point X offsets */
+#define DT_CODE_PROBE_DY         0xD3CE /* probe point Y offsets */
+#define DT_CODE_PROBE_PAGE_BIT   0xD498 /* collision map half of nametable n */
+#define DT_CODE_SPECIAL_LO       0xD1E2 /* handlers of class-3 metatiles by id >> 4, low bytes */
+#define DT_CODE_SPECIAL_HI       0xD1F2
+#define DT_CODE_BANK_TABLE       0xFFE5 /* bus-conflict table of bank_select $FFDE */
+
+#define DT_CODE_MAP_HEADER            0xC7B0
+#define DT_CODE_DRAW_START            0xC71D
+#define DT_CODE_DRAW_SCREEN           0xC78F
+#define DT_CODE_STREAM_BLOCKS         0xC830
+#define DT_CODE_DECODE_BLOCK          0xCCBD
+#define DT_CODE_METATILE_AT           0xCDE2
+#define DT_CODE_SCREEN_POINTER        0xCE2C
+#define DT_CODE_VRAM_FLUSH            0xC139
+#define DT_CODE_TILE_EDIT_FLUSH       0xC15E
+#define DT_CODE_CAMERA_UPDATE         0xEFE2
+#define DT_CODE_SPECIAL_SOLID         0xD162 /* class-3 handlers of the background probe */
+#define DT_CODE_SPECIAL_MARK          0xD16B
+#define DT_CODE_SPECIAL_HAZARD6       0xD176
+#define DT_CODE_SPECIAL_HAZARD7       0xD199
+#define DT_CODE_SPECIAL_SLIPPERY      0xD1B1
+#define DT_CODE_SPECIAL_PIT           0xD1BF
+#define DT_CODE_SPECIAL_MARK_SLIPPERY 0xD1D1
+#define DT_CODE_BOSS_TRIGGER          0xCF93
+#define DT_CODE_BOSS_ROW              0xD04D /* boss trigger: row by land */
+#define DT_CODE_BOSS_PAGE             0xD052 /* boss trigger: Scrooge's X page by land */
+#define DT_CODE_BOSS_SCROLL           0xD057 /* boss trigger: scroll direction by land (move-dir bits) */
+#define DT_CODE_BOSS_LOOK_AHEAD       0xD064 /* 16-bit offset added to Scrooge's X by direction & 2 */
+#define DT_CODE_TILE_EDIT             0xF574
+#define DT_CODE_TILE_EDIT_METATILE    0xF653 /* replacement metatile by land * 4 + kind */
+#define DT_CODE_TILE_EDIT_HI          0xF67F /* PPU address high by tile row / 32 px */
+#define DT_CODE_TILE_EDIT_LO          0xF687 /* PPU address low by tile row / 32 px */
+#define DT_CODE_TILE_EDIT_HALF        0xF68F /* PPU address low of the metatile in its block, by quadrant */
+#define DT_CODE_QUADRANT_KEEP         0xF693 /* mask keeping the other three quadrants of a byte */
+#define DT_ADDR_TILE_EDIT_END         0x005C /* end of the tile edit queue being written (verified) */
+#define DT_ROW_TILE_Y                 0x0740 /* Y of the tile an object edits (code) */
+#define DT_CODE_ROW_CHR_STREAM        0xC42C
+#define DT_CODE_ROW_CHR_BASE          0xC508 /* first entry of each land in the row tables */
+#define DT_CODE_ROW_CHR_LIST          0xC511 /* CHR list per row; bit 7: two lists chosen by camera page */
+#define DT_CODE_ROW_PALETTE           0xC53A /* sprite palette 3 per row */
+#define DT_CODE_CHR_LIST_LO           0xC563 /* CHR list pointers */
+#define DT_CODE_CHR_LIST_HI           0xC583
+#define DT_CODE_SPRITE_PALETTES       0xC6D9 /* 4-byte sprite palettes */
+#define DT_ADDR_CHR_STREAM 0x0050 /* row CHR stream: 0 start, 1 next record, 2 in a record, negative done (verified) */
+#define DT_ADDR_CHR_BANK   0x0051 /* bank of the record being streamed (code) */
+#define DT_ADDR_CHR_LIST   0x0052 /* pointer to the CHR list (code) */
+#define DT_ADDR_CHR_SOURCE 0x0054 /* pointer to the source page (code) */
+#define DT_ADDR_CHR_TARGET 0x0056 /* PPU address of the next 64 bytes, low byte first (code) */
+#define DT_ADDR_CHR_RECORD 0x0058 /* offset of the next record in the list (code) */
+#define DT_ADDR_CHR_OFFSET 0x0059 /* offset in the source page (code) */
+#define DT_ADDR_CHR_PAGES  0x005A /* pages left in the record, minus one (code) */
