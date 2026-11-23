@@ -51,6 +51,7 @@ extern "C" {
 #define OBJ_KIND_CHEST           0x15 /* a chest the cane opens (code) */
 #define OBJ_KIND_PATROLLER       0x18 /* enemy: walks a ledge, turns at its edges and at walls (code) */
 #define OBJ_KIND_LEAPER          0x1C /* enemy: walks a ledge, turns and leaps with a puff of dust (code) */
+#define OBJ_KIND_LEDGE_WALKER    0x1E /* enemy: walks a ledge, turns at its edges (code) */
 #define OBJ_KIND_PACER           0x1F /* enemy: paces left and right (code) */
 #define OBJ_KIND_BOBBER          0x20 /* enemy: bobs up and down in place (code) */
 #define OBJ_KIND_CEILING_HOPPER  0x25 /* an enemy that drops from the ceiling and hops at Scrooge (code) */

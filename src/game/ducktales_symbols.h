@@ -489,6 +489,7 @@
 #define DT_CODE_KIND_FLYER           0x916C /* kind $0D */
 #define DT_CODE_KIND_SWING           0x9225 /* kind $0E */
 #define DT_CODE_KIND_SWOOPER         0x9430 /* kind $11 */
+#define DT_CODE_KIND_LEDGE_WALKER    0x9D8A /* kind $1E */
 #define DT_CODE_KIND_PACER           0x9DF7 /* kind $1F */
 #define DT_CODE_KIND_MOVING_PLATFORM 0xFE69 /* kind $39 (fixed bank) */
 #define DT_CODE_KIND_KEY_SPOT        0xFE50 /* kind $41 (fixed bank) */

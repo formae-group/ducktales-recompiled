@@ -2149,6 +2149,37 @@ static void Obj_Pacer(uint8_t x)
     }
 }
 
+/* Kind $1E ($9D8A): an enemy that walks a ledge at $0133 a frame, right
+ * first, turning at its edges (probe $1E or $20 finds no floor) and at
+ * walls. A hit beats it. */
+static void Obj_LedgeWalker(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_LEDGE_WALKER, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0) {
+        Obj_Defeat(x);
+        return;
+    }
+    if (Step(x) == 0) {
+        Obj_SetVelocityY(x, 0);
+        Obj_SetSpeed(x, 0x0133);
+        gObjects->dir[x] = OBJ_DIR_RIGHT;
+        gObjects->state[x]++;
+    }
+    (void)Obj_TouchScrooge(x);
+    x = Obj_Fall(x, (gObjects->dir[x] & OBJ_DIR_RIGHT) ? 0x20 : 0x1E, 0);
+    if (!(gProbeHits & 1)) {
+        gObjects->dir[x] ^= 3;
+    }
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        x = Obj_WalkRight(x, 0x19, 0);
+    } else {
+        x = Obj_WalkLeft(x, 0x1C, 0);
+    }
+    if (gProbeHits & 1) {
+        gObjects->dir[x] ^= 3;
+    }
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -2235,6 +2266,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_LEAPER:
             Obj_Leaper(slot);
+            break;
+        case OBJ_KIND_LEDGE_WALKER:
+            Obj_LedgeWalker(slot);
             break;
         case OBJ_KIND_PACER:
             Obj_Pacer(slot);
@@ -2443,6 +2477,11 @@ static void Run_Pacer(Regs *r)
     Obj_Pacer(r->x);
 }
 
+static void Run_LedgeWalker(Regs *r)
+{
+    Obj_LedgeWalker(r->x);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -2612,6 +2651,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_LEDGE_WALKER, NULL, "Obj_LedgeWalker", Run_LedgeWalker, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_PACER, NULL, "Obj_Pacer", Run_Pacer, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_MOVING_PLATFORM, NULL, "Obj_MovingPlatform", Run_MovingPlatform, 0 },
     { DT_CODE_KIND_KEY_SPOT, NULL, "Obj_KeySpot", Run_KeySpot, 0 },
