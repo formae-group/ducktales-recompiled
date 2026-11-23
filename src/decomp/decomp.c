@@ -100,7 +100,7 @@
  * (runner/cyc/hw_machine.c); task code compares them. */
 extern uint64_t hw_isolated_io_writes;
 
-#define MAX_ROUTINES     256
+#define MAX_ROUTINES     512
 #define MAX_BUS_OPS      16384
 #define MAX_STORES       8
 #define FRAME_END_MARGIN 32
@@ -1133,7 +1133,10 @@ static int on_entry(uint16_t addr)
 
 static void add_table(const DecompRoutine *table, int n)
 {
-    for (int i = 0; i < n && s_count < MAX_ROUTINES; i++) {
+    for (int i = 0; i < n; i++) {
+        if (s_count == MAX_ROUTINES) {
+            fail("more routines than MAX_ROUTINES", table[i].addr);
+        }
         s_routine[s_count++] = &table[i];
         if (table[i].site_id) {
             nes_mod_register_function_entry_plugin(table[i].site_id, table[i].addr, on_entry);
