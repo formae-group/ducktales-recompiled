@@ -36,6 +36,15 @@
  * A call whose C ends in Decomp_RunOriginal runs the original in both modes
  * and is not compared: the paths that use it lead into code (a row scroll, a
  * message box) that waits for the hardware.
+ *
+ * Only routines that original code calls have a site (DecompRoutine.site_id):
+ * NESRecomp registers at most 128 hook plugins, one address each. A routine
+ * that only decompiled code calls is a plain C call. Every routine's C starts
+ * with Decomp_Enter, which in check mode, when the C of another routine made
+ * the call to a routine without a site, checks that call as a site would: the
+ * original in an isolated call and the routine's C on a copy of the image,
+ * both from the caller's C state, with the registers the C passes. (A routine
+ * with a site is checked there, when the caller's original runs for real.)
  */
 #include "decomp/decomp.h"
 
@@ -52,7 +61,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_ROUTINES 64
+#define MAX_ROUTINES     64
+#define FRAME_END_MARGIN 32
 
 typedef struct {
     uint64_t calls, compared, original;
@@ -68,6 +78,8 @@ static uint8_t s_orig[GAME_RAM_SIZE];
 static bool s_scope;
 static uint8_t s_entry_s, s_entry_p;
 static bool s_run_original;
+static const DecompRoutine *s_top;
+static bool s_top_entered, s_inner;
 static bool s_damage_cancel[8];
 static int s_damage_raised, s_damage_replayed;
 
@@ -78,7 +90,9 @@ static void fail(const char *what, uint16_t routine)
     exit(3);
 }
 
-Regs Decomp_Call(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
+/* An original routine in the C's isolated scope, from the image the C works
+ * on (gRam); its RAM is left in the scope's machine. */
+static bool call_in_scope(uint16_t routine, CycModRegs *r)
 {
     if (!s_scope) {
         if (!cyc_mod_isolate_begin()) {
@@ -88,15 +102,20 @@ Regs Decomp_Call(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
     }
     const uint8_t *ram = cyc_cpu_ram();
     for (uint16_t i = 0; i < GAME_RAM_SIZE; i++) {
-        if (ram[i] != s_image[i]) {
-            cyc_mod_poke(i, s_image[i]);
+        if (ram[i] != gRam[i]) {
+            cyc_mod_poke(i, gRam[i]);
         }
     }
+    return cyc_mod_call(routine, r);
+}
+
+Regs Decomp_Call(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
+{
     CycModRegs r = { a, x, y, s_entry_s, s_entry_p, 0 };
-    if (!cyc_mod_call(routine, &r)) {
+    if (!call_in_scope(routine, &r)) {
         fail("an original routine called from C did not return", routine);
     }
-    memcpy(s_image, cyc_cpu_ram(), GAME_RAM_SIZE);
+    memcpy(gRam, cyc_cpu_ram(), GAME_RAM_SIZE);
     return (Regs){ r.a, r.x, r.y, r.p };
 }
 
@@ -127,6 +146,8 @@ static void run_c(const DecompRoutine *rt, const CycModRegs *in, Regs *out)
     s_run_original = false;
     s_damage_raised = 0;
     s_scope = false;
+    s_top = rt;
+    s_top_entered = false;
     Regs r = { in->a, in->x, in->y, in->p };
     GameRam_Enter(s_image);
     rt->run(&r);
@@ -135,14 +156,18 @@ static void run_c(const DecompRoutine *rt, const CycModRegs *in, Regs *out)
         cyc_mod_isolate_end();
     }
     s_scope = false;
+    if (!s_top_entered) {
+        fail("a decompiled routine does not start with Decomp_Enter", rt->addr);
+    }
     *out = r;
 }
 
 /* Offsets in page 1 below entry S + 3 are dead once the routine has returned
- * (its return address included). */
+ * (its return address included), down to the stack's floor: below it page 1
+ * holds data. */
 static bool live(uint16_t a, uint8_t entry_s)
 {
-    return (a & 0xFF00) != 0x0100 || (a & 0xFF) >= entry_s + 3u;
+    return (a & 0xFF00) != 0x0100 || a < DT_ADDR_STACK_FLOOR || (a & 0xFF) >= entry_s + 3u;
 }
 
 /* The original routine alone on the machine's state: its RAM into s_orig,
@@ -173,17 +198,52 @@ static void spend_cycles(uint16_t addr, uint64_t cycles)
     (void)cpu_read(addr, CYC_POLL | CYC_DONE);
 }
 
-static void report(const DecompRoutine *rt, const CycModRegs *in, const Regs *orig, const Regs *c)
+/* Check mode's verdict: the original (returned, its RAM and registers)
+ * against the C. */
+static bool agree(const DecompRoutine *rt, uint8_t entry_s, bool returned, const uint8_t *orig_ram, const Regs *orig,
+                  const uint8_t *c_ram, const Regs *c)
 {
-    fprintf(stderr, "[decomp] MISMATCH %s ($%04X) at frame %llu, entry A=%02X X=%02X Y=%02X S=%02X P=%02X\n", rt->name,
-            rt->addr, (unsigned long long)cyc_ring_frame, in->a, in->x, in->y, in->s, in->p);
+    if (!returned) {
+        return false;
+    }
+    for (uint16_t a = 0; a < GAME_RAM_SIZE; a++) {
+        if (live(a, entry_s) && orig_ram[a] != c_ram[a]) {
+            return false;
+        }
+    }
+    if ((rt->out & OUT_A) && orig->a != c->a) {
+        return false;
+    }
+    if ((rt->out & OUT_X) && orig->x != c->x) {
+        return false;
+    }
+    if ((rt->out & OUT_Y) && orig->y != c->y) {
+        return false;
+    }
+    if ((rt->out & OUT_P) && ((orig->p ^ c->p) & (P_N | P_V | P_Z | P_C))) {
+        return false;
+    }
+    return true;
+}
+
+/* Prints a difference and stops the program. caller names the routine whose
+ * C made the call, NULL for a site. */
+static void report(const DecompRoutine *rt, const CycModRegs *in, const char *caller, bool returned,
+                   const uint8_t *orig_ram, const Regs *orig, const uint8_t *c_ram, const Regs *c)
+{
+    fprintf(stderr, "[decomp] MISMATCH %s ($%04X) at frame %llu%s%s, entry A=%02X X=%02X Y=%02X S=%02X P=%02X\n",
+            rt->name, rt->addr, (unsigned long long)cyc_ring_frame, caller ? ", called from the C of " : "",
+            caller ? caller : "", in->a, in->x, in->y, in->s, in->p);
+    if (!returned) {
+        fprintf(stderr, "[decomp]   the original did not return\n");
+    }
     int shown = 0;
     for (uint16_t a = 0; a < GAME_RAM_SIZE; a++) {
-        if (!live(a, in->s) || s_orig[a] == s_image[a]) {
+        if (!live(a, in->s) || orig_ram[a] == c_ram[a]) {
             continue;
         }
         if (shown++ < 24) {
-            fprintf(stderr, "[decomp]   $%04X original %02X decompiled %02X\n", a, s_orig[a], s_image[a]);
+            fprintf(stderr, "[decomp]   $%04X original %02X decompiled %02X\n", a, orig_ram[a], c_ram[a]);
         }
     }
     if (shown > 24) {
@@ -210,44 +270,129 @@ static void check(int i, const CycModRegs *in)
         return;
     }
     Regs orig = { o.a, o.x, o.y, o.p };
-    bool same = cycles != 0;
-    for (uint16_t a = 0; a < GAME_RAM_SIZE && same; a++) {
-        if (live(a, in->s) && s_orig[a] != s_image[a]) {
-            same = false;
-        }
-    }
-    if ((rt->out & OUT_A) && orig.a != c.a) {
-        same = false;
-    }
-    if ((rt->out & OUT_X) && orig.x != c.x) {
-        same = false;
-    }
-    if ((rt->out & OUT_Y) && orig.y != c.y) {
-        same = false;
-    }
-    if ((rt->out & OUT_P) && ((orig.p ^ c.p) & (P_N | P_V | P_Z | P_C))) {
-        same = false;
-    }
-    if (!same) {
-        report(rt, in, &orig, &c);
+    if (!agree(rt, in->s, cycles != 0, s_orig, &orig, s_image, &c)) {
+        report(rt, in, NULL, cycles != 0, s_orig, &orig, s_image, &c);
     }
     s_stats[i].compared++;
+}
+
+/* Check mode, a call from the C of another routine: the routine's C on a
+ * copy of the image, then its original in the scope from the caller's image,
+ * entered as a JSR at the caller's entry S would. The copy makes no checks of
+ * its own calls (its real run makes them), except to find the innermost
+ * routine of a difference: then it runs again with them, and one that
+ * differs reports itself first. */
+static void check_inner(int i, Regs in, bool drill)
+{
+    const DecompRoutine *rt = s_routine[i];
+    const DecompRoutine *top = s_top;
+    bool top_entered = s_top_entered, run_original = s_run_original, inner = s_inner;
+    uint8_t image[GAME_RAM_SIZE], orig_ram[GAME_RAM_SIZE];
+    memcpy(image, gRam, GAME_RAM_SIZE);
+    s_top = rt;
+    s_top_entered = false;
+    s_run_original = false;
+    s_inner = !drill;
+    Regs c = in;
+    GameRam_Enter(image);
+    rt->run(&c);
+    GameRam_Leave();
+    bool entered = s_top_entered, original = s_run_original;
+    s_top = top;
+    s_top_entered = top_entered;
+    s_run_original = run_original;
+    s_inner = inner;
+    if (!entered) {
+        fail("a decompiled routine does not start with Decomp_Enter", rt->addr);
+    }
+    s_stats[i].calls++;
+    if (original) {
+        s_stats[i].original++;
+        return;
+    }
+    CycModRegs r = { in.a, in.x, in.y, s_entry_s, in.p, 0 };
+    CycModRegs entry = r;
+    entry.s = (uint8_t)(s_entry_s - 2);
+    bool returned = call_in_scope(rt->addr, &r);
+    memcpy(orig_ram, cyc_cpu_ram(), GAME_RAM_SIZE);
+    Regs orig = { r.a, r.x, r.y, r.p };
+    if (!agree(rt, entry.s, returned, orig_ram, &orig, image, &c)) {
+        if (!drill) {
+            check_inner(i, in, true);
+        }
+        report(rt, &entry, top->name, returned, orig_ram, &orig, image, &c);
+    }
+    s_stats[i].compared++;
+}
+
+void Decomp_Enter(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
+{
+    if (!s_top_entered && routine == s_top->addr) {
+        s_top_entered = true;
+        return;
+    }
+    if (s_mode != DECOMP_CHECK || s_inner) {
+        return;
+    }
+    for (int i = 0; i < s_count; i++) {
+        if (s_routine[i]->addr != routine) {
+            continue;
+        }
+        if (!s_routine[i]->site_id) {
+            check_inner(i, (Regs){ a, x, y, s_entry_p }, false);
+        }
+        return;
+    }
+    fail("Decomp_Enter names a routine that is in no table", routine);
+}
+
+/* The host's frame end, where the RAM log is taken: one frame after the last. */
+static uint64_t s_last_frame_end, s_frame_cycles;
+
+void Decomp_FrameEnd(void)
+{
+    uint64_t now = cyc_cycle_count();
+    if (s_last_frame_end && now > s_last_frame_end) {
+        s_frame_cycles = now - s_last_frame_end;
+    }
+    s_last_frame_end = now;
+}
+
+/* Whether a routine taking this many cycles from now would still run when
+ * the frame ends (with a margin of a few instructions). */
+static bool spans_frame_end(uint64_t cycles)
+{
+    if (!s_frame_cycles) {
+        return false;
+    }
+    return cyc_cycle_count() + cycles + FRAME_END_MARGIN >= s_last_frame_end + s_frame_cycles;
 }
 
 static int replace(int i, const CycModRegs *in)
 {
     const DecompRoutine *rt = s_routine[i];
+    CycModRegs o;
+    uint64_t cycles = run_original(rt, in, &o, false);
+    s_stats[i].calls++;
+    if (cycles && spans_frame_end(cycles)) {
+        s_stats[i].original++;
+        return 0;
+    }
     Regs c;
     run_c(rt, in, &c);
-    s_stats[i].calls++;
     if (s_run_original) {
         s_stats[i].original++;
         return 0;
     }
-    CycModRegs o;
-    uint64_t cycles = run_original(rt, in, &o, true);
     if (!cycles) {
         fail("the original routine did not return in an isolated call", rt->addr);
+    }
+    bool cancelled = false;
+    for (int k = 0; k < s_damage_raised; k++) {
+        cancelled |= s_damage_cancel[k];
+    }
+    if (cancelled) {
+        cycles = run_original(rt, in, &o, true);
     }
     const uint8_t *ram = cyc_cpu_ram();
     for (uint16_t a = 0; a < GAME_RAM_SIZE; a++) {
@@ -286,7 +431,9 @@ static void add_table(const DecompRoutine *table, int n)
 {
     for (int i = 0; i < n && s_count < MAX_ROUTINES; i++) {
         s_routine[s_count++] = &table[i];
-        nes_mod_register_function_entry_plugin(table[i].site_id, table[i].addr, on_entry);
+        if (table[i].site_id) {
+            nes_mod_register_function_entry_plugin(table[i].site_id, table[i].addr, on_entry);
+        }
     }
 }
 
@@ -337,7 +484,9 @@ bool Decomp_SetMode(DecompMode mode)
     }
     s_mode = mode;
     for (int i = 0; i < s_count; i++) {
-        nes_mod_set_function_hook_enabled(s_routine[i]->site_id, mode != DECOMP_OFF);
+        if (s_routine[i]->site_id) {
+            nes_mod_set_function_hook_enabled(s_routine[i]->site_id, mode != DECOMP_OFF);
+        }
     }
     return true;
 }
