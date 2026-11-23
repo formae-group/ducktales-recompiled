@@ -86,6 +86,25 @@ POKES = [
     ('hud-total', {0xAB: 0x01}, ['Hud_RefreshTotal']),
     ('final-trip', {100: {0x5E: 0x01}}, ['LandSelect_FinalWait', 'LandSelect_FinalScene']),
     ('all-treasures', {100: {0x5D: 0x01, 0xA0: 0x1F}}, ['LandSelect_Banked', 'LandSelect_FinalWait']),
+    (
+        'total-max',
+        {
+            100: {
+                0x5D: 0x01,
+                0x322: 0x07,
+                0x323: 0x2C,
+                0x324: 0x24,
+                0x325: 0x24,
+                0x326: 0x01,
+                0x327: 0x05,
+                0x328: 0x00,
+                0x329: 0x00,
+                0x32A: 0x00,
+                **{0x334 + i: 0x09 for i in range(5)},
+            }
+        },
+        ['BankTransfer_Next'],
+    ),
 ]
 
 # name, route, options, routines that must be compared

@@ -377,12 +377,6 @@ length = 8
 crc32 = 0x0FCE60E7
 
 [[mod_function_hook]]
-id = "ducktales.decomp.stop.D8D9"
-addr = 0xD8D9
-length = 8
-crc32 = 0x1A01EAD2
-
-[[mod_function_hook]]
 id = "ducktales.decomp.stop.BE00.4"
 addr = 0xBE00
 length = 8

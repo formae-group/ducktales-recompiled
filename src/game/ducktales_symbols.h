@@ -223,6 +223,7 @@
 #define DT_CODE_APPLY_VY         0xF2A1 /* Y -= vertical velocity (X = slot) */
 #define DT_CODE_APPLY_GRAVITY    0xF2B5 /* vertical velocity -= gravity (X = slot) */
 #define DT_CODE_MUSIC_REQUEST    0xF752 /* remember the music id in $C5, then queue it */
+#define DT_CODE_TOTAL_MAX        0xF84A /* TOTAL's five digits set to 9 (code) */
 #define DT_CODE_SOUND_REQUEST    0xF754 /* queue a sound id in the request ring */
 
 /* ---- game flow (docs/game-state.md, docs/levels.md, docs/rendering.md;
@@ -387,6 +388,7 @@
 #define DT_FLOW_SELECT_RESULT_READ 0xD6E7
 #define DT_FLOW_SELECT_CURSOR      0xD6EF
 #define DT_FLOW_SELECT_NEXT        0xD792
+#define DT_FLOW_BANK_NEXT          0xD9B8
 #define DT_FLOW_WAIT_A_NEXT        0xD9C7
 #define DT_FLOW_LOAD_FADED         0xD79E
 #define DT_FLOW_LOAD_BLACK         0xD7A5

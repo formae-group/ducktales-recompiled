@@ -18,13 +18,12 @@
  *
  * Original routines called from here: through Decomp_Call the sprite builder
  * (bank 5 $8000), the pause text (bank 5 $B580), the Land Select messages
- * (bank 5 $B800/$B81C), the spawner set-up (bank 6 $AE60), $C267, $C2E6, $F2C7
- * and $F812; handed off to: task_yield and task_wait, the camera $EFE2, the
+ * (bank 5 $B800/$B81C), the spawner set-up (bank 6 $AE60), $C267, $C2E6, $F2C7,
+ * $F812 and $F84A; handed off to: task_yield and task_wait, the camera $EFE2, the
  * object spawner (bank 6 $AEA0), the fades $C279/$C282, $C197/$C1A1, $C42C,
  * $C78F, $C830, the object code (bank 6 $8000), Scrooge's update $E354, the
  * final trip's take-off scene (bank 4 $BE00) and the routines of this
- * subsystem that are not decompiled yet (the bank transfer $D8D9, scenes,
- * ending, reset).
+ * subsystem that are not decompiled yet (scenes, ending, reset).
  */
 #include "decomp/decomp.h"
 #include "decomp/sound.h"
@@ -92,6 +91,14 @@
 #define SELECT_MESSAGE_PROMPT 0
 #define SELECT_MESSAGE_ALL    3 /* all five treasures held */
 #define SELECT_MESSAGE_FINAL  4
+#define SFX_BANK_STEP         0x15
+#define BANK_STEPS            10 /* steps of the transfer per two frames */
+#define BANK_WAIT             2
+#define BANK_TOTAL_PPU        0x220A
+#define BANK_MONEY_PPU        0x226B
+#define BANK_PACKET           12 /* the money packet's offset in the VRAM queue */
+#define BANK_MONEY_STEP_DIGIT 3  /* the money digit a step takes one from */
+#define TOTAL_DIGITS          5  /* TOTAL's counted digits; two zeros follow */
 
 #define gScratch0        RAM_U8(DT_ADDR_SCRATCH0)
 #define gStreamSteps     RAM_U8(DT_ADDR_SCRATCH4)
@@ -126,6 +133,7 @@
 #define gHudGate         RAM_U8(DT_ADDR_HUD_GATE)
 #define gSelectMessage   RAM_U8(DT_ADDR_SELECT_MESSAGE)
 #define gSelectMove      RAM_U8(DT_ADDR_SCRATCH10)
+#define gBankSteps       RAM_U8(DT_ADDR_SCRATCH10)
 #define gTimeDigit(i)    RAM_U8(DT_ADDR_TIME_DIGITS + 4 * (i))
 
 static uint8_t Rom(uint16_t addr)
@@ -1327,10 +1335,128 @@ static void LandLoad_Done(Regs *r)
 /* ---- Land Select ---- */
 
 static void LandSelect_FinalTrip(Regs *r);
+static void LandSelect_Banked(Regs *r);
 static void LandSelect_ResultRead(Regs *r);
 static void LandSelect_FinalRead(Regs *r);
 static void LandSelect_Cursor(Regs *r);
 static void LandSelect_Loop(Regs *r);
+
+/* $D8D9: the money Scrooge brought back is banked into TOTAL: both are shown
+ * through the VRAM queue (TOTAL at $220A, the money at $226B), and each step
+ * moves one unit of the money's fourth digit, ten steps every two frames with
+ * a sound, until the money is blank. TOTAL stops at 99999. Only the queue's
+ * copy of the money counts down; TOTAL's digits are kept in its packet. */
+static void BankTransfer_Steps(Regs *r);
+
+static void BankTransfer(Regs *r)
+{
+    Decomp_Enter(DT_CODE_BANK_TRANSFER, r->a, r->x, r->y);
+    uint8_t *q = &gRam[DT_ADDR_VRAM_QUEUE];
+    q[0] = BANK_TOTAL_PPU >> 8;
+    q[1] = (uint8_t)BANK_TOTAL_PPU;
+    q[BANK_PACKET] = BANK_MONEY_PPU >> 8;
+    q[BANK_PACKET + 1] = (uint8_t)BANK_MONEY_PPU;
+    r->a = gRam[DT_ADDR_MONEY_DIGITS + DT_MONEY_DIGIT_COUNT - 1];
+    if (r->a == DT_MONEY_TILE_BLANK) {
+        return;
+    }
+    uint8_t x = gRam[DT_ADDR_HUD_TOTAL_PACKET + 2];
+    uint8_t y = 0;
+    q[2] = x;
+    do {
+        q[3 + y] = gRam[DT_ADDR_HUD_TOTAL_PACKET + 3 + y];
+        y++;
+        x--;
+    } while (!(x & 0x80));
+    x = gRam[DT_ADDR_HUD_MONEY_PACKET + 2];
+    y = 0;
+    q[BANK_PACKET + 2] = x;
+    do {
+        q[BANK_PACKET + 3 + y] = gRam[DT_ADDR_HUD_MONEY_PACKET + 3 + y];
+        y++;
+        x--;
+    } while (!(x & 0x80));
+    q[BANK_PACKET + 3 + y] = x;
+    r->a = x;
+    r->x = x;
+    r->y = y;
+    BankTransfer_Steps(r);
+}
+
+static void BankTransfer_Steps(Regs *r)
+{
+    uint8_t *q = &gRam[DT_ADDR_VRAM_QUEUE];
+    uint8_t *money = &q[BANK_PACKET + 4];
+    uint8_t *total = &q[4];
+    gBankSteps = BANK_STEPS;
+    for (;;) {
+        uint8_t borrow = 1;
+        for (int i = BANK_MONEY_STEP_DIGIT; i >= 0; i--) {
+            int digit = money[i] == DT_MONEY_TILE_BLANK ? 0 : money[i];
+            digit -= borrow;
+            borrow = digit < 0;
+            money[i] = (uint8_t)(digit < 0 ? digit + 10 : digit);
+        }
+        for (int i = 0; i < DT_MONEY_DIGIT_COUNT; i++) {
+            if (money[i] == DT_MONEY_TILE_BLANK) {
+                continue;
+            }
+            if (money[i] != 0) {
+                break;
+            }
+            money[i] = DT_MONEY_TILE_BLANK;
+        }
+        uint8_t carry = 1;
+        for (int i = TOTAL_DIGITS - 1; i >= 0; i--) {
+            uint8_t digit = (uint8_t)(total[i] + carry);
+            carry = 0;
+            if (digit != DT_MONEY_TILE_BLANK) {
+                if (digit > DT_MONEY_TILE_BLANK) {
+                    digit -= DT_MONEY_TILE_BLANK;
+                }
+                if (digit >= 10) {
+                    digit -= 10;
+                    carry = 1;
+                }
+            }
+            total[i] = digit;
+            gRam[DT_ADDR_HUD_TOTAL_PACKET + 4 + i] = digit;
+        }
+        gScratch0 = 0;
+        total[TOTAL_DIGITS] = total[TOTAL_DIGITS + 1] = 0;
+        gRam[DT_ADDR_HUD_TOTAL_PACKET + 4 + TOTAL_DIGITS] = 0;
+        gRam[DT_ADDR_HUD_TOTAL_PACKET + 5 + TOTAL_DIGITS] = 0;
+        r->a = 0;
+        r->x = 0xFF;
+        if (carry) {
+            Call(r, DT_CODE_TOTAL_MAX);
+            for (int i = TOTAL_DIGITS - 1; i >= 0; i--) {
+                total[i] = r->a;
+            }
+            r->x = 0xFF;
+        }
+        r->a = money[DT_MONEY_DIGIT_COUNT - 1];
+        if (r->a == DT_MONEY_TILE_BLANK) {
+            gVramPending = r->x;
+            return;
+        }
+        if (--gBankSteps) {
+            continue;
+        }
+        gVramPending = r->x;
+        SoundRequest(r, SFX_BANK_STEP);
+        r->x = BANK_WAIT;
+        Jsr(DT_CODE_TASK_WAIT, DT_FLOW_BANK_NEXT, OUT_X | OUT_Y);
+        return;
+    }
+}
+
+/* $D9B8 */
+static void BankTransfer_Next(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_BANK_NEXT, r->a, r->x, r->y);
+    BankTransfer_Steps(r);
+}
 
 /* $D9BE: until A is pressed, a frame at a time; then X goes to $19 (the
  * bank transfer's exit, $D9BB). */
@@ -1455,7 +1581,9 @@ static void LandSelect_Lit(Regs *r)
 static void LandSelect_Waited(Regs *r)
 {
     Decomp_Enter(DT_FLOW_SELECT_WAITED, r->a, r->x, r->y);
-    Jsr(DT_CODE_BANK_TRANSFER, DT_FLOW_SELECT_BANKED, 0);
+    if (Gosub(BankTransfer, r, DT_FLOW_SELECT_BANKED)) {
+        LandSelect_Banked(r);
+    }
 }
 
 /* $D6B4: with all five treasures held, their message and the final trip;
@@ -1704,6 +1832,8 @@ const DecompRoutine gFlowRoutines[] = {
     RESUME(DT_FLOW_SELECT_RESULT_READ, "LandSelect_ResultRead", LandSelect_ResultRead, 0),
     RESUME(DT_FLOW_SELECT_CURSOR, "LandSelect_Cursor", LandSelect_Cursor, 0),
     RESUME(DT_FLOW_SELECT_NEXT, "LandSelect_Next", LandSelect_Next, 0),
+    TASK(DT_CODE_BANK_TRANSFER, NULL, "BankTransfer", BankTransfer, 0),
+    RESUME(DT_FLOW_BANK_NEXT, "BankTransfer_Next", BankTransfer_Next, 0),
     TASK(DT_CODE_WAIT_A, NULL, "WaitA", WaitA, 0),
     RESUME(DT_FLOW_WAIT_A_NEXT, "WaitA_Next", WaitA_Next, 0),
 };
@@ -1719,7 +1849,6 @@ const DecompStop gFlowStops[] = {
     STOP(DT_CODE_FADE_OUT, "C282"),   STOP(DT_CODE_SCREEN_OFF, "C197"),  STOP(DT_CODE_SCREEN_ON, "C1A1"),
     STOP(DT_B6_OBJECTS, "8000.6"),    STOP(DT_B6_SPAWN, "AEA0.6"),       STOP(DT_CODE_NT_FILL, "C203"),
     STOP(DT_CODE_CHR_LOAD, "C301"),   STOP(DT_B5_PPU_STRINGS, "BAB0.5"), STOP(DT_CODE_SCENE, "DF27"),
-    STOP(DT_CODE_ENDING, "E1AF"),     STOP(DT_CODE_TASK_WAIT, "FFA5"),   STOP(DT_CODE_BANK_TRANSFER, "D8D9"),
-    STOP(DT_B4_FINAL_TRIP, "BE00.4"),
+    STOP(DT_CODE_ENDING, "E1AF"),     STOP(DT_CODE_TASK_WAIT, "FFA5"),   STOP(DT_B4_FINAL_TRIP, "BE00.4"),
 };
 const int gFlowStopCount = sizeof gFlowStops / sizeof gFlowStops[0];
