@@ -115,6 +115,7 @@ set(_ducktales_extras
     "${CMAKE_SOURCE_DIR}/src/host/ducktales_sprites.c"
     "${CMAKE_SOURCE_DIR}/src/host/ducktales_host.c"
     "${CMAKE_SOURCE_DIR}/src/decomp/decomp.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/decomp_cycle.c"
     "${CMAKE_SOURCE_DIR}/src/decomp/motion.c"
     "${CMAKE_SOURCE_DIR}/src/decomp/sound.c"
     "${CMAKE_SOURCE_DIR}/src/decomp/player.c"
