@@ -173,6 +173,7 @@ set(_native_runtime
     "${CMAKE_SOURCE_DIR}/src/native/native_bus.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_video.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_audio.c"
+    "${CMAKE_SOURCE_DIR}/src/native/native_voices.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_hooks.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_route.c"
     "${_nes_cyc}/cpu6502.c"
@@ -229,7 +230,7 @@ if(NOT DUCKTALES_HEADLESS)
         "${CMAKE_BINARY_DIR}/app_about.c")
     ducktales_native_target(ducktales_player)
     target_compile_features(ducktales_player PRIVATE cxx_std_17)
-    target_compile_definitions(ducktales_player PRIVATE DUCKTALES_WINDOW=1 CYC_GAME_PLAYERS=1 NESRECOMP_GAME_PLAYERS=1
+    target_compile_definitions(ducktales_player PRIVATE DUCKTALES_WINDOW=1 DUCKTALES_NATIVE_PLAYER=1 CYC_GAME_PLAYERS=1 NESRECOMP_GAME_PLAYERS=1
         "DUCKTALES_ROM_SHA256=\"${_ducktales_rom_sha256}\"")
     target_link_libraries(ducktales_player PRIVATE imgui formae::ui SDL2::SDL2)
     formae_ui_embed_file(ducktales_player app_about_logo_png "${CMAKE_SOURCE_DIR}/assets/brand/formae.png")

@@ -20,6 +20,7 @@ src/native/native_bus.c       NESRecomp's hw.h for the generated code: RAM, UNRO
                               sprite DMA, APU write capture, cycle count, scheduler watch
 src/native/native_video.c     PPU registers and memories, VBlank/NMI/$2002/sprite-0 timing
 src/native/native_state.h     the interface for a renderer and a synth
+src/native/native_audio.c     the synth: a frame's APU writes in, its samples out (audio.md)
 src/native/native_hash.h      the per-frame state line both builds write (--ram-hash-out)
 src/native/native_main.c      ducktales_native: input routes, logs, dumps
 src/native/native_hooks.c     game.toml hook sites: the enhancements' callbacks

@@ -15,6 +15,8 @@ Tools (they read your ROM locally; their output is never committed):
 - `tools/audio_requests.py ROUTE`: every request a route makes; with `--callers`, the code
   that made it.
 - `tests/audio_compare.py`: the native synth (below) against the cycle host's APU on the routes.
+- `ducktales_native --sound-request FRAME:IDS`: the same ring patch on the native runtime, after
+  frame FRAME of a route; with `--audio-channels` and the extra-voice options it measures them.
 
 ## Request path
 
@@ -268,6 +270,58 @@ way. Results: [validation.md](validation.md#native-synth).
 
 `ducktales_native --wav-out FILE` writes the synth's output (48 kHz mono) for a route.
 
+## Extra voices
+
+Two options of the native player (`ducktales.exe` on the native runtime) bring back sound the
+console's four channels lose, both off by default: *Keep music under sound effects* (`[Audio]
+MusicUnderEffects`) and *Overlapping sound effects* (`[Audio] OverlapEffects`). They exist only in the
+native synth: `ducktales_cycle.exe` plays NESRecomp's APU, which stays as it is, and only keeps the
+two keys in `config.ini`. NESRecomp's settings file hands the game only its `[Game]` keys, so the
+two are read from the file by the port and written as an `[Audio]` block after the `[Game]` keys.
+`--music-under-effects on|off` and `--overlap-effects on|off` set them for one run of `ducktales.exe`
+or `ducktales_native`.
+
+`src/native/native_voices.c` reads the driver's RAM after every frame, compares it with the frame
+before, and turns what it finds into APU register writes for channels of its own; nothing is written
+back. The synth plays those writes on two more sets of channels, at the point of the frame where the
+driver's update starts (its `$4015` write), and only the channels a voice holds are heard. Their
+output joins the console's in the same nonlinear mixer and output filters. With both options off the
+extra channels do not exist and the samples are the same as before, bit for bit
+([validation.md](validation.md#extra-voices)).
+
+- **Music under effects.** For each channel in `$DF` (the effect's mask) the voice plays the music
+  part the driver keeps sequencing there without writing the APU. The record's music bytes
+  (`+$00-$0F`) are the driver's own, so the voice redoes only what the driver skips for an owned
+  channel: the volume of `$82FF` (`+$0C`, the global fade, the per-note envelope level in `+$0F`,
+  which the driver keeps current for an owned channel too), the tremolo cap of `$83A2`, duty and
+  envelope bits from `+$0C`, the period `+$0A/$0B` (the slide is already in it) plus the vibrato of
+  `$8435`, the low period byte every update and the high byte only when it changes. Vibrato and
+  tremolo live in `+$14-$1E`, which the effect holds, so the voice takes the music's copy from the
+  record the update before the effect took it and runs it on: each note restarts it as `$8514`
+  does (a note is a new stream pointer or a longer time left), repeated-pitch notes keep the period
+  high byte as `$8546` does, a command `$08` read on the way to the note (found by walking the
+  stream from the old pointer) loads the instrument from `$03EC`, and a new song clears it as `$81B8`
+  would. The muting rules are the driver's: silent while the channel is idle (`+$00/$01` = 0), while
+  the game is paused (`$E6` bit 0), and from a rest's note until the next note. The voice stops when
+  the effect gives the channel back.
+- **Overlapping sound effects.** The NMI hands the driver the ring entries from `$C7` on; the voice
+  takes the ones between `$C7` at the end of the previous frame and `$C7` now, with their ids from the
+  previous frame's ring, and applies the driver's priority rule (`$80BB`) to them in order. An
+  effect the driver drops (`$13+$15`: `$15`, priority 6, against `$13`, priority 12) starts on the
+  extra voice from its header; an effect a newer request replaced moves there with its state as the
+  previous frame left it (`$E0-$E3`, the mask, the priority and `+$10-$1E` of each channel it held).
+  The extra voice takes an effect when it is free or the new one's priority is at least its own,
+  and plays it with a port of `$856B`: the commands of the effect stream format, notes, the one wait
+  counter and loop counter, vibrato, tremolo and slide, read from bank 3 of the ROM. The original
+  effect keeps its real channels. The extra voice ends with the effect's `$06` on each channel.
+
+The port follows the driver's quirks, because the voices are checked against it: `$8514` loads the
+tremolo level through `$E4`, which a repeated-pitch note leaves pointing past the record and an
+effect command leaves at the low byte of its handler's address, so the level comes from whatever RAM
+byte that is; a negative vibrato step of 0 adds `$FF00`. Two things are not modelled: songs with
+`$D7` of 2 or more (the game never sets it), and a song re-selecting the instrument it already has
+while an effect holds the channel is found only through the stream walk.
+
 ## Catalogue
 
 "Length" comes from the simulator and was confirmed with `audio_record.py`: for effects, the
@@ -362,6 +416,11 @@ py -3 -I tools/audio_record.py captures/audio/ls350.state 13+15,15+13,1A+1B,37+1
 py -3 -I tools/audio_record.py captures/audio/ls350.state FE --frames 120 --poke D8=84,D9=01,DA=00
 py -3 -I tools/audio_record.py captures/audio/ls350.state FE --frames 300 --poke D7=02 --loop 19:96
 py -3 -I tools/audio_requests.py tests/routes/transylvania_intro.txt --frames 5112 --callers
+N=build/headless/Release/ducktales_native.exe
+$N "$ROM" --frames 471 --input tests/routes/amazon_intro.txt --lag faithful --sound-request 350:13+15 \
+   --audio-channels 2 --overlap-effects on --wav-out captures/audio/p2_13_15_on.wav
+$N "$ROM" --frames 471 --input tests/routes/amazon_intro.txt --lag faithful --sound-request 350:05+13 \
+   --audio-channels 2 --music-under-effects on --wav-out captures/audio/p2_05_13_on.wav
 ```
 
 `audio_record.py` deletes its WAVs unless `--keep` is given; the frame logs of both recorders

@@ -11,9 +11,10 @@
  * stage (90 Hz and 440 Hz high-pass, 14 kHz low-pass) follow, as in the
  * cycle host's APU. Nothing here is read back by the game.
  *
- * Owns no setting; the sample rate is the caller's.
+ * Owns no setting; the sample rate and the extra voices are the caller's.
  */
 #pragma once
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -29,6 +30,18 @@ extern "C" {
 
 /* Power-on: every register 0, silence, samples at sample_rate Hz. */
 void native_audio_reset(int sample_rate);
+
+/* The native player's extra voices (native_voices.h, docs/audio.md "Extra
+ * voices"), both off until set; they read the driver's RAM and the ROM after
+ * each frame and are mixed beside the console's channels. With both off the
+ * output is the console's channels alone, sample for sample as before.
+ * Kept across native_audio_reset. */
+void native_audio_voices(bool music_under_effects, bool overlap_effects);
+
+/* Which channels reach the mix: bit 0 pulse 1, 1 pulse 2, 2 triangle, 3
+ * noise, the extra voices' copies included; all four by default. For
+ * measurements (ducktales_native --audio-channels). */
+void native_audio_channels(unsigned mask);
 
 /* Plays one machine frame (native_last_frame()): its apu_writes[] at their
  * cycle offsets over its cycles. A frame the no-slowdown mode stretched

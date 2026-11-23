@@ -153,6 +153,16 @@ static void numbered_path(char *out, size_t cap, const char *base, long frame)
 
 /* ---- off screen: a route, the pictures to files ---- */
 
+/* --music-under-effects / --overlap-effects for this run, else -1: the saved
+ * [Audio] value (ducktales_host.h). */
+static int s_voice_override[2] = { -1, -1 };
+
+static void apply_voices(void)
+{
+    native_audio_voices(s_voice_override[0] >= 0 ? s_voice_override[0] != 0 : ducktales_host_music_under_effects(),
+                        s_voice_override[1] >= 0 ? s_voice_override[1] != 0 : ducktales_host_overlap_effects());
+}
+
 static uint64_t machine_hash(void)
 {
     uint64_t h = 1469598103934665603ull;
@@ -178,8 +188,7 @@ static int run_off_screen(long frames, const char *input, int lag, const char *p
     if (input && !native_route_load(&route, input)) return 2;
     FILE *wav = wav_out ? fopen(wav_out, "wb") : NULL;
     if (wav_out && !wav) {
-        fprintf(stderr, "cannot write %s
-", wav_out);
+        fprintf(stderr, "cannot write %s\n", wav_out);
         return 2;
     }
     uint32_t wav_samples = 0;
@@ -195,6 +204,7 @@ static int run_off_screen(long frames, const char *input, int lag, const char *p
         run_frame(held[0], held[1]);
         if (wav) {
             static int16_t pcm[NATIVE_AUDIO_MAX_FRAME_SAMPLES];
+            apply_voices();
             size_t n = native_audio_frame(native_last_frame(), pcm, NATIVE_AUDIO_MAX_FRAME_SAMPLES);
             fwrite(pcm, sizeof pcm[0], n, wav);
             wav_samples += (uint32_t)n;
@@ -611,6 +621,7 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
 
         int16_t pcm[4096];
         const NativeFrame *f = native_last_frame();
+        apply_voices();
         size_t n = native_audio_frame(f, pcm, sizeof pcm / sizeof pcm[0]);
         size_t queued = dev ? SDL_GetQueuedAudioSize(dev) / sizeof pcm[0] : 0;
         if (dev && n && !fast && s_set.audio_enabled && queued < (size_t)have.freq / 10) {
@@ -671,7 +682,8 @@ static int usage(const char *self)
             "       [--present-out FILE [--present-every N]]\n"
             "       [--frames N [--input ROUTE] [--lag none|faithful] [--state-check FRAME] [--wav-out FILE]]\n"
             "       [--jump-scale N] [--no-damage on|off] [--infinite-time on|off] [--infinite-lives on|off]\n"
-            "       [--start-lives 0-9|off] [--no-sprite-flicker on|off]\n",
+            "       [--start-lives 0-9|off] [--no-sprite-flicker on|off]\n"
+            "       [--music-under-effects on|off] [--overlap-effects on|off]\n",
             self);
     return 2;
 }
@@ -697,6 +709,9 @@ int ducktales_host_main(int argc, char **argv)
         else if (!strcmp(a, "--input") && v) input = argv[++i];
         else if (!strcmp(a, "--state-check") && v) state_check = atol(argv[++i]);
         else if (!strcmp(a, "--wav-out") && v) wav_out = argv[++i];
+        else if ((!strcmp(a, "--music-under-effects") || !strcmp(a, "--overlap-effects")) && v &&
+                 (!strcmp(v, "on") || !strcmp(v, "off")))
+            s_voice_override[a[2] == 'o'] = !strcmp(argv[++i], "on");
         else if (!strcmp(a, "--lag") && v && !strcmp(v, "none")) lag = NATIVE_LAG_NONE, i++;
         else if (!strcmp(a, "--lag") && v && !strcmp(v, "faithful")) lag = NATIVE_LAG_FAITHFUL, i++;
         else if (a[0] == '-' && v && game_n < 16 && game_option_name(a))
@@ -725,6 +740,7 @@ int ducktales_host_main(int argc, char **argv)
         static const CycSettingsGame GAME = { NULL, game_load, game_save };
         cyc_settings_default(&s_set);
         cyc_settings_load(&s_set, s_set_path, stderr, &GAME);
+        ducktales_host_load_audio_settings(s_set_path);
         s_set.bind.shortcut_off |= 1u << CYC_SC_DISK;
     }
     for (int g = 0; g < game_n; g++) {
