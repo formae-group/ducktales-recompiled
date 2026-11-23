@@ -54,6 +54,7 @@
 #define SFX_POUNCE       0x1F
 #define SFX_POUNCER_LAND 0x20
 #define SFX_SPLASH       0x21
+#define SFX_ROLL         0x27
 
 #define gObjCursor        RAM_U8(DT_ADDR_OBJ_CURSOR)
 #define gScratch0         RAM_U8(DT_ADDR_SCRATCH0)
@@ -2587,6 +2588,28 @@ static void Obj_Boulder(uint8_t x)
     }
 }
 
+/* Kind $23 ($9FEC): something that rolls left at $0180 a frame on the
+ * floor (probe $31), harming Scrooge on contact, with sound $27 at the start
+ * of each animation cycle; in the air it only falls. */
+static void Obj_Roller(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_ROLLER, 0x22, x, gObjects->kind[x]);
+    if (Step(x) == 0) {
+        Obj_SetVelocityY(x, 0);
+        Obj_SetSpeed(x, 0x0180);
+        gObjects->state[x]++;
+    }
+    (void)Obj_TouchScrooge(x);
+    x = Obj_Fall(x, 0x31, 2);
+    if (!(gProbeHits & 1)) {
+        return;
+    }
+    Obj_MoveLeft(x);
+    if (gObjects->animTimer[x] == 0) {
+        Sound_Request(SFX_ROLL, x);
+    }
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -2691,6 +2714,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_BOBBER:
             Obj_Bobber(slot);
+            break;
+        case OBJ_KIND_ROLLER:
+            Obj_Roller(slot);
             break;
         case OBJ_KIND_BOULDER:
             Obj_Boulder(slot);
@@ -2949,6 +2975,11 @@ static void Run_Boulder(Regs *r)
     Obj_Boulder(r->x);
 }
 
+static void Run_Roller(Regs *r)
+{
+    Obj_Roller(r->x);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -3118,6 +3149,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_ROLLER, NULL, "Obj_Roller", Run_Roller, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_BOULDER, NULL, "Obj_Boulder", Run_Boulder, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_BOUNCER, NULL, "Obj_Bouncer", Run_Bouncer, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_PIT_JUMPER, NULL, "Obj_PitJumper", Run_PitJumper, 0, .bank = DT_BANK_OBJECTS },
