@@ -248,7 +248,7 @@ picture and hashes do not depend on it.
 ## Reproducing
 
 ```sh
-E=build/headless/Release/ducktales.exe; ROM="roms/DuckTales (USA).nes"
+E=build/headless/Release/ducktales.exe; ROM=roms/baserom.nes
 $E "$ROM" --frames 1451 --input tests/routes/amazon_intro.txt --frame-log captures/fl_amazon.bin --frame-log-frames 1449:1450
 py -3 -I tools/render_map.py "$ROM" check captures/fl_amazon.bin --frame 1450 --picture
 py -3 -I tools/render_oam.py "$ROM" check captures/fl_amazon.bin --frame 1450 --slots

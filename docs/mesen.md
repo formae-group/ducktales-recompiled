@@ -28,7 +28,7 @@ py -3 -I tests/mesen_compare.py --ignore 0100-01FF --domains ram,oam,palette,cir
   turns on portable mode, so Mesen keeps its DLLs, `Saves/` and `Debugger/` in that folder and
   not in Documents. It also stops the test runner from opening the first-run setup dialog
   (Mesen2 2.1.1 `UI/Program.cs`, `UI/Config/ConfigManager.cs` `HomeFolder`).
-- The ROM is always `roms/DuckTales (USA).nes`; nothing else is downloaded.
+- The ROM is the one in `roms/` with the supported SHA-256, whatever its name; nothing else is downloaded.
 - Each `ducktales.exe --frame-log` run first writes about 130 KB per frame (CHR RAM and the
   picture are always included), up to 1 GB for the longest route. The script shrinks each log
   to RAM, OAM, palette and optional CIRAM right after its run. It refuses to start unless

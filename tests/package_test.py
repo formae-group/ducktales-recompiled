@@ -37,6 +37,9 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'tools'))
+from romfile import default_rom  # noqa: E402
+
 ROM_SHA256 = '97d472f7b2c1088448d1644155b2650a546bad887b3cba571e16d7986824c169'
 FILES = [
     'ducktales.exe',
@@ -50,6 +53,8 @@ FILES = [
     'licenses/SDL2-README-SDL.txt',
     'licenses/imgui-LICENSE.txt',
     'licenses/formae-ui-LICENSE.txt',
+    'licenses/stb-LICENSE.txt',
+    'licenses/lua-LICENSE.txt',
 ]
 RUNTIME_DLL = re.compile(r'^(vcruntime|msvcp|concrt|vccorlib|ucrtbase|api-ms-win-crt-)', re.I)
 
@@ -86,7 +91,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--build', default='build/windows')
     ap.add_argument('--config', default='Release')
-    ap.add_argument('--rom', default=str(ROOT / 'roms' / 'DuckTales (USA).nes'))
+    ap.add_argument('--rom', default=default_rom())
     ap.add_argument('--jobs', type=int, default=4, help='parallel build jobs')
     args = ap.parse_args()
     build = (ROOT / args.build).resolve()
@@ -163,7 +168,7 @@ def main():
                 f'{dll.name} needs no Visual C++ runtime DLL (imports: {", ".join(sorted(imports))})',
             )
 
-        rom = tmp / 'rom' / 'DuckTales (USA).nes'
+        rom = tmp / 'rom' / 'any name.nes'
         rom.parent.mkdir()
         shutil.copyfile(args.rom, rom)
         data = tmp / 'data'

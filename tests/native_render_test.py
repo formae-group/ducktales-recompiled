@@ -25,6 +25,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'tools'))
+from romfile import default_rom  # noqa: E402
 
 
 def route_frames(path):
@@ -70,7 +72,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--build', default='build/headless', help='headless build directory')
     ap.add_argument('--config', default='Release')
-    ap.add_argument('--rom', default=str(ROOT / 'roms' / 'DuckTales (USA).nes'))
+    ap.add_argument('--rom', default=default_rom())
     ap.add_argument('--routes', nargs='*', help='route files (default: tests/routes/full_*.txt)')
     ap.add_argument('--out', default=str(ROOT / 'build' / 'native-render'))
     ap.add_argument('--jobs', type=int, default=2)

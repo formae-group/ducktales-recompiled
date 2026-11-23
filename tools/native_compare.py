@@ -2,7 +2,8 @@
 
 Both write one line per frame with --ram-hash-out (src/native/native_hash.h):
 CPU RAM, nametables, palette, OAM and CHR RAM hashes, the cycle count and the
-CPU registers at the frame's end.
+CPU registers at the frame's end. A golden file of tests/quick_verify.py
+(its # header line is skipped) compares the same way.
 
     py -3 -I tools/native_compare.py CYCLE.txt NATIVE.txt [--fields ram,cycles,...] [--list N]
 
@@ -22,7 +23,7 @@ def load(path):
     with open(path) as f:
         for line in f:
             parts = line.split()
-            if not parts:
+            if not parts or parts[0].startswith('#'):
                 continue
             out.append((int(parts[0]), dict(p.split('=', 1) for p in parts[1:])))
     return out

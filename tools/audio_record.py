@@ -31,6 +31,9 @@ from framelog import frames as log_frames  # noqa: E402
 from world_poke import ram_offset  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from romfile import default_rom  # noqa: E402
+
 SPF = 800  # 48000 Hz / 60 frames
 QUIET = 150  # per-frame RMS below this counts as silence
 
@@ -114,7 +117,7 @@ def main():
     ap.add_argument('--keep', action='store_true')
     ap.add_argument('--out', type=Path, default=ROOT / 'captures' / 'audio')
     ap.add_argument('--exe', default=str(ROOT / 'build' / 'headless' / 'Release' / 'ducktales.exe'))
-    ap.add_argument('--rom', default=str(ROOT / 'roms' / 'DuckTales (USA).nes'))
+    ap.add_argument('--rom', default=default_rom())
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     idle = a.out / 'idle.txt'

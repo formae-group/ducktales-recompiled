@@ -55,6 +55,11 @@ size_t native_audio_frame(const NativeFrame *frame, int16_t *out, size_t max);
  * written first with 0 samples, again with the count when done. */
 void native_audio_wav_header(FILE *f, int sample_rate, uint32_t samples);
 
+/* Channels left out of the mix from now on (bit 0 pulse 1, 1 pulse 2, 2
+ * triangle, 3 noise), the extra voices' copies included; they keep running,
+ * only their sound is dropped (mods that play a file in place of them). */
+void native_audio_set_mute(uint8_t mask);
+
 #ifdef __cplusplus
 }
 #endif

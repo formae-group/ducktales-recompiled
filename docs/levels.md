@@ -135,13 +135,13 @@ bit set). Transylvania is also the land of the final trip (see game-state.md).
 ## Reproducing
 
 ```sh
-py -3 -I tools/world_maps.py "roms/DuckTales (USA).nes"
-build/headless/Release/ducktales.exe "roms/DuckTales (USA).nes" --frames 2000 \
+py -3 -I tools/world_maps.py roms/baserom.nes
+build/headless/Release/ducktales.exe roms/baserom.nes --frames 2000 \
    --input tests/routes/african_mines_intro.txt --frame-log captures/am.bin --frame-log-frames 900:2000
 py -3 -I tools/world_state.py captures/am.bin --changes
 # warp entry 3 from the Amazon
 py -3 -I tools/world_poke.py captures/s_amazon1100.state poke captures/w3.state 7E=83
-build/headless/Release/ducktales.exe "roms/DuckTales (USA).nes" --load-state captures/w3.state \
+build/headless/Release/ducktales.exe roms/baserom.nes --load-state captures/w3.state \
    --frames 1400 --input captures/idle.txt --frame-log captures/w3.bin
 py -3 -I tools/world_state.py captures/w3.bin --changes
 ```

@@ -9,12 +9,16 @@ site: the RTS observer starts them. The content key is the CRC of the first
     py -3 -I tools/flow_sites.py
 """
 
+import sys
 import re
 import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-ROM = ROOT / "roms" / "DuckTales (USA).nes"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from romfile import default_rom  # noqa: E402
+
+ROM = Path(default_rom())
 TOML = ROOT / "config" / "game.toml"
 HEAD = "# Game flow (src/decomp/flow.c"
 TAIL = "# END game flow"

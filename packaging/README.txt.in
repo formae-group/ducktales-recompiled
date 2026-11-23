@@ -11,7 +11,7 @@ Supplying the ROM
 
 Only DuckTales (USA) is supported:
 
-  File      DuckTales (USA).nes (131,088 bytes, iNES)
+  File      any name (131,088 bytes, iNES)
   SHA-256   97d472f7b2c1088448d1644155b2650a546bad887b3cba571e16d7986824c169
 
 Start ducktales.exe, then pick the ROM in the window or drop the file on it.
@@ -21,7 +21,7 @@ modified file is refused. The checked copy is stored in
 
 From a command prompt you can import it without opening the window:
 
-  ducktales.exe --import-rom "C:\path\to\DuckTales (USA).nes"
+  ducktales.exe --import-rom "C:\path\to\your ROM.nes"
 
 
 Controls
@@ -47,8 +47,8 @@ DuckTales Recompiled's own code is MIT licensed (LICENSE.txt). It is built on
 NESRecomp, licensed under PolyForm Noncommercial 1.0.0 with the additional
 permissions in licenses/NESRecomp-PERMISSIONS.md: this package must be free of
 charge to obtain and play, and may not be sold. It also contains formae-ui
-(MIT), Dear ImGui (MIT), SDL2 (zlib) and emu2413 (MIT). Each licence text is in
-licenses/.
+(MIT), Dear ImGui (MIT), SDL2 (zlib), emu2413 (MIT), stb (MIT) and Lua (MIT).
+Each licence text is in licenses/.
 
 DuckTales is a trademark of Disney. This project is not affiliated with Disney
 or Capcom and distributes no part of the game.

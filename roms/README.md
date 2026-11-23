@@ -1,3 +1,4 @@
-Place your own legally obtained `DuckTales (USA).nes` here, or point CMake at it
-with `-DDUCKTALES_ROM=<path>`. Nothing in this folder except this file is tracked.
-The expected identity is recorded in [docs/rom.md](../docs/rom.md).
+Place your own legally obtained DuckTales (USA) ROM here under any file name
+(`baserom.nes`, for example), or point CMake at it with `-DDUCKTALES_ROM=<path>`.
+The build and the test scripts find it by its SHA-256; the expected hashes are in
+[docs/rom.md](../docs/rom.md). Nothing in this folder except this file is tracked.

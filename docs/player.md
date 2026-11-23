@@ -232,13 +232,13 @@ See the final report of this task; rows are not added to `docs/memory-map.md` he
 ## Reproducing
 
 ```sh
-E="build/headless/Release/ducktales.exe roms/DuckTales (USA).nes"   # quote the ROM path
+E="build/headless/Release/ducktales.exe roms/baserom.nes"   # quote the ROM path
 # frame log of the moves route and a trace of the jump frame
 $E --frames 2130 --input tests/routes/re_amazon_moves.txt --frame-log captures/moves.bin --frame-log-frames 1600:2130
 py -3 -I tools/player_trace.py captures/moves.bin --first 1778 --last 1830 --summary
 py -3 -I tools/whoaccesses.py --input tests/routes/re_amazon_moves.txt --frame 1780 07B0,07C0
 py -3 -I tools/whoaccesses.py --input tests/routes/re_amazon_moves.txt --frame 1638 0790,07A0
-py -3 -I tools/player_xref.py "roms/DuckTales (USA).nes" 0790,07A0
+py -3 -I tools/player_xref.py roms/baserom.nes 0790,07A0
 # jump-height experiment
 $E --frames 1701 --input tests/routes/re_amazon_moves.txt --save-state 1700:captures/f1700.state --frame-log captures/f1700.bin --frame-log-frames 1700:1700
 py -3 -I tools/player_poke_state.py captures/f1700.state captures/f1700.bin captures/hi.state 07A0=06 0790=00
