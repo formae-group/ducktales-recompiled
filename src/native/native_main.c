@@ -13,6 +13,7 @@
  *                        [--overlap-effects on|off] [--audio-channels MASK]
  *                        [--sound-request FRAME:IDS]
  *                        [--save-state F:FILE] [--load-state FILE]
+ *                        [--decomp off|replace]
  *
  * --input takes the cycle host's route format (tests/routes): one
  * "<frame> BUTTONS" line per change, buttons joined by +, "-" releases, "2:"
@@ -48,8 +49,13 @@
  * --load-state FILE starts from one: the run continues at the frame after it,
  * with the route's input from there and the frame numbers of every log
  * continuing the saved run's (tests/quick_verify.py --from-state). The lag
- * mode is not part of a state: give the same --lag.
+ * mode is not part of a state: give the same --lag. --decomp replace runs the
+ * decompiled routines alone in place of the recompiled ones
+ * (src/decomp/decomp_native.c), with --lag none only (the C's cycles are not
+ * the console's), and prints each routine's call counts at exit
+ * (tests/native_decomp_test.py).
  */
+#include "decomp/decomp.h"
 #include "native/native_audio.h"
 #include "native/native_hash.h"
 #include "native/native_route.h"
@@ -182,6 +188,7 @@ int main(int argc, char **argv)
                *dump_out = NULL, *audit_out = NULL, *step_out = NULL, *latch_out = NULL, *latch_in = NULL,
                *wav_out = NULL, *load_state = NULL;
     NativeLagMode lag_mode = NATIVE_LAG_NONE;
+    DecompMode decomp = DECOMP_OFF;
     long frames = 600, trace_frame = -1, request_frame = -1;
     uint8_t requests[8];
     int request_count = 0;
@@ -239,6 +246,9 @@ int main(int argc, char **argv)
             lag_mode = NATIVE_LAG_NONE, i++;
         } else if (!strcmp(argv[i], "--lag") && i + 1 < argc && !strcmp(argv[i + 1], "faithful")) {
             lag_mode = NATIVE_LAG_FAITHFUL, i++;
+        } else if (!strcmp(argv[i], "--decomp") && i + 1 < argc && Decomp_ParseMode(argv[i + 1], &decomp) &&
+                   decomp != DECOMP_CHECK) {
+            i++;
         } else if (argv[i][0] != '-' && !rom) {
             rom = argv[i];
         } else {
@@ -290,8 +300,13 @@ int main(int argc, char **argv)
         return 2;
     }
 
+    if (decomp != DECOMP_OFF && lag_mode != NATIVE_LAG_NONE) {
+        fprintf(stderr, "--decomp replace needs --lag none\n");
+        return 2;
+    }
     native_power_on();
     native_set_lag_mode(lag_mode);
+    Decomp_SetMode(decomp);
     if (step_f) {
         native_set_step_hook(dump_step);
     }

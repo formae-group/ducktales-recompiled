@@ -102,6 +102,22 @@ string(REGEX REPLACE "\n\\*+/?[ ]?" "\n" _lua_notice "${_lua_notice}")
 string(STRIP "${_lua_notice}" _lua_notice)
 string(APPEND _lua_notice "\n")
 file(WRITE "${CMAKE_BINARY_DIR}/lua-LICENSE.txt" "${_lua_notice}")
+# The decompiled routines and the core that runs them (docs/decompilation.md);
+# each host adds its backend: decomp_cycle.c or decomp_native.c.
+set(_ducktales_decomp
+    "${CMAKE_SOURCE_DIR}/src/decomp/decomp.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/motion.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/sound.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/player.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/system.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/sprites.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/audio.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/objcommon.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/objects.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/level.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/collision.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/flow.c"
+)
 # The port's systems layer (docs/architecture.md): typed game state, the hook
 # sites it alters behaviour at, settings and options; the typed game API and
 # its events (include/ducktales/) and the decompiled routines (src/decomp/,
@@ -114,19 +130,8 @@ set(_ducktales_extras
     "${CMAKE_SOURCE_DIR}/src/game/enhancements.c"
     "${CMAKE_SOURCE_DIR}/src/host/ducktales_sprites.c"
     "${CMAKE_SOURCE_DIR}/src/host/ducktales_host.c"
-    "${CMAKE_SOURCE_DIR}/src/decomp/decomp.c"
+    ${_ducktales_decomp}
     "${CMAKE_SOURCE_DIR}/src/decomp/decomp_cycle.c"
-    "${CMAKE_SOURCE_DIR}/src/decomp/motion.c"
-    "${CMAKE_SOURCE_DIR}/src/decomp/sound.c"
-    "${CMAKE_SOURCE_DIR}/src/decomp/player.c"
-    "${CMAKE_SOURCE_DIR}/src/decomp/system.c"
-    "${CMAKE_SOURCE_DIR}/src/decomp/sprites.c"
-    "${CMAKE_SOURCE_DIR}/src/decomp/audio.c"
-    "${CMAKE_SOURCE_DIR}/src/decomp/objcommon.c"
-    "${CMAKE_SOURCE_DIR}/src/decomp/objects.c"
-    "${CMAKE_SOURCE_DIR}/src/decomp/level.c"
-    "${CMAKE_SOURCE_DIR}/src/decomp/collision.c"
-    "${CMAKE_SOURCE_DIR}/src/decomp/flow.c"
     "${CMAKE_SOURCE_DIR}/src/host/ducktales_settings.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_render.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_cycle.c"
@@ -259,6 +264,7 @@ set(_native_runtime
     "${CMAKE_SOURCE_DIR}/src/native/native_voices.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_hooks.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_route.c"
+    "${CMAKE_SOURCE_DIR}/src/native/native_mod.c"
     "${_nes_cyc}/cpu6502.c"
     "${_nes_cyc}/cpu6502_interp.c"
     "${NESRECOMP_ROOT}/runner/src/mod_function_hooks.c")
@@ -277,7 +283,11 @@ endfunction()
 
 # ducktales_native: the headless prototype (routes, logs, dumps).
 if(DUCKTALES_NATIVE)
-    add_executable(ducktales_native "${CMAKE_SOURCE_DIR}/src/native/native_main.c")
+    add_executable(ducktales_native "${CMAKE_SOURCE_DIR}/src/native/native_main.c"
+        "${CMAKE_SOURCE_DIR}/src/game/game_ram.c"
+        "${CMAKE_SOURCE_DIR}/src/game/events.c"
+        ${_ducktales_decomp}
+        "${CMAKE_SOURCE_DIR}/src/decomp/decomp_native.c")
     ducktales_native_target(ducktales_native)
 endif()
 
@@ -297,6 +307,8 @@ if(NOT DUCKTALES_HEADLESS)
         "${CMAKE_SOURCE_DIR}/src/game/events.c"
         "${CMAKE_SOURCE_DIR}/src/game/ducktales_jump.c"
         "${CMAKE_SOURCE_DIR}/src/game/enhancements.c"
+        ${_ducktales_decomp}
+        "${CMAKE_SOURCE_DIR}/src/decomp/decomp_native.c"
         "${CMAKE_SOURCE_DIR}/src/host/ducktales_sprites.c"
         "${CMAKE_SOURCE_DIR}/src/host/ducktales_settings.c"
         "${CMAKE_SOURCE_DIR}/src/host/ducktales_main.c"
