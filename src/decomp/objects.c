@@ -57,6 +57,8 @@
 #define SFX_ROLL         0x27
 #define SFX_SPOUT        0x25
 #define SFX_BOSS_HOP     0x22
+#define SFX_BOSS_LAND    0x1E
+#define SFX_BOSS_TURN    0x23
 
 #define gObjCursor        RAM_U8(DT_ADDR_OBJ_CURSOR)
 #define gScratch0         RAM_U8(DT_ADDR_SCRATCH0)
@@ -2892,6 +2894,141 @@ static void Obj_MinesBoss(uint8_t x)
     gObjects->vdir[x] = (uint8_t)(p & 0x0C);
 }
 
+/* Kind $2A ($A8D6): the Himalayas boss. It jumps (vertical velocity $06EE,
+ * frame 2 of its pose), lands (sound $1E) and, at animation frame 7, rests
+ * 30 frames before the next jump, walking at $01CC while airborne. A wall
+ * hit while resting turns it (pose $65, sound $23) and starts a stomp: at
+ * frame 7 of the pose (pose $64) the camera shakes 4 px every 4 frames and
+ * one of two patterns ($AAA8, random) drops a row of falling objects (kind
+ * $2B, pose $47) into slots 8 on, each at its frame count ($AAB6). When the
+ * last one is gone it jumps again. A counted hit goes to the boss hit $F6D7;
+ * the last one beats it. The spawning slot is left in $00. */
+static void Obj_HimalayasBoss(uint8_t x)
+{
+    static const uint8_t dropX[14] = { 0x70, 0xD8, 0x48, 0xA8, 0x18, 0x88, 0x00,
+                                       0x68, 0x98, 0x28, 0xD8, 0x48, 0x88, 0x00 };
+    static const uint8_t dropAt[14] = { 0x00, 0x08, 0x18, 0x18, 0x20, 0x30, 0x00,
+                                        0x00, 0x08, 0x18, 0x18, 0x28, 0x28, 0x00 };
+    static const uint8_t patterns[2] = { 0x00, 0x07 };
+    static const uint8_t shakes[2] = { 0x00, 0x04 };
+
+    Decomp_Enter(DT_CODE_KIND_HIMALAYAS_BOSS, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0 && Boss_Hit(&x)) {
+        Obj_Defeat(x);
+        return;
+    }
+    if (Step(x) == 0) {
+        gObjects->timer[x] = 0;
+        gObjects->unk_06C0[x] = 0;
+        ResetAnim(x);
+        Obj_SetSpeed(x, 0x01CC);
+        gObjects->state[x]++;
+        gObjects->dir[x] = OBJ_DIR_LEFT;
+        RAM_U8(DT_ADDR_HIMALAYAS_BOSS_05A0) = 0x11;
+        Obj_SetVelocityY(x, 0x06EE);
+    }
+    if (gObjects->state[x] & 2) {
+        if (gObjects->action[x] != 0x64) {
+            if (gObjects->animFrame[x] == 0 || gObjects->animTimer[x] != 7) {
+                return;
+            }
+            gObjects->action[x] = 0x64;
+            gObjects->animFrame[x] = 0;
+            gObjects->timer[x] = 0;
+            gRandom(1) = (uint8_t)(gRandom(0) + gRandom(1) + 1);
+            gObjects->unk_06C0[x] = patterns[gRandom(1) & 1];
+            gObjects->unk_06D0[x] = 8;
+        }
+        for (;;) {
+            gObjects->animTimer[x] = 0;
+            gCameraX = shakes[(RAM_U8(DT_ADDR_SPR_PHASE) >> 2) & 1];
+            uint8_t i = gObjects->unk_06C0[x];
+            if (dropX[i] == 0) {
+                break;
+            }
+            if (gObjects->timer[x] != dropAt[i]) {
+                gObjects->timer[x]++;
+                return;
+            }
+            gScratch0 = x;
+            uint8_t s = gObjects->unk_06D0[x];
+            gObjects->worldX[s] = dropX[i];
+            gObjects->worldPage[s] = 4;
+            gObjects->y[s] = 0x38;
+            gObjects->state[s] = 0xA0;
+            gObjects->flags[s] = 0xA0;
+            gObjects->action[s] = 0x47;
+            ResetAnim(s);
+            gObjects->hitbox[s] = 0x10;
+            gObjects->kind[s] = OBJ_KIND_DROPPING;
+            Obj_SetVelocityY(s, 0x0180);
+            gObjects->unk_06C0[x]++;
+            gObjects->unk_06D0[x]++;
+        }
+        if (gObjects->state[gObjects->unk_06D0[x] - 1] != 0) {
+            return;
+        }
+        gObjects->state[x]--;
+        gObjects->timer[x] = 0;
+        gObjects->unk_06C0[x] = 0;
+        gObjects->unk_06D0[x] = 0;
+        gCameraX = 0;
+        Obj_SetVelocityY(x, 0x06EE);
+    }
+    if (gObjects->unk_06C0[x] != 0) {
+        gObjects->animTimer[x] = 0;
+        if (--gObjects->unk_06C0[x] == 0) {
+            gObjects->animFrame[x]++;
+        }
+        return;
+    }
+    if (gObjects->timer[x] == 0) {
+        if (gObjects->animFrame[x] != 2) {
+            return;
+        }
+        gObjects->animTimer[x] = 0;
+        x = Obj_Rise(x, 0x52, 2);
+        if (gObjects->vy[x] & 0x80) {
+            Obj_SetVelocityY(x, 0);
+            gObjects->timer[x]++;
+            return;
+        }
+    } else {
+        if (gObjects->animFrame[x] == 2) {
+            gObjects->animTimer[x] = 0;
+        }
+        x = Obj_Fall(x, 0x31, 2);
+        if (gProbeHits & 1) {
+            if (gObjects->animFrame[x] != 1) {
+                gObjects->animFrame[x] = 1;
+            }
+            if (gObjects->animTimer[x] == 0) {
+                Sound_Request(SFX_BOSS_LAND, x);
+            }
+            if (gObjects->animTimer[x] != 7) {
+                return;
+            }
+            gObjects->unk_06C0[x] = 0x1E;
+            Obj_SetVelocityY(x, 0x06EE);
+            gObjects->timer[x] = 0;
+            gObjects->animFrame[x] = 0;
+        }
+    }
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        x = Obj_WalkRight(x, 0x34, 2);
+    } else {
+        x = Obj_WalkLeft(x, 0x37, 2);
+    }
+    if (!(gProbeHits & 1) || gObjects->unk_06C0[x] == 0) {
+        return;
+    }
+    gObjects->dir[x] ^= 3;
+    gObjects->state[x]++;
+    gObjects->action[x] = 0x65;
+    ResetAnim(x);
+    Sound_Request(SFX_BOSS_TURN, x);
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -3011,6 +3148,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_MINES_BOSS:
             Obj_MinesBoss(slot);
+            break;
+        case OBJ_KIND_HIMALAYAS_BOSS:
+            Obj_HimalayasBoss(slot);
             break;
         case OBJ_KIND_DROPPING:
             Obj_Dropping(slot);
@@ -3295,6 +3435,11 @@ static void Run_MinesBoss(Regs *r)
     Obj_MinesBoss(r->x);
 }
 
+static void Run_HimalayasBoss(Regs *r)
+{
+    Obj_HimalayasBoss(r->x);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -3464,6 +3609,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_HIMALAYAS_BOSS, NULL, "Obj_HimalayasBoss", Run_HimalayasBoss, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_MINES_BOSS, NULL, "Obj_MinesBoss", Run_MinesBoss, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_THIEF, NULL, "Obj_Thief", Run_Thief, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_TREAT, NULL, "Obj_Treat", Run_Treat, 0, .bank = DT_BANK_OBJECTS },
