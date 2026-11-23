@@ -191,6 +191,7 @@ static void frame_end(void *ctx)
         app_mods_audio_frame_end(cyc_cpu_ram());
         cyc_mod_set_apu_audio_mute(app_mods_audio_mute());
     }
+    app_mods_scripts_frame();
     dt_ramhash_frame_end();
     dt_diag_frame_end();
     nv_check_frame_end();

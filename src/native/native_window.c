@@ -140,6 +140,7 @@ static void run_frame(uint8_t pad0, uint8_t pad1)
     if (app_mods_audio_active()) {
         app_mods_audio_frame_end(native_cpu_ram());
     }
+    app_mods_scripts_frame();
 }
 
 /* The frame's sound: the synth with the channels the mods took muted, then

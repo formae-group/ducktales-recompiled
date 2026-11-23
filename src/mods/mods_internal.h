@@ -76,3 +76,11 @@ void mods_audio_read_driver(const uint8_t *prg, size_t size);
 bool mods_audio_add(bool music, int id, uint8_t *file, size_t size, char *err, size_t cap);
 /* An id already has a replacement. */
 bool mods_audio_has(bool music, int id);
+
+/* ---- app_mods_lua.c ---- */
+/* Starts a loaded mod's scripts/main.lua; false when it failed (reported through mods_script_status). */
+bool mods_lua_add(const char *id, const char *path, bool folder);
+
+/* ---- app_mods.c ---- */
+/* A mod's script stopped (why) or runs again (NULL). */
+void mods_script_status(const char *id, const char *why);

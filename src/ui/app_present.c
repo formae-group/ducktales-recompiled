@@ -13,7 +13,8 @@
  *      backdrop colour. The line above it, where the game's writes land
  *      (fine X changes before its end), is drawn again from the nametable
  *      with its own starting scroll. The opaque pixels of sprite 0 (the split
- *      sprite) over the backdrop are drawn in the backdrop colour too.
+ *      sprite) over the backdrop are drawn in the backdrop colour too. A
+ *      palette mod's colours apply to these pixels; its tiles do not.
  *   2. Overscan: the rows and columns cut off.
  *   3. Scaling: with nearest pixels and square pixels the cropped picture goes
  *      to the host as it is (its nearest and integer scaling apply). Otherwise
@@ -29,6 +30,7 @@
 
 #include "cyc_core.h"
 #include "cyc_render.h"
+#include "mods/app_mods.h"
 
 #include <math.h>
 #include <stddef.h>
@@ -155,6 +157,13 @@ void app_present_base_size(int *w, int *h)
     if (s_p.aspect == APP_ASPECT_8_7) *w = (int)lround(*w * 8.0 / 7.0);
 }
 
+/* Palette entry on line y, through a palette mod when one is painting. */
+static uint32_t color(int entry, int y)
+{
+    uint16_t index = (uint16_t)((cyc_render_palette(entry) & 0x3F) | (cyc_render_line_mask(y) >> 5) << 6);
+    return app_mods_color(index, cyc_render_color(entry));
+}
+
 /* Background line y as the PPU starts it (its scroll, pattern table and left
  * column at dot 1), with no sprites: the HUD's own line, before the game's
  * split writes landed in it. */
@@ -172,7 +181,7 @@ static void hud_line(uint32_t *row, int y, uint32_t backdrop)
         int pal = (attr >> (((ty & 2) << 1) | (tx & 2))) & 3;
         uint16_t p = (uint16_t)(table + tile * 16 + fy);
         int v = ((cyc_render_chr(p) >> bit) & 1) | (((cyc_render_chr((uint16_t)(p + 8)) >> bit) & 1) << 1);
-        row[x] = v && (left || x >= 8) ? cyc_render_color(pal * 4 + v) : backdrop;
+        row[x] = v && (left || x >= 8) ? color(pal * 4 + v, y) : backdrop;
     }
 }
 
@@ -191,7 +200,7 @@ static void clean_split(uint32_t *pic, int width, int height)
         }
     }
     if (split < 0) return;
-    const uint32_t backdrop = cyc_render_color(0);
+    const uint32_t backdrop = color(0, split);
     const int ox = cyc_render_native_origin(width);
     const uint8_t *opaque = cyc_frame_bg_opaque();
     const uint8_t tile = oam[1], attr = oam[2];

@@ -1,9 +1,10 @@
 /*
  * app_mods.h - mods: replacement tiles, palettes, music and sound effects
- * loaded from .dtmod archives and loose folders (docs/mods.md). Mods change
- * only what the window shows and what the speakers play: nothing here writes
- * to the machine, so its state, its own picture and every verified hash stay
- * the console's.
+ * loaded from .dtmod archives and loose folders, and Lua scripts
+ * (docs/mods.md). Assets change only what the window shows and what the
+ * speakers play: nothing here writes to the machine, so its state, its own
+ * picture and every verified hash stay the console's. Scripts read the game's
+ * state and may cancel the cancelable game events (app_mods_lua.c).
  *
  *   catalogue   every *.dtmod archive (a zip) and every folder holding a
  *               mod.toml in the mods folders, in the player's order; a mod
@@ -55,6 +56,8 @@ typedef struct {
     bool loaded;             /* its assets are in use since the start */
     char error[320];         /* non-empty: refused or unreadable, never loaded */
     int tiles, palettes, music, sfx;
+    bool script;             /* ships scripts/main.lua */
+    char script_error[320];  /* non-empty: its script stopped (error or limit) and why */
 } AppMod;
 
 /* ---- folders and settings ---- */
@@ -106,6 +109,11 @@ void app_mods_rescan(void);
 /* Enabled, the enabled mods or their order differ from what was loaded. */
 bool app_mods_restart_needed(void);
 
+/* ---- scripts (app_mods_lua.c) ---- */
+
+/* After each machine frame: "frame" handlers, then scripts whose file changed start again. */
+void app_mods_scripts_frame(void);
+
 /* ---- video ---- */
 
 /* A tile or palette replacement is loaded, or a key dump is on. */
@@ -119,6 +127,10 @@ void app_mods_video_apply(const NvVideo *video, const NvRenderOptions *options, 
 /* Developer: from now on write every tile drawn, once, into dir as
  * <key>.png (from the player's own ROM; never distribute them). */
 bool app_mods_dump_dir(const char *dir);
+/* The colour of 9-bit palette index under the palette mod of the last picture
+ * painted, or argb when none applies (presentation that redraws pixels after
+ * the compositor, ui/app_present.c). */
+uint32_t app_mods_color(uint16_t index, uint32_t argb);
 
 /* ---- audio ---- */
 

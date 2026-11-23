@@ -36,6 +36,8 @@ import struct
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import wave
 import zipfile
 import zlib
@@ -157,9 +159,240 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--build', default='build/headless')
     ap.add_argument('--config', default='Release')
+    ap.add_argument('--native-build', default='build/windows', help='the native player\'s build ("" to skip it)')
+    ap.add_argument('--native-only', action='store_true', help='only the native player\'s checks')
     args = ap.parse_args()
     exe = ROOT / args.build / args.config / 'ducktales.exe'
     route = ROOT / 'tests' / 'routes' / 'amazon_intro.txt'
+    native = ROOT / args.native_build / args.config / 'ducktales.exe' if args.native_build else None
+    if native and not native.exists():
+        print(f'SKIP  the native player: {native} is not built')
+        native = None
+    if not args.native_only:
+        headless_checks(exe, route)
+    if native:
+        native_checks(native, route)
+    script_checks(native or exe, route, native is not None)
+    print(f'\n{"FAILED: " + ", ".join(failures) if failures else "all mods checks passed"}')
+    return 1 if failures else 0
+
+
+def samples(p):
+    with wave.open(str(p)) as wv:
+        return wv.getframerate(), struct.unpack(f'<{wv.getnframes()}h', wv.readframes(wv.getnframes()))
+
+
+def share_440(s, rate):
+    s = s[rate // 60 * 30:rate // 60 * 230]
+    c = sum(x * math.cos(2 * math.pi * 440 * i / rate) for i, x in enumerate(s))
+    d = sum(x * math.sin(2 * math.pi * 440 * i / rate) for i, x in enumerate(s))
+    power = 2 * (c * c + d * d) / len(s)
+    total = sum(x * x for x in s) or 1
+    return power / total
+
+
+def tone_wav(path):
+    with wave.open(str(path), 'wb') as wv:
+        wv.setnchannels(1)
+        wv.setsampwidth(2)
+        wv.setframerate(48000)
+        wv.writeframes(b''.join(struct.pack('<h', int(12000 * math.sin(2 * math.pi * 440 * i / 48000)))
+                                for i in range(48000 * 2)))
+    return path.read_bytes()
+
+
+def native_checks(exe, route):
+    with tempfile.TemporaryDirectory() as t:
+        tmp = Path(t)
+
+        def run(name, mods=None, frames=1501, every=300, wav=False, extra=()):
+            out = tmp / name
+            out.mkdir()
+            cmd = [exe, ROM, '--frames', str(frames), '--input', route, '--lag', 'faithful', '--config', tmp / 'x.ini',
+                   '--present-out', out / 'p.png', '--present-every', str(every)]
+            if mods:
+                cmd += ['--mods', 'on', '--mods-dir', mods]
+            if wav:
+                cmd += ['--wav-out', out / 'a.wav']
+            p = subprocess.run([str(c) for c in [*cmd, *extra]], capture_output=True, text=True, timeout=3600)
+            if p.returncode:
+                print(p.stdout + p.stderr)
+                raise SystemExit(f'native {name}: exit {p.returncode}')
+            pics = {}
+            for f in out.glob('p*.png'):
+                digits = ''.join(c for c in f.stem if c.isdigit())
+                pics[int(digits) if digits else frames] = png_read(f)[2]
+            return out, pics, p.stdout + p.stderr
+
+        _, base, _ = run('base')
+        dump = tmp / 'dump'
+        run('dump', every=1500, extra=('--mods', 'on', '--mods-dump', dump))
+        keys = sorted(dump.glob('*.png'))
+        key = next((k for k in keys if len(set(png_read(k)[2])) >= 3 and all(p >> 24 == 255 for p in png_read(k)[2])), None)
+        check(key is not None and 1500 in base, f'native player: --mods-dump wrote {len(keys)} tile templates')
+        if key is None or 1500 not in base:
+            return
+        inverted = bytes(255 - c for rgb in nes_palette() for c in rgb)
+        magenta = png_bytes(8, 8, [0xFFFF00FF] * 64, tmp)
+        (tmp / 'mods_inv').mkdir()
+        make_mod(tmp / 'mods_inv', 'inverse', {'palettes/global.pal': inverted})
+        _, inv, log = run('inv', tmp / 'mods_inv')
+        check(all(p == (0xFF000000 | (~q & 0xFFFFFF)) for p, q in zip(inv[1500], base[1500])),
+              'native player: global palette inverts every pixel of frame 1500', log)
+        (tmp / 'mods_mag').mkdir()
+        make_mod(tmp / 'mods_mag', 'magenta-tile', {f'tiles/{key.name}': magenta})
+        _, mag, log = run('mag', tmp / 'mods_mag')
+        changed = [i for i, (p, q) in enumerate(zip(mag[1500], base[1500])) if p != q]
+        check(changed and all(mag[1500][i] == 0xFFFF00FF for i in changed),
+              f'native player: tile {key.stem} in magenta: {len(changed)} pixels changed, every one of them magenta', log)
+        (tmp / 'mods_tone').mkdir()
+        make_mod(tmp / 'mods_tone', 'title-tone', {'music/07.wav': tone_wav(tmp / 'tone.wav')})
+        a_dir, _, _ = run('wav_base', frames=240, every=240, wav=True)
+        b_dir, _, log = run('wav_tone', tmp / 'mods_tone', frames=240, every=240, wav=True)
+        (ra, a), (rb, b) = samples(a_dir / 'a.wav'), samples(b_dir / 'a.wav')
+        sa, sb = share_440(a, ra), share_440(b, rb)
+        check(len(a) > ra * 3 and sb > 0.9 and sa < 0.2,
+              f'native player: frames 30-230: the 440 Hz tone carries {sb:.0%} of the energy with the mod, {sa:.0%} without', log)
+
+
+SANDBOX_LUA = r'''
+local open = {}
+for _, name in ipairs({"io", "os", "package", "debug", "require", "dofile", "loadfile"}) do
+    if _G[name] ~= nil then
+        open[#open + 1] = name
+    end
+end
+if string.dump ~= nil then
+    open[#open + 1] = "string.dump"
+end
+local binary = load("\27Lua")
+dt.log("sandbox", #open == 0 and "closed" or table.concat(open, ","), binary == nil and "binary-refused" or "binary-loaded",
+    load("return 6 * 7")())
+dt.on("new-game", function(name)
+    dt.log("event", name)
+end)
+dt.on("frame", function(frame)
+    if frame == 1000 or frame == 1400 then
+        dt.log("state", frame, dt.state.land, dt.state.lives, dt.state.time, dt.state.hp)
+    end
+end)
+'''
+
+LIMIT_LUA = {
+    'loop': 'dt.on("frame", function(f) if f == 100 then while true do end end end)',
+    'pcall-loop': 'dt.on("frame", function(f) if f == 110 then while true do pcall(function() while true do end end) end end end)',
+    'memory': ('dt.on("frame", function(f) if f == 120 then pcall(function() local t = {} for i = 1, 1000 do '
+               't[i] = string.rep("x", 1000000) .. i end end) end end)'),
+    'error': 'dt.on("frame", function(f) if f == 130 then error("boom") end end)',
+}
+
+CANCEL_LUA = r'''
+dt.on("timer-tick", function()
+    return dt.CANCEL
+end)
+dt.on("frame", function(frame)
+    if frame == 1000 or frame == 1400 then
+        dt.log("state", frame, dt.state.land, dt.state.lives, dt.state.time, dt.state.hp)
+    end
+end)
+'''
+
+
+def script_mod(folder, mod_id, text):
+    make_mod(folder, mod_id, {'scripts/main.lua': text.encode()})
+
+
+def states(log, mod_id):
+    found = {}
+    for line in log.splitlines():
+        parts = line.split()
+        if line.startswith(f'[ducktales] Mod {mod_id}: state') and len(parts) >= 9:
+            found[int(parts[4])] = [None if p == 'nil' else int(p) for p in parts[5:9]]
+    return found
+
+
+def script_checks(exe, route, native):
+    host = 'native player' if native else 'headless'
+    with tempfile.TemporaryDirectory() as t:
+        tmp = Path(t)
+
+        def run(name, mods, frames=1500):
+            cmd = [exe, ROM, '--frames', str(frames), '--input', route, '--mods', 'on', '--mods-dir', mods]
+            if native:
+                cmd += ['--lag', 'faithful', '--config', tmp / 'x.ini']
+            p = subprocess.run([str(c) for c in cmd], capture_output=True, text=True, timeout=3600)
+            if p.returncode:
+                print(p.stdout + p.stderr)
+                raise SystemExit(f'{host} scripts {name}: exit {p.returncode}')
+            return p.stdout + p.stderr
+
+        all_dir = tmp / 'mods_all'
+        all_dir.mkdir()
+        script_mod(all_dir, 'sandbox', SANDBOX_LUA)
+        for mod_id, text in LIMIT_LUA.items():
+            script_mod(all_dir, mod_id, text)
+        log = run('all', all_dir)
+        check('5 loaded' in log and '5 scripts' in log, f'{host}: five script mods load', log)
+        check('Mod sandbox: sandbox\tclosed\tbinary-refused\t42' in log,
+              f'{host}: io, os, package, debug, require, dofile, loadfile and string.dump are absent; '
+              'load refuses a binary chunk and runs text', log)
+        check('Mod sandbox: event\tnew-game' in log, f'{host}: dt.on("new-game") runs at the title\'s set-up', log)
+        reasons = {
+            'loop': 'ran more than 1000000 instructions in one callback',
+            'pcall-loop': 'ran more than 1000000 instructions in one callback',
+            'memory': 'used more than 16 MiB of memory',
+            'error': 'scripts/main.lua:1: boom',
+        }
+        for mod_id, why in reasons.items():
+            check(f'Mod {mod_id}: script stopped: {why}' in log, f'{host}: {mod_id}: stopped with "{why}"', log)
+        seen = states(log, 'sandbox')
+        check(sorted(seen) == [1000, 1400] and all(len(v) == 4 for v in seen.values()),
+              f'{host}: the other mod still runs after them (dt.state at frames 1000 and 1400: {seen})', log)
+        check(len(seen) == 2 and seen[1000][2] != seen[1400][2], f'{host}: the HUD time runs without a cancel', str(seen))
+
+        cancel_dir = tmp / 'mods_cancel'
+        cancel_dir.mkdir()
+        script_mod(cancel_dir, 'stop-the-clock', CANCEL_LUA)
+        log = run('cancel', cancel_dir)
+        held = states(log, 'stop-the-clock')
+        check(len(held) == 2 and held[1000][2] == held[1400][2] and seen and held[1000][2] != seen[1400][2],
+              f'{host}: returning dt.CANCEL from "timer-tick" holds the HUD time ({held})', log)
+
+        reload_dir = tmp / 'mods_reload'
+        script = reload_dir / 'reload' / 'scripts' / 'main.lua'
+        script.parent.mkdir(parents=True)
+        (reload_dir / 'reload' / 'mod.toml').write_text(mod_toml('reload', 'Reload'))
+        versions = ['dt.on("frame", function(f) if f % 30 == 0 then dt.log("version one") end end)',
+                    'dt.on("frame", function(f) if f % 30 == 0 then dt.log("version two!" end end)',
+                    'dt.on("frame", function(f) if f % 30 == 0 then dt.log("version three") end end) -- fixed']
+        script.write_text(versions[0])
+        cmd = [exe, ROM, '--frames', '2000000', '--input', route, '--mods', 'on', '--mods-dir', reload_dir]
+        if native:
+            cmd += ['--config', tmp / 'x.ini']
+        p = subprocess.Popen([str(c) for c in cmd], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        steps = [('Mod reload: version one', 1), ('Mod reload: script stopped: scripts/main.lua:1:', 2),
+                 ('Mod reload: version three', None)]
+        got = []
+        watchdog = threading.Timer(180, p.kill)
+        watchdog.start()
+        try:
+            for want, write in steps:
+                for line in p.stdout:
+                    if want in line:
+                        got.append(want)
+                        break
+                if write is not None:
+                    time.sleep(1.2)
+                    script.write_text(versions[write])
+        finally:
+            watchdog.cancel()
+            p.kill()
+            p.wait()
+        check(len(got) == 3, f'{host}: hot reload: a changed script starts again, a broken one is stopped with its '
+              f'syntax error and the fixed one runs ({len(got)} of 3 steps seen)')
+
+
+def headless_checks(exe, route):
 
     with tempfile.TemporaryDirectory() as t:
         tmp = Path(t)
@@ -227,12 +460,7 @@ def main():
         magenta = png_bytes(8, 8, [0xFFFF00FF] * 64, tmp)
         cyan = png_bytes(8, 8, [0xFF00FFFF] * 64, tmp)
         tone = tmp / 'tone.wav'
-        with wave.open(str(tone), 'wb') as wv:
-            wv.setnchannels(1)
-            wv.setsampwidth(2)
-            wv.setframerate(48000)
-            wv.writeframes(b''.join(struct.pack('<h', int(12000 * math.sin(2 * math.pi * 440 * i / 48000)))
-                                    for i in range(48000 * 2)))
+        tone_wav(tone)
 
         # 1. machine hashes with every kind of replacement loaded
         folder('all', ('all-kinds', {'palettes/global.pal': inverted, f'tiles/{key.name}': magenta,
@@ -311,29 +539,20 @@ def main():
         folder('tone', ('title-tone', {'music/07.wav': tone.read_bytes()}))
         a_dir, _, _ = run('wav_base', frames=240, every=240, wav=True, hashes=True)
         b_dir, _, log = run('wav_tone', mods['tone'], frames=240, every=240, wav=True, hashes=True)
-
-        def samples(p):
-            with wave.open(str(p)) as wv:
-                return struct.unpack(f'<{wv.getnframes()}h', wv.readframes(wv.getnframes()))
-        a, b = samples(a_dir / 'a.wav'), samples(b_dir / 'a.wav')
+        (_, a), (_, b) = samples(a_dir / 'a.wav'), samples(b_dir / 'a.wav')
         first = next((i for i, (x, y) in enumerate(zip(a, b)) if x != y), None)
         check(first is not None and 7 * 790 <= first <= 9 * 810,
               f'the sound is unchanged until the title requests music 07 (first difference at sample {first}, frame ~{(first or 0) / 798.7:.1f})')
-
-        def share_440(s):
-            s = s[48000 // 60 * 30:48000 // 60 * 230]
-            c = sum(x * math.cos(2 * math.pi * 440 * i / 48000) for i, x in enumerate(s))
-            d = sum(x * math.sin(2 * math.pi * 440 * i / 48000) for i, x in enumerate(s))
-            power = 2 * (c * c + d * d) / len(s)
-            total = sum(x * x for x in s) or 1
-            return power / total
-        sa, sb = share_440(a), share_440(b)
+        sa, sb = share_440(a, 48000), share_440(b, 48000)
         check(sb > 0.9 and sa < 0.2, f'frames 30-230: the 440 Hz tone carries {sb:.0%} of the energy with the mod, {sa:.0%} without')
         check((a_dir / 'hash.txt').read_bytes() == (b_dir / 'hash.txt').read_bytes(),
               'per-frame machine hashes are equal with the music replaced (frames 0-240)')
 
-    print(f'\n{"FAILED: " + ", ".join(failures) if failures else "all mods checks passed"}')
-    return 1 if failures else 0
+        # 7. a script that only reads
+        folder('reader', ('sandbox', {'scripts/main.lua': SANDBOX_LUA.encode()}))
+        reader_dir, _, log = run('reader', mods['reader'], hashes=True)
+        check('state\t1400' in log and (reader_dir / 'hash.txt').read_bytes() == (base_dir / 'hash.txt').read_bytes(),
+              'a script with "frame" and "new-game" handlers that reads dt.state leaves the machine hashes equal, frames 0-1500', log)
 
 
 if __name__ == '__main__':

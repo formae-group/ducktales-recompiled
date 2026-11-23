@@ -70,6 +70,7 @@ static size_t s_tile_cap, s_tile_count;
 static uint32_t *s_palettes[MAX_MODS * (LANDS + 1)];
 static int s_palette_count;
 static const uint32_t *s_palette_for[LANDS + 1];
+static const uint32_t *s_painted_palette;
 static char s_dump_dir[1024];
 static uint64_t *s_dumped;
 static size_t s_dumped_cap, s_dumped_count;
@@ -446,6 +447,7 @@ static void read_mod(AppMod *m)
         m->palettes += !_strnicmp(n, "palettes/", 9) && ends_with(n, ".pal");
         m->music += !_strnicmp(n, "music/", 6);
         m->sfx += !_strnicmp(n, "sfx/", 4);
+        m->script |= !_stricmp(n, "scripts/main.lua");
     }
     mod_archive_close(&a);
 }
@@ -546,18 +548,28 @@ void app_mods_move(int from, int to)
 
 void app_mods_rescan(void)
 {
-    bool loaded[MAX_MODS];
-    char ids[MAX_MODS][64];
+    static AppMod before[MAX_MODS];
     int n = s_count;
-    for (int i = 0; i < n; i++) {
-        loaded[i] = s_mods[i].loaded;
-        snprintf(ids[i], sizeof ids[i], "%s", s_mods[i].id);
-    }
+    memcpy(before, s_mods, (size_t)n * sizeof before[0]);
     order_from_catalogue();
     scan();
-    for (int i = 0; i < s_count; i++)
-        for (int k = 0; k < n; k++)
-            if (!strcmp(ids[k], s_mods[i].id)) s_mods[i].loaded = loaded[k];
+    for (int i = 0; i < s_count; i++) {
+        for (int k = 0; k < n; k++) {
+            if (!strcmp(before[k].id, s_mods[i].id)) {
+                s_mods[i].loaded = before[k].loaded;
+                memcpy(s_mods[i].script_error, before[k].script_error, sizeof s_mods[i].script_error);
+            }
+        }
+    }
+}
+
+void mods_script_status(const char *id, const char *why)
+{
+    for (int i = 0; i < s_count; i++) {
+        if (!strcmp(s_mods[i].id, id)) {
+            snprintf(s_mods[i].script_error, sizeof s_mods[i].script_error, "%s", why ? why : "");
+        }
+    }
 }
 
 bool app_mods_restart_needed(void)
@@ -848,11 +860,21 @@ void app_mods_start(const uint8_t *prg, size_t prg_size)
         }
     }
     loaded_set(s_loaded_set, sizeof s_loaded_set, &s_loaded_enabled);
-    printf("[ducktales] Mods: %s, %d found, %d loaded (%zu tiles, %d palettes, sounds %s)\n", s_enabled ? "on" : "off", s_count,
-           used, s_tile_count, s_palette_count, app_mods_audio_active() ? "replaced" : "none");
+    int scripts = 0;
+    for (int i = 0; i < s_count; i++) {
+        scripts += s_mods[i].loaded && s_mods[i].script;
+    }
+    printf("[ducktales] Mods: %s, %d found, %d loaded (%zu tiles, %d palettes, sounds %s, %d scripts)\n",
+           s_enabled ? "on" : "off", s_count, used, s_tile_count, s_palette_count,
+           app_mods_audio_active() ? "replaced" : "none", scripts);
     for (int i = 0; i < s_count; i++)
         if (s_mods[i].error[0]) printf("[ducktales] Mod %s: %s\n", s_mods[i].id, s_mods[i].error);
     fflush(stdout);
+    for (int i = 0; i < s_count; i++) {
+        if (s_mods[i].loaded && s_mods[i].script) {
+            mods_lua_add(s_mods[i].id, s_mods[i].path, s_mods[i].folder);
+        }
+    }
 }
 
 /* ---- the picture ---- */
@@ -907,6 +929,11 @@ static void dump_tile(const NvVideo *v, unsigned tile, unsigned group, uint64_t 
     mod_png_write(path, px, 8, 8);
 }
 
+uint32_t app_mods_color(uint16_t index, uint32_t argb)
+{
+    return s_painted_palette ? s_painted_palette[index & 0x1FF] : argb;
+}
+
 void app_mods_video_apply(const NvVideo *video, const NvRenderOptions *options, const uint8_t *ram, uint32_t *argb)
 {
     if (!app_mods_video_active() || !video || !argb) return;
@@ -923,6 +950,7 @@ void app_mods_video_apply(const NvVideo *video, const NvRenderOptions *options, 
         ram[DT_ADDR_LAST_MUSIC] != DT_MUSIC_TITLE)
         land = ram[DT_ADDR_LAND];
     const uint32_t *pal = s_palette_for[land] ? s_palette_for[land] : s_palette_for[LANDS];
+    s_painted_palette = pal;
     const uint32_t *base = nv_palette_argb();
     for (int p = 0; p < NV_WIDTH * NV_HEIGHT; p++) {
         uint16_t i = index[p] & 0x1FF;
