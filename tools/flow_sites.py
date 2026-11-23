@@ -22,6 +22,7 @@ ROM = Path(default_rom())
 TOML = ROOT / "config" / "game.toml"
 HEAD = "# Game flow (src/decomp/flow.c"
 TAIL = "# END game flow"
+NOTES = {"C976": "The row scroll the row change ($E8C0, src/decomp/player.c) hands off to."}
 
 
 def main():
@@ -56,16 +57,19 @@ def main():
         sym, site = m.groups()
         addr = syms[sym]
         bank = int(site.split(".")[1]) if "." in site else 7
+        out += [f"# {NOTES[site]}"] if site in NOTES else []
         out += ["[[mod_function_hook]]", f'id = "ducktales.decomp.stop.{site}"', f"addr = 0x{addr:04X}"]
         out += ["length = 8", f"crc32 = 0x{crc(bank, addr):08X}", ""]
         count += 1
     out.append(TAIL)
     text = TOML.read_bytes().decode().replace("\r\n", "\n")
+    block = "\n".join(out) + "\n"
     start = text.find("\n" + HEAD)
     if start >= 0:
         end = text.index(TAIL, start) + len(TAIL) + 1
-        text = text[:start] + text[end:]
-    text = text.rstrip("\n") + "\n" + "\n".join(out) + "\n"
+        text = text[:start] + block + text[end:]
+    else:
+        text = text.rstrip("\n") + "\n" + block
     TOML.write_bytes(text.replace("\n", "\r\n").encode())
     print(f"{count} sites")
 
