@@ -215,6 +215,7 @@ the CPU registers, and must be identical on every frame. The oracle's hashes are
 | Test | Checks |
 |---|---|
 | `tests/verify_routes.py` | Recompiled, interpreter and oracle equality on every route |
+| `tests/quick_verify.py` | The fast tier: affected routes at alignment 0 against golden hashes |
 | `tests/sprites_test.py` | Sprite presentation versus the machine picture |
 | `tests/enhancements_test.py` | Each enhancement's effect, and identity with the original when off |
 | `tests/decomp_test.py` | Decompiled routines against the original on every call, and the routes with them running in its place |

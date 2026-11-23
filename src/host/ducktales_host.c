@@ -216,6 +216,7 @@ static void state_loaded(void *ctx)
 {
     (void)ctx;
     dt_sprites_forget();
+    dt_ramhash_state_loaded();
     app_mods_reset();
     cyc_mod_set_apu_audio_mute(0);
 }

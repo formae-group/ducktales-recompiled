@@ -72,16 +72,33 @@ Run the checks that cover what you touched before submitting:
 
 | Change | Required checks |
 |---|---|
-| Game code, hooks, seeds, runtime integration | `py -3 -I tests/verify_routes.py --build build/headless` |
+| Game code, seeds, native runtime (every commit) | `py -3 -I tests/quick_verify.py --build build/headless` |
+| Hooks, host, runtime integration (every commit) | `py -3 -I tests/quick_verify.py --build build/headless --runtime cycle` |
+| Nightly, a release | `py -3 -I tests/verify_routes.py --build build/headless` |
 | Enhancements | `py -3 -I tests/enhancements_test.py --build build/headless --dev-build build/headless-dev` |
 | Sprite presentation | `py -3 -I tests/sprites_test.py --build build/headless --dev-build build/headless-dev` |
 | Menu, settings, ROM import, window | `py -3 -I tests/window_smoke.py --build build/windows` |
 | ROM identity and import | `build\headless\Release\app_rom_test.exe` |
 
-`verify_routes.py` must report native, interpreter and oracle equality on every frame of every route at
-all four alignments, with 100% of CPU cycles in recompiled code. `--routes` limits a run to a subset
-while iterating; run the full set once before submitting. The oracle's results are cached in
-`build/verify-cache/`, and `--no-cache` discards them.
+Checks come in two tiers ([docs/validation.md](docs/validation.md#fast-verification)):
+
+- **Every commit**, `tests/quick_verify.py` runs the routes at alignment 0 and compares every
+  frame with golden hashes recorded from a verified build, stopping at the first difference and
+  printing the fields that differ. `--changed 6:8B00-8BFF` or `--routes-for C10B` runs only the
+  routes that execute that code (16 KiB bank and address; `$C000-$FFFF` needs no bank), and
+  `--from-state auto --span 600` starts them from a save state just before it. The native runtime
+  (the default, about 11 s for all 12 routes with `--jobs 4`) runs the generated code on its own bus; it does not run
+  the host's hooks and enhancements, so check those with `--runtime cycle` (about 3.5 min).
+- **Nightly and before a release**, not per branch per change,
+  `verify_routes.py` must report native, interpreter and oracle equality on every frame of every
+  route at all four alignments, with 100% of CPU cycles in recompiled code (3 h 18 min with `--jobs 3` and no oracle cache). The oracle's
+  results are cached in `build/verify-cache/`, and `--no-cache` discards them.
+
+The golden files are recorded with `py -3 -I tests/quick_verify.py --record --build build/headless`
+right after a full `verify_routes.py` pass on that build, into `build/golden/<ROM SHA-256>/`. They are
+derived from the ROM: never commit them. They are keyed on the ROM, each route file and its frame
+count; quick_verify refuses a stale one and asks for a new recording. Record again after a NESRecomp
+update too: its bus trace and hardware hashes are part of the golden line.
 
 A new route that reaches code no route has executed adds interpreter misses. Append them to
 `config/ducktales.seeds` with `--miss-log`, rebuild and rerun the route; see the README.
