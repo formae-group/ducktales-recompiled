@@ -45,6 +45,7 @@ extern "C" {
 #define OBJ_KIND_LIFT           0x0F /* platform that rises and sinks (code) */
 #define OBJ_KIND_CHARGER        0x10 /* enemy: charges at Scrooge, bounces off walls and blocks (code) */
 #define OBJ_KIND_SWOOPER        0x11 /* enemy: drops to Scrooge's height and weaves (code) */
+#define OBJ_KIND_BLOCK_DWELLER  0x12 /* an enemy that lives in a block (code) */
 #define OBJ_KIND_PICKUP         0x13 /* an item Scrooge takes by touching it (code) */
 #define OBJ_KIND_HIDDEN_ITEM    0x14 /* an item that appears when touched (code) */
 #define OBJ_KIND_CHEST          0x15 /* a chest the cane opens (code) */

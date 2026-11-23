@@ -33,22 +33,23 @@
 
 #define OBJ_GRAVITY 0x40
 
-#define SFX_DIAMOND  0x15
-#define SFX_BREAK    0x16
-#define SFX_DEFEAT   0x35
-#define SFX_TREASURE 0x37
-#define SFX_THROW    0x1B
-#define SFX_SNAP     0x19
-#define SFX_SPIT     0x1A
-#define SFX_SWING    0x26
-#define SFX_CRAWLER  0x27
-#define SFX_WATCHER  0x2A
-#define SFX_FLYER    0x2B
-#define SFX_SWOOP    0x30
-#define SFX_CHARGE   0x31
-#define SFX_BOUNCE   0x1D
-#define SFX_LEAP     0x34
-#define SFX_HOP      0x24
+#define SFX_DIAMOND     0x15
+#define SFX_BREAK       0x16
+#define SFX_DEFEAT      0x35
+#define SFX_TREASURE    0x37
+#define SFX_THROW       0x1B
+#define SFX_SNAP        0x19
+#define SFX_SPIT        0x1A
+#define SFX_SWING       0x26
+#define SFX_CRAWLER     0x27
+#define SFX_WATCHER     0x2A
+#define SFX_FLYER       0x2B
+#define SFX_SWOOP       0x30
+#define SFX_CHARGE      0x31
+#define SFX_BOUNCE      0x1D
+#define SFX_LEAP        0x34
+#define SFX_HOP         0x24
+#define SFX_DWELLER_HIT 0x2C
 
 #define gObjCursor        RAM_U8(DT_ADDR_OBJ_CURSOR)
 #define gScratch0         RAM_U8(DT_ADDR_SCRATCH0)
@@ -1959,6 +1960,119 @@ static void Obj_CeilingHopper(uint8_t x)
     Obj_CeilingJump(x);
 }
 
+/* $9649: link the block the dweller sits in ($06D0): a live block in pose
+ * $1D or $1E at its world X, else a new block (kind 8, pose $1E) 8 px below
+ * it in the highest free slot, else slot 0. */
+static void Obj_DwellerLinkBlock(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_DWELLER_LINK_BLOCK, 0, x, 0);
+    for (uint8_t y = 0x0F; y != 0; y--) {
+        if (!(gObjects->state[y] & OBJ_STATUS_LIVE)) {
+            continue;
+        }
+        if (gObjects->action[y] != 0x1D && gObjects->action[y] != 0x1E) {
+            continue;
+        }
+        if (gObjects->worldPage[y] == gObjects->worldPage[x] && gObjects->worldX[y] == gObjects->worldX[x]) {
+            gObjects->unk_06D0[x] = y;
+            return;
+        }
+    }
+    uint8_t y = 0x0F;
+    while (y != 0 && (gObjects->state[y] & OBJ_STATUS_LIVE)) {
+        y--;
+    }
+    gObjects->unk_06D0[x] = y;
+    if (y == 0) {
+        return;
+    }
+    gObjects->worldX[y] = gObjects->worldX[x];
+    gObjects->worldPage[y] = gObjects->worldPage[x];
+    gObjects->y[y] = (uint8_t)(gObjects->y[x] + 8);
+    gObjects->hitbox[y] = 0x80;
+    gObjects->kind[y] = OBJ_KIND_BLOCK;
+    gObjects->state[y] = 0xA0;
+    ResetAnim(y);
+    gObjects->unk_0690[y] = 0;
+    gObjects->action[y] = 0x1E;
+}
+
+/* Kind $12 ($9552): an enemy that lives in a block. It steps out left or
+ * right (pose $2F, 32 frames) or waits (pose $30, 60 frames) by a cycle of
+ * four moves out of two ($06C0, chosen at random), the block's pose and
+ * facing following it. A hit, or its block launched, beats it: sound $2C,
+ * pose $31 for 60 frames, then pose $32. */
+static void Obj_BlockDweller(uint8_t x)
+{
+    static const uint8_t dirs[4] = { OBJ_DIR_RIGHT, OBJ_DIR_LEFT, OBJ_DIR_LEFT, OBJ_DIR_RIGHT };
+    static const uint8_t facing[4] = { OBJ_FLAG_FACING_RIGHT, 0, 0, OBJ_FLAG_FACING_RIGHT };
+    static const uint8_t cycles[2] = { 0, 4 };
+    static const uint8_t blockPoses[8] = { 0x1E, 0x1D, 0x1E, 0x1E, 0x1E, 0x1D, 0x1E, 0x1E };
+    static const uint8_t blockFacing[8] = { 0, OBJ_FLAG_FACING_RIGHT, 0, 0, 0, 0, 0, 0 };
+
+    Decomp_Enter(DT_CODE_KIND_BLOCK_DWELLER, 0x22, x, gObjects->kind[x]);
+    if (gObjects->action[x] == 0x31) {
+        if (gObjects->timer[x] == 0) {
+            gObjects->action[x] = 0x32;
+            Obj_Defeat(x);
+            return;
+        }
+        gObjects->timer[x]--;
+        return;
+    }
+    if (Step(x) == 0) {
+        Obj_DwellerLinkBlock(x);
+        gObjects->timer[x] = 0;
+        gObjects->unk_06C0[x] = 0;
+        Obj_SetSpeed(x, 0x0100);
+        gObjects->state[x]++;
+        return;
+    }
+    uint8_t block = gObjects->unk_06D0[x];
+    if (gObjects->unk_0690[x] != 0 || gObjects->kind[block] == OBJ_KIND_THROWN) {
+        Sound_Request(SFX_DWELLER_HIT, x);
+        gObjects->action[x] = 0x31;
+        gObjects->animTimer[x] = 0;
+        gObjects->hitbox[x] = 0;
+        gObjects->animFrame[x] = 0;
+        gObjects->timer[x] = 0x3C;
+        return;
+    }
+    if (gObjects->timer[x] == 0) {
+        uint8_t c = gObjects->unk_06C0[x];
+        gScratch0 = x;
+        if ((gObjects->state[block] & OBJ_STATUS_LIVE) &&
+            (gObjects->action[block] == 0x1D || gObjects->action[block] == 0x1E)) {
+            gObjects->action[block] = blockPoses[c];
+            gObjects->flags[block] = (uint8_t)((gObjects->flags[block] & (uint8_t)~OBJ_FLAG_FACING_RIGHT) |
+                                               blockFacing[c]);
+        }
+        if (c & 1) {
+            gObjects->timer[x] = 0x3C;
+            gObjects->dir[x] = 0;
+            gObjects->action[x] = 0x30;
+        } else {
+            gObjects->dir[x] = dirs[c >> 1];
+            gObjects->flags[x] = (uint8_t)((gObjects->flags[x] & (uint8_t)~OBJ_FLAG_FACING_RIGHT) | facing[c >> 1]);
+            gObjects->timer[x] = 0x20;
+            gObjects->action[x] = 0x2F;
+        }
+        ResetAnim(x);
+        if ((++gObjects->unk_06C0[x] & 3) == 0) {
+            gObjects->unk_06C0[x] = cycles[(gRandom(0) + gRandom(2) + (c & 1)) & 1];
+        }
+    }
+    gObjects->timer[x]--;
+    if (gObjects->dir[x] != 0) {
+        if (gObjects->dir[x] & OBJ_DIR_LEFT) {
+            Obj_MoveLeft(x);
+        } else {
+            Obj_MoveRight(x);
+        }
+    }
+    (void)Obj_TouchScrooge(x);
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -2027,6 +2141,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_SWOOPER:
             Obj_Swooper(slot);
+            break;
+        case OBJ_KIND_BLOCK_DWELLER:
+            Obj_BlockDweller(slot);
             break;
         case OBJ_KIND_PICKUP:
             Obj_Pickup(slot);
@@ -2216,6 +2333,16 @@ static void Run_CeilingWalk(Regs *r)
     Obj_CeilingWalk(r->x);
 }
 
+static void Run_BlockDweller(Regs *r)
+{
+    Obj_BlockDweller(r->x);
+}
+
+static void Run_DwellerLinkBlock(Regs *r)
+{
+    Obj_DwellerLinkBlock(r->x);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -2385,6 +2512,8 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_BLOCK_DWELLER, NULL, "Obj_BlockDweller", Run_BlockDweller, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_DWELLER_LINK_BLOCK, NULL, "Obj_DwellerLinkBlock", Run_DwellerLinkBlock, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_CEILING_HOPPER, NULL, "Obj_CeilingHopper", Run_CeilingHopper, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_CEILING_HOPPER_WALK, NULL, "Obj_CeilingWalk", Run_CeilingWalk, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_DROPPING, NULL, "Obj_Dropping", Run_Dropping, 0, .bank = DT_BANK_OBJECTS },

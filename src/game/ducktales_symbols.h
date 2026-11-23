@@ -489,6 +489,8 @@
 #define DT_CODE_KIND_FLYER           0x916C /* kind $0D */
 #define DT_CODE_KIND_SWING           0x9225 /* kind $0E */
 #define DT_CODE_KIND_SWOOPER         0x9430 /* kind $11 */
+#define DT_CODE_KIND_BLOCK_DWELLER   0x9552 /* kind $12 */
+#define DT_CODE_DWELLER_LINK_BLOCK   0x9649 /* kind $12: find or make its block */
 #define DT_CODE_KIND_CEILING_HOPPER  0xA065 /* kind $25 */
 #define DT_CODE_CEILING_HOPPER_WALK  0xA1D4 /* kind $25: walk in the slot's direction */
 #define DT_CODE_KIND_DROPPING        0xAAC8 /* kind $2B */
