@@ -1400,8 +1400,7 @@ const int gFlowRoutineCount = sizeof gFlowRoutines / sizeof gFlowRoutines[0];
  * ($C42C, $C71D, $C830, $EFE2 in level.c, $E354 in player.c, $8000 bank 6 in
  * objects.c) stop the isolated runs at their own sites. */
 const DecompStop gFlowStops[] = {
-    STOP(DT_CODE_TASK_YIELD, "FFAC"), STOP(DT_CODE_RESET, "FEE0"),  STOP(DT_CODE_FADE_IN, "C279"),
-    STOP(DT_CODE_FADE_OUT, "C282"),   STOP(DT_B6_SPAWN, "AEA0.6"),  STOP(DT_CODE_LAND_SELECT, "D630"),
-    STOP(DT_CODE_SCENE, "DF27"),      STOP(DT_CODE_ENDING, "E1AF"),
+    STOP(DT_CODE_TASK_YIELD, "FFAC"),  STOP(DT_CODE_RESET, "FEE0"), STOP(DT_B6_SPAWN, "AEA0.6"),
+    STOP(DT_CODE_LAND_SELECT, "D630"), STOP(DT_CODE_SCENE, "DF27"), STOP(DT_CODE_ENDING, "E1AF"),
 };
 const int gFlowStopCount = sizeof gFlowStops / sizeof gFlowStops[0];

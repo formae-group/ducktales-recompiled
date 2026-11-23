@@ -320,8 +320,9 @@ RAM-identical in replace mode.
 | `Ppu_FillNametable` | `$C203` | checked | 12 | - | not measured |
 | `Mem_FillPages` | `$C24F` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
 | `Oam_Clear` | `$C267` | checked | 12 | - | not measured |
-| `Palette_FadeIn` | `$C279` | claimed (decomp/system): task routine, a stop point of the flow until then | - | - | - |
-| `Palette_FadeOut` | `$C282` | claimed (decomp/system): task routine, a stop point of the flow until then | - | - | - |
+| `Palette_FadeIn` (task code) | `$C279` | checked | 12 | - | not measured |
+| `Palette_FadeOut` (task code) | `$C282` | checked | 12 | - | not measured |
+| `Palette_FadeWait` (resume point after `task_yield`) | `$C2B2` | checked | 12 | - | not measured |
 | `Random_Next` | `$C2E6` | checked | 12 | - | not measured |
 | `Chr_LoadList` | `$C301` | checked | 12 | - | not measured |
 | `Palette_LoadScene` | `$F76D` | written, not compared | 0 | - | every branch (no route calls it; needs a poke case) |

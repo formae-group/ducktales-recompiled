@@ -70,6 +70,9 @@
 #define DT_ADDR_PAD2_NEW        0x0015 /* controller 2, newly pressed (code, read_controllers) */
 #define DT_ADDR_RANDOM          0x00C0 /* 32-bit shift register stepped by $C2E6 (code) */
 #define DT_ADDR_PPU_MASK        0x00FE /* PPUMASK shadow (verified) */
+#define DT_ADDR_FADE_STEP       0x000D /* scratch of the fades: level change per step */
+#define DT_ADDR_FADE_FRAMES     0x000E /* scratch of the fades: frames per step */
+#define DT_ADDR_FADE_LEVEL      0x000F /* scratch of the fades: amount subtracted from every colour */
 #define DT_ADDR_CHR_LOAD_LIST   0x0002 /* scratch $02/$03 of $C301: the CHR list */
 #define DT_ADDR_CHR_LOAD_PAGES  0x0004 /* scratch of $C301: pages left, minus one */
 #define DT_ADDR_CHR_LOAD_SOURCE 0x0005 /* scratch $05/$06 of $C301: source page */
@@ -364,6 +367,7 @@
 #define DT_CODE_OAM_CLEAR      0xC267
 #define DT_CODE_FADE_IN        0xC279
 #define DT_CODE_FADE_OUT       0xC282
+#define DT_CODE_FADE_WAIT      0xC2B2 /* the fades after their task_yield: next frame or next step */
 #define DT_CODE_RANDOM         0xC2E6 /* steps the generator at $C0 (code) */
 #define DT_CODE_CHR_LOAD       0xC301
 #define DT_CODE_ROW_CHR_STREAM 0xC42C

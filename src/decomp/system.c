@@ -17,14 +17,18 @@
 
 #include "ducktales/game.h"
 
-#define gBank          RAM_U8(DT_ADDR_BANK)
-#define gPpuCtrl       RAM_U8(DT_ADDR_PPU_CTRL)
-#define gPpuMask       RAM_U8(DT_ADDR_PPU_MASK)
-#define gBlanked       RAM_U8(DT_ADDR_PPU_OFF)
-#define gSplitEnabled  RAM_U8(DT_ADDR_HUD_SPLIT)
-#define gPalette       (&gRam[DT_ADDR_PALETTE_SHOWN])
-#define gPaletteMaster (&gRam[DT_ADDR_PALETTE])
-#define gRandom        (&gRam[DT_ADDR_RANDOM])
+#define gBank           RAM_U8(DT_ADDR_BANK)
+#define gPpuCtrl        RAM_U8(DT_ADDR_PPU_CTRL)
+#define gPpuMask        RAM_U8(DT_ADDR_PPU_MASK)
+#define gBlanked        RAM_U8(DT_ADDR_PPU_OFF)
+#define gSplitEnabled   RAM_U8(DT_ADDR_HUD_SPLIT)
+#define gPalette        (&gRam[DT_ADDR_PALETTE_SHOWN])
+#define gPaletteMaster  (&gRam[DT_ADDR_PALETTE])
+#define gRandom         (&gRam[DT_ADDR_RANDOM])
+#define gPaletteRequest RAM_U8(DT_ADDR_PALETTE_REQUEST)
+#define gFadeStep       RAM_U8(DT_ADDR_FADE_STEP)
+#define gFadeFrames     RAM_U8(DT_ADDR_FADE_FRAMES)
+#define gFadeLevel      RAM_U8(DT_ADDR_FADE_LEVEL)
 
 #define MASK_SHOWN        0x1E
 #define OAM_PARKED_Y      0xF8
@@ -37,6 +41,13 @@
 #define STRINGS_TOTAL     0x0B
 #define TOTAL_DIGITS      8
 #define STRINGS_BANK      5
+#define PALETTE_BYTES     32
+#define PALETTE_BLACK     0x0F
+#define FADE_FRAMES       4
+#define FADE_IN_LEVEL     0x30
+#define FADE_IN_STEP      0xF0 /* -0x10 */
+#define FADE_OUT_STEP     0x10
+#define FADE_OUT_DONE     0x50
 
 static uint16_t rom_pointer(uint16_t lo_table, uint16_t hi_table, uint8_t index)
 {
@@ -150,6 +161,78 @@ static void Oam_Clear(void)
     for (unsigned entry = gSplitEnabled ? OAM_SPLIT_ENTRY : 0; entry < 0x100; entry += 4) {
         RAM_U8(DT_ADDR_OAM + entry) = OAM_PARKED_Y;
     }
+}
+
+/* ---- the fades: task code (docs/decompilation.md "Task code") ---- */
+
+/* $C28D: the shown palette is the loaded one darkened by the fade level
+ * (colours that would go below 0 are black); then the step's frames, the
+ * count kept on the stack across task_yield. X keeps the step. */
+static void Fade_Step(Regs *r)
+{
+    for (int i = 0; i < PALETTE_BYTES; i++) {
+        gPalette[i] = gPaletteMaster[i];
+    }
+    for (int i = PALETTE_BYTES - 1; i >= 0; i--) {
+        uint8_t colour = (uint8_t)(gPalette[i] - gFadeLevel);
+        gPalette[i] = colour & 0x80 ? PALETTE_BLACK : colour;
+    }
+    r->y = 0xFF;
+    gPaletteRequest = r->y;
+    r->a = gFadeFrames;
+    Decomp_Push(r->a);
+    Decomp_Handoff(DT_CODE_TASK_YIELD, DT_CODE_FADE_WAIT, OUT_X | OUT_Y);
+}
+
+static void Fade_Start(Regs *r, uint8_t level, uint8_t step)
+{
+    gFadeLevel = level;
+    gFadeStep = step;
+    gFadeFrames = FADE_FRAMES;
+    r->x = step;
+    Fade_Step(r);
+}
+
+/* $C279: from black to the loaded palette in four steps. */
+static void Palette_FadeIn(Regs *r)
+{
+    Decomp_Enter(DT_CODE_FADE_IN, r->a, r->x, r->y);
+    Oam_Clear();
+    Fade_Start(r, FADE_IN_LEVEL, FADE_IN_STEP);
+}
+
+/* $C282: from the loaded palette to black in four steps. */
+static void Palette_FadeOut(Regs *r)
+{
+    Decomp_Enter(DT_CODE_FADE_OUT, r->a, r->x, r->y);
+    Fade_Start(r, FADE_OUT_STEP, FADE_OUT_STEP);
+}
+
+/* $C2B2 (the frame count on the stack): wait out the step, then the next
+ * level; the fade ends when the level reaches $50 (out) or turns negative
+ * (in). A and the flags are those of the last CMP or LDA. */
+static void Palette_FadeWait(Regs *r)
+{
+    Decomp_Enter(DT_CODE_FADE_WAIT, r->a, r->x, r->y);
+    uint8_t frames = (uint8_t)(Decomp_Pull() - 1);
+    r->a = frames;
+    if (frames) {
+        Decomp_Push(frames);
+        Decomp_Handoff(DT_CODE_TASK_YIELD, DT_CODE_FADE_WAIT, OUT_X | OUT_Y);
+        return;
+    }
+    uint8_t p = (uint8_t)(r->p & ~P_C);
+    gFadeLevel = Alu_Adc(gFadeLevel, gFadeStep, &p);
+    r->a = gFadeLevel;
+    p = Flags_Cmp(p, r->a, FADE_OUT_DONE);
+    if (r->a != FADE_OUT_DONE) {
+        p = Flags_NZ(p, r->a);
+        if (!(r->a & 0x80)) {
+            Fade_Step(r);
+            return;
+        }
+    }
+    r->p = p;
 }
 
 /* $C2E6: one step of the 32-bit shift register $C0-$C3 (feedback from bit 1
@@ -348,6 +431,9 @@ static void Run_TextDrawStrings(Regs *r)
     Text_DrawStrings(r->x);
 }
 
+/* The fades return with A, X, Y and the flags as their RTS leaves them. */
+#define FADE_RETURNS (OUT_A | OUT_X | OUT_Y | OUT_P)
+
 const DecompRoutine gSystemRoutines[] = {
     { DT_CODE_BANK_SELECT, "ducktales.decomp.FFDE", "Bank_Select", Run_BankSelect, OUT_A | OUT_X | OUT_P | OUT_HW },
     { DT_CODE_BANK_SELECT_TEMP, "ducktales.decomp.FFE0", "Bank_SelectTemp", Run_BankSelectTemp,
@@ -358,6 +444,9 @@ const DecompRoutine gSystemRoutines[] = {
     { DT_CODE_NT_FILL, "ducktales.decomp.C203", "Ppu_FillNametable", Run_FillNametable, OUT_HW },
     { DT_CODE_OAM_CLEAR, "ducktales.decomp.C267", "Oam_Clear", Run_OamClear, 0 },
     { DT_CODE_RANDOM, "ducktales.decomp.C2E6", "Random_Next", Run_RandomNext, OUT_X | OUT_Y },
+    { DT_CODE_FADE_IN, "ducktales.decomp.C279", "Palette_FadeIn", Palette_FadeIn, FADE_RETURNS, true, 0, false },
+    { DT_CODE_FADE_OUT, "ducktales.decomp.C282", "Palette_FadeOut", Palette_FadeOut, FADE_RETURNS, true, 0, false },
+    { DT_CODE_FADE_WAIT, NULL, "Palette_FadeWait", Palette_FadeWait, FADE_RETURNS, true, 1, true },
     { DT_CODE_CHR_LOAD, "ducktales.decomp.C301", "Chr_LoadList", Run_ChrLoadList, OUT_HW },
     { DT_CODE_PALETTE_SCENE, "ducktales.decomp.F76D", "Palette_LoadScene", Run_PaletteLoadScene, 0 },
     { DT_CODE_DRAW_STRINGS, "ducktales.decomp.5.BAB0", "Text_DrawStrings", Run_TextDrawStrings, OUT_HW,
