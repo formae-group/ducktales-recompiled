@@ -5,6 +5,13 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ## [Unreleased]
 
+### Added
+
+- `tests/decomp_test.py --changed <ranges> --from-state --span N` checks only the routes that run
+  a decompiled routine, from the golden save state before it: 32 s instead of 689 s for a routine
+  the routes reach late.
+- `tools/test_slot.py` queues heavy test runs across worktrees, at most two at once.
+
 ## [1.0.0] - 2026-11-23
 
 The first release.

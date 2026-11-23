@@ -169,6 +169,13 @@ addr = 0xDD52
 length = 8
 crc32 = 0x6C7EAD65
 
+# LandLoad
+[[mod_function_hook]]
+id = "ducktales.decomp.D79B"
+addr = 0xD79B
+length = 8
+crc32 = 0xDACBE679
+
 [[mod_function_hook]]
 id = "ducktales.decomp.stop.FFAC"
 addr = 0xFFAC
@@ -218,10 +225,10 @@ length = 8
 crc32 = 0xDACBE679
 
 [[mod_function_hook]]
-id = "ducktales.decomp.stop.D79B"
-addr = 0xD79B
+id = "ducktales.decomp.stop.C71D"
+addr = 0xC71D
 length = 8
-crc32 = 0xDACBE679
+crc32 = 0xD475BCE7
 
 [[mod_function_hook]]
 id = "ducktales.decomp.stop.DF27"
