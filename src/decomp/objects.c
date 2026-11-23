@@ -68,9 +68,21 @@
 
 /* ---- shared pieces of the handlers ---- */
 
-static uint8_t Rom(uint16_t addr) { return Game_ReadRom(addr); }
-static bool OnScreen(uint8_t x) { return gObjects->flags[x] & OBJ_FLAG_ON_SCREEN; }
-static uint8_t Step(uint8_t x) { return gObjects->state[x] & OBJ_STATE_STEP; }
+static uint8_t Rom(uint16_t addr)
+{
+    return Game_ReadRom(addr);
+}
+
+static bool OnScreen(uint8_t x)
+{
+    return gObjects->flags[x] & OBJ_FLAG_ON_SCREEN;
+}
+
+static uint8_t Step(uint8_t x)
+{
+    return gObjects->state[x] & OBJ_STATE_STEP;
+}
+
 static void ResetAnim(uint8_t x)
 {
     gObjects->animTimer[x] = 0;
@@ -84,6 +96,7 @@ static void Obj_MoveDown(uint8_t x)
     gObjects->yFrac[x] = Alu_Adc(gObjects->yFrac[x], gObjects->vyFrac[x], &p);
     gObjects->y[x] = Alu_Adc(gObjects->y[x], gObjects->vy[x], &p);
 }
+
 static void Obj_MoveUp(uint8_t x)
 {
     uint8_t p = P_C;
@@ -98,6 +111,7 @@ static bool Obj_ApplyVelocityYCarry(uint8_t x)
     Obj_ApplyVelocityY(x);
     return carry;
 }
+
 /* $F234 / $F252 with the carry they leave: true when the move left the
  * world (page $FF to 0 moving right; for the left move the original's carry
  * is the opposite). */
@@ -107,6 +121,7 @@ static bool Obj_MoveRightOff(uint8_t x)
     Obj_MoveRight(x);
     return page == 0xFF && gObjects->worldPage[x] == 0;
 }
+
 static bool Obj_MoveLeftOff(uint8_t x)
 {
     uint8_t page = gObjects->worldPage[x];
@@ -117,7 +132,10 @@ static bool Obj_MoveLeftOff(uint8_t x)
 /* The original's tile edit at the slot ($F506), not decompiled yet. It
  * leaves the caller's Y in $13 when it spawns nothing, so Y is passed as the
  * original has it. */
-static uint8_t Obj_EditTile(uint8_t x, uint8_t a, uint8_t y) { return Decomp_Call(DT_CODE_OBJ_EDIT_TILE, a, x, y).x; }
+static uint8_t Obj_EditTile(uint8_t x, uint8_t a, uint8_t y)
+{
+    return Decomp_Call(DT_CODE_OBJ_EDIT_TILE, a, x, y).x;
+}
 
 /* Scrooge swinging the cane, on the frame it reaches out (frame 3), at the
  * slot: the test the breakable kinds make. The contact test only runs once
@@ -135,7 +153,9 @@ static bool Obj_CaneReaches(uint8_t x)
 static bool Obj_HitOthers(uint8_t x)
 {
     Decomp_Enter(DT_CODE_OBJ_HIT_OTHERS, 0, x, 0);
-    if (!OnScreen(x)) return false;
+    if (!OnScreen(x)) {
+        return false;
+    }
     gScratch(0) = x;
     gScratch(1) = gObjects->y[x];
     gScratch(2) = gObjects->worldX[x];
@@ -143,9 +163,15 @@ static bool Obj_HitOthers(uint8_t x)
     uint8_t box = gObjects->hitbox[x] & 0x7F;
     uint16_t wx = (uint16_t)(gScratch(3) << 8 | gScratch(2));
     for (uint8_t o = 0x0F; o != 0; o--) {
-        if (o == x || !OnScreen(o)) continue;
-        if (AbsDiff(gScratch(1), gObjects->y[o]) >= Rom((uint16_t)(DT_CODE_HIT_HEIGHT + box))) continue;
-        if (AbsDiff16(wx, Obj_GetWorldX(o)) > Rom((uint16_t)(DT_CODE_HIT_WIDTH + box))) continue;
+        if (o == x || !OnScreen(o)) {
+            continue;
+        }
+        if (AbsDiff(gScratch(1), gObjects->y[o]) >= Rom((uint16_t)(DT_CODE_HIT_HEIGHT + box))) {
+            continue;
+        }
+        if (AbsDiff16(wx, Obj_GetWorldX(o)) > Rom((uint16_t)(DT_CODE_HIT_WIDTH + box))) {
+            continue;
+        }
         uint8_t pose = OBJ_ACTION_BREAK;
         uint8_t kind = gObjects->kind[o];
         if (kind != OBJ_KIND_BLOCK && kind != OBJ_KIND_THROWN && kind != 0x25) {
@@ -172,6 +198,7 @@ static void Obj_Shatter(uint8_t x)
     gObjects->flags[x] = (uint8_t)((gObjects->flags[x] & 0xF0) | OBJ_FLAG_DELETE_AT_END);
     Sound_Request(SFX_BREAK, x);
 }
+
 static void Obj_Break(uint8_t x)
 {
     Decomp_Enter(DT_CODE_OBJ_BREAK, 0, x, 0);
@@ -203,9 +230,12 @@ static void Obj_OpenBlock(uint8_t x)
     Decomp_Enter(DT_CODE_OBJ_OPEN_BLOCK, 0, x, 0);
     Obj_MarkConsumed(x);
     uint8_t item = 0;
-    if (gObjects->action[x] == OBJ_ACTION_LAND_CHEST)
+    if (gObjects->action[x] == OBJ_ACTION_LAND_CHEST) {
         item = Rom((uint16_t)(DT_CODE_ITEM_BY_LAND + gLand * 3 + gObjects->timer[x]));
-    if (item == 0) item = Rom((uint16_t)(DT_CODE_ITEM_BY_INDEX + gObjects->timer[x]));
+    }
+    if (item == 0) {
+        item = Rom((uint16_t)(DT_CODE_ITEM_BY_INDEX + gObjects->timer[x]));
+    }
     gObjects->timer[x] = item;
     Obj_BecomePickupNow(x);
 }
@@ -234,8 +264,11 @@ static void Obj_ResolveBlock(uint8_t x)
 {
     Decomp_Enter(DT_CODE_OBJ_RESOLVE_BLOCK, 0, x, 0);
     uint8_t a = gObjects->action[x];
-    if (a == OBJ_ACTION_CHEST || a == OBJ_ACTION_LAND_CHEST) Obj_OpenBlock(x);
-    else if (a != OBJ_ACTION_STAY) Obj_Break(x);
+    if (a == OBJ_ACTION_CHEST || a == OBJ_ACTION_LAND_CHEST) {
+        Obj_OpenBlock(x);
+    } else if (a != OBJ_ACTION_STAY) {
+        Obj_Break(x);
+    }
 }
 
 /* $86F7: a block hit by a counted blow ($0690): uncover its tile first
@@ -244,7 +277,9 @@ static void Obj_HitBlock(uint8_t x, uint8_t y)
 {
     Decomp_Enter(DT_CODE_OBJ_HIT_BLOCK, 0, x, y);
     if (gObjects->state[x] & OBJ_STATUS_HIDDEN) {
-        if (gBlockOpened) return;
+        if (gBlockOpened) {
+            return;
+        }
         x = Obj_EditTile(x, gBlockOpened, y);
         gObjects->state[x] &= (uint8_t)~OBJ_STATUS_HIDDEN;
     }
@@ -267,7 +302,9 @@ static void Obj_Block(uint8_t x, uint8_t y)
             Obj_ResolveBlock(x);
             return;
         }
-        if (gBlockOpened) return;
+        if (gBlockOpened) {
+            return;
+        }
         gBlockOpened++;
         if (gObjects->state[x] & OBJ_STATUS_HIDDEN) {
             gObjects->state[x] &= (uint8_t)~OBJ_STATUS_HIDDEN;
@@ -276,7 +313,9 @@ static void Obj_Block(uint8_t x, uint8_t y)
         Obj_LaunchBlock(x);
         return;
     }
-    if (gObjects->unk_0690[x] == 0) return;
+    if (gObjects->unk_0690[x] == 0) {
+        return;
+    }
     Obj_HitBlock(x, y);
 }
 
@@ -288,11 +327,14 @@ static uint8_t Obj_ThrownFall(uint8_t x)
     gContactDepth = gProbeHits;
     return x;
 }
+
 /* $88C8: walk in the slot's direction with probes $29 or $2B. */
 static uint8_t Obj_ThrownWalk(uint8_t x)
 {
     Decomp_Enter(DT_CODE_THROWN_WALK, 0, x, 0);
-    if (gObjects->dir[x] & OBJ_DIR_RIGHT) return Obj_WalkRight(x, 0x29, 1);
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        return Obj_WalkRight(x, 0x29, 1);
+    }
     return Obj_WalkLeft(x, 0x2B, 1);
 }
 
@@ -308,66 +350,43 @@ static void Obj_Thrown(uint8_t x)
     gScratch(1) = Rom((uint16_t)(DT_CODE_THROWN_STEP_HI + step));
     uint16_t at = (uint16_t)(gScratch(1) << 8 | gScratch(0));
     switch (at) {
-    case 0x8735:
-        if (gObjects->vdir[x] == 0) {
-            x = Obj_Rise(x, 0x2F, 1);
-            if (gObjects->vy[x] & 0x80) {
-                Obj_SetVelocityY(x, 0);
-                gObjects->vdir[x]++;
-            }
-        } else {
-            x = Obj_ThrownFall(x);
-        }
-        x = Obj_ThrownWalk(x);
-        if ((gProbeHits | gContactDepth) & 1) Obj_Break(x);
-        else if (Obj_HitOthers(x)) Obj_Shatter(x);
-        return;
-    case 0x876D:
-        x = Obj_ThrownFall(x);
-        if (!(gProbeHits & 1)) {
-            gObjects->vdir[x] = 1;
-        } else {
-            if (gObjects->vdir[x] != 0) {
-                Obj_OpenBlock(x);
-                return;
+        case 0x8735:
+            if (gObjects->vdir[x] == 0) {
+                x = Obj_Rise(x, 0x2F, 1);
+                if (gObjects->vy[x] & 0x80) {
+                    Obj_SetVelocityY(x, 0);
+                    gObjects->vdir[x]++;
+                }
+            } else {
+                x = Obj_ThrownFall(x);
             }
             x = Obj_ThrownWalk(x);
-            if (gProbeHits & 1) {
-                Obj_OpenBlock(x);
-                return;
-            }
-        }
-        (void)Obj_HitOthers(x);
-        return;
-    case 0x8792:
-        x = Decomp_Call(DT_CODE_CLIMB_UP, 0x2F, x, 1).x;
-        if (gProbeHits & 1) {
-            Obj_Break(x);
-            return;
-        }
-        x = Obj_ThrownWalk(x);
-        if (gProbeHits & 1) {
-            Obj_Break(x);
-            return;
-        }
-        if (!Obj_HitOthers(x)) return;
-        {
-            uint8_t o = gContactDepth;
-            if (gObjects->kind[o] == OBJ_KIND_BLOCK && gObjects->action[o] == OBJ_ACTION_CHEST) {
-                Obj_LaunchBlock(o);
+            if ((gProbeHits | gContactDepth) & 1) {
                 Obj_Break(x);
-            } else {
+            } else if (Obj_HitOthers(x)) {
                 Obj_Shatter(x);
             }
-        }
-        return;
-    case 0x87D0:
-        gObjects->action[x] = 0x20;
-        x = Obj_ThrownFall(x);
-        if (!(gProbeHits & 1)) {
-            gObjects->vdir[x] = 1;
-        } else {
-            if (gObjects->vdir[x] != 0) {
+            return;
+        case 0x876D:
+            x = Obj_ThrownFall(x);
+            if (!(gProbeHits & 1)) {
+                gObjects->vdir[x] = 1;
+            } else {
+                if (gObjects->vdir[x] != 0) {
+                    Obj_OpenBlock(x);
+                    return;
+                }
+                x = Obj_ThrownWalk(x);
+                if (gProbeHits & 1) {
+                    Obj_OpenBlock(x);
+                    return;
+                }
+            }
+            (void)Obj_HitOthers(x);
+            return;
+        case 0x8792:
+            x = Decomp_Call(DT_CODE_CLIMB_UP, 0x2F, x, 1).x;
+            if (gProbeHits & 1) {
                 Obj_Break(x);
                 return;
             }
@@ -376,26 +395,61 @@ static void Obj_Thrown(uint8_t x)
                 Obj_Break(x);
                 return;
             }
-        }
-        if (Obj_HitOthers(x)) Obj_Shatter(x);
-        return;
-    case 0x87FF:
-        x = Obj_ThrownFall(x);
-        if (!(gProbeHits & 1)) gObjects->vdir[x] = 1;
-        else if (gObjects->vdir[x] == 0) x = Obj_ThrownWalk(x);
-        if (gObjects->vdir[x] == 0 && Obj_HitOthers(x)) {
-            gObjects->action[x] = OBJ_ACTION_STAY;
-            uint8_t o = gContactDepth;
-            if (gObjects->kind[o] == OBJ_KIND_BLOCK) {
-                Obj_HitBlock(o, o);
+            if (!Obj_HitOthers(x)) {
                 return;
             }
-        }
-        if (gProbeHits & 1) gObjects->kind[x] = OBJ_KIND_BLOCK;
-        return;
-    default:
-        Decomp_Call(at, gScratch(1), x, step);
-        return;
+            {
+                uint8_t o = gContactDepth;
+                if (gObjects->kind[o] == OBJ_KIND_BLOCK && gObjects->action[o] == OBJ_ACTION_CHEST) {
+                    Obj_LaunchBlock(o);
+                    Obj_Break(x);
+                } else {
+                    Obj_Shatter(x);
+                }
+            }
+            return;
+        case 0x87D0:
+            gObjects->action[x] = 0x20;
+            x = Obj_ThrownFall(x);
+            if (!(gProbeHits & 1)) {
+                gObjects->vdir[x] = 1;
+            } else {
+                if (gObjects->vdir[x] != 0) {
+                    Obj_Break(x);
+                    return;
+                }
+                x = Obj_ThrownWalk(x);
+                if (gProbeHits & 1) {
+                    Obj_Break(x);
+                    return;
+                }
+            }
+            if (Obj_HitOthers(x)) {
+                Obj_Shatter(x);
+            }
+            return;
+        case 0x87FF:
+            x = Obj_ThrownFall(x);
+            if (!(gProbeHits & 1)) {
+                gObjects->vdir[x] = 1;
+            } else if (gObjects->vdir[x] == 0) {
+                x = Obj_ThrownWalk(x);
+            }
+            if (gObjects->vdir[x] == 0 && Obj_HitOthers(x)) {
+                gObjects->action[x] = OBJ_ACTION_STAY;
+                uint8_t o = gContactDepth;
+                if (gObjects->kind[o] == OBJ_KIND_BLOCK) {
+                    Obj_HitBlock(o, o);
+                    return;
+                }
+            }
+            if (gProbeHits & 1) {
+                gObjects->kind[x] = OBJ_KIND_BLOCK;
+            }
+            return;
+        default:
+            Decomp_Call(at, gScratch(1), x, step);
+            return;
     }
 }
 
@@ -403,7 +457,9 @@ static void Obj_Thrown(uint8_t x)
 static void Money_Max(void)
 {
     Decomp_Enter(DT_CODE_MONEY_MAX, 0, 0, 0);
-    for (int i = 3; i >= 0; i--) gMoneyDigit(i) = 9;
+    for (int i = 3; i >= 0; i--) {
+        gMoneyDigit(i) = 9;
+    }
 }
 
 /* $8BBF: add amount to money digit y (0 = most significant) with decimal
@@ -415,9 +471,15 @@ static void Money_Add(uint8_t amount, uint8_t y)
     for (;;) {
         a = (uint8_t)(a + gMoneyDigit(y) + c);
         gMoneyDigit(y) = a;
-        if (a == DT_MONEY_TILE_BLANK) break;
-        if (a > DT_MONEY_TILE_BLANK) gMoneyDigit(y) = a = (uint8_t)(a - DT_MONEY_TILE_BLANK);
-        if (a < 10) break;
+        if (a == DT_MONEY_TILE_BLANK) {
+            break;
+        }
+        if (a > DT_MONEY_TILE_BLANK) {
+            gMoneyDigit(y) = a = (uint8_t)(a - DT_MONEY_TILE_BLANK);
+        }
+        if (a < 10) {
+            break;
+        }
         gMoneyDigit(y) = (uint8_t)(a - 10);
         a = 0;
         c = 1;
@@ -434,7 +496,9 @@ static void Hud_RefillHp(void)
 {
     Decomp_Enter(DT_CODE_HUD_REFILL_HP, 0, 0, 0);
     gPlayerEasyHits = 0;
-    for (int y = 0x10; y >= 0; y -= 4) HUD_RECORD(y / 4)[2] = 0;
+    for (int y = 0x10; y >= 0; y -= 4) {
+        HUD_RECORD(y / 4)[2] = 0;
+    }
 }
 
 /* $8B82: the first lost HP dot becomes full. */
@@ -456,11 +520,15 @@ static void Hud_RestoreDot(void)
 static void Pickup_ExtraDot(void)
 {
     Decomp_Enter(DT_CODE_PICKUP_EXTRA_DOT, 0, 0, 0);
-    if (gLand == 1) gExtraDotTaken = 1;
+    if (gLand == 1) {
+        gExtraDotTaken = 1;
+    }
     uint8_t y = 0x0C;
     if (!(HUD_RECORD(3)[0] & 0x80)) {
         y = 0x10;
-        if (!(HUD_RECORD(4)[0] & 0x80)) return;
+        if (!(HUD_RECORD(4)[0] & 0x80)) {
+            return;
+        }
     }
     HUD_RECORD(y / 4)[0] = 0x20;
     HUD_RECORD(y / 4 + 1)[0] = DT_HUD_RECORD_END_Y;
@@ -511,25 +579,37 @@ static void Pickup_Take(uint8_t x)
     gScratch(1) = Rom((uint16_t)(DT_CODE_ITEM_TAKE_HI + i));
     uint16_t at = (uint16_t)(gScratch(1) << 8 | gScratch(0));
     switch (at) {
-    case 0x8B71: Money_Add(2, 3); break;
-    case 0x8B82: Hud_RestoreDot(); break;
-    case 0x8B9C: Hud_RefillHp(); break;
-    case 0x8B9F:
-        gPlayerInvulnerable = 0;
-        gPlayerPower = 1;
-        RAM_U8(DT_ADDR_POWER_FRAMES) = 0xE0;
-        RAM_U8(DT_ADDR_POWER_FRAMES + 1) = 0x01;
-        break;
-    case 0x8BB0:
-        if (gLives != 9) gLives++;
-        break;
-    case 0x8BBB: Money_Add(1, 2); break;
-    case 0x8BE7:
-        gKeyItems |= gLand == 4 ? 4 : 2;
-        gSceneStep = gLand == 4 ? 0x10 : 0x0E;
-        gPlayerMode = PLAYER_MODE_MESSAGE;
-        break;
-    default: Decomp_Call(at, gScratch(1), x, i); break;
+        case 0x8B71:
+            Money_Add(2, 3);
+            break;
+        case 0x8B82:
+            Hud_RestoreDot();
+            break;
+        case 0x8B9C:
+            Hud_RefillHp();
+            break;
+        case 0x8B9F:
+            gPlayerInvulnerable = 0;
+            gPlayerPower = 1;
+            RAM_U8(DT_ADDR_POWER_FRAMES) = 0xE0;
+            RAM_U8(DT_ADDR_POWER_FRAMES + 1) = 0x01;
+            break;
+        case 0x8BB0:
+            if (gLives != 9) {
+                gLives++;
+            }
+            break;
+        case 0x8BBB:
+            Money_Add(1, 2);
+            break;
+        case 0x8BE7:
+            gKeyItems |= gLand == 4 ? 4 : 2;
+            gSceneStep = gLand == 4 ? 0x10 : 0x0E;
+            gPlayerMode = PLAYER_MODE_MESSAGE;
+            break;
+        default:
+            Decomp_Call(at, gScratch(1), x, i);
+            break;
     }
 }
 
@@ -551,7 +631,9 @@ static void Obj_Pickup(uint8_t x)
         return;
     }
     if (gObjects->action[x] == OBJ_ACTION_BREAK) {
-        if (gObjects->animFrame[x] == 0 || gObjects->animTimer[x] != 5) return;
+        if (gObjects->animFrame[x] == 0 || gObjects->animTimer[x] != 5) {
+            return;
+        }
         gObjects->action[x] = gObjects->timer[x];
         Obj_DifficultAction(x);
         ResetAnim(x);
@@ -559,7 +641,9 @@ static void Obj_Pickup(uint8_t x)
     if (Step(x) == 0) {
         Obj_ApplyVelocityY(x);
         Obj_ApplyGravity(x);
-        if (!(gObjects->vy[x] & 0x80)) return;
+        if (!(gObjects->vy[x] & 0x80)) {
+            return;
+        }
         gObjects->state[x]++;
         Obj_SetVelocityY(x, 0);
     }
@@ -576,16 +660,22 @@ static void Obj_Pickup(uint8_t x)
                 gObjects->state[x] = 0;
                 return;
             }
-            if (gObjects->timer[x] == 0x78) gObjects->flags[x] |= OBJ_FLAG_BLINK;
+            if (gObjects->timer[x] == 0x78) {
+                gObjects->flags[x] |= OBJ_FLAG_BLINK;
+            }
             gObjects->timer[x]--;
         }
     }
-    if (gPlayerMode == PLAYER_MODE_KNOCKBACK) return;
+    if (gPlayerMode == PLAYER_MODE_KNOCKBACK) {
+        return;
+    }
     if (gPlayerMode == PLAYER_MODE_DEATH) {
         gObjects->state[x] = 0;
         return;
     }
-    if (Obj_TouchScrooge(x)) Pickup_Take(x);
+    if (Obj_TouchScrooge(x)) {
+        Pickup_Take(x);
+    }
 }
 
 /* $8CE1: the slot becomes a block (kind 8). In a boss fight it gets
@@ -599,9 +689,13 @@ static void Obj_BecomeBlock(uint8_t x)
     gObjects->timer[x] = 0;
     gObjects->unk_06C0[x] = 0;
     gObjects->vdir[x] = 0;
-    if (!(gBossFight & 0x80)) return;
+    if (!(gBossFight & 0x80)) {
+        return;
+    }
     gObjects->timer[x] = (uint8_t)(gLand + 6);
-    if (gObjects->timer[x] != 0x0A) return;
+    if (gObjects->timer[x] != 0x0A) {
+        return;
+    }
     RAM_U8(DT_ADDR_PALETTE + 0x1D) = RAM_U8(DT_ADDR_MASTER_PALETTE + 0x1D) = 0x0F;
     RAM_U8(DT_ADDR_PALETTE + 0x1F) = RAM_U8(DT_ADDR_MASTER_PALETTE + 0x1F) = 0x29;
     gPaletteUpload = 0x29;
@@ -639,13 +733,17 @@ static void Obj_HiddenItem(uint8_t x)
         return;
     }
     if (Step(x) == 0) {
-        if (gPlayerInvulnerable || !Obj_TouchScrooge(x)) return;
+        if (gPlayerInvulnerable || !Obj_TouchScrooge(x)) {
+            return;
+        }
         Obj_MarkConsumed(x);
         gObjects->state[x]++;
         gObjects->unk_06C0[x] = 0x1E;
     }
     if (!(gObjects->state[x] & 2)) {
-        if (--gObjects->unk_06C0[x] != 0) return;
+        if (--gObjects->unk_06C0[x] != 0) {
+            return;
+        }
         gObjects->state[x] &= (uint8_t)~OBJ_STATUS_HIDDEN;
         Obj_SetVelocityY(x, 0);
         gObjects->timer[x] = gObjects->action[x];
@@ -654,7 +752,9 @@ static void Obj_HiddenItem(uint8_t x)
         return;
     }
     if (gObjects->action[x] == OBJ_ACTION_BREAK) {
-        if (gObjects->animFrame[x] == 0 || gObjects->animTimer[x] != 5) return;
+        if (gObjects->animFrame[x] == 0 || gObjects->animTimer[x] != 5) {
+            return;
+        }
         Obj_ShowItem(x, gObjects->timer[x]);
         return;
     }
@@ -698,12 +798,18 @@ static void Obj_Chest(uint8_t x)
         gObjects->kind[x]++;
         return;
     }
-    if (gLand != 1 || gObjects->timer[x] < 2) return;
+    if (gLand != 1 || gObjects->timer[x] < 2) {
+        return;
+    }
     gObjects->state[x] &= 0xE0;
-    if (gObjects->action[P_] == PLAYER_ACTION_CANE) return;
+    if (gObjects->action[P_] == PLAYER_ACTION_CANE) {
+        return;
+    }
     gObjects->action[x] = 0x5B;
     gObjects->hitbox[x] = 0x82;
-    if (AbsDiff(gObjects->y[x], gObjects->y[P_]) >= 0x18) gObjects->hitbox[x]++;
+    if (AbsDiff(gObjects->y[x], gObjects->y[P_]) >= 0x18) {
+        gObjects->hitbox[x]++;
+    }
 }
 
 /* $89DA: a defeated enemy may drop an item: one time in four by the random
@@ -714,12 +820,18 @@ static void Obj_Drop(uint8_t x, bool carry)
 {
     gScratch(0) = x;
     gRandom(1) = (uint8_t)(gRandom(0) + gRandom(1) + carry);
-    if (gRandom(1) & 3) return;
+    if (gRandom(1) & 3) {
+        return;
+    }
     uint8_t item = Rom((uint16_t)(DT_CODE_DROP_BY_KIND + gObjects->kind[x]));
-    if (item == 0) return;
+    if (item == 0) {
+        return;
+    }
     gScratch(1) = item;
     uint8_t o;
-    if (!Obj_FindFreeSlot(&o)) return;
+    if (!Obj_FindFreeSlot(&o)) {
+        return;
+    }
     Obj_ShowItem(o, gScratch(1));
     uint8_t from = gScratch(0);
     gObjects->y[o] = gObjects->y[from];
@@ -753,7 +865,9 @@ static void Obj_Defeated(uint8_t x)
             return;
         }
     }
-    if ((gObjects->dir[x] & OBJ_DIR_RIGHT) ? Obj_MoveRightOff(x) : Obj_MoveLeftOff(x)) gObjects->state[x] = 0;
+    if ((gObjects->dir[x] & OBJ_DIR_RIGHT) ? Obj_MoveRightOff(x) : Obj_MoveLeftOff(x)) {
+        gObjects->state[x] = 0;
+    }
 }
 
 /* $8932: an enemy is beaten: sound $35, maybe a drop, then it flies off
@@ -785,13 +899,19 @@ static void Obj_Lift(uint8_t x)
     Obj_SetVelocityY(x, 0x0180);
     if (Step(x) == 0) {
         Obj_MoveUp(x);
-        if (gObjects->y[x] >= 0x68) return;
+        if (gObjects->y[x] >= 0x68) {
+            return;
+        }
         gObjects->state[x]++;
     } else {
         Obj_MoveDown(x);
     }
-    if (Obj_DistanceX(x) < 0x1D && Obj_DistanceY(x) < 0x18) gObjects->y[P_] += 2;
-    if (gObjects->y[x] >= 0xA8) gObjects->state[x]--;
+    if (Obj_DistanceX(x) < 0x1D && Obj_DistanceY(x) < 0x18) {
+        gObjects->y[P_] += 2;
+    }
+    if (gObjects->y[x] >= 0xA8) {
+        gObjects->state[x]--;
+    }
 }
 
 /* Kind $2F ($9065): a door. Touched, it requests warp $06B0 ($7E). Door 0
@@ -800,10 +920,14 @@ static void Obj_Lift(uint8_t x)
 static void Obj_Door(uint8_t x)
 {
     Decomp_Enter(DT_CODE_KIND_DOOR, 0x22, x, gObjects->kind[x]);
-    if (!Obj_TouchScrooge(x)) return;
+    if (!Obj_TouchScrooge(x)) {
+        return;
+    }
     uint8_t warp = gObjects->timer[x];
     if (warp == 0) {
-        if (!(gMessagesShown(0) & 8)) return;
+        if (!(gMessagesShown(0) & 8)) {
+            return;
+        }
     } else if (warp == 4) {
         if ((gTreasures & 0x1F) != 0x1F) {
             gLandRedirect = 0x80;
@@ -820,9 +944,15 @@ static void Obj_Door(uint8_t x)
 static void Obj_Talker(uint8_t x)
 {
     Decomp_Enter(DT_CODE_KIND_TALKER, 0x22, x, gObjects->kind[x]);
-    if (gPlayerMode == PLAYER_MODE_DEATH || gPlayerMode == PLAYER_MODE_KNOCKBACK) return;
-    if (Step(x) != 0 || !Obj_TouchScrooge(x)) return;
-    if (gObjects->action[x] == 0x33 && (gLaunchpadRides & Rom((uint16_t)(DT_CODE_LAND_BIT + gLand)))) return;
+    if (gPlayerMode == PLAYER_MODE_DEATH || gPlayerMode == PLAYER_MODE_KNOCKBACK) {
+        return;
+    }
+    if (Step(x) != 0 || !Obj_TouchScrooge(x)) {
+        return;
+    }
+    if (gObjects->action[x] == 0x33 && (gLaunchpadRides & Rom((uint16_t)(DT_CODE_LAND_BIT + gLand)))) {
+        return;
+    }
     gPlayerMode = PLAYER_MODE_MESSAGE;
     gObjects->state[x]++;
     gSceneStep = gObjects->timer[x];
@@ -855,8 +985,12 @@ static void Obj_SetMotionIndex(uint8_t x, uint8_t index)
 static bool Enemy_Beaten(uint8_t x, uint8_t hit_pose)
 {
     if (OnScreen(x)) {
-        if (gObjects->unk_0690[x] == 0) return false;
-        if (hit_pose) gObjects->action[x] = hit_pose;
+        if (gObjects->unk_0690[x] == 0) {
+            return false;
+        }
+        if (hit_pose) {
+            gObjects->action[x] = hit_pose;
+        }
     }
     gHeldSlot = 0x3C;
     Obj_Defeat(x);
@@ -867,7 +1001,9 @@ static bool Enemy_Beaten(uint8_t x, uint8_t hit_pose)
 static uint8_t Enemy_Walk(uint8_t x)
 {
     Decomp_Enter(DT_CODE_ENEMY_WALK, 0, x, 0);
-    if (gObjects->dir[x] & OBJ_DIR_RIGHT) return Obj_WalkRight(x, 0x18, 2);
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        return Obj_WalkRight(x, 0x18, 2);
+    }
     return Obj_WalkLeft(x, 0x1B, 2);
 }
 
@@ -876,7 +1012,9 @@ static uint8_t Enemy_Walk(uint8_t x)
 static void Obj_Hopper(uint8_t x)
 {
     Decomp_Enter(DT_CODE_KIND_HOPPER, 0x22, x, gObjects->kind[x]);
-    if (Enemy_Beaten(x, 0x0C)) return;
+    if (Enemy_Beaten(x, 0x0C)) {
+        return;
+    }
     if (Step(x) == 0) {
         Obj_SetVelocityY(x, 0);
         gObjects->speedFrac[x] = 0;
@@ -894,10 +1032,16 @@ static void Obj_Hopper(uint8_t x)
             Obj_SetVelocityY(x, 0);
         }
     }
-    if (!fall || (x = Obj_Fall(x, 0x1E, 2), !(gProbeHits & 1))) ResetAnim(x);
+    if (!fall || (x = Obj_Fall(x, 0x1E, 2), !(gProbeHits & 1))) {
+        ResetAnim(x);
+    }
     x = Enemy_Walk(x);
-    if (gObjects->state[x] & 2) return;
-    if (!(gProbeHits & 1) || Obj_GetVelocityY(x) != 0) return;
+    if (gObjects->state[x] & 2) {
+        return;
+    }
+    if (!(gProbeHits & 1) || Obj_GetVelocityY(x) != 0) {
+        return;
+    }
     gObjects->state[x]++;
     Obj_SetVelocityY(x, 0x0400);
 }
@@ -919,9 +1063,13 @@ static void Obj_Walker(uint8_t x)
         Obj_FaceScrooge(x);
     }
     x = Obj_Fall(x, 0x1E, 2);
-    if (!(gProbeHits & 1)) ResetAnim(x);
+    if (!(gProbeHits & 1)) {
+        ResetAnim(x);
+    }
     x = Enemy_Walk(x);
-    if (gProbeHits & 1) gObjects->dir[x] ^= 3;
+    if (gProbeHits & 1) {
+        gObjects->dir[x] ^= 3;
+    }
 }
 
 /* $80B3: the highest free slot 15..1 (the bank 6 copy, which answers in Y). */
@@ -944,7 +1092,9 @@ static bool Obj_FindFreeSlotY(uint8_t *slot)
 static void Obj_Thrower(uint8_t x)
 {
     Decomp_Enter(DT_CODE_KIND_THROWER, 0x22, x, gObjects->kind[x]);
-    if (Enemy_Beaten(x, 0)) return;
+    if (Enemy_Beaten(x, 0)) {
+        return;
+    }
     if (Step(x) == 0) {
         Obj_SetVelocityY(x, 0);
         gObjects->timer[x] = 0;
@@ -972,7 +1122,9 @@ static void Obj_Thrower(uint8_t x)
             Sound_Request(SFX_THROW, x);
             gObjects->unk_06C0[x]++;
         }
-        if (--gObjects->timer[x] != 0) return;
+        if (--gObjects->timer[x] != 0) {
+            return;
+        }
         ResetAnim(x);
         gObjects->action[x] = 0x14;
         gObjects->state[x] &= 0xF1;
@@ -995,14 +1147,20 @@ static void Obj_Thrower(uint8_t x)
         gObjects->action[x] = 0x14;
     }
     x = (gObjects->dir[x] & OBJ_DIR_RIGHT) ? Obj_WalkRight(x, 0x00, 2) : Obj_WalkLeft(x, 0x03, 2);
-    if (gObjects->state[x] & 2) return;
-    if (Obj_GetVelocityY(x) != 0) return;
+    if (gObjects->state[x] & 2) {
+        return;
+    }
+    if (Obj_GetVelocityY(x) != 0) {
+        return;
+    }
     if (gProbeHits & 1) {
         gObjects->state[x]++;
         Obj_SetVelocityY(x, 0x0400);
         return;
     }
-    if (gObjects->unk_06C0[x] != 0 || Obj_DistanceX(x) >= 0x51) return;
+    if (gObjects->unk_06C0[x] != 0 || Obj_DistanceX(x) >= 0x51) {
+        return;
+    }
     gObjects->animTimer[x] = 0;
     gObjects->animFrame[x] = 0x80;
     gObjects->pose[x] = 1;
@@ -1016,10 +1174,15 @@ static void Obj_Thrower(uint8_t x)
 static void Obj_Shot(uint8_t x)
 {
     Decomp_Enter(DT_CODE_KIND_SHOT, 0x22, x, gObjects->kind[x]);
-    if (gObjects->flags[x] & OBJ_FLAG_FACING_RIGHT) x = Obj_WalkRight(x, 0x24, 0);
-    else x = Obj_WalkLeft(x, 0x25, 0);
+    if (gObjects->flags[x] & OBJ_FLAG_FACING_RIGHT) {
+        x = Obj_WalkRight(x, 0x24, 0);
+    } else {
+        x = Obj_WalkLeft(x, 0x25, 0);
+    }
     (void)Obj_TouchScrooge(x);
-    if (!(gProbeHits & 1)) return;
+    if (!(gProbeHits & 1)) {
+        return;
+    }
     gObjects->flags[x] = 0;
     gObjects->state[x] = 0;
     gObjects->record[x] = 0xFF;
@@ -1039,11 +1202,16 @@ static void Obj_Watcher(uint8_t x)
     if (gObjects->animFrame[x] == 0x0C) {
         gRandom(2) = (uint8_t)(gRandom(0) + gRandom(1) + 1);
         gObjects->action[x] = (uint8_t)((gRandom(2) & 1) + 0x0D);
-        if (gObjects->action[x] == 0x0E) Sound_Request(SFX_WATCHER, x);
+        if (gObjects->action[x] == 0x0E) {
+            Sound_Request(SFX_WATCHER, x);
+        }
         ResetAnim(x);
     }
-    if (Obj_GetWorldX(x) < Obj_GetWorldX(P_)) gObjects->flags[x] |= OBJ_FLAG_FACING_RIGHT;
-    else gObjects->flags[x] &= (uint8_t)~OBJ_FLAG_FACING_RIGHT;
+    if (Obj_GetWorldX(x) < Obj_GetWorldX(P_)) {
+        gObjects->flags[x] |= OBJ_FLAG_FACING_RIGHT;
+    } else {
+        gObjects->flags[x] &= (uint8_t)~OBJ_FLAG_FACING_RIGHT;
+    }
 }
 
 /* Kind 7 ($8567): a plant that snaps at Scrooge within $0B px. Caught
@@ -1053,7 +1221,9 @@ static void Obj_Watcher(uint8_t x)
 static void Obj_Snapper(uint8_t x)
 {
     Decomp_Enter(DT_CODE_KIND_SNAPPER, 0x22, x, gObjects->kind[x]);
-    if (gPlayerMode == PLAYER_MODE_DEATH) return;
+    if (gPlayerMode == PLAYER_MODE_DEATH) {
+        return;
+    }
     if (!OnScreen(x)) {
         gObjects->state[x] = 0;
         return;
@@ -1068,7 +1238,9 @@ static void Obj_Snapper(uint8_t x)
             gObjects->action[x]--;
             gObjects->state[x]--;
         } else {
-            if (gPlayerInvulnerable != 8) return;
+            if (gPlayerInvulnerable != 8) {
+                return;
+            }
             gObjects->flags[x] = (uint8_t)((gObjects->flags[P_] & 0xFC) ^ OBJ_FLAG_FACING_RIGHT);
             Sound_Request(SFX_SPIT, x);
             if (++gObjects->action[x] == 0) {
@@ -1092,9 +1264,13 @@ static void Obj_Snapper(uint8_t x)
             gObjects->animFrame[x] = a = 1;
         }
     }
-    if (a == 2 && gObjects->animTimer[x] == 0) Sound_Request(SFX_SNAP, x);
+    if (a == 2 && gObjects->animTimer[x] == 0) {
+        Sound_Request(SFX_SNAP, x);
+    }
     gObjects->hitbox[x] = Rom((uint16_t)(DT_CODE_SNAPPER_HITBOX + gObjects->animFrame[x]));
-    if (!Obj_TouchScrooge(x)) return;
+    if (!Obj_TouchScrooge(x)) {
+        return;
+    }
     if (Obj_DistanceX(x) >= 8) {
         gPlayerMode = PLAYER_MODE_KNOCKBACK;
         return;
@@ -1126,10 +1302,14 @@ static void Obj_Dropper(uint8_t x)
         return;
     }
     if (Step(x) == 0) {
-        if (gBlockOpened) return;
+        if (gBlockOpened) {
+            return;
+        }
         uint8_t d = Obj_DistanceX(x);
         uint8_t y = gObjects->action[x];
-        if (d >= (y == 0x87 ? 0x20 : 0x04)) return;
+        if (d >= (y == 0x87 ? 0x20 : 0x04)) {
+            return;
+        }
         Obj_SetVelocityY(x, 0);
         gObjects->state[x]++;
         if (gObjects->action[x] != 0x87) {
@@ -1137,12 +1317,16 @@ static void Obj_Dropper(uint8_t x)
             gObjects->flags[x] = gObjects->state[x] & 0xF0;
             Obj_SetVelocityY(x, 0);
             x = Obj_EditTile(x, 0, y);
-            if (gObjects->y[x] < gObjects->y[P_]) gObjects->hitbox[x] = 0x10;
+            if (gObjects->y[x] < gObjects->y[P_]) {
+                gObjects->hitbox[x] = 0x10;
+            }
         }
     }
     if (!Obj_TouchScrooge(x)) {
         x = Obj_Fall(x, 0x2D, 0);
-        if (!(gProbeHits & 1)) return;
+        if (!(gProbeHits & 1)) {
+            return;
+        }
     }
     Obj_Break(x);
 }
@@ -1155,7 +1339,9 @@ static void Obj_Crawler(uint8_t x)
     if (Step(x) == 0) {
         uint16_t d = (uint16_t)(Obj_GetWorldX(P_) - Obj_GetWorldX(x));
         gScratch(0) = (uint8_t)d;
-        if (Obj_GetWorldX(P_) < Obj_GetWorldX(x) || gScratch(0) < 0x10) return;
+        if (Obj_GetWorldX(P_) < Obj_GetWorldX(x) || gScratch(0) < 0x10) {
+            return;
+        }
         gObjects->state[x] &= (uint8_t)~OBJ_STATUS_HIDDEN;
         Obj_SetVelocityY(x, 0);
         Obj_SetSpeed(x, 0x0180);
@@ -1164,10 +1350,16 @@ static void Obj_Crawler(uint8_t x)
     }
     (void)Obj_TouchScrooge(x);
     x = Obj_Fall(x, 0x31, 2);
-    if (!(gProbeHits & 1)) return;
+    if (!(gProbeHits & 1)) {
+        return;
+    }
     x = (gObjects->dir[x] & OBJ_DIR_RIGHT) ? Obj_WalkRight(x, 0x34, 2) : Obj_WalkLeft(x, 0x37, 2);
-    if (gProbeHits & 1) gObjects->dir[x] ^= 3;
-    if (gObjects->animTimer[x] == 0) Sound_Request(SFX_CRAWLER, x);
+    if (gProbeHits & 1) {
+        gObjects->dir[x] ^= 3;
+    }
+    if (gObjects->animTimer[x] == 0) {
+        Sound_Request(SFX_CRAWLER, x);
+    }
 }
 
 /* Kind $0D ($916C): a flyer that heads towards where Scrooge was and
@@ -1176,18 +1368,26 @@ static void Obj_Crawler(uint8_t x)
 static void Obj_Flyer(uint8_t x)
 {
     Decomp_Enter(DT_CODE_KIND_FLYER, 0x22, x, gObjects->kind[x]);
-    if (Enemy_Beaten(x, 0)) return;
+    if (Enemy_Beaten(x, 0)) {
+        return;
+    }
     if (Step(x) == 0) {
         gObjects->state[x]++;
         gObjects->timer[x] = 0;
         gObjects->unk_06C0[x] = 0;
         Obj_FaceScrooge(x);
-        if (!(gObjects->dir[x] & OBJ_DIR_LEFT)) gObjects->flags[x] |= OBJ_FLAG_FACING_RIGHT;
+        if (!(gObjects->dir[x] & OBJ_DIR_LEFT)) {
+            gObjects->flags[x] |= OBJ_FLAG_FACING_RIGHT;
+        }
     }
     if (gObjects->timer[x] == 0) {
         Obj_SetMotionIndex(x, Rom((uint16_t)(DT_CODE_FLYER_PATH + gObjects->unk_06C0[x])));
-        if (gObjects->speed[x] & 0x80) Obj_SetSpeed(x, (uint16_t)-Obj_GetSpeed(x));
-        if (++gObjects->unk_06C0[x] == 0x0E) gObjects->unk_06C0[x] = 0;
+        if (gObjects->speed[x] & 0x80) {
+            Obj_SetSpeed(x, (uint16_t)-Obj_GetSpeed(x));
+        }
+        if (++gObjects->unk_06C0[x] == 0x0E) {
+            gObjects->unk_06C0[x] = 0;
+        }
         gObjects->timer[x] = 5;
     }
     gObjects->timer[x]--;
@@ -1196,7 +1396,9 @@ static void Obj_Flyer(uint8_t x)
         Obj_Despawn(x);
         return;
     }
-    if (gObjects->animTimer[x] == 0) Sound_Request(SFX_FLYER, x);
+    if (gObjects->animTimer[x] == 0) {
+        Sound_Request(SFX_FLYER, x);
+    }
     (void)Obj_TouchScrooge(x);
 }
 
@@ -1214,12 +1416,16 @@ static void Obj_Swing(uint8_t x)
         gObjects->xFrac[x] = 0;
         gObjects->state[x]++;
     }
-    if (gObjects->animTimer[x] == 0) Sound_Request(SFX_SWING, x);
+    if (gObjects->animTimer[x] == 0) {
+        Sound_Request(SFX_SWING, x);
+    }
     if (gObjects->timer[x] == 0) {
         uint8_t e = Rom((uint16_t)(DT_CODE_SWING_PATH + gObjects->unk_06C0[x]));
         Obj_SetMotionIndex(x, e & 0x1F);
         gObjects->timer[x] = Rom((uint16_t)(DT_CODE_SWING_FRAMES + (e >> 7)));
-        if (++gObjects->unk_06C0[x] == 0x24) gObjects->unk_06C0[x] = 0;
+        if (++gObjects->unk_06C0[x] == 0x24) {
+            gObjects->unk_06C0[x] = 0;
+        }
     }
     gObjects->timer[x]--;
     Obj_MoveDown(x);
@@ -1228,9 +1434,13 @@ static void Obj_Swing(uint8_t x)
     gObjects->xFrac[x] = Alu_Adc(gObjects->xFrac[x], gObjects->speedFrac[x], &p);
     gObjects->worldX[x] = Alu_Adc(gObjects->worldX[x], gObjects->speed[x], &p);
     gObjects->worldPage[x] = Alu_Adc(gObjects->worldPage[x], gScratch(0), &p);
-    if (gPlayerMode == PLAYER_MODE_KNOCKBACK || gPlayerMode == PLAYER_MODE_DEATH) return;
+    if (gPlayerMode == PLAYER_MODE_KNOCKBACK || gPlayerMode == PLAYER_MODE_DEATH) {
+        return;
+    }
     if (gPlayerMode != PLAYER_MODE_9) {
-        if (!Obj_TouchScrooge(x) || !(gPadHeld & DT_PAD_UP)) return;
+        if (!Obj_TouchScrooge(x) || !(gPadHeld & DT_PAD_UP)) {
+            return;
+        }
         gPlayerMode = PLAYER_MODE_9;
         gObjects->action[P_] = PLAYER_ACTION_CLIMB;
         gObjects->animTimer[P_] = 0;
@@ -1264,15 +1474,23 @@ static void Obj_Dangler(uint8_t x)
     if (!(gObjects->state[x] & 2)) {
         Obj_SetVelocityY(x, 0x0200);
         x = Decomp_Call(DT_CODE_CLIMB_UP, 0x27, x, 0).x;
-        if (!(gProbeHits & 1)) return;
-        if (Obj_DistanceX(x) >= 0x32) gObjects->timer[x] = 0;
-        else if (gObjects->timer[x] == 0) gObjects->state[x]++;
-        else gObjects->timer[x]--;
+        if (!(gProbeHits & 1)) {
+            return;
+        }
+        if (Obj_DistanceX(x) >= 0x32) {
+            gObjects->timer[x] = 0;
+        } else if (gObjects->timer[x] == 0) {
+            gObjects->state[x]++;
+        } else {
+            gObjects->timer[x]--;
+        }
         return;
     }
     Obj_SetVelocityY(x, 0x0300);
     Obj_MoveDown(x);
-    if (gObjects->y[x] < 0xB0 && Obj_DistanceY(x) >= 0x18) return;
+    if (gObjects->y[x] < 0xB0 && Obj_DistanceY(x) >= 0x18) {
+        return;
+    }
     gObjects->state[x]--;
     gObjects->timer[x] = 0x96;
 }
@@ -1297,7 +1515,9 @@ static void Obj_Swooper(uint8_t x)
     }
     if (Step(x) == 0) {
         if (gObjects->action[x] != 0x85) {
-            if (Obj_DistanceX(x) >= 0x60) return;
+            if (Obj_DistanceX(x) >= 0x60) {
+                return;
+            }
             Sound_Request(SFX_SWOOP, x);
         }
         gObjects->state[x]++;
@@ -1306,17 +1526,23 @@ static void Obj_Swooper(uint8_t x)
         gObjects->unk_06D0[x] = 0;
         Obj_SetVelocityY(x, 0x0300);
         Obj_FaceScrooge(x);
-        if (!(gObjects->dir[x] & OBJ_DIR_LEFT)) gObjects->flags[x] |= OBJ_FLAG_FACING_RIGHT;
+        if (!(gObjects->dir[x] & OBJ_DIR_LEFT)) {
+            gObjects->flags[x] |= OBJ_FLAG_FACING_RIGHT;
+        }
     }
     (void)Obj_TouchScrooge(x);
     if (!(gObjects->state[x] & 2)) {
-        if (gObjects->y[x] >= gObjects->y[P_] && (uint8_t)(gObjects->y[x] - gObjects->y[P_]) >= 0x10) gObjects->state[x]++;
+        if (gObjects->y[x] >= gObjects->y[P_] && (uint8_t)(gObjects->y[x] - gObjects->y[P_]) >= 0x10) {
+            gObjects->state[x]++;
+        }
         Obj_MoveDown(x);
         return;
     }
     if (gObjects->timer[x] == 0) {
         Obj_SetMotionIndex(x, Rom((uint16_t)(DT_CODE_SWOOPER_PATH + gObjects->unk_06C0[x])));
-        if (gObjects->speed[x] & 0x80) Obj_SetSpeed(x, (uint16_t)-Obj_GetSpeed(x));
+        if (gObjects->speed[x] & 0x80) {
+            Obj_SetSpeed(x, (uint16_t)-Obj_GetSpeed(x));
+        }
         gObjects->timer[x] = (gObjects->unk_06C0[x] >= 7 && (gObjects->unk_06D0[x] & 1)) ? 8 : 3;
         if (++gObjects->unk_06C0[x] == 0x0E) {
             gObjects->unk_06C0[x] = 0;
@@ -1325,13 +1551,21 @@ static void Obj_Swooper(uint8_t x)
     }
     bool tick = true;
     if (!(gObjects->state[x] & 1)) {
-        if (gObjects->y[P_] >= gObjects->y[x] && (uint8_t)(gObjects->y[P_] - gObjects->y[x]) >= 0x20) gObjects->state[x]++;
-        else tick = false;
+        if (gObjects->y[P_] >= gObjects->y[x] && (uint8_t)(gObjects->y[P_] - gObjects->y[x]) >= 0x20) {
+            gObjects->state[x]++;
+        } else {
+            tick = false;
+        }
     }
-    if (tick) gObjects->timer[x]--;
+    if (tick) {
+        gObjects->timer[x]--;
+    }
     Obj_MoveDown(x);
-    if (gObjects->dir[x] & OBJ_DIR_LEFT) Obj_MoveLeft(x);
-    else Obj_MoveRight(x);
+    if (gObjects->dir[x] & OBJ_DIR_LEFT) {
+        Obj_MoveLeft(x);
+    } else {
+        Obj_MoveRight(x);
+    }
 }
 
 /* ---- the dispatch ---- */
@@ -1350,29 +1584,74 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
     r->y = kind;
     r->p = Flags_NZ(r->p, r->a);
     switch (kind) {
-    case OBJ_KIND_NONE: break;
-    case OBJ_KIND_HOPPER: Obj_Hopper(slot); break;
-    case OBJ_KIND_WALKER: Obj_Walker(slot); break;
-    case OBJ_KIND_THROWER: Obj_Thrower(slot); break;
-    case OBJ_KIND_SHOT: Obj_Shot(slot); break;
-    case OBJ_KIND_WATCHER: Obj_Watcher(slot); break;
-    case OBJ_KIND_DANGLER: Obj_Dangler(slot); break;
-    case OBJ_KIND_SNAPPER: Obj_Snapper(slot); break;
-    case OBJ_KIND_BLOCK: Obj_Block(slot, kind); break;
-    case OBJ_KIND_THROWN: Obj_Thrown(slot); break;
-    case OBJ_KIND_DEFEATED: Obj_Defeated(slot); break;
-    case OBJ_KIND_DROPPER: Obj_Dropper(slot); break;
-    case OBJ_KIND_CRAWLER: Obj_Crawler(slot); break;
-    case OBJ_KIND_FLYER: Obj_Flyer(slot); break;
-    case OBJ_KIND_SWING: Obj_Swing(slot); break;
-    case OBJ_KIND_LIFT: Obj_Lift(slot); break;
-    case OBJ_KIND_SWOOPER: Obj_Swooper(slot); break;
-    case OBJ_KIND_PICKUP: Obj_Pickup(slot); break;
-    case OBJ_KIND_HIDDEN_ITEM: Obj_HiddenItem(slot); break;
-    case OBJ_KIND_CHEST: Obj_Chest(slot); break;
-    case OBJ_KIND_DOOR: Obj_Door(slot); break;
-    case OBJ_KIND_TALKER: Obj_Talker(slot); break;
-    default: *r = Decomp_CallP((uint16_t)(gScratch1 << 8 | gScratch0), r->a, slot, r->y, r->p); break;
+        case OBJ_KIND_NONE:
+            break;
+        case OBJ_KIND_HOPPER:
+            Obj_Hopper(slot);
+            break;
+        case OBJ_KIND_WALKER:
+            Obj_Walker(slot);
+            break;
+        case OBJ_KIND_THROWER:
+            Obj_Thrower(slot);
+            break;
+        case OBJ_KIND_SHOT:
+            Obj_Shot(slot);
+            break;
+        case OBJ_KIND_WATCHER:
+            Obj_Watcher(slot);
+            break;
+        case OBJ_KIND_DANGLER:
+            Obj_Dangler(slot);
+            break;
+        case OBJ_KIND_SNAPPER:
+            Obj_Snapper(slot);
+            break;
+        case OBJ_KIND_BLOCK:
+            Obj_Block(slot, kind);
+            break;
+        case OBJ_KIND_THROWN:
+            Obj_Thrown(slot);
+            break;
+        case OBJ_KIND_DEFEATED:
+            Obj_Defeated(slot);
+            break;
+        case OBJ_KIND_DROPPER:
+            Obj_Dropper(slot);
+            break;
+        case OBJ_KIND_CRAWLER:
+            Obj_Crawler(slot);
+            break;
+        case OBJ_KIND_FLYER:
+            Obj_Flyer(slot);
+            break;
+        case OBJ_KIND_SWING:
+            Obj_Swing(slot);
+            break;
+        case OBJ_KIND_LIFT:
+            Obj_Lift(slot);
+            break;
+        case OBJ_KIND_SWOOPER:
+            Obj_Swooper(slot);
+            break;
+        case OBJ_KIND_PICKUP:
+            Obj_Pickup(slot);
+            break;
+        case OBJ_KIND_HIDDEN_ITEM:
+            Obj_HiddenItem(slot);
+            break;
+        case OBJ_KIND_CHEST:
+            Obj_Chest(slot);
+            break;
+        case OBJ_KIND_DOOR:
+            Obj_Door(slot);
+            break;
+        case OBJ_KIND_TALKER:
+            Obj_Talker(slot);
+            break;
+        default:
+            *r = Decomp_CallP((uint16_t)(gScratch1 << 8 | gScratch0), r->a, slot, r->y, r->p);
+            break;
     }
 }
 
@@ -1385,7 +1664,9 @@ static void Obj_UpdateAll(Regs *r)
     r->a = OBJ_GRAVITY;
     for (gObjCursor = 1; gObjCursor != OBJ_SLOTS; gObjCursor++) {
         r->a = gObjects->state[gObjCursor];
-        if (r->a & OBJ_STATUS_LIVE) Obj_RunHandler(gObjCursor, r);
+        if (r->a & OBJ_STATUS_LIVE) {
+            Obj_RunHandler(gObjCursor, r);
+        }
         r->x = (uint8_t)(gObjCursor + 1);
         r->p = Flags_Cmp(r->p, r->x, OBJ_SLOTS);
     }

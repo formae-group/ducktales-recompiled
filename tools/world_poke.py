@@ -11,6 +11,7 @@ over RAM, so a patched state loads in the build that wrote it.
     py -3 -I tools/world_poke.py STATE peek ADDR[,ADDR...]
     py -3 -I tools/world_poke.py STATE poke OUT ADDR=VAL [ADDR=VAL ...]
 """
+
 import argparse
 import struct
 from pathlib import Path
@@ -24,7 +25,7 @@ def ram_offset(data):
         raise SystemExit('not a save state')
     pos = HEADER
     while pos + 8 <= len(data):
-        tag, length = data[pos:pos + 4], struct.unpack_from('<I', data, pos + 4)[0]
+        tag, length = data[pos : pos + 4], struct.unpack_from('<I', data, pos + 4)[0]
         if tag == b'HW  ':
             if length < RAM_FIELD + 0x800:
                 raise SystemExit('HW chunk too small: HwMachine layout changed')

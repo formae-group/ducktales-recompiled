@@ -1,4 +1,5 @@
 """Tile headless screenshots (shot_NNNNN.png) into one labelled sheet for review."""
+
 import argparse
 import re
 from pathlib import Path

@@ -25,17 +25,39 @@
 extern "C" {
 #endif
 
-typedef enum { APP_PACING_AUTO, APP_PACING_VSYNC, APP_PACING_STEADY, APP_PACING_COUNT } AppPacing;
-typedef enum { APP_PIXELS_NEAREST, APP_PIXELS_SHARP, APP_PIXELS_SMOOTH, APP_PIXELS_COUNT } AppPixels;
-typedef enum { APP_ASPECT_SQUARE, APP_ASPECT_8_7, APP_ASPECT_COUNT } AppAspect;
-typedef enum { APP_OVERSCAN_OFF, APP_OVERSCAN_TOP_BOTTOM, APP_OVERSCAN_ALL, APP_OVERSCAN_COUNT } AppOverscan;
+typedef enum {
+    APP_PACING_AUTO,
+    APP_PACING_VSYNC,
+    APP_PACING_STEADY,
+    APP_PACING_COUNT
+} AppPacing;
+
+typedef enum {
+    APP_PIXELS_NEAREST,
+    APP_PIXELS_SHARP,
+    APP_PIXELS_SMOOTH,
+    APP_PIXELS_COUNT
+} AppPixels;
+
+typedef enum {
+    APP_ASPECT_SQUARE,
+    APP_ASPECT_8_7,
+    APP_ASPECT_COUNT
+} AppAspect;
+
+typedef enum {
+    APP_OVERSCAN_OFF,
+    APP_OVERSCAN_TOP_BOTTOM,
+    APP_OVERSCAN_ALL,
+    APP_OVERSCAN_COUNT
+} AppOverscan;
 
 typedef struct {
-    int pacing;       /* AppPacing; applies at the next launch */
-    int clean_split;  /* bool */
-    int overscan;     /* AppOverscan */
-    int pixels;       /* AppPixels */
-    int aspect;       /* AppAspect */
+    int pacing;      /* AppPacing; applies at the next launch */
+    int clean_split; /* bool */
+    int overscan;    /* AppOverscan */
+    int pixels;      /* AppPixels */
+    int aspect;      /* AppAspect */
 } AppPresentation;
 
 void app_present_get(AppPresentation *out);

@@ -44,7 +44,9 @@ static bool s_valid;
 static void update_armed(void)
 {
     cyc_hooks_armed = (uint8_t)(s_valid && cyc_native_hook_site_count && nes_mod_function_hooks_active() > 0);
-    if (!cyc_hooks_armed) cyc_hook_passed = -1;
+    if (!cyc_hooks_armed) {
+        cyc_hook_passed = -1;
+    }
 }
 
 bool native_hooks_init(void)
@@ -54,7 +56,9 @@ bool native_hooks_init(void)
     s_sites = n ? (Site *)calloc(n, sizeof(Site)) : NULL;
     memset(s_bits, 0, sizeof s_bits);
     bool ok = true;
-    for (uint32_t i = 0; i < n; i++) s_bits[cyc_native_hook_sites[i].addr >> 3] |= (uint8_t)(1u << (cyc_native_hook_sites[i].addr & 7));
+    for (uint32_t i = 0; i < n; i++) {
+        s_bits[cyc_native_hook_sites[i].addr >> 3] |= (uint8_t)(1u << (cyc_native_hook_sites[i].addr & 7));
+    }
     for (int r = 0; r < nes_mod_function_hook_count(); r++) {
         const char *id = NULL;
         uint16_t addr = 0;
@@ -63,8 +67,10 @@ bool native_hooks_init(void)
         for (uint32_t i = 0; i < n; i++) {
             const CycHookSite *site = &cyc_native_hook_sites[i];
             bool named = site->id && id && !strcmp(site->id, id);
-            if (!(named || (!site->id && site->addr == addr)) || site->addr != addr || s_sites[i].plugins == MAX_BINDINGS)
+            if (!(named || (!site->id && site->addr == addr)) || site->addr != addr ||
+                s_sites[i].plugins == MAX_BINDINGS) {
                 continue;
+            }
             s_sites[i].plugin[s_sites[i].plugins++] = r;
             bound++;
         }
@@ -82,15 +88,21 @@ bool native_hooks_init(void)
 
 bool native_hooks_due(uint16_t pc)
 {
-    return (s_bits[pc >> 3] >> (pc & 7)) & 1 && cyc_hook_passed != (int32_t)pc && !(cpu.do_nmi | cpu.do_irq | cpu.do_reset);
+    return (s_bits[pc >> 3] >> (pc & 7)) & 1 && cyc_hook_passed != (int32_t)pc &&
+           !(cpu.do_nmi | cpu.do_irq | cpu.do_reset);
 }
 
 static bool holds(const CycHookSite *site)
 {
     uint8_t b[16];
-    if (site->len > sizeof b) return false;
-    for (unsigned k = 0; k < site->len; k++)
-        if (!native_peek((uint16_t)(site->addr + k), &b[k])) return false;
+    if (site->len > sizeof b) {
+        return false;
+    }
+    for (unsigned k = 0; k < site->len; k++) {
+        if (!native_peek((uint16_t)(site->addr + k), &b[k])) {
+            return false;
+        }
+    }
     return !site->len || nes_crc32(0, b, site->len) == site->crc32;
 }
 
@@ -107,17 +119,23 @@ void native_hooks_fire(uint16_t pc)
 {
     for (uint32_t i = 0; s_sites && i < cyc_native_hook_site_count; i++) {
         const CycHookSite *site = &cyc_native_hook_sites[i];
-        if (site->addr != pc || !s_sites[i].plugins || !holds(site)) continue;
+        if (site->addr != pc || !s_sites[i].plugins || !holds(site)) {
+            continue;
+        }
         for (int b = 0; b < s_sites[i].plugins; b++) {
             int enabled = 0;
             NESModFunctionEntryCallback cb = NULL;
             nes_mod_function_hook_at(s_sites[i].plugin[b], NULL, NULL, &enabled, &cb);
-            if (!enabled || !cb) continue;
+            if (!enabled || !cb) {
+                continue;
+            }
             if (cb(pc)) {
                 return_from_routine();
                 return;
             }
-            if (cpu.pc != pc) return;
+            if (cpu.pc != pc) {
+                return;
+            }
         }
     }
 }

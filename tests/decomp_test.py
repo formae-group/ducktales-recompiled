@@ -30,6 +30,7 @@
 DUCKTALES_DECOMP=check py -3 -I tests/verify_routes.py runs the oracle comparison with
 the checks on.
 """
+
 import argparse
 import concurrent.futures
 import re
@@ -43,11 +44,13 @@ RAM = 0x800
 IDLE_S = 0xFF
 TASKS = 0x80
 MAIN_TASK_BASE = 0xBF
-STACK = 0x160      # page 1 below this is data: palette, consumed-record bits, HUD time
-LINE = re.compile(r'^decomp: mode=\S+ routine=(\S+) addr=\$([0-9A-F]{4}) calls=(\d+) compared=(\d+) original=(\d+)$', re.M)
+STACK = 0x160  # page 1 below this is data: palette, consumed-record bits, HUD time
+LINE = re.compile(
+    r'^decomp: mode=\S+ routine=(\S+) addr=\$([0-9A-F]{4}) calls=(\d+) compared=(\d+) original=(\d+)$', re.M
+)
 
 POKE_ROUTE = ROOT / 'tests' / 'routes' / 're_amazon_moves.txt'
-POKE_FRAME = 1700   # Scrooge on the ground in the Amazon
+POKE_FRAME = 1700  # Scrooge on the ground in the Amazon
 POKE_FRAMES = 220
 # name, {address: value} stored before POKE_FRAME (or {frame: {...}}), routines that must be compared
 POKES = [
@@ -63,10 +66,29 @@ POKES = [
     ('invulnerable-held', {0x7D: 0x90, 0x75: 0x80}, ['Player_Update']),
     ('slippery', {POKE_FRAME + 10 * i: {0x71: 0x01} for i in range(20)}, ['Player_Walk']),
     # slot 9 made a pickup on Scrooge (step 2, waiting): the extra HP dot; a big diamond with money at 999...
-    ('extra-dot', {0x709: 0xA2, 0x719: 0x13, 0x629: 0x2B, 0x649: 0xA6, 0x729: 0x62, 0x739: 0x00, 0x7D9: 0x01, 0x609: 0x80},
-     ['Pickup_Take', 'Pickup_ExtraDot', 'Hud_RefillHp']),
-    ('money-max', {0x709: 0xA2, 0x719: 0x13, 0x629: 0x61, 0x6B9: 0xFF, 0x649: 0xA6, 0x729: 0x62, 0x739: 0x00, 0x7D9: 0x01,
-                   0x609: 0x80, 0x324: 0x09, 0x325: 0x09, 0x326: 0x09}, ['Money_Add', 'Money_Max']),
+    (
+        'extra-dot',
+        {0x709: 0xA2, 0x719: 0x13, 0x629: 0x2B, 0x649: 0xA6, 0x729: 0x62, 0x739: 0x00, 0x7D9: 0x01, 0x609: 0x80},
+        ['Pickup_Take', 'Pickup_ExtraDot', 'Hud_RefillHp'],
+    ),
+    (
+        'money-max',
+        {
+            0x709: 0xA2,
+            0x719: 0x13,
+            0x629: 0x61,
+            0x6B9: 0xFF,
+            0x649: 0xA6,
+            0x729: 0x62,
+            0x739: 0x00,
+            0x7D9: 0x01,
+            0x609: 0x80,
+            0x324: 0x09,
+            0x325: 0x09,
+            0x326: 0x09,
+        },
+        ['Money_Add', 'Money_Max'],
+    ),
     # slot 9 made a lift (kind $0F) under Scrooge
     ('lift', {0x709: 0xA0, 0x719: 0x0F, 0x649: 0xB0, 0x729: 0x62, 0x739: 0x00, 0x609: 0x80}, ['Obj_Lift']),
 ]
@@ -93,8 +115,12 @@ def route_case(route):
 def poke_case(name, pokes, want):
     if not all(isinstance(v, dict) for v in pokes.values()):
         pokes = {POKE_FRAME: pokes}
-    extra = [arg for frame, at in pokes.items() for addr, value in at.items()
-             for arg in ('--dt-poke-at', f'{frame}:{addr:X}={value:02X}')]
+    extra = [
+        arg
+        for frame, at in pokes.items()
+        for addr, value in at.items()
+        for arg in ('--dt-poke-at', f'{frame}:{addr:X}={value:02X}')
+    ]
     return {'name': name, 'route': POKE_ROUTE, 'frames': POKE_FRAME + POKE_FRAMES, 'extra': extra, 'want': want}
 
 
@@ -176,8 +202,10 @@ def run_checks(pool, exe, rom, cases, label, failed):
 def run_replaces(pool, exe, rom, cases, label, failed):
     with tempfile.TemporaryDirectory(dir=ROOT / 'captures' if (ROOT / 'captures').is_dir() else None) as tmp:
         for name, result, frames in pool.map(lambda c: replace_case(exe, rom, c, tmp), cases):
-            print(f'{label:8s} {name:24s} {"PASS" if result is None else "FAIL"}  frames={frames}'
-                  + ('' if result is None else f'  first difference: {result}'))
+            print(
+                f'{label:8s} {name:24s} {"PASS" if result is None else "FAIL"}  frames={frames}'
+                + ('' if result is None else f'  first difference: {result}')
+            )
             if result is not None:
                 failed.append(f'{label} {name}')
 

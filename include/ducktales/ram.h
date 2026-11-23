@@ -34,7 +34,11 @@ extern uint8_t *gRam;
 
 #define RAM_U8(addr) (gRam[(addr)])
 
-static inline uint16_t Ram_GetU16(uint16_t lo, uint16_t hi) { return (uint16_t)(gRam[lo] | gRam[hi] << 8); }
+static inline uint16_t Ram_GetU16(uint16_t lo, uint16_t hi)
+{
+    return (uint16_t)(gRam[lo] | gRam[hi] << 8);
+}
+
 static inline void Ram_SetU16(uint16_t lo, uint16_t hi, uint16_t v)
 {
     gRam[lo] = (uint8_t)v;

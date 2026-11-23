@@ -22,96 +22,97 @@ extern "C" {
 #define OBJ_SLOTS DT_OBJ_SLOTS
 
 /* $0700 status bits (docs/rendering.md, docs/decompilation.md "Objects"). */
-#define OBJ_STATUS_LIVE   0x80   /* the slot is updated and drawn (verified) */
-#define OBJ_STATUS_WORLD  0x20   /* X is a world position (verified) */
-#define OBJ_STATUS_HIDDEN 0x10   /* not drawn (verified) */
+#define OBJ_STATUS_LIVE   0x80 /* the slot is updated and drawn (verified) */
+#define OBJ_STATUS_WORLD  0x20 /* X is a world position (verified) */
+#define OBJ_STATUS_HIDDEN 0x10 /* not drawn (verified) */
 
 /* Object kinds ($0710), the index of the handler table. */
-#define OBJ_KIND_NONE        0x00   /* the handler is a bare RTS (code) */
-#define OBJ_KIND_HOPPER      0x01   /* enemy: walks and hops (code) */
-#define OBJ_KIND_WALKER      0x02   /* enemy: walks, turns at walls (code) */
-#define OBJ_KIND_THROWER     0x03   /* enemy: walks, hops, throws a shot (code) */
-#define OBJ_KIND_SHOT        0x04   /* kind 3's shot (code) */
-#define OBJ_KIND_WATCHER     0x05   /* enemy: stays, faces Scrooge (code) */
-#define OBJ_KIND_DANGLER     0x06   /* enemy: climbs to the ceiling, drops on Scrooge (code) */
-#define OBJ_KIND_SNAPPER     0x07   /* plant that catches Scrooge (code) */
-#define OBJ_KIND_BLOCK       0x08   /* block: solid to other objects, launched or opened by the cane (code) */
-#define OBJ_KIND_THROWN      0x09   /* a launched block (code) */
-#define OBJ_KIND_DROPPER     0x0A   /* block that falls when Scrooge comes near (code) */
-#define OBJ_KIND_DEFEATED    0x0B   /* a beaten enemy flying off (code) */
-#define OBJ_KIND_CRAWLER     0x0C   /* enemy: waits for Scrooge to pass, walks (code) */
-#define OBJ_KIND_FLYER       0x0D   /* enemy: weaving flyer (code) */
-#define OBJ_KIND_SWING       0x0E   /* swinging hold Scrooge grabs with Up (code) */
-#define OBJ_KIND_LIFT        0x0F   /* platform that rises and sinks (code) */
-#define OBJ_KIND_SWOOPER     0x11   /* enemy: drops to Scrooge's height and weaves (code) */
-#define OBJ_KIND_PICKUP      0x13   /* an item Scrooge takes by touching it (code) */
-#define OBJ_KIND_HIDDEN_ITEM 0x14   /* an item that appears when touched (code) */
-#define OBJ_KIND_CHEST       0x15   /* a chest the cane opens (code) */
-#define OBJ_KIND_DOOR        0x2F   /* a door: warp request (code) */
-#define OBJ_KIND_TALKER      0x35   /* a character that shows a message (code) */
+#define OBJ_KIND_NONE        0x00 /* the handler is a bare RTS (code) */
+#define OBJ_KIND_HOPPER      0x01 /* enemy: walks and hops (code) */
+#define OBJ_KIND_WALKER      0x02 /* enemy: walks, turns at walls (code) */
+#define OBJ_KIND_THROWER     0x03 /* enemy: walks, hops, throws a shot (code) */
+#define OBJ_KIND_SHOT        0x04 /* kind 3's shot (code) */
+#define OBJ_KIND_WATCHER     0x05 /* enemy: stays, faces Scrooge (code) */
+#define OBJ_KIND_DANGLER     0x06 /* enemy: climbs to the ceiling, drops on Scrooge (code) */
+#define OBJ_KIND_SNAPPER     0x07 /* plant that catches Scrooge (code) */
+#define OBJ_KIND_BLOCK       0x08 /* block: solid to other objects, launched or opened by the cane (code) */
+#define OBJ_KIND_THROWN      0x09 /* a launched block (code) */
+#define OBJ_KIND_DROPPER     0x0A /* block that falls when Scrooge comes near (code) */
+#define OBJ_KIND_DEFEATED    0x0B /* a beaten enemy flying off (code) */
+#define OBJ_KIND_CRAWLER     0x0C /* enemy: waits for Scrooge to pass, walks (code) */
+#define OBJ_KIND_FLYER       0x0D /* enemy: weaving flyer (code) */
+#define OBJ_KIND_SWING       0x0E /* swinging hold Scrooge grabs with Up (code) */
+#define OBJ_KIND_LIFT        0x0F /* platform that rises and sinks (code) */
+#define OBJ_KIND_SWOOPER     0x11 /* enemy: drops to Scrooge's height and weaves (code) */
+#define OBJ_KIND_PICKUP      0x13 /* an item Scrooge takes by touching it (code) */
+#define OBJ_KIND_HIDDEN_ITEM 0x14 /* an item that appears when touched (code) */
+#define OBJ_KIND_CHEST       0x15 /* a chest the cane opens (code) */
+#define OBJ_KIND_DOOR        0x2F /* a door: warp request (code) */
+#define OBJ_KIND_TALKER      0x35 /* a character that shows a message (code) */
 
 /* $0700 bits 0-3: the handler's step (code). */
-#define OBJ_STATE_STEP       0x0F
+#define OBJ_STATE_STEP 0x0F
 
 /* $0620 poses ($0620 of a pickup is its item) used by the handlers (code). */
-#define OBJ_ACTION_CHEST       0x1B   /* a block that holds an item */
-#define OBJ_ACTION_STAY        0x22   /* a block that a hit leaves in place */
-#define OBJ_ACTION_BREAK       0x2A   /* debris, and a pickup jumping out */
-#define OBJ_ACTION_BREAK_HIT   0x2B   /* debris after a counted hit */
-#define OBJ_ACTION_LAND_CHEST  0x3F   /* a block whose item comes from the land's table */
-#define OBJ_ITEM_FIRST         0x23   /* items $23-$29 index the take table at $8BFE */
-#define OBJ_ITEM_RESPAWNS      0x29   /* gives its record back when it leaves the screen */
-#define OBJ_ITEM_EXTRA_DOT     0x2B   /* one more HP dot */
-#define OBJ_ITEM_BIG_DIAMOND   0x61
-#define OBJ_ITEM_TREASURE      0x6F   /* $6F + n: treasure bit n of $A0 */
+#define OBJ_ACTION_CHEST          0x1B /* a block that holds an item */
+#define OBJ_ACTION_STAY           0x22 /* a block that a hit leaves in place */
+#define OBJ_ACTION_BREAK          0x2A /* debris, and a pickup jumping out */
+#define OBJ_ACTION_BREAK_HIT      0x2B /* debris after a counted hit */
+#define OBJ_ACTION_LAND_CHEST     0x3F /* a block whose item comes from the land's table */
+#define OBJ_ITEM_FIRST            0x23 /* items $23-$29 index the take table at $8BFE */
+#define OBJ_ITEM_RESPAWNS         0x29 /* gives its record back when it leaves the screen */
+#define OBJ_ITEM_EXTRA_DOT        0x2B /* one more HP dot */
+#define OBJ_ITEM_BIG_DIAMOND      0x61
+#define OBJ_ITEM_TREASURE         0x6F /* $6F + n: treasure bit n of $A0 */
 #define OBJ_ITEM_TREASURE_MESSAGE 0x74
 
 /* $0600 flags. */
-#define OBJ_FLAG_ON_SCREEN    0x80   /* set by the sprite builder; contact tests skip slots without it (code) */
-#define OBJ_FLAG_FACING_RIGHT 0x40   /* (verified) */
-#define OBJ_FLAG_DELETE_AT_END 0x08  /* freed when its animation ends (verified, rendering.md) */
-#define OBJ_FLAG_BLINK        0x02   /* drawn every other frame (verified, rendering.md) */
+#define OBJ_FLAG_ON_SCREEN     0x80 /* set by the sprite builder; contact tests skip slots without it (code) */
+#define OBJ_FLAG_FACING_RIGHT  0x40 /* (verified) */
+#define OBJ_FLAG_DELETE_AT_END 0x08 /* freed when its animation ends (verified, rendering.md) */
+#define OBJ_FLAG_BLINK         0x02 /* drawn every other frame (verified, rendering.md) */
 
 /* $07E0 direction of the walking kinds: bit 0 right (code). */
-#define OBJ_DIR_RIGHT     1
-#define OBJ_DIR_LEFT      2
+#define OBJ_DIR_RIGHT 1
+#define OBJ_DIR_LEFT  2
 
 typedef struct ObjectTable {
-    uint8_t flags[OBJ_SLOTS];       /* $0600 bit 6 facing right (verified); bit 2 set by special tiles (code) */
-    uint8_t animFrame[OBJ_SLOTS];   /* $0610 animation frame of the action (hypothesis) */
-    uint8_t action[OBJ_SLOTS];      /* $0620 action; Scrooge: PlayerAction (verified) */
-    uint8_t animTimer[OBJ_SLOTS];   /* $0630 frame timer of the action (hypothesis) */
-    uint8_t y[OBJ_SLOTS];           /* $0640 Y on screen (verified) */
-    uint8_t x[OBJ_SLOTS];           /* $0650 X on screen (verified) */
-    uint8_t yFrac[OBJ_SLOTS];       /* $0660 Y fraction (verified) */
-    uint8_t xFrac[OBJ_SLOTS];       /* $0670 world X fraction (verified) */
-    uint8_t pose[OBJ_SLOTS];        /* $0680 pose variant (code) */
-    uint8_t unk_0690[OBJ_SLOTS];    /* $0690 incremented by contact while invincible (code) */
+    uint8_t flags[OBJ_SLOTS];     /* $0600 bit 6 facing right (verified); bit 2 set by special tiles (code) */
+    uint8_t animFrame[OBJ_SLOTS]; /* $0610 animation frame of the action (hypothesis) */
+    uint8_t action[OBJ_SLOTS];    /* $0620 action; Scrooge: PlayerAction (verified) */
+    uint8_t animTimer[OBJ_SLOTS]; /* $0630 frame timer of the action (hypothesis) */
+    uint8_t y[OBJ_SLOTS];         /* $0640 Y on screen (verified) */
+    uint8_t x[OBJ_SLOTS];         /* $0650 X on screen (verified) */
+    uint8_t yFrac[OBJ_SLOTS];     /* $0660 Y fraction (verified) */
+    uint8_t xFrac[OBJ_SLOTS];     /* $0670 world X fraction (verified) */
+    uint8_t pose[OBJ_SLOTS];      /* $0680 pose variant (code) */
+    uint8_t unk_0690[OBJ_SLOTS];  /* $0690 incremented by contact while invincible (code) */
     uint8_t unk_06A0[OBJ_SLOTS];
-    uint8_t timer[OBJ_SLOTS];       /* $06B0 countdown; Scrooge: cane recoil (code) */
+    uint8_t timer[OBJ_SLOTS]; /* $06B0 countdown; Scrooge: cane recoil (code) */
     uint8_t unk_06C0[OBJ_SLOTS];
     uint8_t unk_06D0[OBJ_SLOTS];
     uint8_t unk_06E0[OBJ_SLOTS];
-    uint8_t bossCooldown[OBJ_SLOTS];/* $06F0 frames before a boss can be hit again (code) */
-    uint8_t state[OBJ_SLOTS];       /* $0700 sub-state; Scrooge: death step (code) */
-    uint8_t kind[OBJ_SLOTS];        /* $0710 object type read by the cane test (code) */
-    uint8_t worldX[OBJ_SLOTS];      /* $0720 world X low byte (verified) */
-    uint8_t worldPage[OBJ_SLOTS];   /* $0730 world X page (verified) */
+    uint8_t bossCooldown[OBJ_SLOTS]; /* $06F0 frames before a boss can be hit again (code) */
+    uint8_t state[OBJ_SLOTS];        /* $0700 sub-state; Scrooge: death step (code) */
+    uint8_t kind[OBJ_SLOTS];         /* $0710 object type read by the cane test (code) */
+    uint8_t worldX[OBJ_SLOTS];       /* $0720 world X low byte (verified) */
+    uint8_t worldPage[OBJ_SLOTS];    /* $0730 world X page (verified) */
     uint8_t unk_0740[OBJ_SLOTS];
     uint8_t unk_0750[OBJ_SLOTS];
-    uint8_t speedFrac[OBJ_SLOTS];   /* $0760 horizontal speed fraction (verified) */
-    uint8_t speed[OBJ_SLOTS];       /* $0770 horizontal speed (verified) */
-    uint8_t vdir[OBJ_SLOTS];        /* $0780 Scrooge: 8 rising, 4 falling (verified) */
-    uint8_t unk_0790[OBJ_SLOTS];    /* $0790 slot 0: jump take-off velocity fraction (verified) */
-    uint8_t unk_07A0[OBJ_SLOTS];    /* $07A0 slot 0: jump take-off velocity (verified) */
-    uint8_t vyFrac[OBJ_SLOTS];      /* $07B0 vertical velocity fraction, up positive (verified) */
-    uint8_t vy[OBJ_SLOTS];          /* $07C0 vertical velocity, signed, up positive (verified) */
-    uint8_t hitbox[OBJ_SLOTS];      /* $07D0 hitbox entry (verified) */
-    uint8_t dir[OBJ_SLOTS];         /* $07E0 direction (code) */
-    uint8_t record[OBJ_SLOTS];      /* $07F0 land record the slot was spawned from, $FF none (verified, levels.md) */
+    uint8_t speedFrac[OBJ_SLOTS]; /* $0760 horizontal speed fraction (verified) */
+    uint8_t speed[OBJ_SLOTS];     /* $0770 horizontal speed (verified) */
+    uint8_t vdir[OBJ_SLOTS];      /* $0780 Scrooge: 8 rising, 4 falling (verified) */
+    uint8_t unk_0790[OBJ_SLOTS];  /* $0790 slot 0: jump take-off velocity fraction (verified) */
+    uint8_t unk_07A0[OBJ_SLOTS];  /* $07A0 slot 0: jump take-off velocity (verified) */
+    uint8_t vyFrac[OBJ_SLOTS];    /* $07B0 vertical velocity fraction, up positive (verified) */
+    uint8_t vy[OBJ_SLOTS];        /* $07C0 vertical velocity, signed, up positive (verified) */
+    uint8_t hitbox[OBJ_SLOTS];    /* $07D0 hitbox entry (verified) */
+    uint8_t dir[OBJ_SLOTS];       /* $07E0 direction (code) */
+    uint8_t record[OBJ_SLOTS];    /* $07F0 land record the slot was spawned from, $FF none (verified, levels.md) */
 } ObjectTable;
 
-#define OBJ_ROW_CHECK(field, addr) typedef char obj_row_check_##field[offsetof(ObjectTable, field) == (addr) - DT_OBJ_BASE ? 1 : -1]
+#define OBJ_ROW_CHECK(field, addr) \
+    typedef char obj_row_check_##field[offsetof(ObjectTable, field) == (addr) - DT_OBJ_BASE ? 1 : -1]
 OBJ_ROW_CHECK(flags, DT_ROW_FLAGS);
 OBJ_ROW_CHECK(animFrame, DT_ROW_FRAME);
 OBJ_ROW_CHECK(action, DT_ROW_ACTION);
@@ -142,19 +143,33 @@ typedef char obj_table_size_check[sizeof(ObjectTable) == 0x200 ? 1 : -1];
 #define gObjects ((ObjectTable *)(gRam + DT_OBJ_BASE))
 
 /* 8.8 values split over two rows (whole byte in one, fraction in another). */
-static inline uint16_t Obj_GetVelocityY(int slot) { return (uint16_t)(gObjects->vy[slot] << 8 | gObjects->vyFrac[slot]); }
+static inline uint16_t Obj_GetVelocityY(int slot)
+{
+    return (uint16_t)(gObjects->vy[slot] << 8 | gObjects->vyFrac[slot]);
+}
+
 static inline void Obj_SetVelocityY(int slot, uint16_t v)
 {
     gObjects->vy[slot] = (uint8_t)(v >> 8);
     gObjects->vyFrac[slot] = (uint8_t)v;
 }
-static inline uint16_t Obj_GetSpeed(int slot) { return (uint16_t)(gObjects->speed[slot] << 8 | gObjects->speedFrac[slot]); }
+
+static inline uint16_t Obj_GetSpeed(int slot)
+{
+    return (uint16_t)(gObjects->speed[slot] << 8 | gObjects->speedFrac[slot]);
+}
+
 static inline void Obj_SetSpeed(int slot, uint16_t v)
 {
     gObjects->speed[slot] = (uint8_t)(v >> 8);
     gObjects->speedFrac[slot] = (uint8_t)v;
 }
-static inline uint16_t Obj_GetWorldX(int slot) { return (uint16_t)(gObjects->worldPage[slot] << 8 | gObjects->worldX[slot]); }
+
+static inline uint16_t Obj_GetWorldX(int slot)
+{
+    return (uint16_t)(gObjects->worldPage[slot] << 8 | gObjects->worldX[slot]);
+}
+
 static inline void Obj_SetWorldX(int slot, uint16_t v)
 {
     gObjects->worldPage[slot] = (uint8_t)(v >> 8);

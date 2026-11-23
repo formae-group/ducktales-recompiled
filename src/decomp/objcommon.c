@@ -24,23 +24,30 @@
 
 #define P_ PLAYER_SLOT
 
-#define OBJ_KIND_BLOCK      0x08
-#define OBJ_KIND_09         0x09
-#define OBJ_KIND_24         0x24
-#define HITBOX_INDEX        0x7F
-#define HITBOX_HARMFUL      0x70
-#define DESPAWN_HELD_RESET  0x3C
+#define OBJ_KIND_BLOCK     0x08
+#define OBJ_KIND_09        0x09
+#define OBJ_KIND_24        0x24
+#define HITBOX_INDEX       0x7F
+#define HITBOX_HARMFUL     0x70
+#define DESPAWN_HELD_RESET 0x3C
 
-#define gProbeHits     RAM_U8(DT_ADDR_PROBE_HITS)
-#define gContactDepth  RAM_U8(DT_ADDR_CONTACT_DEPTH)
-#define gContactSlot   RAM_U8(DT_ADDR_CONTACT_SLOT)
-#define gProbeFirst    RAM_U8(DT_ADDR_PROBE_FIRST)
-#define gProbeCount    RAM_U8(DT_ADDR_PROBE_COUNT)
-#define gHeldSlot      RAM_U8(DT_ADDR_HELD_SLOT)
-#define gScratch(i)    RAM_U8(DT_ADDR_SCRATCH0 + (i))
+#define gProbeHits    RAM_U8(DT_ADDR_PROBE_HITS)
+#define gContactDepth RAM_U8(DT_ADDR_CONTACT_DEPTH)
+#define gContactSlot  RAM_U8(DT_ADDR_CONTACT_SLOT)
+#define gProbeFirst   RAM_U8(DT_ADDR_PROBE_FIRST)
+#define gProbeCount   RAM_U8(DT_ADDR_PROBE_COUNT)
+#define gHeldSlot     RAM_U8(DT_ADDR_HELD_SLOT)
+#define gScratch(i)   RAM_U8(DT_ADDR_SCRATCH0 + (i))
 
-static uint8_t HitboxHeight(uint8_t box) { return Game_ReadRom((uint16_t)(DT_CODE_HITBOX_HEIGHT + box)); }
-static uint8_t HitboxWidth(uint8_t box) { return Game_ReadRom((uint16_t)(DT_CODE_HITBOX_WIDTH + box)); }
+static uint8_t HitboxHeight(uint8_t box)
+{
+    return Game_ReadRom((uint16_t)(DT_CODE_HITBOX_HEIGHT + box));
+}
+
+static uint8_t HitboxWidth(uint8_t box)
+{
+    return Game_ReadRom((uint16_t)(DT_CODE_HITBOX_WIDTH + box));
+}
 
 /* $F179: free the slot; a slot that held the marker in $4F (slot | $80)
  * resets it to $3C. */
@@ -50,7 +57,9 @@ void Obj_Despawn(uint8_t slot)
     gObjects->flags[slot] = 0;
     gObjects->state[slot] = 0;
     gObjects->record[slot] = 0xFF;
-    if ((slot | 0x80) == gHeldSlot) gHeldSlot = DESPAWN_HELD_RESET;
+    if ((slot | 0x80) == gHeldSlot) {
+        gHeldSlot = DESPAWN_HELD_RESET;
+    }
 }
 
 /* $F436: does the slot touch Scrooge? Only slots on screen ($0600 bit 7)
@@ -61,18 +70,30 @@ void Obj_Despawn(uint8_t slot)
 bool Obj_TouchScrooge(uint8_t slot)
 {
     Decomp_Enter(DT_CODE_OBJ_TOUCH_SCROOGE, 0, slot, 0);
-    if (!(gObjects->flags[slot] & 0x80)) return false;
+    if (!(gObjects->flags[slot] & 0x80)) {
+        return false;
+    }
     uint8_t box = gObjects->hitbox[slot] & HITBOX_INDEX;
     uint8_t dy = AbsDiff(gObjects->y[P_], gObjects->y[slot]);
-    if (gObjects->action[P_] == PLAYER_ACTION_CROUCH) dy = (uint8_t)(dy + 8);
-    if (dy >= HitboxHeight(box)) return false;
-    if (AbsDiff16(Obj_GetWorldX(P_), Obj_GetWorldX(slot)) > HitboxWidth(box)) return false;
-    if (!(gObjects->hitbox[slot] & HITBOX_HARMFUL)) return true;
+    if (gObjects->action[P_] == PLAYER_ACTION_CROUCH) {
+        dy = (uint8_t)(dy + 8);
+    }
+    if (dy >= HitboxHeight(box)) {
+        return false;
+    }
+    if (AbsDiff16(Obj_GetWorldX(P_), Obj_GetWorldX(slot)) > HitboxWidth(box)) {
+        return false;
+    }
+    if (!(gObjects->hitbox[slot] & HITBOX_HARMFUL)) {
+        return true;
+    }
     if (gPlayerPower) {
         gObjects->unk_0690[slot]++;
         return false;
     }
-    if (gPlayerInvulnerable) return false;
+    if (gPlayerInvulnerable) {
+        return false;
+    }
     gPlayerMode = PLAYER_MODE_KNOCKBACK;
     return true;
 }
@@ -82,29 +103,43 @@ bool Obj_TouchScrooge(uint8_t slot)
  * world X. */
 static bool Obj_FindBlock(uint8_t slot, bool horizontal)
 {
-    if (!(gObjects->flags[slot] & 0x80)) return false;
+    if (!(gObjects->flags[slot] & 0x80)) {
+        return false;
+    }
     gScratch(0) = slot;
     gScratch(1) = gObjects->y[slot];
     gScratch(2) = gObjects->worldX[slot];
     gScratch(3) = gObjects->worldPage[slot];
     uint16_t wx = (uint16_t)(gScratch(3) << 8 | gScratch(2));
     for (uint8_t x = 0x0F; x != 0; x--) {
-        if (x == slot || !(gObjects->state[x] & OBJ_STATUS_LIVE) || !(gObjects->flags[x] & 0x80)) continue;
-        if (gObjects->kind[x] != OBJ_KIND_BLOCK) continue;
+        if (x == slot || !(gObjects->state[x] & OBJ_STATUS_LIVE) || !(gObjects->flags[x] & 0x80)) {
+            continue;
+        }
+        if (gObjects->kind[x] != OBJ_KIND_BLOCK) {
+            continue;
+        }
         uint8_t box = gObjects->hitbox[x] & HITBOX_INDEX;
         uint8_t dy = AbsDiff(gScratch(1), gObjects->y[x]);
         uint8_t dx = AbsDiff16(wx, Obj_GetWorldX(x));
         if (horizontal) {
-            if (dy >= HitboxHeight(box)) continue;
+            if (dy >= HitboxHeight(box)) {
+                continue;
+            }
             gScratch(4) = (uint8_t)(HitboxWidth(box) + 1);
-            if (dx >= gScratch(4)) continue;
+            if (dx >= gScratch(4)) {
+                continue;
+            }
             gScratch(4) = dx;
             gContactDepth = (uint8_t)(HitboxWidth(box) - dx);
             gContactSlot = x;
         } else {
-            if (dx >= HitboxWidth(box)) continue;
+            if (dx >= HitboxWidth(box)) {
+                continue;
+            }
             gScratch(4) = (uint8_t)(HitboxHeight(box) + 1);
-            if (dy >= gScratch(4)) continue;
+            if (dy >= gScratch(4)) {
+                continue;
+            }
             gScratch(4) = dy;
             gContactDepth = (uint8_t)(HitboxHeight(box) - dy);
         }
@@ -150,11 +185,17 @@ uint8_t Obj_WalkRight(uint8_t slot, uint8_t first, uint8_t count)
         return slot;
     }
     Regs r = Decomp_Call(DT_CODE_BG_PROBE, 0, slot, count);
-    if (gProbeHits & 1) r = Decomp_Call(DT_CODE_SNAP_RIGHT, r.a, r.x, r.y);
+    if (gProbeHits & 1) {
+        r = Decomp_Call(DT_CODE_SNAP_RIGHT, r.a, r.x, r.y);
+    }
     uint8_t x = r.x;
     gObjects->flags[x] |= OBJ_FLAG_FACING_RIGHT;
-    if (gObjects->kind[x] == OBJ_KIND_24 && x != 0) return x;
-    if (PushedByBlocks(x)) Obj_SetWorldX(x, (uint16_t)(Obj_GetWorldX(x) - gContactDepth));
+    if (gObjects->kind[x] == OBJ_KIND_24 && x != 0) {
+        return x;
+    }
+    if (PushedByBlocks(x)) {
+        Obj_SetWorldX(x, (uint16_t)(Obj_GetWorldX(x) - gContactDepth));
+    }
     return x;
 }
 
@@ -171,10 +212,14 @@ uint8_t Obj_WalkLeft(uint8_t slot, uint8_t first, uint8_t count)
         return slot;
     }
     Regs r = Decomp_Call(DT_CODE_BG_PROBE, 0, slot, count);
-    if (gProbeHits & 1) r = Decomp_Call(DT_CODE_SNAP_LEFT, r.a, r.x, r.y);
+    if (gProbeHits & 1) {
+        r = Decomp_Call(DT_CODE_SNAP_LEFT, r.a, r.x, r.y);
+    }
     uint8_t x = r.x;
     gObjects->flags[x] &= (uint8_t)~OBJ_FLAG_FACING_RIGHT;
-    if (PushedByBlocks(x)) Obj_SetWorldX(x, (uint16_t)(Obj_GetWorldX(x) + gContactDepth));
+    if (PushedByBlocks(x)) {
+        Obj_SetWorldX(x, (uint16_t)(Obj_GetWorldX(x) + gContactDepth));
+    }
     return x;
 }
 
@@ -213,7 +258,9 @@ uint8_t Obj_Fall(uint8_t slot, uint8_t first, uint8_t count)
     if (gProbeHits & 1) {
         x = Decomp_Call(DT_CODE_SNAP_FEET, r.a, r.x, r.y).x;
     } else {
-        if (!LandsOnBlocks(x)) return x;
+        if (!LandsOnBlocks(x)) {
+            return x;
+        }
         gObjects->y[x] -= gContactDepth;
     }
     Obj_SetVelocityY(x, 0);
@@ -234,7 +281,9 @@ uint8_t Obj_Rise(uint8_t slot, uint8_t first, uint8_t count)
     if (gProbeHits & 1) {
         x = Decomp_Call(DT_CODE_SNAP_HEAD, r.a, r.x, r.y).x;
     } else {
-        if (!LandsOnBlocks(x)) return x;
+        if (!LandsOnBlocks(x)) {
+            return x;
+        }
         gObjects->y[x] = (uint8_t)(gObjects->y[x] + gContactDepth + 1);
     }
     Obj_SetVelocityY(x, 0xFF00);
@@ -277,9 +326,14 @@ void Obj_MarkConsumed(uint8_t slot)
 void Obj_DifficultAction(uint8_t slot)
 {
     Decomp_Enter(DT_CODE_OBJ_DIFFICULT_ACTION, 0, slot, 0);
-    if (gDifficulty != DIFFICULTY_DIFFICULT) return;
-    if (gObjects->action[slot] == 0x25) gObjects->action[slot] = 0x28;
-    else if (gObjects->action[slot] == 0x26) gObjects->action[slot] = 0x24;
+    if (gDifficulty != DIFFICULTY_DIFFICULT) {
+        return;
+    }
+    if (gObjects->action[slot] == 0x25) {
+        gObjects->action[slot] = 0x28;
+    } else if (gObjects->action[slot] == 0x26) {
+        gObjects->action[slot] = 0x24;
+    }
 }
 
 /* $F312: horizontal speed from the speed table by index. */
@@ -308,15 +362,21 @@ bool Obj_FindFreeSlot(uint8_t *slot)
 
 /* ---- site adapters ---- */
 
-static void SetCarry(Regs *r, bool carry) { r->p = (uint8_t)(carry ? r->p | P_C : r->p & ~P_C); }
+static void SetCarry(Regs *r, bool carry)
+{
+    r->p = (uint8_t)(carry ? r->p | P_C : r->p & ~P_C);
+}
 
 static void Run_TouchScrooge(Regs *r)
 {
     uint8_t slot = r->x;
     bool on = gObjects->flags[slot] & 0x80;
     SetCarry(r, !Obj_TouchScrooge(slot));
-    if (on) r->y = gObjects->hitbox[slot] & HITBOX_INDEX;
+    if (on) {
+        r->y = gObjects->hitbox[slot] & HITBOX_INDEX;
+    }
 }
+
 static void Run_WalkRight(Regs *r)
 {
     r->x = Obj_WalkRight(r->x, r->a, r->y);

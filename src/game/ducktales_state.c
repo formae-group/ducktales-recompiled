@@ -6,10 +6,14 @@
 const char *dt_difficulty_name(DtDifficulty d)
 {
     switch (d) {
-    case DT_DIFFICULTY_EASY: return "Easy";
-    case DT_DIFFICULTY_NORMAL: return "Normal";
-    case DT_DIFFICULTY_DIFFICULT: return "Difficult";
-    default: return "?";
+        case DT_DIFFICULTY_EASY:
+            return "Easy";
+        case DT_DIFFICULTY_NORMAL:
+            return "Normal";
+        case DT_DIFFICULTY_DIFFICULT:
+            return "Difficult";
+        default:
+            return "?";
     }
 }
 
@@ -24,8 +28,12 @@ bool dt_money(const uint8_t *ram, uint32_t *money)
     uint32_t value = 0;
     for (int i = 0; i < DT_MONEY_DIGIT_COUNT; i++) {
         uint8_t tile = ram[DT_ADDR_MONEY_DIGITS + i];
-        if (tile == DT_MONEY_TILE_BLANK) tile = 0;
-        else if (tile > 9) { *money = 0; return false; }
+        if (tile == DT_MONEY_TILE_BLANK) {
+            tile = 0;
+        } else if (tile > 9) {
+            *money = 0;
+            return false;
+        }
         value = value * 10 + tile;
     }
     *money = value * 10;
@@ -42,7 +50,9 @@ void dt_hp(const uint8_t *ram, uint8_t *hp, uint8_t *hp_max)
             *hp_max = i;
             return;
         }
-        if (!(rec[2] & DT_HP_DOT_LOST)) full++;
+        if (!(rec[2] & DT_HP_DOT_LOST)) {
+            full++;
+        }
     }
     *hp = 0;
     *hp_max = 0;
@@ -74,10 +84,12 @@ void dt_state_decode(const uint8_t *ram, DtState *out)
 int dt_state_format(const DtState *s, char *out, int cap)
 {
     char money[16];
-    if (s->money_valid) snprintf(money, sizeof money, "%lu", (unsigned long)s->money);
-    else snprintf(money, sizeof money, "?");
-    return snprintf(out, (size_t)cap,
-                    "diff=%s money=%s hp=%u/%u lives=%u x=%u y=%u vy=%+.3f held=%02X new=%02X",
-                    dt_difficulty_name(s->difficulty), money, s->hp, s->hp_max, s->lives, s->scrooge_x,
-                    s->scrooge_y, s->scrooge_vy / 256.0, s->pad_held, s->pad_new);
+    if (s->money_valid) {
+        snprintf(money, sizeof money, "%lu", (unsigned long)s->money);
+    } else {
+        snprintf(money, sizeof money, "?");
+    }
+    return snprintf(out, (size_t)cap, "diff=%s money=%s hp=%u/%u lives=%u x=%u y=%u vy=%+.3f held=%02X new=%02X",
+                    dt_difficulty_name(s->difficulty), money, s->hp, s->hp_max, s->lives, s->scrooge_x, s->scrooge_y,
+                    s->scrooge_vy / 256.0, s->pad_held, s->pad_new);
 }
