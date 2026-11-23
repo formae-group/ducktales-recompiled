@@ -17,17 +17,19 @@
  * and the routines not decompiled yet, which get the registers the original
  * gives them.
  *
- * Not decompiled yet and called through Decomp_Call: the background probe
- * $D120 and its snaps $D49A/$D4B2/$D4C8/$D4D6, one probe point $D350 (where
- * the vertical contact test can fall through to), and the walls move $F0F8,
- * which every object kind shares. The climbing steps $F192/$F1A8 are the C
- * of objcommon.c.
- * Given to the original routine (Decomp_RunOriginal):
- * Player_Update in modes 15 and 16 (message and treasure: they wait for
- * frames) and every call that reaches the row change at $E8C0 (it scrolls
- * the screen and re-enters the frame loop).
+ * The background probe and its snaps are the C of collision.c, the climbing
+ * steps $F192/$F1A8 the C of objcommon.c. Not decompiled yet and called
+ * through Decomp_Call: one probe point $D350 (where the vertical contact
+ * test can fall through to), the walls move $F0F8 and the HP refill $F812,
+ * which every object kind shares.
+ * Given to the original routine (Decomp_RunOriginal): Player_Update in modes
+ * 15 and 16 (message and treasure: they wait for frames) and every call that
+ * reaches the row change at $E8C0. The row change is task code (decomp.h)
+ * with its own site: it drops Player_Update's return address and hands off
+ * to the row scroll, which goes back into the frame loop.
  */
 #include "decomp/decomp.h"
+#include "decomp/collision.h"
 #include "decomp/motion.h"
 #include "decomp/objcommon.h"
 #include "decomp/sound.h"
@@ -291,18 +293,18 @@ static uint8_t Player_ProbeVertical(void)
     uint8_t flags = gObjects->flags[P_], hits = gProbeHits, feet = gFeetClass;
     gProbeFirst = (vdir & 4) ? PROBE_FEET : PROBE_HEAD;
     gProbeCount = 2;
-    Regs r = Decomp_Call(DT_CODE_BG_PROBE, gProbeFirst, 0, 2);
+    Bg_Probe(P_);
     if (gProbeHits & 1) {
         if (gTemp08 & 4) {
-            r = Decomp_Call(DT_CODE_SNAP_FEET, 4, r.x, r.y);
+            Bg_SnapFeet(P_);
         } else {
-            r = Decomp_Call(DT_CODE_SNAP_HEAD, 0, r.x, r.y);
+            Bg_SnapHead(P_);
         }
     }
     gFeetClass |= feet;
     gProbeHits |= hits;
     gObjects->flags[P_] = flags;
-    return r.x;
+    return P_;
 }
 
 /* $EA1A: the pose while airborne: pogo with B+Down (or in a bounce), the
@@ -412,16 +414,16 @@ static uint8_t Player_ProbeSide(void)
     uint8_t hits = gProbeHits;
     gProbeFirst = (gPlayerMoveSide & 2) ? PROBE_LEFT : PROBE_RIGHT;
     gProbeCount = 2;
-    Regs r = Decomp_Call(DT_CODE_BG_PROBE, gProbeFirst, 0, 2);
+    Bg_Probe(P_);
     if (gProbeHits & 1) {
         if (gPlayerMoveSide & 1) {
-            r = Decomp_Call(DT_CODE_SNAP_RIGHT, 1, r.x, r.y);
+            Bg_SnapRight(P_);
         } else {
-            r = Decomp_Call(DT_CODE_SNAP_LEFT, 0, r.x, r.y);
+            Bg_SnapLeft(P_);
         }
     }
     gProbeHits |= hits;
-    return r.x;
+    return P_;
 }
 
 static uint8_t Player_MoveRight(uint8_t x)
@@ -632,8 +634,9 @@ static void Player_StartJump(void)
 
 /* $E878: Scrooge left the screen row: in the final arena that ends the
  * fight's drop; otherwise move to the row above or below if the map has one
- * there. The move itself ($E8C0) scrolls the screen and goes back into the
- * frame loop, so a call that gets there runs as the original. */
+ * there. The move (Player_RowChange) leaves Player_Update without returning,
+ * so a call that gets there runs as the original, which reaches the row
+ * change's own site. */
 static void Player_LeaveRow(void)
 {
     if (gFinalArena && gObjects->y[P_] >= FINAL_ARENA_DROP_Y) {
@@ -661,6 +664,26 @@ static void Player_LeaveRow(void)
         return;
     }
     Decomp_RunOriginal();
+}
+
+/* $E8C0: the row change, reached from $E878 with A = the new row, X = 0 (or 2
+ * with Up held), Y = the new camera screen and $00 the new stream screen. It
+ * gives slot X its entry Y, drops Player_Update's return address and hands
+ * off to the row scroll ($C976), which returns to a JMP into the frame loop
+ * at $DBE4. */
+static void Player_RowChange(Regs *r)
+{
+    Decomp_Enter(DT_CODE_ROW_CHANGE, r->a, r->x, r->y);
+    gMapRow = r->a;
+    gObjects->y[r->x] = Game_ReadRom((uint16_t)(DT_CODE_ROW_ENTRY_Y + r->x));
+    gCameraScreen = r->y;
+    gStreamScreen = gScratch(0);
+    Decomp_Pull();
+    Decomp_Pull();
+    RAM_U8(DT_ADDR_HELD_SLOT) = 0;
+    gObjects->flags[P_] &= 0xFC;
+    r->a = gObjects->flags[P_];
+    Decomp_Handoff(DT_CODE_ROW_SCROLL, DT_CODE_ROW_CHANGE_END, 0);
 }
 
 /* $E719: falling off the bottom of the screen drops into the row below. */
@@ -691,7 +714,7 @@ static void Player_GrabClimb(void)
     }
     gProbeFirst = PROBE_CLIMB;
     gProbeCount = 3;
-    Decomp_Call(DT_CODE_BG_PROBE, 3, 0, 0);
+    Bg_Probe(P_);
     if (gProbeHits & 1) {
         return;
     }
@@ -1037,13 +1060,13 @@ static void Player_Carried(void)
     }
     gProbeFirst = PROBE_LEFT;
     gProbeCount = 2;
-    Regs r = Decomp_Call(DT_CODE_BG_PROBE, 3, 0, 2);
+    Bg_Probe(P_);
     if (!(gProbeHits & 1)) {
         return;
     }
     gObjects->y[P_] += 8;
     gPlayerMode = PLAYER_MODE_KNOCKBACK;
-    Player_Knockback(r.x);
+    Player_Knockback(P_);
 }
 
 /* Mode 12, $EC2D (not studied): a scripted fall and drift to the right. */
@@ -1346,12 +1369,13 @@ static void Run_SelectRefill(Regs *r)
 }
 
 /* Sites only where original code calls a routine: the frame loop calls
- * Player_Update, the original modes 15 and 16 jump to Player_PitDeath. The
+ * Player_Update, the original modes 15 and 16 jump to Player_PitDeath, and
+ * the original $E878 falls into Player_RowChange. The
  * damage routine keeps its site for replace mode's measuring call (decomp.c);
  * the damage event runs at its own [[mod_function_hook]] there (declared
  * first, so it fires first), and the adapter is the routine without it. */
 const DecompRoutine gPlayerRoutines[] = {
-    { DT_CODE_PLAYER_UPDATE, "ducktales.decomp.E354", "Player_Update", Run_Update, 0 },
+    { DT_CODE_PLAYER_UPDATE, "ducktales.decomp.E354", "Player_Update", Run_Update, OUT_HW },
     { DT_CODE_PLAYER_GROUND, NULL, "Player_Ground", Run_Ground, 0 },
     { DT_CODE_JUMP_START, NULL, "Player_StartJump", Run_StartJump, 0 },
     { DT_CODE_PLAYER_WALK, NULL, "Player_Walk", Run_Walk, 0 },
@@ -1379,5 +1403,6 @@ const DecompRoutine gPlayerRoutines[] = {
     { DT_CODE_CONTACT_H, NULL, "Player_ContactH", Run_ContactH, OUT_X | OUT_C },
     { DT_CODE_CONTACT_V, NULL, "Player_ContactV", Run_ContactV, OUT_C },
     { DT_CODE_SELECT_REFILL, NULL, "Player_SelectRefill", Run_SelectRefill, OUT_X },
+    { DT_CODE_ROW_CHANGE, "ducktales.decomp.E8C0", "Player_RowChange", Player_RowChange, 0, true, 0, false },
 };
 const int gPlayerRoutineCount = sizeof gPlayerRoutines / sizeof gPlayerRoutines[0];

@@ -136,6 +136,13 @@ addr = 0xEB5E
 length = 8
 crc32 = 0xE8776DC5
 
+# Player_RowChange (task code, src/decomp/player.c)
+[[mod_function_hook]]
+id = "ducktales.decomp.E8C0"
+addr = 0xE8C0
+length = 8
+crc32 = 0x7F4AD69A
+
 # Player_PitDeath
 [[mod_function_hook]]
 id = "ducktales.decomp.EBB4"
@@ -474,6 +481,13 @@ id = "ducktales.decomp.stop.E1AF"
 addr = 0xE1AF
 length = 8
 crc32 = 0xD1E4F218
+
+# The row scroll the row change ($E8C0, src/decomp/player.c) hands off to.
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.C976"
+addr = 0xC976
+length = 8
+crc32 = 0x51C43FB5
 
 # END game flow
 
