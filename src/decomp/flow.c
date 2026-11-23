@@ -68,6 +68,19 @@
 #define ALL_TREASURES         0x1F
 #define TREASURE_TRANSYLVANIA 0x02
 #define REDIRECT_LAND_SELECT  0x80
+#define MAIN_TASK_STACK       0xBF
+#define TITLE_SEED            0x88
+#define TITLE_OBJECTS         2
+#define TITLE_STRINGS         2 /* $BAB0 set of the title */
+#define TITLE_CHR             6 /* $C301 set of the title */
+#define TITLE_PALETTE         0x60
+#define TITLE_COLOUR_TEXT     0x11
+#define TITLE_COLOUR_A        0x2C
+#define TITLE_COLOUR_B        0x20
+#define TITLE_PAD_MOVE        (DT_PAD_SELECT | DT_PAD_LEFT | DT_PAD_RIGHT)
+#define TITLE_BLINK_FRAMES    0xB4
+#define SFX_CURSOR            0x2F
+#define DIFFICULTY_COUNT      3
 
 #define gScratch0        RAM_U8(DT_ADDR_SCRATCH0)
 #define gStreamSteps     RAM_U8(DT_ADDR_SCRATCH4)
@@ -826,6 +839,200 @@ static void FrameLoop_Yield(Regs *r)
     Yield(DT_FLOW_NEXT_FRAME);
 }
 
+/* ---- title and difficulty ---- */
+
+static void Title_Loop(Regs *r);
+
+/* $D4E6: the main task starts (power-on and every reset): the title. */
+static void MainTask(Regs *r)
+{
+    Decomp_Enter(DT_CODE_MAIN_TASK, r->a, r->x, r->y);
+    r->x = MAIN_TASK_STACK;
+    Decomp_SetStack(MAIN_TASK_STACK);
+    r->a = RAM_U8(DT_ADDR_PPU_CTRL);
+    Decomp_Store(DT_PPU_CTRL, r->a);
+    Yield(DT_FLOW_TITLE_START);
+}
+
+/* $D4F1: the generator's seed, the HUD packets, the title music; fade out. */
+static void Title_Start(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_START, r->a, r->x, r->y);
+    RAM_U8(DT_ADDR_RANDOM) = TITLE_SEED;
+    Hud_Reset(r);
+    MusicRequest(r, DT_MUSIC_TITLE);
+    Jsr(DT_CODE_FADE_OUT, DT_FLOW_TITLE_FADED, 0);
+}
+
+/* $D500 */
+static void Title_Faded(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_FADED, r->a, r->x, r->y);
+    gHudSplit = 0;
+    gPlayerInvulnerable = 0;
+    r->a = 0;
+    Yield(DT_FLOW_TITLE_BLACK);
+}
+
+/* $D509 */
+static void Title_Black(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_BLACK, r->a, r->x, r->y);
+    Jsr(DT_CODE_SCREEN_OFF, DT_FLOW_TITLE_SCREEN_OFF, 0);
+}
+
+/* $D50C: no scroll, both nametables cleared. */
+static void Title_ScreenOff(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_SCREEN_OFF, r->a, r->x, r->y);
+    RAM_U8(DT_ADDR_SCROLL_X) = 0;
+    RAM_U8(DT_ADDR_SCROLL_Y) = 0;
+    gCameraPage = 0;
+    gCameraX = 0;
+    r->a = NT_FILL_ADDR;
+    r->x = NT_FILL_TILE;
+    r->y = 0;
+    Jsr(DT_CODE_NT_FILL, DT_FLOW_TITLE_FILLED, OUT_A | OUT_X | OUT_Y);
+}
+
+/* $D51F: the title's strings. */
+static void Title_Filled(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_FILLED, r->a, r->x, r->y);
+    Call(r, DT_CODE_OAM_CLEAR);
+    Call(r, DT_CODE_CLEAR_OBJECTS);
+    SelectBank(r, DT_BANK_SPRITES);
+    r->x = TITLE_STRINGS;
+    Jsr(DT_B5_PPU_STRINGS, DT_FLOW_TITLE_STRINGS, OUT_X);
+}
+
+/* $D52F: the title's CHR. */
+static void Title_Strings(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_STRINGS, r->a, r->x, r->y);
+    r->x = TITLE_CHR;
+    Jsr(DT_CODE_CHR_LOAD, DT_FLOW_TITLE_CHR, OUT_X);
+}
+
+/* $D534: the title's palette and its two objects (Scrooge and the
+ * difficulty cursor). */
+static void Title_Chr(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_CHR, r->a, r->x, r->y);
+    r->x = TITLE_PALETTE;
+    Land_LoadPalette(r, TITLE_PALETTE);
+    gRam[DT_ADDR_PALETTE_SHOWN + 0x10] = gRam[DT_ADDR_PALETTE + 0x10] = TITLE_COLOUR_TEXT;
+    for (int slot = TITLE_OBJECTS - 1; slot >= 0; slot--) {
+        uint16_t e = (uint16_t)(DT_DATA_TITLE_OBJECTS + 3 * slot);
+        gObjects->state[slot] = 0x80;
+        gObjects->flags[slot] = 0x80;
+        gObjects->action[slot] = Rom(e);
+        gObjects->y[slot] = Rom((uint16_t)(e + 1));
+        gObjects->worldX[slot] = Rom((uint16_t)(e + 2));
+        gObjects->animTimer[slot] = 0;
+        gObjects->animFrame[slot] = 0;
+        gObjects->worldPage[slot] = 0;
+    }
+    r->x = 0xFF;
+    r->y = 0xFD;
+    gRam[DT_ADDR_PALETTE_SHOWN + 0x1A] = gRam[DT_ADDR_PALETTE + 0x1A] = TITLE_COLOUR_A;
+    gRam[DT_ADDR_PALETTE_SHOWN + 0x1E] = gRam[DT_ADDR_PALETTE + 0x1E] = TITLE_COLOUR_B;
+    gRam[DT_ADDR_PALETTE_SHOWN + 0x1F] = gRam[DT_ADDR_PALETTE + 0x1F] = TITLE_COLOUR_A;
+    r->a = TITLE_COLOUR_A;
+    Jsr(DT_CODE_SCREEN_ON, DT_FLOW_TITLE_SHOWN, 0);
+}
+
+/* $D58B */
+static void Title_Shown(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_SHOWN, r->a, r->x, r->y);
+    Yield(DT_FLOW_TITLE_FADE_IN);
+}
+
+/* $D58E */
+static void Title_FadeIn(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_FADE_IN, r->a, r->x, r->y);
+    Jsr(DT_CODE_FADE_IN, DT_FLOW_TITLE_LIT, 0);
+}
+
+/* $D591: the lives group of the HUD as a game starts it. */
+static void Title_Lit(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_LIT, r->a, r->x, r->y);
+    CopyRom(DT_ADDR_HUD_GROUP_LIVES, DT_DATA_HUD_LIVES, DT_HUD_LIVES_LEN);
+    r->a = Rom(DT_DATA_HUD_LIVES);
+    r->y = 0xFF;
+    Yield(DT_FLOW_TITLE_READY);
+}
+
+/* $D59F: Normal is preselected. */
+static void Title_Ready(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_READY, r->a, r->x, r->y);
+    gDifficulty = 1;
+    Title_Loop(r);
+}
+
+static void Title_Frame(Regs *r);
+
+/* $D5A3 (and $D5D1 after each frame): Start goes to Land Select; Select,
+ * Left or Right moves the cursor through the three difficulties (Left
+ * upward, wrapping). */
+static void Title_Loop(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_LOOP, r->a, r->x, r->y);
+    r->a = gPadNew & DT_PAD_START;
+    if (r->a) {
+        Jump(DT_CODE_LAND_SELECT, 0);
+        return;
+    }
+    r->a = gPadNew & TITLE_PAD_MOVE;
+    if (r->a) {
+        r->y = r->a & DT_PAD_LEFT;
+        uint8_t difficulty = (uint8_t)(gDifficulty + Rom((uint16_t)(DT_DATA_DIFFICULTY_STEP + r->y)));
+        if (difficulty >= DIFFICULTY_COUNT) {
+            difficulty = (uint8_t)(difficulty + Rom((uint16_t)(DT_DATA_DIFFICULTY_STEP + r->y + 1)));
+        }
+        gDifficulty = difficulty;
+        r->y = difficulty;
+        gObjects->worldX[1] = Rom((uint16_t)(DT_DATA_DIFFICULTY_X + difficulty));
+        SoundRequest(r, SFX_CURSOR);
+    }
+    if (Gosub(Title_Frame, r, DT_FLOW_TITLE_LOOP)) {
+        Title_Loop(r);
+    }
+}
+
+/* $D5D7: Scrooge's idle animation picks a new variant at random every 180
+ * builder frames; the sprites, and the next frame. */
+static void Title_Frame(Regs *r)
+{
+    Decomp_Enter(DT_CODE_TITLE_FRAME, r->a, r->x, r->y);
+    if (gObjects->animFrame[P_] == 0 && gObjects->animTimer[P_] == 1) {
+        gObjects->animTimer[P_] = 0;
+        r->a = 0;
+        r->x = gSpritePhase;
+        if (gSpritePhase == TITLE_BLINK_FRAMES) {
+            gSpritePhase = 0;
+            uint8_t *random = &gRam[DT_ADDR_RANDOM];
+            random[0] = (uint8_t)(random[0] + random[1] + 1);
+            gObjects->animFrame[P_] = random[0] & 1;
+            r->a = random[0] & 1;
+        }
+    }
+    Call(r, DT_CODE_OAM_CLEAR);
+    SelectBank(r, DT_BANK_SPRITES);
+    Call(r, DT_B5_BUILD_OAM);
+    Yield(DT_FLOW_TITLE_FRAME_DONE);
+}
+
+/* $D609 */
+static void Title_FrameDone(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_FRAME_DONE, r->a, r->x, r->y);
+}
+
 /* ---- boss trigger ---- */
 
 static uint16_t Rom16(uint16_t addr)
@@ -1153,6 +1360,21 @@ const DecompRoutine gFlowRoutines[] = {
     RESUME(DT_FLOW_GAME_OVER_NEXT, "GameOver_Next", GameOver_Next, 1),
     TASK(DT_CODE_LAND_EXIT, NULL, "LandExit", LandExit, 0),
     RESUME(DT_FLOW_LAND_EXIT_NEXT, "LandExit_Next", LandExit_Next, 1),
+    TASK(DT_CODE_MAIN_TASK, SITE("D4E6"), "MainTask", MainTask, 0),
+    RESUME(DT_FLOW_TITLE_START, "Title_Start", Title_Start, 0),
+    RESUME(DT_FLOW_TITLE_FADED, "Title_Faded", Title_Faded, 0),
+    RESUME(DT_FLOW_TITLE_BLACK, "Title_Black", Title_Black, 0),
+    RESUME(DT_FLOW_TITLE_SCREEN_OFF, "Title_ScreenOff", Title_ScreenOff, 0),
+    RESUME(DT_FLOW_TITLE_FILLED, "Title_Filled", Title_Filled, 0),
+    RESUME(DT_FLOW_TITLE_STRINGS, "Title_Strings", Title_Strings, 0),
+    RESUME(DT_FLOW_TITLE_CHR, "Title_Chr", Title_Chr, 0),
+    RESUME(DT_FLOW_TITLE_SHOWN, "Title_Shown", Title_Shown, 0),
+    RESUME(DT_FLOW_TITLE_FADE_IN, "Title_FadeIn", Title_FadeIn, 0),
+    RESUME(DT_FLOW_TITLE_LIT, "Title_Lit", Title_Lit, 0),
+    RESUME(DT_FLOW_TITLE_READY, "Title_Ready", Title_Ready, 0),
+    RESUME(DT_FLOW_TITLE_LOOP, "Title_Loop", Title_Loop, 0),
+    TASK(DT_CODE_TITLE_FRAME, NULL, "Title_Frame", Title_Frame, 0),
+    RESUME(DT_FLOW_TITLE_FRAME_DONE, "Title_FrameDone", Title_FrameDone, 0),
     TASK(DT_CODE_BOSS_TRIGGER, NULL, "BossTrigger", BossTrigger, 0),
     RESUME(DT_FLOW_BOSS_STREAMED, "BossTrigger_Streamed", BossTrigger_Streamed, 2),
     RESUME(DT_FLOW_BOSS_NEXT, "BossTrigger_Next", BossTrigger_Next, 2),

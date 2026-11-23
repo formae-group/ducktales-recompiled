@@ -595,15 +595,19 @@ static void run_task_original(const DecompRoutine *rt, const CycModRegs *in)
 }
 
 /* Bytes both runs must agree on: page 1 only above the C's final S, and never
- * the slot of the isolated call's return address. */
+ * the slot of the isolated call's return address (which wraps to the bottom of
+ * page 1 for the main task's start, entered with S = $FF). */
 static bool task_live(uint16_t a)
 {
-    if ((a & 0xFF00) != 0x0100 || a < DT_ADDR_STACK_FLOOR) {
+    if ((a & 0xFF00) != 0x0100) {
         return true;
     }
     uint8_t off = (uint8_t)a;
     if (off == s_run.call_s || off == (uint8_t)(s_run.call_s - 1)) {
         return false;
+    }
+    if (a < DT_ADDR_STACK_FLOOR) {
+        return true;
     }
     return s_handoff_set ? off > s_cur_s : off >= s_cur_s + 3u;
 }
