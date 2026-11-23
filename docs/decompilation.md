@@ -114,7 +114,17 @@ timing, replace mode also runs the original routine in an isolated call, only to
 count from the same state. After storing the C's results, it spends that many CPU cycles as reads
 of the routine's first byte (`cpu_read`, with every device clocked), polling interrupts in the
 last one as the RTS would. So interrupts and frame boundaries come at the same points of the game's
-work as on the console. The one difference: an NMI that the original would take in the middle of a
+work as on the console.
+
+**Bus operations.** A routine that writes the PPU or the mapper does it through
+`Decomp_BusWrite(addr, value)`, which records the write (the C's own view of the ROM banks follows
+mapper writes at once). Replace mode makes the recorded writes on the machine spread evenly among
+those reads, and check mode makes them the same way on an isolated copy of the machine at entry and
+compares CIRAM, palette RAM, CHR RAM and the PRG bank with the original's (contract `OUT_HW`). The
+spacing matters: the PPU acts on a `$2006` or `$2007` write a few cycles late, so writes made back to
+back put every byte of a VRAM queue one address off. That left 84 nametable bytes wrong from
+`african_mines_intro` frame 221, which moved the sprite-0 split and showed in RAM only at frame
+1383 (found on the level branch). The one difference: an NMI that the original would take in the middle of a
 routine is taken right after it, so the bytes it pushes on the stack differ. With this, replace
 mode is RAM-identical to the console on every frame of every route (see Verification).
 
@@ -134,11 +144,13 @@ the HP-dot work it skips, and `moon_intro` drifted from the console at frame 108
 each (`NES_MOD_MAX_FUNCTION_HOOKS` in `runner/src/mod_function_hooks.c`), so one site per routine
 would not last the whole game. A routine has a site (`site_id` in its table entry) only if
 original code reaches it; `tools/decomp_callers.py` lists, from a build's generated code, the
-instructions outside the decompiled ranges that jump to an entry. Of the 31 routines here, 9 have
+instructions outside the decompiled ranges that jump to an entry. Of the 50 routines here, 25 have
 one: `Player_Update` (the frame loop's `JSR` at `$DB6C`), `Player_PitDeath` (the original
 mode 15 and 16 code jumps to it at `$EDCC`), the four motion primitives and the two sound requests
-(object and game code everywhere), and `Player_TakeDamage`, kept for replace mode's measuring call
-above. As more of the game is decompiled the boundary moves out and sites go away.
+(object and game code everywhere), `Player_TakeDamage`, kept for replace mode's measuring call
+above, and 16 of the 19 camera, scrolling, level and background routines (all but
+`Level_ScreenPointer`, `Level_DecodeBlock` and `Level_MetatileAt`, which only decompiled code
+calls). As more of the game is decompiled the boundary moves out and sites go away.
 
 Check mode still compares every call of every routine. The C of each routine starts with
 `Decomp_Enter(addr, a, x, y)`, giving the registers the original gets (0 for those the C does not
@@ -178,6 +190,18 @@ leave the jump vector in `$00/$01` as the original's loop does.
 | `Player_Walk`, `Player_Knockback` | X | none | X is the slot the push of `$73` moves when no direction is held, and what the sound request keeps in `$00` |
 | `Player_MoveRight`, `Player_MoveLeft`, `Player_Fall`, `Player_Rise`, `Player_ProbeVertical` | X (moves only) | X | X is what the probe or contact routine returned; callers pass it on |
 | every other `Player_*` | none | none | |
+| `Camera_Update` | X | X, hardware | the frame loop keeps X past `$CF93` into the code after it: X is the entry X when the camera stays, else what the column streaming leaves |
+| `Scroll_StreamBlocks` | none | X, hardware | X is the last step's collision map index (or the screen id >> 5 when its screen is missing), or where the upload stopped when the screen is blanked |
+| `Vram_FlushQueue` | none | X, hardware | X is the queue index where the upload stopped |
+| `Level_ScreenPointer` | Y = grid cell | X | X = screen id >> 5 |
+| `Level_DecodeBlock` | none | X | X is the block's collision map index |
+| `Level_MetatileAt` | X = probe slot | A, X | |
+| `Map_LoadHeader` | X = map | X | X is kept |
+| `Bg_Probe` | X = slot | X, hardware | X is kept |
+| `Bg_SnapRight`, `Bg_SnapLeft`, `Bg_SnapHead`, `Bg_SnapFeet` | X = slot | X | X is kept |
+| `Level_TileEdit` | X = slot | hardware | |
+| `Level_DrawStartColumns`, `Level_DrawScreen`, `Level_PlaceFromEntry`, `Vram_FlushTileEdits`, `Chr_StreamRow` | none | hardware | |
+| `Boss_CheckTrigger` | none | none | the arena start runs as the original (`Decomp_RunOriginal`): it scrolls the row |
 
 ### Routines
 
@@ -231,13 +255,14 @@ RAM-identical in replace mode.
 | `Vram_FlushQueue` | `$C139` | claimed (decomp/level) | - | - | - |
 | `Vram_FlushTileEdits` | `$C15E` | claimed (decomp/level) | - | - | - |
 | `Bg_Probe` | `$D120` | claimed (decomp/level) | - | - | - |
-| `Bg_SnapLeft` | `$D49A` | claimed (decomp/level) | - | - | - |
-| `Bg_SnapRight` | `$D4B2` | claimed (decomp/level) | - | - | - |
-| `Bg_SnapDown` | `$D4C8` | claimed (decomp/level) | - | - | - |
-| `Bg_SnapUp` | `$D4D6` | claimed (decomp/level) | - | - | - |
+| `Bg_SnapRight` | `$D49A` | claimed (decomp/level) | - | - | - |
+| `Bg_SnapLeft` | `$D4B2` | claimed (decomp/level) | - | - | - |
+| `Bg_SnapHead` | `$D4C8` | claimed (decomp/level) | - | - | - |
+| `Bg_SnapFeet` | `$D4D6` | claimed (decomp/level) | - | - | - |
 | `Level_PlaceFromEntry` | `$DD4E` | claimed (decomp/level) | - | - | - |
-| `Boss_Trigger` | `$CF93` | claimed (decomp/level) | - | - | - |
+| `Boss_CheckTrigger` | `$CF93` | claimed (decomp/level) | - | - | - |
 | `Level_TileEdit` | `$F574` | claimed (decomp/level) | - | - | - |
+| `Chr_StreamRow` | `$C42C` | claimed (decomp/level) | - | - | - |
 
 Not decompiled yet, and still run as the original from the C:
 

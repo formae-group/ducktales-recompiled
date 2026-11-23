@@ -22,8 +22,9 @@
  *            real.
  *   replace  the image's changes are stored into the machine with
  *            cyc_mod_poke (the dead stack excepted), the contract's registers
- *            set, and the CPU spends the original's cycle count as reads of
- *            the routine's first byte, polling interrupts in the last one as
+ *            set, and the CPU spends the original's cycle count as the C's
+ *            bus operations (Decomp_BusWrite) spread evenly among reads of
+ *            the routine's first byte, polling interrupts in the last read as
  *            the RTS would; then the scheduler returns from the routine as
  *            its RTS would. Interrupts and frames therefore come at the same
  *            points of the game's work as on the console (an NMI that the
@@ -64,6 +65,7 @@
 #define MAX_ROUTINES     256
 #define MAX_BUS_OPS      8192
 #define FRAME_END_MARGIN 32
+#define SCOPE_OP_GAP     8
 
 typedef struct {
     uint64_t calls, compared, original;
@@ -127,16 +129,24 @@ void Decomp_BusRead(uint16_t addr)
 }
 
 /* The recorded bus operations from index from on, made on the machine (or
- * on the isolated copy inside a scope). */
-static void play_ops(int from)
+ * on the isolated copy inside a scope), with spare reads of addr spread
+ * evenly between them: the PPU acts on a $2006 or $2007 write a few cycles
+ * late, so the operations cannot come back to back. Returns the reads made,
+ * fewer than spare when spare is not 0. */
+static uint64_t play_ops(int from, uint64_t spare, uint16_t addr)
 {
+    uint64_t slots = (uint64_t)(s_nops - from) + 1, spent = 0;
     for (int i = from; i < s_nops; i++) {
+        for (uint64_t due = spare * (uint64_t)(i - from + 1) / slots; spent < due; spent++) {
+            (void)cpu_read(addr, 0);
+        }
         if (s_ops[i].write) {
             cpu_write(s_ops[i].addr, s_ops[i].value, 0);
         } else {
             (void)cpu_read(s_ops[i].addr, 0);
         }
     }
+    return spent;
 }
 
 static uint64_t fnv(const uint8_t *p, size_t n)
@@ -179,7 +189,7 @@ static bool call_in_scope(uint16_t routine, CycModRegs *r)
         }
     }
     if (s_ops_in_scope < s_nops) {
-        play_ops(s_ops_in_scope);
+        play_ops(s_ops_in_scope, (uint64_t)(s_nops - s_ops_in_scope) * SCOPE_OP_GAP, routine);
     }
     s_ops_in_scope = s_nops;
     return cyc_mod_call(routine, r);
@@ -271,6 +281,13 @@ static uint64_t run_original(const DecompRoutine *rt, const CycModRegs *in, CycM
     return returned ? after.cycles - before.cycles : 0;
 }
 
+/* The original's cycles that the C's bus operations leave to spend, at
+ * least the one that polls interrupts. */
+static uint64_t spare_cycles(uint64_t cycles)
+{
+    return cycles > (uint64_t)s_nops ? cycles - (uint64_t)s_nops : 1;
+}
+
 static void spend_cycles(uint16_t addr, uint64_t cycles)
 {
     while (cycles-- > 1) {
@@ -340,14 +357,14 @@ static void report(const DecompRoutine *rt, const CycModRegs *in, const char *ca
 
 /* The C's bus operations made on a copy of the machine at entry must leave
  * the PPU's memories and the PRG bank as the original left them. */
-static void check_hw(const DecompRoutine *rt)
+static void check_hw(const DecompRoutine *rt, uint64_t cycles)
 {
     HwState c;
     if (s_nops) {
         if (!cyc_mod_isolate_begin()) {
             fail("cannot open an isolated scope", rt->addr);
         }
-        play_ops(0);
+        play_ops(0, spare_cycles(cycles), rt->addr);
         c = hw_state();
         cyc_mod_isolate_end();
     } else {
@@ -385,7 +402,7 @@ static void check(int i, const CycModRegs *in)
         report(rt, in, NULL, cycles != 0, s_orig, &orig, s_image, &c);
     }
     if (rt->out & OUT_HW) {
-        check_hw(rt);
+        check_hw(rt, cycles);
     }
     s_stats[i].compared++;
 }
@@ -526,8 +543,8 @@ static int replace(int i, const CycModRegs *in)
     uint8_t flags = P_N | P_V | P_Z | P_C;
     CycModRegs set = { c.a, c.x, c.y, in->s, (uint8_t)((c.p & flags) | (in->p & ~flags)), 0 };
     cyc_mod_set_regs(&set);
-    play_ops(0);
-    spend_cycles(rt->addr, cycles > (uint64_t)s_nops ? cycles - (uint64_t)s_nops : 1);
+    uint64_t spare = spare_cycles(cycles);
+    spend_cycles(rt->addr, spare - play_ops(0, spare, rt->addr));
     return 1;
 }
 

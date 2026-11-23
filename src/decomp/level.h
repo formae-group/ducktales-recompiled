@@ -14,8 +14,8 @@
 #define gProbeY        RAM_U8(DT_ADDR_PROBE_Y)
 
 void Map_LoadHeader(uint8_t map);
-void Level_ScreenPointer(uint8_t index);
+uint8_t Level_ScreenPointer(uint8_t index);
 uint8_t Level_MetatileAt(uint8_t x);
-void Scroll_StreamBlocks(void);
-void Vram_FlushQueue(void);
-void Camera_Update(void);
+uint8_t Scroll_StreamBlocks(void);
+uint8_t Vram_FlushQueue(void);
+uint8_t Camera_Update(uint8_t x);

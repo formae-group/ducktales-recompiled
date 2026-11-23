@@ -85,8 +85,8 @@ void Map_LoadHeader(uint8_t map)
 
 /* $CE2C: ($22) = the data of the screen in grid cell index: bank 4,
  * $8000 + id * 72. The products id * 8 and id * 64 it adds are left in the
- * scratch bytes. */
-void Level_ScreenPointer(uint8_t index)
+ * scratch bytes. Returns id >> 5, which the original leaves in X. */
+uint8_t Level_ScreenPointer(uint8_t index)
 {
     Decomp_Enter(DT_CODE_SCREEN_POINTER, 0, 0, index);
     uint8_t id = Map_Cell(index);
@@ -94,6 +94,7 @@ void Level_ScreenPointer(uint8_t index)
     gScratch1 = (uint8_t)(id << 3);
     gScratch2 = (uint8_t)(id >> 5);
     Ram_SetU16(DT_ADDR_SCREEN_DATA, DT_ADDR_SCREEN_DATA + 1, (uint16_t)(DT_SCREEN_BASE + id * 72));
+    return gScratch2;
 }
 
 /* $CDAF: ($00) = the entry of block gBlockCell of the screen at ($22) in
@@ -153,8 +154,9 @@ static uint8_t Level_Substitute(int quadrant, uint8_t metatile)
  * and the collision map. The bottom block row is half a block: its lower
  * quadrants redraw the last metatile (at first the tileset bank number, which
  * the bank switch leaves in the original's X) at the last buffer offset, and
- * the queue never uploads those tiles. Leaves the tileset bank mapped. */
-static void Level_DecodeBlock(void)
+ * the queue never uploads those tiles. Leaves the tileset bank mapped.
+ * Returns the block's collision map index, which the original leaves in X. */
+static uint8_t Level_DecodeBlock(void)
 {
     Decomp_Enter(DT_CODE_DECODE_BLOCK, 0, 0, 0);
     uint8_t pos = gStreamPos;
@@ -182,7 +184,9 @@ static void Level_DecodeBlock(void)
         Level_DrawMetatile(gScratch3, metatile);
     }
     gScratch2 = 0xFF;
-    gCollisionMap[(gStreamPage & 1) << 6 | gBlockCell] = gBlockClasses;
+    uint8_t cell = (uint8_t)((gStreamPage & 1) << 6 | gBlockCell);
+    gCollisionMap[cell] = gBlockClasses;
+    return cell;
 }
 
 /* $CDE2: the metatile under a probed point (collision.c): screen page $03
@@ -210,14 +214,14 @@ uint8_t Level_MetatileAt(uint8_t x)
 
 /* $C139/$C15E: upload a queue to the PPU. Records of address high, low,
  * count - 1 and the bytes, until an address high byte with bit 7 (or the
- * index wraps). */
-static void Vram_Upload(uint16_t queue)
+ * index wraps). Returns the index where it stopped, the original's X. */
+static uint8_t Vram_Upload(uint16_t queue)
 {
     uint8_t i = 0;
     do {
         uint8_t hi = RAM_U8(queue + i);
         if (hi & QUEUE_END) {
-            return;
+            return i;
         }
         Decomp_BusWrite(DT_PPU_ADDR, hi);
         Decomp_BusWrite(DT_PPU_ADDR, RAM_U8(queue + i + 1));
@@ -228,13 +232,14 @@ static void Vram_Upload(uint16_t queue)
         } while ((int8_t)--count >= 0);
         i += 3;
     } while (i);
+    return i;
 }
 
-void Vram_FlushQueue(void)
+uint8_t Vram_FlushQueue(void)
 {
     Decomp_Enter(DT_CODE_VRAM_FLUSH, 0, 0, 0);
     gVramQueueReady = 0;
-    Vram_Upload(DT_ADDR_VRAM_QUEUE);
+    return Vram_Upload(DT_ADDR_VRAM_QUEUE);
 }
 
 static void Vram_FlushTileEdits(void)
@@ -245,15 +250,16 @@ static void Vram_FlushTileEdits(void)
 }
 
 /* $C84E/$C959: close the queue at offset end; upload it now while the
- * screen is blanked, else let the NMI do it. */
-static void Vram_EndQueue(unsigned end)
+ * screen is blanked, else let the NMI do it. Returns the original's X: the
+ * upload's, else x. */
+static uint8_t Vram_EndQueue(unsigned end, uint8_t x)
 {
     gVramQueue[end] = 0xFF;
     if (gBlanked) {
-        Vram_FlushQueue();
-    } else {
-        gVramQueueReady = 0xFF;
+        return Vram_FlushQueue();
     }
+    gVramQueueReady = 0xFF;
+    return x;
 }
 
 /* $C7FB: the next step in the direction of the last move ($38). A change of
@@ -324,29 +330,29 @@ static uint8_t Scroll_QueueBlock(void)
 
 /* $C830: stream gSteps steps into the queue from gQueueEnd, starting with
  * block $26 of screen $24. A step whose screen is missing, or whose block
- * the HUD covers, queues nothing. */
-void Scroll_StreamBlocks(void)
+ * the HUD covers, queues nothing. Returns the X the original leaves, which
+ * the frame loop carries past the camera. */
+uint8_t Scroll_StreamBlocks(void)
 {
     Decomp_Enter(DT_CODE_STREAM_BLOCKS, 0, 0, 0);
     for (;;) {
-        Level_ScreenPointer(gStreamScreen);
+        uint8_t x = Level_ScreenPointer(gStreamScreen);
         bool queued = false;
         if (Map_Cell(gStreamScreen) != MAP_NO_SCREEN && gStreamPage < gMapStride) {
-            Level_DecodeBlock();
+            x = Level_DecodeBlock();
             queued = gLand > LAND_MOON || (gStreamPage & 1) || (gStreamPos & 7);
         }
         if (queued) {
             uint8_t at = Scroll_QueueBlock();
             if (!--gSteps) {
-                Vram_EndQueue(at + 4u);
-                return;
+                return Vram_EndQueue(at + 4u, x);
             }
             gQueueEnd = (uint8_t)(at + 4);
         } else if (!--gSteps) {
             if (gQueueEnd) {
-                Vram_EndQueue(gQueueEnd);
+                return Vram_EndQueue(gQueueEnd, x);
             }
-            return;
+            return x;
         }
         Scroll_Advance();
     }
@@ -354,8 +360,8 @@ void Scroll_StreamBlocks(void)
 
 /* $C7C5: one step per 4 pixels the camera moved, counted from the previous
  * camera X so that the steps follow the 4-pixel grid in the scroll
- * direction. */
-static void Scroll_Stream(void)
+ * direction. Returns the original's X, x when there is nothing to stream. */
+static uint8_t Scroll_Stream(uint8_t x)
 {
     uint8_t moved = (uint8_t)(gCameraX - gCameraXPrev);
     if (moved & 0x80) {
@@ -365,21 +371,24 @@ static void Scroll_Stream(void)
     uint8_t carried = (gPlayerMoveDir & 2) ? (uint8_t)(~gCameraXPrev & 3) : (uint8_t)(gCameraXPrev & 3);
     gSteps = (uint8_t)(carried + moved) >> 2;
     if (!gSteps) {
-        return;
+        return x;
     }
     gQueueEnd = 0;
     Scroll_Advance();
-    Scroll_StreamBlocks();
+    return Scroll_StreamBlocks();
 }
 
-/* $F0C4: the camera moved by gCameraDelta: target X, page and screen. */
-static void Camera_Target(void)
+/* $F0C4: the camera moved by gCameraDelta: target X, page and screen.
+ * Returns the direction's table index, which the original leaves in X. */
+static uint8_t Camera_Target(void)
 {
-    uint8_t carry = rom((uint16_t)(DT_CODE_CAMERA_PAGE_STEP + (gPlayerMoveDir & 2)));
+    uint8_t index = gPlayerMoveDir & 2;
+    uint8_t carry = rom((uint16_t)(DT_CODE_CAMERA_PAGE_STEP + index));
     unsigned x = (unsigned)gCameraX + gCameraDelta;
     gTargetX = (uint8_t)x;
     gTargetPage = (uint8_t)(gCameraPage + carry + (x >> 8));
     gTargetScreen = (uint8_t)(gCameraScreen + carry + (x >> 8));
+    return index;
 }
 
 static void Camera_MoveTo(uint8_t x)
@@ -392,9 +401,9 @@ static void Camera_MoveTo(uint8_t x)
 /* $F067: scroll right unless the next screen of the row is missing (or a
  * boss fight holds the camera): then the camera stops on the page and
  * Scrooge stops at the right edge. */
-static void Camera_ScrollRight(void)
+static uint8_t Camera_ScrollRight(void)
 {
-    Camera_Target();
+    uint8_t x = Camera_Target();
     if (!(gBossFight & 0x80) && (uint8_t)(gTargetPage + 1) != gMapStride && (uint8_t)(gTargetScreen + 1) != 0 &&
         Map_Cell((uint8_t)(gTargetScreen + 1)) != MAP_NO_SCREEN) {
         Camera_MoveTo(gTargetX);
@@ -406,15 +415,15 @@ static void Camera_ScrollRight(void)
         gCameraPage = gTargetPage;
         gCameraScreen = gTargetScreen;
     }
-    Scroll_Stream();
+    return Scroll_Stream(x);
 }
 
 /* $F091: scroll left unless the screen there is missing (or before page 0,
  * or a boss fight): then the camera stops and Scrooge stops at the left
  * edge. */
-static void Camera_ScrollLeft(void)
+static uint8_t Camera_ScrollLeft(void)
 {
-    Camera_Target();
+    uint8_t x = Camera_Target();
     if (!(gBossFight & 0x80) && !(gTargetPage & 0x80) && Map_Cell(gTargetScreen) != MAP_NO_SCREEN) {
         Camera_MoveTo(gTargetX);
     } else {
@@ -423,12 +432,12 @@ static void Camera_ScrollLeft(void)
             gObjects->worldX[P_] = SCROLL_EDGE_LEFT;
         }
     }
-    Scroll_Stream();
+    return Scroll_Stream(x);
 }
 
 /* $EFE8: scenes move the camera by script (one pixel left per frame while
  * $79 bit 7 is set) and push Scrooge back from the screen edges. */
-static void Camera_FollowScript(void)
+static uint8_t Camera_FollowScript(uint8_t x)
 {
     uint16_t camera = (uint16_t)(gCameraPage << 8 | gCameraX);
     if ((gSceneScroll & 0x80) && camera) {
@@ -459,36 +468,36 @@ static void Camera_FollowScript(void)
         gObjects->worldPage[P_] = (uint8_t)(x >> 16);
     }
     if (!(gCameraX | gCameraPage)) {
-        return;
+        return x;
     }
     gPlayerMoveDir = DT_PAD_LEFT;
-    Scroll_Stream();
+    return Scroll_Stream(x);
 }
 
 /* $EFE2, from the frame loop: keep Scrooge at screen X $80 while the row
- * lets the camera move, then stream the columns it uncovered. */
-void Camera_Update(void)
+ * lets the camera move, then stream the columns it uncovered. Returns the
+ * X the original leaves (x when the camera stays): the frame loop keeps it
+ * in X past $CF93, so it reaches the code after. */
+uint8_t Camera_Update(uint8_t x)
 {
-    Decomp_Enter(DT_CODE_CAMERA_UPDATE, 0, 0, 0);
+    Decomp_Enter(DT_CODE_CAMERA_UPDATE, 0, x, 0);
     if (gScene & 2) {
-        Camera_FollowScript();
-        return;
+        return Camera_FollowScript(x);
     }
     if (!(gPlayerMoveDir & 3)) {
-        return;
+        return x;
     }
     gPlayerMoveDir = DT_PAD_RIGHT;
     uint8_t offset = (uint8_t)(gObjects->worldX[P_] - gCameraX - CAMERA_CENTER);
     if (!offset) {
-        return;
+        return x;
     }
     gCameraDelta = offset;
     if (!(offset & 0x80)) {
-        Camera_ScrollRight();
-        return;
+        return Camera_ScrollRight();
     }
     gPlayerMoveDir = DT_PAD_LEFT;
-    Camera_ScrollLeft();
+    return Camera_ScrollLeft();
 }
 
 /* $C71D, land load: draw the start screen's columns, with the screens on
@@ -645,7 +654,7 @@ static void Chr_StreamRow(void)
             gChrStream--;
         }
     }
-    Vram_EndQueue(3 + CHR_CHUNK);
+    Vram_EndQueue(3 + CHR_CHUNK, CHR_CHUNK);
 }
 
 /* $CF93, every frame after the camera: the boss room starts when Scrooge
@@ -729,8 +738,7 @@ static void Run_MapLoadHeader(Regs *r)
 
 static void Run_StreamBlocks(Regs *r)
 {
-    (void)r;
-    Scroll_StreamBlocks();
+    r->x = Scroll_StreamBlocks();
 }
 
 static void Run_DrawStartColumns(Regs *r)
@@ -753,8 +761,7 @@ static void Run_PlaceFromEntry(Regs *r)
 
 static void Run_VramFlush(Regs *r)
 {
-    (void)r;
-    Vram_FlushQueue();
+    r->x = Vram_FlushQueue();
 }
 
 static void Run_TileEditFlush(Regs *r)
@@ -765,13 +772,12 @@ static void Run_TileEditFlush(Regs *r)
 
 static void Run_ScreenPointer(Regs *r)
 {
-    Level_ScreenPointer(r->y);
+    r->x = Level_ScreenPointer(r->y);
 }
 
 static void Run_DecodeBlock(Regs *r)
 {
-    (void)r;
-    Level_DecodeBlock();
+    r->x = Level_DecodeBlock();
 }
 
 static void Run_MetatileAt(Regs *r)
@@ -781,8 +787,7 @@ static void Run_MetatileAt(Regs *r)
 
 static void Run_CameraUpdate(Regs *r)
 {
-    (void)r;
-    Camera_Update();
+    r->x = Camera_Update(r->x);
 }
 
 static void Run_BossCheckTrigger(Regs *r)
@@ -804,17 +809,17 @@ static void Run_ChrStreamRow(Regs *r)
 
 const DecompRoutine gLevelRoutines[] = {
     { DT_CODE_MAP_HEADER, "ducktales.decomp.C7B0", "Map_LoadHeader", Run_MapLoadHeader, OUT_X },
-    { DT_CODE_STREAM_BLOCKS, "ducktales.decomp.C830", "Scroll_StreamBlocks", Run_StreamBlocks, OUT_HW },
+    { DT_CODE_STREAM_BLOCKS, "ducktales.decomp.C830", "Scroll_StreamBlocks", Run_StreamBlocks, OUT_X | OUT_HW },
     { DT_CODE_DRAW_START, "ducktales.decomp.C71D", "Level_DrawStartColumns", Run_DrawStartColumns, OUT_HW },
     { DT_CODE_DRAW_SCREEN, "ducktales.decomp.C78F", "Level_DrawScreen", Run_DrawScreen, OUT_HW },
     { DT_CODE_PLACE_FROM_ENTRY, "ducktales.decomp.DD4E", "Level_PlaceFromEntry", Run_PlaceFromEntry, OUT_HW },
-    { DT_CODE_VRAM_FLUSH, "ducktales.decomp.C139", "Vram_FlushQueue", Run_VramFlush, OUT_HW },
+    { DT_CODE_VRAM_FLUSH, "ducktales.decomp.C139", "Vram_FlushQueue", Run_VramFlush, OUT_X | OUT_HW },
     { DT_CODE_TILE_EDIT_FLUSH, "ducktales.decomp.C15E", "Vram_FlushTileEdits", Run_TileEditFlush, OUT_HW },
-    { DT_CODE_CAMERA_UPDATE, "ducktales.decomp.EFE2", "Camera_Update", Run_CameraUpdate, OUT_HW },
+    { DT_CODE_CAMERA_UPDATE, "ducktales.decomp.EFE2", "Camera_Update", Run_CameraUpdate, OUT_X | OUT_HW },
     { DT_CODE_BOSS_TRIGGER, "ducktales.decomp.CF93", "Boss_CheckTrigger", Run_BossCheckTrigger, 0 },
     { DT_CODE_TILE_EDIT, "ducktales.decomp.F574", "Level_TileEdit", Run_TileEdit, OUT_HW },
-    { DT_CODE_SCREEN_POINTER, NULL, "Level_ScreenPointer", Run_ScreenPointer, 0 },
-    { DT_CODE_DECODE_BLOCK, NULL, "Level_DecodeBlock", Run_DecodeBlock, 0 },
+    { DT_CODE_SCREEN_POINTER, NULL, "Level_ScreenPointer", Run_ScreenPointer, OUT_X },
+    { DT_CODE_DECODE_BLOCK, NULL, "Level_DecodeBlock", Run_DecodeBlock, OUT_X },
     { DT_CODE_METATILE_AT, NULL, "Level_MetatileAt", Run_MetatileAt, OUT_A | OUT_X },
     { DT_CODE_ROW_CHR_STREAM, "ducktales.decomp.C42C", "Chr_StreamRow", Run_ChrStreamRow, OUT_HW },
 };
