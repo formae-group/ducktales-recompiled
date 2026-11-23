@@ -101,11 +101,13 @@ option is not given.
 
 The C of a routine always runs on a private image of CPU RAM taken at the routine's entry. In check
 mode "agree" means: all of CPU RAM except the stack below the routine's return address (dead after
-its RTS), plus the registers of the routine's contract. The stack ends at `$0160`
+its RTS), plus the registers of the routine's contract. The stack ends at `$0161`
 (`DT_ADDR_STACK_FLOOR`): below it page 1 holds the master palette, the consumed-record bits
-`$0120-$013F` and the HUD time group, which are always compared and stored. (Treating them as dead
+`$0120-$013F` and the HUD time group, which the game-over box replaces up to its end mark at `$0160`; they
+are always compared and stored. (Treating them as dead
 stack dropped an object routine's writes to `$0120` in replace mode, and `amazon_intro` diverged at
-frame 1630; found on the objects branch.)
+frame 1630; found on the objects branch. With the floor at `$0160`, replace mode dropped the game-over
+box's end mark and the sprites of its next frame differed; found on the flow branch.)
 
 **Timing in replace mode.** A hook that handles a routine returns in zero guest time, and the
 NESRecomp API has no call that charges cycles. A replaced routine that takes no time makes the game
@@ -221,6 +223,13 @@ RAM-identical in replace mode.
 | `Player_Mode12` | `$EC2D` | checked (pokes only) | 0 | mode12, mode12-page7 | no vertical direction with Y below `$18` |
 | `Player_Death` | `$EC9B` | checked | 8 | hurt-last-dot | none |
 | `Player_Mode14` | `$ECFF` | checked | 1 | - | none |
+
+**Claimed, in progress** (branch `decomp/flow`, `src/decomp/flow.c`): the game flow of the main task in the fixed
+bank, `$D4E6-$E353` and the boss trigger `$CF93-$D04C`: title and difficulty select (`$D4E6`), Land Select and the
+banking of money (`$D630`, `$D8D9`), land load (`$D79B`) and the per-land tables (`$D9CA`), the frame loop (`$DB36`)
+with pause and the boss checkpoint (`$DC04`), death and warps (`$DC3E`, `$DD23`, `$DD4E`), the HUD refreshes
+(`$DE6C`, `$DEA3`), game over (`$DEB9`), land exit and scenes (`$DF08`, `$DF27`), the ending (`$E054`, `$E1AF`) and
+the HUD timer `timer_tick` (`$E28C`).
 
 Not decompiled yet, and still run as the original from the C:
 

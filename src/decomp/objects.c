@@ -55,7 +55,7 @@
 #define gContactDepth     RAM_U8(DT_ADDR_CONTACT_DEPTH)
 #define gBlockOpened      RAM_U8(DT_ADDR_BLOCK_OPENED)
 #define gMoneyDigit(i)    RAM_U8(DT_ADDR_MONEY_DIGITS + (i))
-#define gMoneyChanged     RAM_U8(DT_ADDR_MONEY_CHANGED)
+#define gMoneyChanged     RAM_U8(DT_ADDR_HUD_MONEY_DIRTY)
 #define gExtraDotTaken    RAM_U8(DT_ADDR_EXTRA_DOT_TAKEN)
 #define gPogoCeiling      RAM_U8(DT_ADDR_POGO_CEILING)
 #define gSceneStep        RAM_U8(DT_ADDR_SCENE_STEP)
@@ -63,7 +63,7 @@
 #define gMessagesShown(i) RAM_U8(DT_ADDR_MESSAGES_SHOWN + (i))
 #define gLaunchpadRides   RAM_U8(DT_ADDR_LAUNCHPAD_RIDES)
 #define gRandom(i)        RAM_U8(DT_ADDR_RANDOM + (i))
-#define gPaletteUpload    RAM_U8(DT_ADDR_PALETTE_UPLOAD)
+#define gPaletteUpload    RAM_U8(DT_ADDR_PALETTE_REQUEST)
 #define gHeldSlot         RAM_U8(DT_ADDR_HELD_SLOT)
 
 /* ---- shared pieces of the handlers ---- */
@@ -494,7 +494,7 @@ static void Money_Add(uint8_t amount, uint8_t y)
 /* $F812: every HP dot full again. */
 static void Hud_RefillHp(void)
 {
-    Decomp_Enter(DT_CODE_HUD_REFILL_HP, 0, 0, 0);
+    Decomp_Enter(DT_CODE_HP_REFILL, 0, 0, 0);
     gPlayerEasyHits = 0;
     for (int y = 0x10; y >= 0; y -= 4) {
         HUD_RECORD(y / 4)[2] = 0;
@@ -696,8 +696,8 @@ static void Obj_BecomeBlock(uint8_t x)
     if (gObjects->timer[x] != 0x0A) {
         return;
     }
-    RAM_U8(DT_ADDR_PALETTE + 0x1D) = RAM_U8(DT_ADDR_MASTER_PALETTE + 0x1D) = 0x0F;
-    RAM_U8(DT_ADDR_PALETTE + 0x1F) = RAM_U8(DT_ADDR_MASTER_PALETTE + 0x1F) = 0x29;
+    RAM_U8(DT_ADDR_PALETTE_SHOWN + 0x1D) = RAM_U8(DT_ADDR_PALETTE + 0x1D) = 0x0F;
+    RAM_U8(DT_ADDR_PALETTE_SHOWN + 0x1F) = RAM_U8(DT_ADDR_PALETTE + 0x1F) = 0x29;
     gPaletteUpload = 0x29;
 }
 
@@ -1659,7 +1659,7 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
  * which the code after it passes on (a sound request keeps it in $00). */
 static void Obj_UpdateAll(Regs *r)
 {
-    Decomp_Enter(DT_CODE_OBJ_UPDATE, r->a, r->x, r->y);
+    Decomp_Enter(DT_B6_OBJECTS, r->a, r->x, r->y);
     gGravity = OBJ_GRAVITY;
     r->a = OBJ_GRAVITY;
     for (gObjCursor = 1; gObjCursor != OBJ_SLOTS; gObjCursor++) {
@@ -1911,50 +1911,50 @@ static void Run_MoneyMax(Regs *r)
 }
 
 const DecompRoutine gObjectRoutines[] = {
-    { DT_CODE_OBJ_UPDATE, "ducktales.decomp.6.8000", "Obj_UpdateAll", Run_UpdateAll, OUT_X, DT_OBJ_BANK },
-    { DT_CODE_KIND_HOPPER, NULL, "Obj_Hopper", Run_Hopper, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_WALKER, NULL, "Obj_Walker", Run_Walker, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_THROWER, NULL, "Obj_Thrower", Run_Thrower, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_SHOT, NULL, "Obj_Shot", Run_Shot, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_WATCHER, NULL, "Obj_Watcher", Run_Watcher, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_DANGLER, NULL, "Obj_Dangler", Run_Dangler, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_SNAPPER, NULL, "Obj_Snapper", Run_Snapper, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_BLOCK, NULL, "Obj_Block", Run_Block, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_THROWN, NULL, "Obj_Thrown", Run_Thrown, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_DEFEATED, NULL, "Obj_Defeated", Run_Defeated, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_DROPPER, NULL, "Obj_Dropper", Run_Dropper, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_CRAWLER, NULL, "Obj_Crawler", Run_Crawler, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_FLYER, NULL, "Obj_Flyer", Run_Flyer, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_PICKUP, NULL, "Obj_Pickup", Run_Pickup, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_HIDDEN_ITEM, NULL, "Obj_HiddenItem", Run_HiddenItem, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_CHEST, NULL, "Obj_Chest", Run_Chest, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_DOOR, NULL, "Obj_Door", Run_Door, 0, DT_OBJ_BANK },
+    { DT_B6_OBJECTS, "ducktales.decomp.6.8000", "Obj_UpdateAll", Run_UpdateAll, OUT_X, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_HOPPER, NULL, "Obj_Hopper", Run_Hopper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_WALKER, NULL, "Obj_Walker", Run_Walker, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_THROWER, NULL, "Obj_Thrower", Run_Thrower, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_SHOT, NULL, "Obj_Shot", Run_Shot, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_WATCHER, NULL, "Obj_Watcher", Run_Watcher, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_DANGLER, NULL, "Obj_Dangler", Run_Dangler, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_SNAPPER, NULL, "Obj_Snapper", Run_Snapper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_BLOCK, NULL, "Obj_Block", Run_Block, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_THROWN, NULL, "Obj_Thrown", Run_Thrown, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_DEFEATED, NULL, "Obj_Defeated", Run_Defeated, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_DROPPER, NULL, "Obj_Dropper", Run_Dropper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_CRAWLER, NULL, "Obj_Crawler", Run_Crawler, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_FLYER, NULL, "Obj_Flyer", Run_Flyer, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_PICKUP, NULL, "Obj_Pickup", Run_Pickup, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_HIDDEN_ITEM, NULL, "Obj_HiddenItem", Run_HiddenItem, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_CHEST, NULL, "Obj_Chest", Run_Chest, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_DOOR, NULL, "Obj_Door", Run_Door, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_TALKER, NULL, "Obj_Talker", Run_Talker, 0 },
-    { DT_CODE_OBJ_FIND_FREE_Y, NULL, "Obj_FindFreeSlotY", Run_FindFreeSlotY, OUT_Y | OUT_C, DT_OBJ_BANK },
-    { DT_CODE_OBJ_HIT_OTHERS, NULL, "Obj_HitOthers", Run_HitOthers, OUT_C, DT_OBJ_BANK },
-    { DT_CODE_OBJ_SET_MOTION, NULL, "Obj_SetMotionIndex", Run_SetMotionIndex, 0, DT_OBJ_BANK },
-    { DT_CODE_ENEMY_WALK, NULL, "Enemy_Walk", Run_EnemyWalk, OUT_X, DT_OBJ_BANK },
-    { DT_CODE_OBJ_LAUNCH_BLOCK, NULL, "Obj_LaunchBlock", Run_LaunchBlock, 0, DT_OBJ_BANK },
-    { DT_CODE_OBJ_RESOLVE_BLOCK, NULL, "Obj_ResolveBlock", Run_ResolveBlock, 0, DT_OBJ_BANK },
-    { DT_CODE_OBJ_BREAK, NULL, "Obj_Break", Run_Break, 0, DT_OBJ_BANK },
-    { DT_CODE_OBJ_SHATTER, NULL, "Obj_Shatter", Run_Shatter, 0, DT_OBJ_BANK },
-    { DT_CODE_OBJ_DEFEAT, NULL, "Obj_Defeat", Run_Defeat, 0, DT_OBJ_BANK },
-    { DT_CODE_OBJ_OPEN_BLOCK, NULL, "Obj_OpenBlock", Run_OpenBlock, 0, DT_OBJ_BANK },
-    { DT_CODE_OBJ_BECOME_PICKUP, NULL, "Obj_BecomePickupNow", Run_BecomePickupNow, 0, DT_OBJ_BANK },
-    { DT_CODE_OBJ_BECOME_BLOCK, NULL, "Obj_BecomeBlock", Run_BecomeBlock, 0, DT_OBJ_BANK },
-    { DT_CODE_OBJ_HIT_BLOCK, NULL, "Obj_HitBlock", Run_HitBlock, 0, DT_OBJ_BANK },
-    { DT_CODE_THROWN_FALL, NULL, "Obj_ThrownFall", Run_ThrownFall, OUT_X, DT_OBJ_BANK },
-    { DT_CODE_THROWN_WALK, NULL, "Obj_ThrownWalk", Run_ThrownWalk, OUT_X, DT_OBJ_BANK },
-    { DT_CODE_OBJ_SHOW_ITEM, NULL, "Obj_ShowItem", Run_ShowItem, 0, DT_OBJ_BANK },
-    { DT_CODE_PICKUP_TAKE, NULL, "Pickup_Take", Run_PickupTake, 0, DT_OBJ_BANK },
-    { DT_CODE_PICKUP_TREASURE, NULL, "Pickup_Treasure", Run_PickupTreasure, 0, DT_OBJ_BANK },
-    { DT_CODE_PICKUP_EXTRA_DOT, NULL, "Pickup_ExtraDot", Run_PickupExtraDot, 0, DT_OBJ_BANK },
-    { DT_CODE_HUD_RESTORE_DOT, NULL, "Hud_RestoreDot", Run_RestoreDot, 0, DT_OBJ_BANK },
-    { DT_CODE_MONEY_ADD, NULL, "Money_Add", Run_MoneyAdd, 0, DT_OBJ_BANK },
-    { DT_CODE_HUD_REFILL_HP, "ducktales.decomp.F812", "Hud_RefillHp", Run_RefillHp, OUT_A | OUT_Y },
+    { DT_CODE_OBJ_FIND_FREE_Y, NULL, "Obj_FindFreeSlotY", Run_FindFreeSlotY, OUT_Y | OUT_C, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_HIT_OTHERS, NULL, "Obj_HitOthers", Run_HitOthers, OUT_C, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_SET_MOTION, NULL, "Obj_SetMotionIndex", Run_SetMotionIndex, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_ENEMY_WALK, NULL, "Enemy_Walk", Run_EnemyWalk, OUT_X, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_LAUNCH_BLOCK, NULL, "Obj_LaunchBlock", Run_LaunchBlock, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_RESOLVE_BLOCK, NULL, "Obj_ResolveBlock", Run_ResolveBlock, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_BREAK, NULL, "Obj_Break", Run_Break, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_SHATTER, NULL, "Obj_Shatter", Run_Shatter, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_DEFEAT, NULL, "Obj_Defeat", Run_Defeat, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_OPEN_BLOCK, NULL, "Obj_OpenBlock", Run_OpenBlock, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_BECOME_PICKUP, NULL, "Obj_BecomePickupNow", Run_BecomePickupNow, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_BECOME_BLOCK, NULL, "Obj_BecomeBlock", Run_BecomeBlock, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_HIT_BLOCK, NULL, "Obj_HitBlock", Run_HitBlock, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_THROWN_FALL, NULL, "Obj_ThrownFall", Run_ThrownFall, OUT_X, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_THROWN_WALK, NULL, "Obj_ThrownWalk", Run_ThrownWalk, OUT_X, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_SHOW_ITEM, NULL, "Obj_ShowItem", Run_ShowItem, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_PICKUP_TAKE, NULL, "Pickup_Take", Run_PickupTake, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_PICKUP_TREASURE, NULL, "Pickup_Treasure", Run_PickupTreasure, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_PICKUP_EXTRA_DOT, NULL, "Pickup_ExtraDot", Run_PickupExtraDot, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_HUD_RESTORE_DOT, NULL, "Hud_RestoreDot", Run_RestoreDot, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_MONEY_ADD, NULL, "Money_Add", Run_MoneyAdd, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_HP_REFILL, "ducktales.decomp.F812", "Hud_RefillHp", Run_RefillHp, OUT_A | OUT_Y },
     { DT_CODE_MONEY_MAX, "ducktales.decomp.F83F", "Money_Max", Run_MoneyMax, OUT_A | OUT_Y },
 };
 const int gObjectRoutineCount = sizeof gObjectRoutines / sizeof gObjectRoutines[0];

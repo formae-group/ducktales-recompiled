@@ -9,7 +9,9 @@
  *                        [--ram-dump FILE] [--nmi-audit FILE]
  *                        [--step-dump FILE] [--latch-log FILE | --latch-input FILE]
  *                        [--split-log FILE] [--trace-frame N --trace-out FILE]
- *                        [--wav-out FILE]
+ *                        [--wav-out FILE] [--music-under-effects on|off]
+ *                        [--overlap-effects on|off] [--audio-channels MASK]
+ *                        [--sound-request FRAME:IDS]
  *
  * --input takes the cycle host's route format (tests/routes): one
  * "<frame> BUTTONS" line per change, buttons joined by +, "-" releases, "2:"
@@ -33,6 +35,14 @@
  * the same input per logic step (tools/lag_report.py --steps). --wav-out
  * plays every frame's APU writes through the native synth (native_audio.h)
  * and writes the result as 48 kHz mono 16-bit PCM (tests/audio_compare.py).
+ * --music-under-effects and --overlap-effects turn on the native player's
+ * extra voices ([Audio] MusicUnderEffects, OverlapEffects; docs/audio.md),
+ * --audio-channels keeps only the channels of a hex mask in the mix (2 =
+ * pulse 2, extra voices included). --sound-request fills the sound request
+ * ring ($C6-$CF) with hex ids joined by + (13+15) after frame FRAME runs, as
+ * if the game had queued them in it (tools/audio_record.py does the same to a
+ * save state), so the next NMI hands them to the driver; it changes the
+ * machine and is for audio measurements only.
  */
 #include "native/native_audio.h"
 #include "native/native_hash.h"
@@ -53,16 +63,6 @@ static NativeRoute route;
 static FILE *step_f, *latch_log_f;
 static uint8_t (*latches)[2];
 static size_t latch_count, latch_next;
-
-static void wav_header(FILE *f, uint32_t samples)
-{
-    uint32_t rate = 48000, bytes = samples * 2, riff = 36 + bytes, fmt = 16, byte_rate = rate * 2;
-    uint16_t pcm = 1, channels = 1, align = 2, bits = 16;
-    fseek(f, 0, SEEK_SET);
-    fwrite("RIFF", 1, 4, f), fwrite(&riff, 4, 1, f), fwrite("WAVEfmt ", 1, 8, f), fwrite(&fmt, 4, 1, f);
-    fwrite(&pcm, 2, 1, f), fwrite(&channels, 2, 1, f), fwrite(&rate, 4, 1, f), fwrite(&byte_rate, 4, 1, f);
-    fwrite(&align, 2, 1, f), fwrite(&bits, 2, 1, f), fwrite("data", 1, 4, f), fwrite(&bytes, 4, 1, f);
-}
 
 static void dump_step(void)
 {
@@ -130,7 +130,11 @@ int main(int argc, char **argv)
                *dump_out = NULL, *audit_out = NULL, *step_out = NULL, *latch_out = NULL, *latch_in = NULL,
                *wav_out = NULL;
     NativeLagMode lag_mode = NATIVE_LAG_NONE;
-    long frames = 600, trace_frame = -1;
+    long frames = 600, trace_frame = -1, request_frame = -1;
+    uint8_t requests[8];
+    int request_count = 0;
+    bool music_under = false, overlap = false;
+    unsigned channels = 0x0F;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--input") && i + 1 < argc) {
             input = argv[++i];
@@ -158,6 +162,21 @@ int main(int argc, char **argv)
             latch_in = argv[++i];
         } else if (!strcmp(argv[i], "--wav-out") && i + 1 < argc) {
             wav_out = argv[++i];
+        } else if (!strcmp(argv[i], "--music-under-effects") && i + 1 < argc) {
+            music_under = !strcmp(argv[++i], "on");
+        } else if (!strcmp(argv[i], "--overlap-effects") && i + 1 < argc) {
+            overlap = !strcmp(argv[++i], "on");
+        } else if (!strcmp(argv[i], "--audio-channels") && i + 1 < argc) {
+            channels = (unsigned)strtoul(argv[++i], NULL, 16);
+        } else if (!strcmp(argv[i], "--sound-request") && i + 1 < argc) {
+            char *s = argv[++i];
+            request_frame = strtol(s, &s, 10);
+            while (*s == ':' || (*s == '+' && request_count > 0)) {
+                if (request_count == 8) {
+                    break;
+                }
+                requests[request_count++] = (uint8_t)strtoul(s + 1, &s, 16);
+            }
         } else if (!strcmp(argv[i], "--lag") && i + 1 < argc && !strcmp(argv[i + 1], "none")) {
             lag_mode = NATIVE_LAG_NONE, i++;
         } else if (!strcmp(argv[i], "--lag") && i + 1 < argc && !strcmp(argv[i + 1], "faithful")) {
@@ -227,7 +246,9 @@ int main(int argc, char **argv)
     uint32_t wav_samples = 0;
     if (wav_f) {
         native_audio_reset(48000);
-        wav_header(wav_f, 0);
+        native_audio_voices(music_under, overlap);
+        native_audio_channels(channels);
+        native_audio_wav_header(wav_f, 48000, 0);
     }
     uint8_t held[2] = { 0, 0 };
     clock_t start = clock();
@@ -238,6 +259,13 @@ int main(int argc, char **argv)
         cyc_trace_enabled = trace_f && frame == trace_frame;
         cyc_trace_file = cyc_trace_enabled ? trace_f : NULL;
         native_run_frame();
+        if (frame == request_frame) {
+            for (int k = 0; k < 8; k++) {
+                native_poke((uint16_t)(0xC8 + k), k < request_count ? requests[k] : 0x88);
+            }
+            native_poke(0xC6, (uint8_t)(request_count & 7));
+            native_poke(0xC7, 0);
+        }
         if (hash_f) {
             const NativeVideoMemory *m = native_video_memory();
             NativeHashInput in = {
@@ -290,7 +318,7 @@ int main(int argc, char **argv)
         fclose(lag_f);
     }
     if (wav_f) {
-        wav_header(wav_f, wav_samples);
+        native_audio_wav_header(wav_f, 48000, wav_samples);
         fclose(wav_f);
     }
     if (dump_f) {

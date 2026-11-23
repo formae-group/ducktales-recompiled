@@ -69,7 +69,7 @@ every pixel with the machine: the 9-bit index with `cyc_frame_index()`, the ARGB
 `cyc_frame_argb()`, the background coverage with `cyc_frame_bg_opaque()` on drawn lines.
 
 `py -3 -I tests/native_render_test.py --build build/headless` (2026-11-22, five `full_*` routes;
-the test runs the exe at below-normal priority, `--jobs 2`):
+the same numbers again after merging main at dabe175):
 
 | Route | Frames | Line-granular segments: frames / pixels differing | Split column placed: frames / pixels | `$2005` splits / `$2006` splits / not placed | Differences off the split line |
 |---|---|---|---|---|---|
