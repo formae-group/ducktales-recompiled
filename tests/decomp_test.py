@@ -31,8 +31,9 @@
 
 --changed [BANK:]ADDR[-ADDR] ... keeps only the routes whose quick_verify coverage (the golden
 directory, tests/quick_verify.py) executes those PRG addresses; --from-state starts each of them
-from the golden save state just before the first segment that does, and --span N stops N frames
-later. That is the loop for one routine; the merge gate is every route from power-on.
+from the latest golden save state at or before the first segment that does where the game's
+scheduler is idle (S = $FF on the frame before it: a state inside a task would resume the original's
+task while replace mode runs the C), and --span N stops N frames after that segment's start. That is the loop for one routine; the merge gate is every route from power-on.
 
 DUCKTALES_DECOMP=check py -3 -I tests/verify_routes.py runs the oracle comparison with
 the checks on.
@@ -157,10 +158,20 @@ def select_routes(routes, args):
             sys.exit(f'{route.stem}: no coverage in {golden}; record it with tests/quick_verify.py --record')
         reach = [s for s, offs in quick_verify.read_cover(cover) if quick_verify.hits(offs, ranges)]
         if reach:
-            start = reach[0] if args.from_state else 0
+            start = 0
+            if args.from_state:
+                idle = {
+                    int(m[1]) + 1
+                    for m in re.finditer(r'^(\d+) .*\bS=FF\b', (golden / f'{route.stem}.txt').read_text(), re.M)
+                }
+                start = max(
+                    (s for s in idle if s <= reach[0] and quick_verify.state_path(golden, route, s).exists()), default=0
+                )
             state = quick_verify.state_path(golden, route, start) if start else None
-            selected.append(route_case(route, start, state, args.span))
-            print(f'{route.stem}: executes {" ".join(args.changed)} from the segment at frame {reach[0]}')
+            selected.append(route_case(route, reach[0] if args.from_state else 0, state, args.span))
+            print(
+                f'{route.stem}: executes {" ".join(args.changed)} from the segment at frame {reach[0]}, run from frame {start}'
+            )
     if not selected:
         sys.exit(f'no route executes {" ".join(args.changed)}; add a route that does')
     return selected

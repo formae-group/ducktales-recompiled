@@ -16,6 +16,12 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   the routes reach late.
 - `tools/test_slot.py` queues heavy test runs across worktrees, at most two at once.
 - `tests/decomp_test.py` names each differing RAM address with its `ducktales_symbols.h` name.
+
+### Fixed
+
+- `tests/decomp_test.py --from-state` starts only from a golden state where the game's scheduler is
+  idle. `full_moon` saved at frame 500 inside a task, and replace mode failed on its first frame
+  from there, because the run resumed the original's task while replace ran the C.
 - The camera, the column streaming, the map and block decoding, the VRAM queue uploads and the
   background probe with its four snaps are decompiled (`src/decomp/level.c`, `src/decomp/collision.c`):
   18 routines, checked on every call of every route and RAM-identical in replace mode.
