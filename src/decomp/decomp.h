@@ -48,6 +48,7 @@ typedef struct Regs {
 #define OUT_X 0x02
 #define OUT_Y 0x04
 #define OUT_P 0x08 /* N, V, Z and C */
+#define OUT_C 0x20 /* C only */
 #define OUT_HW \
     0x10 /* writes the PPU or the mapper (Decomp_BusWrite): check also compares
                         CIRAM, palette, CHR RAM and the PRG bank, replace replays the writes */

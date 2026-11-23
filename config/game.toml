@@ -94,6 +94,20 @@ addr = 0xF252
 length = 8
 crc32 = 0x7E95A00A
 
+# Obj_AddVelocityY
+[[mod_function_hook]]
+id = "ducktales.decomp.F270"
+addr = 0xF270
+length = 8
+crc32 = 0xB85A90CB
+
+# Obj_SubVelocityY
+[[mod_function_hook]]
+id = "ducktales.decomp.F284"
+addr = 0xF284
+length = 8
+crc32 = 0x94C209F4
+
 # Music_Request
 [[mod_function_hook]]
 id = "ducktales.decomp.F752"

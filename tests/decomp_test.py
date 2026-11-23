@@ -17,7 +17,8 @@
            interrupts pushed, which differs because an NMI the original takes
            inside a replaced routine is taken right after it.
   pokes    (needs --dev-build) states no route reaches, made with
-           --dt-poke-at from a point of re_amazon_moves (POKES below): each
+           --dt-poke-at (and extra pad states, written into a copy of the
+           route) from a point of re_amazon_moves (POKES below): each
            case runs in check mode, where the routines it targets must be
            compared at least once, and stock against replace as above.
   events   (needs --dev-build) enhancements whose event a decompiled routine
@@ -70,7 +71,8 @@ NAMED = re.compile(r'\$([0-9A-F]{4})(?= original)')
 POKE_ROUTE = ROOT / 'tests' / 'routes' / 're_amazon_moves.txt'
 POKE_FRAME = 1700  # Scrooge on the ground in the Amazon
 POKE_FRAMES = 220
-# name, {address: value} stored before POKE_FRAME (or {frame: {...}}), routines that must be compared
+# name, {address: value} stored before POKE_FRAME (or {frame: {...}}), routines that must be compared,
+# optionally {frame: buttons} pad states added to the route
 POKES = [
     ('hurt-wait', {0x39: 0x05, 0x7D: 0x20}, ['Player_Hurt']),
     ('hurt-now', {0x39: 0x05, 0x7D: 0x00}, ['Player_Hurt', 'Player_TakeDamage']),
@@ -83,6 +85,14 @@ POKES = [
     ('mode12-page7', {0x39: 0x0C, 0x780: 0x00, 0x730: 0x07}, ['Player_Mode12']),
     ('invulnerable-held', {0x7D: 0x90, 0x75: 0x80}, ['Player_Update']),
     ('slippery', {POKE_FRAME + 10 * i: {0x71: 0x01} for i in range(20)}, ['Player_Walk']),
+    (
+        'select-refill',
+        {0x34A: 0x01, 0x334: 0x01},
+        ['Player_SelectRefill'],
+        {POKE_FRAME + 8: 'LEFT+SELECT', POKE_FRAME + 10: 'LEFT'},
+    ),
+    ('select-poor', {0x34A: 0x01}, ['Player_SelectRefill'], {POKE_FRAME + 8: 'LEFT+SELECT', POKE_FRAME + 10: 'LEFT'}),
+    ('select-full', {}, ['Player_SelectRefill'], {POKE_FRAME + 8: 'LEFT+SELECT', POKE_FRAME + 10: 'LEFT'}),
 ]
 
 # name, route, options, routines that must be compared
@@ -129,7 +139,7 @@ def select_routes(routes, args):
     return selected
 
 
-def poke_case(name, pokes, want):
+def poke_case(name, pokes, want, presses=None):
     if not all(isinstance(v, dict) for v in pokes.values()):
         pokes = {POKE_FRAME: pokes}
     extra = [
@@ -138,7 +148,20 @@ def poke_case(name, pokes, want):
         for addr, value in at.items()
         for arg in ('--dt-poke-at', f'{frame}:{addr:X}={value:02X}')
     ]
-    return {'name': name, 'route': POKE_ROUTE, 'frames': POKE_FRAME + POKE_FRAMES, 'extra': extra, 'want': want}
+    case = {'name': name, 'route': POKE_ROUTE, 'frames': POKE_FRAME + POKE_FRAMES, 'extra': extra, 'want': want}
+    return case | {'presses': presses} if presses else case
+
+
+def pressed_route(case, tmp):
+    events = {}
+    for line in POKE_ROUTE.read_text().splitlines():
+        if line.strip() and not line.startswith('#'):
+            frame, buttons = line.split(None, 1)
+            events[int(frame)] = buttons.strip()
+    events.update(case['presses'])
+    path = Path(tmp) / f'{case["name"]}.txt'
+    path.write_text(''.join(f'{frame} {buttons}\n' for frame, buttons in sorted(events.items())))
+    return path
 
 
 def event_case(name, route, options, want):
@@ -256,7 +279,11 @@ def main():
     exe = ROOT / args.build / args.config / 'ducktales.exe'
     dev = ROOT / args.dev_build / args.config / 'ducktales.exe' if args.dev_build else None
     failed = []
-    with concurrent.futures.ThreadPoolExecutor(args.jobs) as pool:
+    scratch = ROOT / 'captures' if (ROOT / 'captures').is_dir() else None
+    with tempfile.TemporaryDirectory(dir=scratch) as tmp, concurrent.futures.ThreadPoolExecutor(args.jobs) as pool:
+        for case in pokes:
+            if 'presses' in case:
+                case['route'] = pressed_route(case, tmp)
         if 'check' in args.modes:
             run_checks(pool, exe, args.rom, cases, 'check', failed)
         if 'replace' in args.modes and dev:
