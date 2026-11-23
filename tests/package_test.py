@@ -50,6 +50,8 @@ FILES = [
     'licenses/SDL2-README-SDL.txt',
     'licenses/imgui-LICENSE.txt',
     'licenses/formae-ui-LICENSE.txt',
+    'licenses/stb-LICENSE.txt',
+    'licenses/lua-LICENSE.txt',
 ]
 RUNTIME_DLL = re.compile(r'^(vcruntime|msvcp|concrt|vccorlib|ucrtbase|api-ms-win-crt-)', re.I)
 
