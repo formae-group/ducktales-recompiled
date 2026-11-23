@@ -34,7 +34,7 @@ enhancement and sprite tests use.
   shows, but never the machine state, the machine picture or any verified hash.
 - **The menu library is shared.** `external/formae-ui` is a pinned submodule, used by Formae's other
   ports too. `app_ui.cpp` keeps only DuckTales' pages, settings and texts; a change to the look,
-  a widget or the navigation goes to [formae-ui](https://gitlab.com/formae/formae-ui) first, then the
+  a widget or the navigation goes to [formae-ui](https://github.com/formae-group/formae-ui) first, then the
   submodule is moved to its new tag.
 - **Windows only.** The supported target is Windows x64 with Visual Studio 2022.
 
@@ -86,6 +86,10 @@ while iterating; run the full set once before submitting. The oracle's results a
 A new route that reaches code no route has executed adds interpreter misses. Append them to
 `config/ducktales.seeds` with `--miss-log`, rebuild and rerun the route; see the README.
 
+CI ([GitHub Actions](.github/workflows/ci.yml)) runs on every push to `main` and every pull request,
+without the ROM: `tools/format.py --check` with the pinned clang-format and Black, and a byte-compile
+of `tests/` and `tools/`. Everything that needs the game (the table above) runs on your machine.
+
 Record new verified results in [docs/validation.md](docs/validation.md), and list anything you did
 not verify in its *Not verified* section.
 
@@ -103,14 +107,14 @@ not verify in its *Not verified* section.
 - Python tools and tests run with `py -3 -I` and use only the standard library unless the script
   says otherwise.
 
-## Commits and merge requests
+## Commits and pull requests
 
 - One logical change per commit. Write the subject as a short imperative sentence in sentence case,
   without a prefix or trailing period: *Cache the oracle's route hashes in verify_routes*.
-- Put the reason and the evidence (routes run, frames, results) in the body or the merge request.
-- Work on a branch and open a merge request against `main`. Update the README, the relevant `docs/`
-  page and [CHANGELOG.md](CHANGELOG.md) in the same merge request.
-- A merge request is accepted when its checks pass and the change keeps the original behaviour at
+- Put the reason and the evidence (routes run, frames, results) in the body or the pull request.
+- Work on a branch and open a pull request against `main`. Update the README, the relevant `docs/`
+  page and [CHANGELOG.md](CHANGELOG.md) in the same pull request.
+- A pull request is accepted when CI and the checks above pass and the change keeps the original behaviour at
   default settings.
 
 ## Releasing
@@ -132,7 +136,11 @@ shows), so a package built from an untagged or modified tree says so in its name
 
 3. Write the package: `cmake --build build/windows --config Release --target PACKAGE`. It is
    `build\windows\DuckTalesRecompiled-v1.0.0-win64.zip`.
-4. Publish the ZIP free of charge (NESRecomp's licence, see below) and push the tag.
+4. Push the tag and publish the ZIP free of charge (NESRecomp's licence, see below) as the GitHub
+   release, with the version's `CHANGELOG.md` section as its notes:
+   `gh release create v1.0.0 build/windows/DuckTalesRecompiled-v1.0.0-win64.zip --verify-tag --notes-file <notes>`.
+   The release is built on a maintainer's machine because the build needs the ROM, which never goes
+   to GitHub, to CI or into the package.
 
 The package holds `ducktales.exe` (static MSVC runtime, so players need no Visual C++
 redistributable), `SDL2.dll`, the player `README.txt` (from `packaging/README.txt.in`),

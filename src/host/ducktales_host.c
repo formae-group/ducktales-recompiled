@@ -25,6 +25,11 @@
  *                     present_from_snapshot and no present_phase turns on the
  *                     window's steady hold while VSync is off, with no
  *                     in-between pictures (docs/presentation.md)
+ *   mods              mods/app_mods.h: the folders (--mods-dir; the window
+ *                     adds the data folder's), loaded before the first frame;
+ *                     their sounds follow the driver at each frame's end (the
+ *                     APU's audio-only mute) and are mixed in audio_mix; their
+ *                     tiles and palettes are painted by the sprite compositor
  *   diagnostics       DUCKTALES_DEV_DIAGNOSTICS builds only
  *                     (host/ducktales_diagnostics.h)
  *   native check      headless builds only: the native renderer against
@@ -35,6 +40,7 @@
  */
 #include "cyc_core.h"
 #include "cyc_host_extras.h"
+#include "cyc_mod.h"
 
 #include "decomp/decomp.h"
 #include "game/enhancements.h"
@@ -42,9 +48,11 @@
 #include "host/ducktales_host.h"
 #include "host/ducktales_sprites.h"
 #include "host/ducktales_ramhash.h"
+#include "mods/app_mods.h"
 #include "native/native_check.h"
 #if DUCKTALES_WINDOW
 #include "ui/app_present.h"
+#include "ui/app_settings.h"
 #include "ui/app_ui.h"
 #endif
 
@@ -78,7 +86,7 @@ static void save_settings(void *ctx, FILE *f)
  * developer ones. */
 static const CycHostOption DIAG_OPTIONS[] = { DT_RAMHASH_OPTIONS DT_DIAG_OPTIONS NV_CHECK_OPTIONS{ NULL, false,
                                                                                                    NULL } };
-static CycHostOption s_options[DT_ENH_COUNT + 2 + sizeof DIAG_OPTIONS / sizeof DIAG_OPTIONS[0]];
+static CycHostOption s_options[DT_ENH_COUNT + 2 + APP_MODS_OPTION_COUNT + sizeof DIAG_OPTIONS / sizeof DIAG_OPTIONS[0]];
 static bool s_decomp_option;
 static char s_option_help[DT_ENH_COUNT][160];
 
@@ -100,6 +108,9 @@ static size_t options_init(void)
         "--decomp", true,
         "off|check|replace: run the decompiled routines (check: compare with the original on every call; default off)"
     };
+    for (int i = 0; i < APP_MODS_OPTION_COUNT; i++) {
+        s_options[n++] = (CycHostOption){ app_mods_option_name(i), true, app_mods_option_help(i) };
+    }
     for (size_t i = 0; DIAG_OPTIONS[i].name; i++) {
         s_options[n++] = DIAG_OPTIONS[i];
     }
@@ -118,6 +129,9 @@ static bool option(void *ctx, const char *name, const char *value)
     if (ducktales_host_game_option(name, value, &ok)) {
         return ok;
     }
+    if (app_mods_option(name, value, &ok)) {
+        return ok;
+    }
     if (!strcmp(name, "--ram-hash-out")) {
         return dt_ramhash_open(value);
     }
@@ -131,6 +145,8 @@ static void power_on(void *ctx)
 {
     (void)ctx;
     dt_sprites_forget();
+    app_mods_reset();
+    cyc_mod_set_apu_audio_mute(0);
     DecompMode mode;
     const char *env = getenv("DUCKTALES_DECOMP");
     if (!s_decomp_option && env && *env) {
@@ -149,9 +165,32 @@ static void power_on(void *ctx)
     dt_diag_power_on();
 }
 
+/* The mods load once, before the first frame (after the options and the
+ * window's settings): the running PRG decides which are refused. */
+static void start_mods(void)
+{
+    static bool started;
+    if (started) {
+        return;
+    }
+    started = true;
+#if DUCKTALES_WINDOW
+    app_mods_use_player_folders(app_settings_path());
+#endif
+    size_t size = cyc_mod_copy_cart_payload(NULL, 0);
+    uint8_t *prg = size ? malloc(size) : NULL;
+    if (prg && cyc_mod_copy_cart_payload(prg, size) != size) {
+        size = 0;
+    }
+    app_mods_start(prg, prg ? size : 0);
+    free(prg);
+    dt_sprites_mods_changed();
+}
+
 static void frame_begin(void *ctx)
 {
     (void)ctx;
+    start_mods();
 #if DUCKTALES_WINDOW
     app_ui_frame_begin();
 #endif
@@ -162,6 +201,11 @@ static void frame_end(void *ctx)
 {
     (void)ctx;
     dt_sprites_frame_end();
+    if (app_mods_audio_active()) {
+        app_mods_audio_frame_end(cyc_cpu_ram());
+        cyc_mod_set_apu_audio_mute(app_mods_audio_mute());
+    }
+    app_mods_scripts_frame();
     dt_ramhash_frame_end();
     dt_diag_frame_end();
     nv_check_frame_end();
@@ -173,12 +217,24 @@ static void state_loaded(void *ctx)
     (void)ctx;
     dt_sprites_forget();
     dt_ramhash_state_loaded();
+    app_mods_reset();
+    cyc_mod_set_apu_audio_mute(0);
 }
 
 static void tcp_setup(void *ctx)
 {
     (void)ctx;
     dt_diag_tcp_setup();
+}
+
+/* The host mixes at 48 kHz (its default rate, CycHostExtras.audio_rate 0). */
+static void audio_mix(void *ctx, int16_t *samples, size_t count)
+{
+    (void)ctx;
+    app_mods_audio_mix(samples, count, 48000);
+#if DUCKTALES_WINDOW
+    app_ui_audio(samples, count);
+#endif
 }
 
 #if DUCKTALES_WINDOW
@@ -193,12 +249,6 @@ static void event(void *ctx, const void *ev, int player)
     (void)ctx;
     (void)player;
     app_ui_event(ev);
-}
-
-static void audio_mix(void *ctx, int16_t *samples, size_t count)
-{
-    (void)ctx;
-    app_ui_audio(samples, count);
 }
 
 static const uint32_t *present(void *ctx, int *width, int *height)
@@ -217,10 +267,10 @@ static CycHostExtras s_extras = {
     .state_loaded = state_loaded,
     .option = option,
     .tcp_setup = tcp_setup,
+    .audio_mix = audio_mix,
 #if DUCKTALES_WINDOW
     .input = input,
     .event = event,
-    .audio_mix = audio_mix,
     .present = present,
     .present_rate = 60,
     .present_from_snapshot = true,

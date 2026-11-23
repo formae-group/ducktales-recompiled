@@ -13,6 +13,7 @@
  *                     (ducktales_host_apply_no_slowdown)
  *   presentation      window builds: ui/app_present.h and the menu's own keys
  *                     (ui/app_ui.h)
+ *   mods              the [Mods] section, written last (mods/app_mods.h)
  *   extra voices      [Audio] MusicUnderEffects and OverlapEffects (off by
  *                     default), played by the native player only
  *
@@ -22,6 +23,7 @@
 #include "host/ducktales_host.h"
 
 #include "host/ducktales_sprites.h"
+#include "mods/app_mods.h"
 #if DUCKTALES_WINDOW
 #include "ui/app_present.h"
 #include "ui/app_ui.h"
@@ -227,6 +229,7 @@ void ducktales_host_write_game_settings(FILE *f)
 #endif
     fprintf(f, "[Audio]\nMusicUnderEffects = %s\nOverlapEffects = %s\n", s_music_under_effects ? "on" : "off",
             s_overlap_effects ? "on" : "off");
+    app_mods_write_settings(f);
 }
 
 bool ducktales_host_game_option(const char *name, const char *value, bool *ok)
