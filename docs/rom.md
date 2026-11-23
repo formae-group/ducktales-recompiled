@@ -4,7 +4,7 @@ The port targets one cartridge revision. The user supplies it; it is never commi
 
 | Field | Value |
 |---|---|
-| File | `DuckTales (USA).nes` (131,088 bytes) |
+| File | Any name (No-Intro: `DuckTales (USA).nes`), 131,088 bytes |
 | SHA-256 (file) | `97d472f7b2c1088448d1644155b2650a546bad887b3cba571e16d7986824c169` |
 | SHA-1 (file) | `f83191749d019d75eb5ff95d247ef25882c2571a` |
 | CRC32 (file) | `06B994B2` |
@@ -12,6 +12,11 @@ The port targets one cartridge revision. The user supplies it; it is never commi
 | SHA-1 (PRG, header excluded) | `6e700e8f72f767918b096f6a5f17f8cd1e2d0866` |
 | CRC32 (PRG, header excluded) | `EFB09075` |
 | Region | USA (NTSC) |
+
+The ROM is identified by these hashes and never by its file name. The build takes the file in
+`roms/` whose SHA-256 matches (or the one `-DDUCKTALES_ROM=<path>` names, which must match too), the
+test scripts find it the same way (`tools/romfile.py`), and the game checks whatever file the player
+picks. The commands in these docs call it `roms/baserom.nes`.
 
 ## Header
 

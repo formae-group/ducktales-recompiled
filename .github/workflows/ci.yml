@@ -1,0 +1,39 @@
+# .github/workflows/ci.yml - the checks that need no ROM: every C, C++ and
+# Python source laid out by the pinned clang-format and Black
+# (tools/format.py --check), and every Python test and tool byte-compiled.
+# The game is generated from the player's own ROM at configure time, so
+# building it and running the verification suites (tests/verify_routes.py
+# and the rest) happens on a maintainer's machine, never in CI.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: format and syntax
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out with CRLF, the layout .clang-format and Windows expect
+        run: git config --global core.autocrlf true
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install the pinned formatters
+        run: python -m pip install clang-format==23.1.5 black==26.10.1
+
+      - name: Format check
+        run: python tools/format.py --check
+
+      - name: Byte-compile the tests and tools
+        run: python -m compileall -q tests tools

@@ -195,7 +195,7 @@ host shows it at its logical size. So:
 Captures: `--present-out` in the window build saves what the window shows, for example
 
 ```sh
-build/windows/Release/ducktales.exe "roms/DuckTales (USA).nes" --hidden --uncapped --config captures/p.ini \
+build/windows/Release/ducktales.exe roms/baserom.nes --hidden --uncapped --config captures/p.ini \
     --window-input tests/routes/full_amazon.txt --exit-after 3001 --present-out captures/p.png --present-every 3000
 ```
 

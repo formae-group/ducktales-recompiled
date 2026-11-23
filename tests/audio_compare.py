@@ -50,6 +50,9 @@ from pathlib import Path
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'tools'))
+from romfile import default_rom  # noqa: E402
+
 COMPARE = ROOT / 'tools' / 'native_compare.py'
 RATE = 48000
 SPF = 800
@@ -410,7 +413,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--build', default='build/headless')
     ap.add_argument('--config', default='Release')
-    ap.add_argument('--rom', default=str(ROOT / 'roms' / 'DuckTales (USA).nes'))
+    ap.add_argument('--rom', default=default_rom())
     ap.add_argument('--routes', nargs='*', default=DEFAULT_ROUTES)
     ap.add_argument('--jobs', type=int, default=2)
     ap.add_argument('--out', default=str(ROOT / 'captures' / 'audio_compare'))

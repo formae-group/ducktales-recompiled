@@ -27,6 +27,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
+from romfile import default_rom  # noqa: E402
+
+sys.path.insert(0, str(ROOT / 'tools'))
 from framelog import frames  # noqa: E402
 
 ROUTES = ROOT / 'tests' / 'routes'
@@ -154,7 +157,7 @@ def main():
     ap.add_argument('--build', default='build/headless')
     ap.add_argument('--dev-build', help='a -DDUCKTALES_DEV_DIAGNOSTICS=ON headless build')
     ap.add_argument('--config', default='Release')
-    ap.add_argument('--rom', default=str(ROOT / 'roms' / 'DuckTales (USA).nes'))
+    ap.add_argument('--rom', default=default_rom())
     args = ap.parse_args()
     exe = ROOT / args.build / args.config / 'ducktales.exe'
     dev = ROOT / args.dev_build / args.config / 'ducktales.exe' if args.dev_build else None
