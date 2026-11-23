@@ -15,6 +15,9 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - The camera, the column streaming, the map and block decoding, the VRAM queue uploads and the
   background probe with its four snaps are decompiled (`src/decomp/level.c`, `src/decomp/collision.c`):
   18 routines, checked on every call of every route and RAM-identical in replace mode.
+- Decompiled: Scrooge's object contact tests (`$D202`/`$D291`), the Select refill (`$E2FE`) and
+  the vertical velocity moves (`$F270`/`$F284`). `tests/decomp_test.py` poke cases can add pad
+  states to their route; three of them press Select.
 
 ### Fixed
 
