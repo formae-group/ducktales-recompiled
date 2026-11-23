@@ -22,6 +22,13 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - Decompiled: Scrooge's object contact tests (`$D202`/`$D291`), the Select refill (`$E2FE`) and
   the vertical velocity moves (`$F270`/`$F284`). `tests/decomp_test.py` poke cases can add pad
   states to their route; three of them press Select.
+- The object system is decompiled (`src/decomp/objects.c`, `src/decomp/objcommon.c`): the per-frame
+  dispatch of bank 6, 21 of the 67 object kinds (the Amazon's enemies, the Himalayas' dangler,
+  Transylvania's swooper, blocks, pickups and what taking each item does, hidden items, chests,
+  doors, the lift and talking characters) and the shared helpers: contact with Scrooge, the movers,
+  block tests, money and HP. 60 routines, each checked on its own at every call (1,643,275 calls
+  compared on the 12 routes) and RAM-identical in replace mode; poke cases cover the lift, the extra
+  HP dot and the money cap, which no route reaches. Hook sites only where original code calls them.
 
 ### Fixed
 

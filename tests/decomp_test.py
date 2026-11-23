@@ -94,6 +94,32 @@ POKES = [
     ('select-poor', {0x34A: 0x01}, ['Player_SelectRefill'], {POKE_FRAME + 8: 'LEFT+SELECT', POKE_FRAME + 10: 'LEFT'}),
     ('select-full', {}, ['Player_SelectRefill'], {POKE_FRAME + 8: 'LEFT+SELECT', POKE_FRAME + 10: 'LEFT'}),
     ('hud-total', {0xAB: 0x01}, ['Hud_RefreshTotal']),
+    # slot 9 made a pickup on Scrooge (step 2, waiting): the extra HP dot; a big diamond with money at 999...
+    (
+        'extra-dot',
+        {0x709: 0xA2, 0x719: 0x13, 0x629: 0x2B, 0x649: 0xA6, 0x729: 0x62, 0x739: 0x00, 0x7D9: 0x01, 0x609: 0x80},
+        ['Pickup_Take', 'Pickup_ExtraDot', 'Hud_RefillHp'],
+    ),
+    (
+        'money-max',
+        {
+            0x709: 0xA2,
+            0x719: 0x13,
+            0x629: 0x61,
+            0x6B9: 0xFF,
+            0x649: 0xA6,
+            0x729: 0x62,
+            0x739: 0x00,
+            0x7D9: 0x01,
+            0x609: 0x80,
+            0x324: 0x09,
+            0x325: 0x09,
+            0x326: 0x09,
+        },
+        ['Money_Add', 'Money_Max'],
+    ),
+    # slot 9 made a lift (kind $0F) under Scrooge
+    ('lift', {0x709: 0xA0, 0x719: 0x0F, 0x649: 0xB0, 0x729: 0x62, 0x739: 0x00, 0x609: 0x80}, ['Obj_Lift']),
 ]
 
 # name, route, options, routines that must be compared

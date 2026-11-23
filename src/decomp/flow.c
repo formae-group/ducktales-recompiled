@@ -92,8 +92,8 @@
 #define gStreamPage      RAM_U8(DT_ADDR_STREAM_PAGE)
 #define gStreamRequest   RAM_U8(DT_ADDR_MOVE_DIR)
 #define gUnk2E           RAM_U8(DT_ADDR_UNK_2E)
-#define gUnk4F           RAM_U8(DT_ADDR_UNK_4F)
-#define gUnk5B           RAM_U8(DT_ADDR_UNK_5B)
+#define gHeldSlot        RAM_U8(DT_ADDR_HELD_SLOT)
+#define gBlockOpened     RAM_U8(DT_ADDR_BLOCK_OPENED)
 #define gRowChrState     RAM_U8(DT_ADDR_ROW_CHR_STATE)
 #define gLandLeft        RAM_U8(DT_ADDR_LAND_LEFT)
 #define gMessage         RAM_U8(DT_ADDR_MESSAGE)
@@ -535,7 +535,7 @@ static void Death_Fade(Regs *r)
 static void Death_Blank(Regs *r)
 {
     Decomp_Enter(DT_FLOW_DEATH_BLANK, r->a, r->x, r->y);
-    gUnk4F = 0;
+    gHeldSlot = 0;
     gBossFight = 0;
     for (int i = 0x0B; i >= 0; i--) {
         gRam[DT_ADDR_HAZARD + i] = 0;
@@ -806,7 +806,7 @@ static void FrameLoop_AfterSpawn(Regs *r)
     Decomp_Enter(DT_FLOW_AFTER_SPAWN, r->a, r->x, r->y);
     gPrevCameraX = gCameraX;
     gUnk2E = 0;
-    gUnk5B = 0;
+    gBlockOpened = 0;
     uint8_t hazard = gHazard;
     if (hazard) {
         gHazard = 0;
@@ -1278,7 +1278,7 @@ static void LandLoad_Done(Regs *r)
 {
     Decomp_Enter(DT_FLOW_LOAD_DONE, r->a, r->x, r->y);
     gBossFight = 0;
-    gUnk4F = 0;
+    gHeldSlot = 0;
     gPlayerMode = 0;
     gLandLeft = 0;
     gPrevCameraX = 0;
@@ -1297,7 +1297,7 @@ static void LandLoad_Done(Regs *r)
     gTickFrames = DT_TICK_FRAMES_RELOAD;
     gObjects->state[1] = 0xFF;
     gObjects->flags[1] = 0xFF;
-    gObjects->unk_07F0[1] = 0xFF;
+    gObjects->record[1] = 0xFF;
     gHudGate = 0xFF;
     gObjects->y[1] = 0;
     gObjects->worldX[1] = 0;
@@ -1397,13 +1397,13 @@ const int gFlowRoutineCount = sizeof gFlowRoutines / sizeof gFlowRoutines[0];
 #define STOP(addr, id) { addr, "ducktales.decomp.stop." id }
 
 /* The routines the flow hands off to that have a decompiled C of their own
- * ($C42C, $C71D, $C830, $EFE2 in level.c, $E354 in player.c) stop the isolated
- * runs at their own sites. */
+ * ($C42C, $C71D, $C830, $EFE2 in level.c, $E354 in player.c, $8000 bank 6 in
+ * objects.c) stop the isolated runs at their own sites. */
 const DecompStop gFlowStops[] = {
-    STOP(DT_CODE_TASK_YIELD, "FFAC"), STOP(DT_CODE_RESET, "FEE0"),      STOP(DT_CODE_FADE_IN, "C279"),
-    STOP(DT_CODE_FADE_OUT, "C282"),   STOP(DT_CODE_SCREEN_OFF, "C197"), STOP(DT_CODE_SCREEN_ON, "C1A1"),
-    STOP(DT_B6_OBJECTS, "8000.6"),    STOP(DT_B6_SPAWN, "AEA0.6"),      STOP(DT_CODE_LAND_SELECT, "D630"),
-    STOP(DT_CODE_NT_FILL, "C203"),    STOP(DT_CODE_CHR_LOAD, "C301"),   STOP(DT_B5_PPU_STRINGS, "BAB0.5"),
-    STOP(DT_CODE_SCENE, "DF27"),      STOP(DT_CODE_ENDING, "E1AF"),
+    STOP(DT_CODE_TASK_YIELD, "FFAC"), STOP(DT_CODE_RESET, "FEE0"),       STOP(DT_CODE_FADE_IN, "C279"),
+    STOP(DT_CODE_FADE_OUT, "C282"),   STOP(DT_CODE_SCREEN_OFF, "C197"),  STOP(DT_CODE_SCREEN_ON, "C1A1"),
+    STOP(DT_B6_SPAWN, "AEA0.6"),      STOP(DT_CODE_LAND_SELECT, "D630"), STOP(DT_CODE_NT_FILL, "C203"),
+    STOP(DT_CODE_CHR_LOAD, "C301"),   STOP(DT_B5_PPU_STRINGS, "BAB0.5"), STOP(DT_CODE_SCENE, "DF27"),
+    STOP(DT_CODE_ENDING, "E1AF"),
 };
 const int gFlowStopCount = sizeof gFlowStops / sizeof gFlowStops[0];

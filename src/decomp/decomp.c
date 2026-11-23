@@ -243,7 +243,12 @@ static bool call_in_scope(uint16_t routine, CycModRegs *r)
 
 Regs Decomp_Call(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
 {
-    CycModRegs r = { a, x, y, s_cur_s, s_entry_p, 0 };
+    return Decomp_CallP(routine, a, x, y, s_entry_p);
+}
+
+Regs Decomp_CallP(uint16_t routine, uint8_t a, uint8_t x, uint8_t y, uint8_t p)
+{
+    CycModRegs r = { a, x, y, s_cur_s, p, 0 };
     if (!call_in_scope(routine, &r)) {
         fail("an original routine called from C did not return", routine);
     }
@@ -949,6 +954,9 @@ static int on_entry(uint16_t addr)
         if (s_routine[i]->addr != addr || !s_routine[i]->site_id) {
             continue;
         }
+        if (addr < 0xC000 && cyc_cpu_ram()[DT_ADDR_BANK] != s_routine[i]->bank) {
+            continue;
+        }
         CycModRegs in;
         cyc_mod_regs(&in);
         if (s_routine[i]->task) {
@@ -989,6 +997,8 @@ NES_MOD_CONSTRUCTOR(dt_register_decomp_sites)
     add_table(gMotionRoutines, gMotionRoutineCount);
     add_table(gSoundRoutines, gSoundRoutineCount);
     add_table(gPlayerRoutines, gPlayerRoutineCount);
+    add_table(gObjCommonRoutines, gObjCommonRoutineCount);
+    add_table(gObjectRoutines, gObjectRoutineCount);
     add_table(gLevelRoutines, gLevelRoutineCount);
     add_table(gCollisionRoutines, gCollisionRoutineCount);
     add_table(gFlowRoutines, gFlowRoutineCount);

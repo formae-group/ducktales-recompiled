@@ -8,10 +8,10 @@ port's own files and all switched off by default:
 - **Game events** (`include/ducktales/events.h`, `src/game/events.c`): verified code sites where mod
   code can react to, or cancel, something the game does. The enhancements are handlers of these
   events.
-- **Decompiled routines** (`src/decomp/`): Scrooge's per-frame code, shared motion and sound
-  primitives, and parts of the frame loop and HUD, written as C. The cycle host can check them
-  against the original or run them in its place. Flow tasks can hand control back to recompiled
-  code and resume in C when the task resumes, without a hook at each resume point.
+- **Decompiled routines** (`src/decomp/`): Scrooge's per-frame code, the object system (the per-frame
+  dispatch, the shared object helpers and 21 object kinds) and the motion and sound primitives they
+  use, written as C on the API. Each replaces the recompiled routine at its entry, and
+  each is checked against the original on every call of every route.
 
 Addresses are named only in `src/game/ducktales_symbols.h`. Status words (verified, code,
 hypothesis) are used as in [memory-map.md](memory-map.md). Code addresses are in bank 7 (the fixed
@@ -362,6 +362,160 @@ task code runs.
 **Next routines, in order:** the row change `$E8C0` and modes 15 and 16 with the flow's task
 hand-off, then `player.c` calling the C of the background probe and its snaps instead of their
 originals.
+
+### Objects
+
+`src/decomp/objects.c` (bank 6) and `src/decomp/objcommon.c` (fixed bank) decompile the object
+system. The frame loop maps bank 6 and calls `Obj_UpdateAll` (`$8000`) at `$DB78`, its only
+caller. It loads the objects' gravity (`$EF = $40`), then walks slots 1-15 with the cursor in `$4A`
+and, for every slot whose status `$0700` has bit 7 set, jumps to the handler of its kind (`$0710`)
+through the 67-entry table at `$802C`/`$806F` with the return address `$8022` pushed. The C keeps the
+cursor in RAM because a handler could change it, writes the jump vector into `$00/$01` as the
+original does, and enters an original handler with A = `$22`, X = slot, Y = kind and the loop's
+flags (`Decomp_CallP`): a handler that adds without `CLC` (the Amazon boss's random step at
+`$A664`) sees the carry of the caller for slot 1 and of the loop's `CPX #$10` after it.
+
+Object layout used by the handlers (all slots, `objects.h`): `$0700` bit 7 live, bit 5 world X, bit 4
+hidden, bits 0-3 the handler's step; `$0600` bit 7 on screen (set by the sprite builder, required by
+every contact test), bit 6 facing right, bit 3 freed at the end of the animation, bit 1 blink;
+`$06B0`/`$06C0` per-kind timers; `$07D0` hitbox (bits 0-6 index the half-height table `$F498` and
+half-width table `$F4B8`, bits 4-6 harmful); `$07E0` direction (bit 0 right); `$07F0` the land record
+the slot came from. A hit by Scrooge's cane or a thrown block counts in `$0690`; a handler that sees
+it non-zero is beaten.
+
+**Contact with Scrooge.** `Obj_TouchScrooge` (`$F436`) is the test every kind uses: a slot on
+screen touches him when the vertical distance is below its half-height (8 px more when he crouches)
+and the world-X distance at most its half-width. A harmful hitbox then starts his knock-back
+(mode 6) unless `$7D` is running; during the power-up (`$75`) the object takes a hit instead.
+Scrooge's own side, `$D202`/`$D291`, is still original (see above).
+
+**Contracts.** The registers original callers use after a routine returns (the C callers use its
+return value instead). Every handler is entered with A = `$22`, X = slot and Y = kind and returns
+nothing the dispatch uses.
+
+| Routine | In | Out | Notes |
+|---|---|---|---|
+| `Obj_UpdateAll` | P | X | X = 16 when it returns; the timer after it passes X to a sound request, which keeps it in `$00` |
+| `Obj_TouchScrooge` | X = slot | X, C | C clear = contact; Y = hitbox index when the slot is on screen |
+| `Obj_WalkRight`, `Obj_WalkLeft`, `Obj_Fall`, `Obj_Rise` | A = first probe, Y = probe count - 1, X = slot | X | X is what the probe returned |
+| `Obj_TouchBlockH`, `Obj_TouchBlockV`, `Obj_HitOthers` | X = slot | C | C clear = a hit |
+| `Obj_FindFreeSlot`, `Obj_FindFreeSlotY` | - | X or Y, C | C set = no free slot |
+| `Obj_DistanceX`, `Obj_DistanceY`, `Obj_FaceScrooge` | X = slot | A | |
+| `Obj_SetSpeedIndex`, `Obj_MarkConsumed`, `Hud_RefillHp`, `Money_Max` | A = index (speed), X = slot | A, Y | what the loops leave; original callers may use them |
+
+**Hook sites: only the frontier.** A routine has a site only when original code calls it
+(`tools/decomp_callers.py`); everything the C calls is a plain C call that starts with
+`Decomp_Enter`, so check mode compares it on its own at every call. The 14 sites are the dispatch
+`$8000`, `Obj_TouchScrooge` and the four movers (called by the 46 handlers that are still
+original), and eight fixed-bank helpers that original code also calls: `$F312`, `$F6BD`, `$F7BE`,
+`$F7CC`, `$F7DA`, `$F7F0`, `$F812` (also the flow's respawn) and `$F83F`. The flow's stop at
+`$8000` (bank 6) is this site: `Obj_UpdateAll`'s hook ends an isolated run of the frame loop there
+too, so the flow has no separate stop for it. Routines with a site that the C calls are compared
+where original code calls them, not from the C.
+
+**Routines** (60: 21 kind handlers, the dispatch and 38 inner routines). "Routes" is the number of
+the 12 routes where check mode compared the routine, "Calls" the calls compared on them, "Pokes"
+the `tests/decomp_test.py` cases that reach it from a poked state. All were compared equal on every
+call and are RAM-identical in replace mode.
+
+| Routine | Address | Site | Out | Status | Routes | Calls | Pokes |
+|---|---|---|---|---|---|---|---|
+| `Obj_UpdateAll` | `$8000` (bank 6) | yes | X | checked | 12 | 51,760 | - |
+| `Obj_FindFreeSlotY` | `$80B3` (bank 6) | - | Y, C | checked | 1 | 1 | - |
+| `Obj_HitOthers` | `$80C1` (bank 6) | - | C | checked | 4 | 170 | - |
+| `Obj_SetMotionIndex` | `$818A` (bank 6) | - | - | checked | 5 | 862 | - |
+| `Obj_Hopper` | `$8225` (bank 6) | - | - | checked | 2 | 1,566 | - |
+| `Obj_Walker` | `$82AF` (bank 6) | - | - | checked | 1 | 625 | - |
+| `Enemy_Walk` | `$82F9` (bank 6) | - | X | checked | 2 | 2,180 | - |
+| `Obj_Thrower` | `$830E` (bank 6) | - | - | checked | 1 | 106 | - |
+| `Obj_Shot` | `$8462` (bank 6) | - | - | checked | 1 | 24 | - |
+| `Obj_Watcher` | `$8491` (bank 6) | - | - | checked | 2 | 515 | - |
+| `Obj_Dangler` | `$84E5` (bank 6) | - | - | checked | 2 | 770 | - |
+| `Obj_Snapper` | `$8567` (bank 6) | - | - | checked | 2 | 3,321 | - |
+| `Obj_Block` | `$8668` (bank 6) | - | - | checked | 11 | 96,966 | - |
+| `Obj_LaunchBlock` | `$86B5` (bank 6) | - | - | checked | 5 | 18 | - |
+| `Obj_HitBlock` | `$86F7` (bank 6) | - | - | checked | 9 | 45 | - |
+| `Obj_ResolveBlock` | `$870D` (bank 6) | - | - | checked | 9 | 45 | - |
+| `Obj_Thrown` | `$8722` (bank 6) | - | - | checked | 5 | 186 | - |
+| `Obj_Dropper` | `$8845` (bank 6) | - | - | checked | 1 | 1,263 | - |
+| `Obj_ThrownFall` | `$88BC` (bank 6) | - | X | checked | 3 | 104 | - |
+| `Obj_ThrownWalk` | `$88C8` (bank 6) | - | X | checked | 5 | 183 | - |
+| `Obj_Break` | `$88DF` (bank 6) | - | - | checked | 8 | 50 | - |
+| `Obj_Shatter` | `$88E4` (bank 6) | - | - | checked | 8 | 52 | - |
+| `Obj_Defeat` | `$8932` (bank 6) | - | - | checked | 2 | 22 | - |
+| `Obj_Defeated` | `$897B` (bank 6) | - | - | checked | 7 | 1,692 | - |
+| `Obj_OpenBlock` | `$8A11` (bank 6) | - | - | checked | 6 | 11 | - |
+| `Obj_BecomePickupNow` | `$8A32` (bank 6) | - | - | checked | 6 | 11 | - |
+| `Obj_Pickup` | `$8A59` (bank 6) | - | - | checked | 11 | 5,458 | extra-dot, money-max |
+| `Pickup_Take` | `$8B21` (bank 6) | - | - | checked | 10 | 23 | extra-dot, money-max |
+| `Pickup_ExtraDot` | `$8B38` (bank 6) | - | - | checked (pokes only) | 0 | 0 | extra-dot |
+| `Hud_RestoreDot` | `$8B82` (bank 6) | - | - | checked | 1 | 1 | - |
+| `Money_Add` | `$8BBF` (bank 6) | - | - | checked | 10 | 19 | money-max |
+| `Pickup_Treasure` | `$8C13` (bank 6) | - | - | checked | 5 | 6 | - |
+| `Obj_HiddenItem` | `$8C45` (bank 6) | - | - | checked | 12 | 26,083 | - |
+| `Obj_ShowItem` | `$8CAC` (bank 6) | - | - | checked | 11 | 70 | - |
+| `Obj_BecomeBlock` | `$8CE1` (bank 6) | - | - | checked | 5 | 10 | - |
+| `Obj_Chest` | `$8D19` (bank 6) | - | - | checked | 7 | 8,242 | - |
+| `Obj_Door` | `$9065` (bank 6) | - | - | checked | 5 | 3,442 | - |
+| `Obj_Lift` | `$9093` (bank 6) | - | - | checked (pokes only) | 0 | 0 | lift |
+| `Obj_Crawler` | `$90EA` (bank 6) | - | - | checked | 1 | 788 | - |
+| `Obj_Flyer` | `$916C` (bank 6) | - | - | checked | 1 | 1,763 | - |
+| `Obj_Swing` | `$9225` (bank 6) | - | - | checked | 1 | 1,492 | - |
+| `Obj_Swooper` | `$9430` (bank 6) | - | - | checked | 4 | 2,370 | - |
+| `Obj_WalkRight` | `$F0F8` | yes | X | checked | 11 | 10,787 | - |
+| `Obj_WalkLeft` | `$F13B` | yes | X | checked | 11 | 13,317 | - |
+| `Obj_Despawn` | `$F179` | - | - | checked | 2 | 22 | - |
+| `Obj_Fall` | `$F1BE` | yes | X | checked | 11 | 19,854 | - |
+| `Obj_Rise` | `$F1F9` | yes | X | checked | 10 | 2,157 | - |
+| `Obj_SetSpeedIndex` | `$F312` | yes | A, Y | checked | 2 | 6 | - |
+| `Obj_TouchBlockH` | `$F332` | - | C | checked | 11 | 26,520 | - |
+| `Obj_TouchBlockV` | `$F3B7` | - | C | checked | 11 | 5,851 | - |
+| `Obj_TouchScrooge` | `$F436` | yes | X, C | checked | 12 | 62,474 | - |
+| `Obj_FaceScrooge` | `$F6BD` | yes | A | checked | 9 | 154 | - |
+| `Obj_FindFreeSlot` | `$F7BE` | yes | X, C | checked | 12 | 970 | - |
+| `Obj_DistanceY` | `$F7CC` | yes | A | checked | 2 | 158 | - |
+| `Obj_DistanceX` | `$F7DA` | yes | A | checked | 10 | 7,864 | - |
+| `Obj_MarkConsumed` | `$F7F0` | yes | A, Y | checked | 11 | 74 | - |
+| `Hud_RefillHp` | `$F812` | yes | A, Y | checked | 12 | 28 | extra-dot |
+| `Obj_DifficultAction` | `$F822` | - | - | checked | 11 | 81 | - |
+| `Money_Max` | `$F83F` | yes | A, Y | checked (pokes only) | 0 | 0 | money-max |
+| `Obj_Talker` | `$FDF5` | - | - | checked | 7 | 3,599 | - |
+
+**Object kinds decompiled: 21 of the 67 entries of the handler table (31%).**
+
+| Kind | Handler | Name | What it is |
+|---|---|---|---|
+| 1 | `$8225` | `Obj_Hopper` | enemy: walks and hops |
+| 2 | `$82AF` | `Obj_Walker` | enemy: walks, turns at walls |
+| 3 | `$830E` | `Obj_Thrower` | enemy: walks, hops, throws a shot |
+| 4 | `$8462` | `Obj_Shot` | kind 3's shot |
+| 5 | `$8491` | `Obj_Watcher` | enemy: stays, faces Scrooge |
+| 6 | `$84E5` | `Obj_Dangler` | enemy: climbs to the ceiling, drops on Scrooge |
+| 7 | `$8567` | `Obj_Snapper` | plant that catches Scrooge |
+| 8 | `$8668` | `Obj_Block` | block: solid to other objects, launched or opened by the cane |
+| 9 | `$8722` | `Obj_Thrown` | a launched block |
+| `$0A` | `$8845` | `Obj_Dropper` | block that falls when Scrooge comes near |
+| `$0B` | `$897B` | `Obj_Defeated` | a beaten enemy flying off |
+| `$0C` | `$90EA` | `Obj_Crawler` | enemy: waits for Scrooge to pass, walks |
+| `$0D` | `$916C` | `Obj_Flyer` | enemy: weaving flyer |
+| `$0E` | `$9225` | `Obj_Swing` | swinging hold Scrooge grabs with Up |
+| `$0F` | `$9093` | `Obj_Lift` | platform that rises and sinks |
+| `$11` | `$9430` | `Obj_Swooper` | enemy: drops to Scrooge's height and weaves |
+| `$13` | `$8A59` | `Obj_Pickup` | an item Scrooge takes by touching it |
+| `$14` | `$8C45` | `Obj_HiddenItem` | an item that appears when touched |
+| `$15` | `$8D19` | `Obj_Chest` | a chest the cane opens |
+| `$2F` | `$9065` | `Obj_Door` | a door: warp request |
+| `$35` | `$FDF5` | `Obj_Talker` | a character that shows a message (fixed bank) |
+
+Written as C inside the routines above but without an entry of their own: the drop of a beaten
+enemy (`$89DA`, entered with the caller's carry, which `Decomp_Enter` cannot pass; it is compared
+through `Obj_Defeat`), the vertical moves `$F270`/`$F284`/`$F298` and the seven item actions at
+`$8B71-$8BE7`.
+
+Not decompiled yet: the other 46 kinds, among them the bosses (their hit routine `$F6D7` raises
+`EVENT_BOSS_HIT`, so a C boss has to raise it itself), the spawner (bank 6 `$AE20-$AF61`), the tile
+edit `$F506` and the climbing step `$F1A8` (both through `Decomp_Call`). The movers test the
+background through the C of the probe `$D120` and its snaps (`collision.c`).
 
 ### Adding a routine
 

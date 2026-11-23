@@ -107,6 +107,7 @@
 #define DT_ROW_VY            0x07C0 /* vertical velocity, whole pixels, signed, up positive (verified) */
 #define DT_ROW_HITBOX        0x07D0 /* hitbox entry: bit 7 solid, bits 4-6 harmful (verified) */
 #define DT_ROW_DIR           0x07E0 /* per-object direction (code) */
+#define DT_ROW_RECORD        0x07F0 /* land record of the slot, $FF none (verified, levels.md) */
 
 /* Scrooge's jump take-off velocity (8.8, up positive). Stored by the land
  * set-up code in the fixed bank and copied into slot 0's velocity when a
@@ -236,19 +237,20 @@
 
 /* ---- game flow (docs/game-state.md, docs/levels.md, docs/rendering.md;
  * decompiled in src/decomp/flow.c) ---- */
-#define DT_ADDR_SCRATCH4           0x0004 /* scratch: block steps for $C830 (verified, rendering.md) */
-#define DT_ADDR_SCRATCH5           0x0005 /* scratch: VRAM queue offset for $C830 (code) */
-#define DT_ADDR_SCRATCH10          0x0010 /* scratch: counters and pointers of the flow code (code) */
-#define DT_ADDR_SCRATCH11          0x0011 /* scratch: screens left to draw at a respawn (code) */
-#define DT_ADDR_PALETTE_REQUEST    0x0018 /* the NMI uploads $0300-$031F when set (verified) */
-#define DT_ADDR_VRAM_PENDING       0x0019 /* the NMI draws the $0400 queue when set (verified) */
-#define DT_ADDR_TILE_EDIT_PENDING  0x001A /* the NMI draws the $0440 queue when set (verified) */
-#define DT_ADDR_STREAM_PAGE        0x002C /* page of the screen being streamed (verified) */
-#define DT_ADDR_PREV_CAMERA_X      0x0025 /* previous frame's $F2 (verified) */
-#define DT_ADDR_UNK_2E             0x002E /* cleared every frame by the frame loop (code; meaning unknown) */
-#define DT_ADDR_UNK_4F             0x004F /* cleared at land load, respawn and scenes (code; meaning unknown) */
+#define DT_ADDR_SCRATCH4          0x0004 /* scratch: block steps for $C830 (verified, rendering.md) */
+#define DT_ADDR_SCRATCH5          0x0005 /* scratch: VRAM queue offset for $C830 (code) */
+#define DT_ADDR_SCRATCH10         0x0010 /* scratch: counters and pointers of the flow code (code) */
+#define DT_ADDR_SCRATCH11         0x0011 /* scratch: screens left to draw at a respawn (code) */
+#define DT_ADDR_PALETTE_REQUEST   0x0018 /* the NMI uploads $0300-$031F when set (verified) */
+#define DT_ADDR_VRAM_PENDING      0x0019 /* the NMI draws the $0400 queue when set (verified) */
+#define DT_ADDR_TILE_EDIT_PENDING 0x001A /* the NMI draws the $0440 queue when set (verified) */
+#define DT_ADDR_STREAM_PAGE       0x002C /* page of the screen being streamed (verified) */
+#define DT_ADDR_PREV_CAMERA_X     0x0025 /* previous frame's $F2 (verified) */
+#define DT_ADDR_UNK_2E            0x002E /* cleared every frame by the frame loop (code; meaning unknown) */
+#define DT_ADDR_HELD_SLOT \
+    0x004F /* slot | $80 of a marked object, $3C when it despawns; cleared at land load, respawn and scenes (code; meaning unknown) */
 #define DT_ADDR_ROW_CHR_STATE      0x0050 /* row sprite-CHR stream state, negative = done (verified) */
-#define DT_ADDR_UNK_5B             0x005B /* cleared every frame by the frame loop (code; meaning unknown) */
+#define DT_ADDR_BLOCK_OPENED       0x005B /* a block was launched or uncovered this frame; cleared every frame (code) */
 #define DT_ADDR_TILE_EDIT_OFFSET   0x005C /* write offset of the $0440 queue (verified) */
 #define DT_ADDR_LAND_LEFT          0x005D /* land left: back to Land Select (verified) */
 #define DT_ADDR_HUD_MONEY_DIRTY    0x0074 /* the frame loop redraws the money when set (code) */
@@ -416,6 +418,105 @@
 #define DT_DATA_RESPAWN           0xDDC1 /* 9-byte respawn and warp entries (levels.md) */
 #define DT_DATA_GAME_OVER_SPRITES 0xDEE7
 #define DT_GAME_OVER_SPRITES_LEN  33
+/* ---- object system (bank 6, docs/decompilation.md "Objects") ----
+ * The frame loop maps bank 6 and calls DT_B6_OBJECTS at $DB78, its only
+ * caller (code). */
+#define DT_ADDR_OBJ_CURSOR        0x004A /* slot whose handler runs (code) */
+#define DT_CODE_OBJ_HANDLER_LO    0x802C /* handler address by kind ($0710), low bytes, 67 entries (code) */
+#define DT_CODE_OBJ_HANDLER_HI    0x806F /* high bytes */
+#define DT_ADDR_CONTACT_SLOT      0x0012 /* block slot a horizontal block test found, 0 none (code) */
+#define DT_ADDR_CONSUMED          0x0120 /* consumed-record bits of the land (verified, game-state.md) */
+#define DT_CODE_OBJ_WALK_LEFT     0xF13B /* move left with wall probes and blocks (code) */
+#define DT_CODE_OBJ_FALL          0xF1BE /* gravity, move down, land on tiles or blocks (code) */
+#define DT_CODE_OBJ_RISE          0xF1F9 /* move up, gravity, bump on tiles or blocks (code) */
+#define DT_CODE_SPEED_TABLE       0xF330 /* 8.8 speeds by index, read by $F312 (code) */
+#define DT_CODE_OBJ_TOUCH_SCROOGE 0xF436 /* contact between a slot and Scrooge; knock-back (code) */
+#define DT_CODE_HITBOX_HEIGHT     0xF498 /* half-height by hitbox entry (code) */
+#define DT_CODE_HITBOX_WIDTH      0xF4B8 /* half-width by hitbox entry (code) */
+#define DT_CODE_OBJ_FACE_SCROOGE  0xF6BD /* $07E0 = direction towards Scrooge (code) */
+#define DT_CODE_OBJ_FIND_FREE     0xF7BE /* highest free slot 15..1 (code) */
+#define DT_CODE_OBJ_DISTANCE_X    0xF7DA /* |Scrooge's world X - the slot's|, low byte (code) */
+#define DT_CODE_OBJ_MARK_CONSUMED 0xF7F0 /* set the slot's record bit in $0120 (verified, game-state.md) */
+#define DT_CODE_OBJ_EDIT_TILE     0xF506 /* edit the metatile at the slot (rendering.md) */
+#define DT_CODE_BIT_TABLE         0xF80A /* 1 << n, n = 0-7 (code) */
+#define DT_CODE_LAND_BIT          0xD8C7 /* bit by land or message id (code) */
+#define DT_ADDR_MESSAGE_SLOT      0x007A /* slot of the character whose message shows (code) */
+#define DT_ADDR_LAUNCHPAD_RIDES   0x00A6 /* lands where the Launchpad ride was taken (hypothesis, game-state.md) */
+#define DT_ADDR_MESSAGES_SHOWN    0x00A8 /* bit per message id already shown (hypothesis, game-state.md) */
+#define DT_ADDR_EXTRA_DOT_TAKEN   0x00AE /* the extra HP dot was taken in the Himalayas (code) */
+#define DT_ADDR_RANDOM            0x00C0 /* four random bytes, stepped by $C2E6 (code) */
+/* Handlers by kind (bank 6 unless noted) and their tables. */
+#define DT_CODE_HIT_HEIGHT           0x814A /* $80C1: half-heights by the thrower's hitbox (code) */
+#define DT_CODE_HIT_WIDTH            0x816A /* $80C1: half-widths (code) */
+#define DT_CODE_MOTION_VY            0x81A5 /* $818A: vertical velocity by index, 8.8 */
+#define DT_CODE_MOTION_SPEED         0x81E5 /* $818A: speed by index, 8.8 */
+#define DT_CODE_SNAPPER_HOLD_Y       0x8661 /* kind 7: Scrooge's Y offset when caught, by pose */
+#define DT_CODE_SNAPPER_HOLD_POSE    0x8663 /* kind 7: Scrooge's pose when caught */
+#define DT_CODE_SNAPPER_HITBOX       0x8665 /* kind 7: hitbox by animation frame */
+#define DT_CODE_KIND_BLOCK           0x8668 /* kind 8 */
+#define DT_CODE_KIND_THROWN          0x8722 /* kind 9 */
+#define DT_CODE_THROWN_STEP_LO       0x88FC /* kind 9's code by step, low bytes (9 entries) */
+#define DT_CODE_THROWN_STEP_HI       0x8905
+#define DT_CODE_BLOCK_LAUNCH         0x890E /* launch velocity, speed by pose - $1A, 4 bytes each */
+#define DT_CODE_KIND_DEFEATED        0x897B /* kind $0B */
+#define DT_CODE_KIND_PICKUP          0x8A59 /* kind $13 */
+#define DT_CODE_ITEM_TAKE_LO         0x8BFE /* what taking items $23-$29 does, low bytes */
+#define DT_CODE_ITEM_TAKE_HI         0x8C05
+#define DT_CODE_ITEM_SOUND           0x8C0C /* their sounds */
+#define DT_CODE_KIND_HIDDEN_ITEM     0x8C45 /* kind $14 */
+#define DT_CODE_KIND_CHEST           0x8D19 /* kind $15 */
+#define DT_CODE_ITEM_BY_INDEX        0x8FB8 /* item by $06B0 */
+#define DT_CODE_CHEST_ITEM           0x8FDA /* chest: 0 = no item shown, by land * 4 + $06B0 */
+#define DT_CODE_CHEST_RISE           0x9002 /* chest: Y offset when opened */
+#define DT_CODE_ITEM_BY_LAND         0x9016 /* item of a pose-$3F block by land * 3 + $06B0 */
+#define DT_CODE_DROP_BY_KIND         0x9025 /* item a beaten enemy may drop, by kind */
+#define DT_CODE_KIND_DOOR            0x9065 /* kind $2F */
+#define DT_CODE_FLYER_PATH           0x9215 /* kind $0D: motion index by step, 14 entries */
+#define DT_CODE_SWING_PATH           0x92ED /* kind $0E: motion index by step, bit 7 = long step, 36 entries */
+#define DT_CODE_SWING_FRAMES         0x9311 /* kind $0E: frames per step, short and long */
+#define DT_CODE_SWOOPER_PATH         0x9544 /* kind $11: motion index by step, 14 entries */
+#define DT_CODE_KIND_LIFT            0x9093 /* kind $0F */
+#define DT_CODE_KIND_TALKER          0xFDF5 /* kind $35 (fixed bank) */
+#define DT_CODE_KIND_HOPPER          0x8225 /* kind 1 */
+#define DT_CODE_KIND_WALKER          0x82AF /* kind 2 */
+#define DT_CODE_KIND_THROWER         0x830E /* kind 3 */
+#define DT_CODE_KIND_SHOT            0x8462 /* kind 4 */
+#define DT_CODE_KIND_WATCHER         0x8491 /* kind 5 */
+#define DT_CODE_KIND_DANGLER         0x84E5 /* kind 6 */
+#define DT_CODE_KIND_SNAPPER         0x8567 /* kind 7 */
+#define DT_CODE_KIND_DROPPER         0x8845 /* kind $0A */
+#define DT_CODE_KIND_CRAWLER         0x90EA /* kind $0C */
+#define DT_CODE_KIND_FLYER           0x916C /* kind $0D */
+#define DT_CODE_KIND_SWING           0x9225 /* kind $0E */
+#define DT_CODE_KIND_SWOOPER         0x9430 /* kind $11 */
+#define DT_CODE_OBJ_FIND_FREE_Y      0x80B3 /* highest free slot 15..1 in Y */
+#define DT_CODE_OBJ_HIT_OTHERS       0x80C1 /* the slot a thrown slot hits */
+#define DT_CODE_OBJ_SET_MOTION       0x818A /* vertical velocity and speed by index */
+#define DT_CODE_ENEMY_WALK           0x82F9 /* walk with probes $18 or $1B */
+#define DT_CODE_OBJ_LAUNCH_BLOCK     0x86B5 /* a block starts flying (kind 9) */
+#define DT_CODE_OBJ_HIT_BLOCK        0x86F7 /* a counted blow on a block */
+#define DT_CODE_OBJ_RESOLVE_BLOCK    0x870D /* open, leave or shatter a block */
+#define DT_CODE_THROWN_FALL          0x88BC /* kind 9: fall with probe $2D */
+#define DT_CODE_THROWN_WALK          0x88C8 /* kind 9: walk with probes $29 or $2B */
+#define DT_CODE_OBJ_BREAK            0x88DF /* pose $1C, then $88E4 */
+#define DT_CODE_OBJ_SHATTER          0x88E4 /* the debris animation */
+#define DT_CODE_OBJ_DEFEAT           0x8932 /* an enemy is beaten */
+#define DT_CODE_OBJ_OPEN_BLOCK       0x8A11 /* an opened block or chest picks its item */
+#define DT_CODE_OBJ_BECOME_PICKUP    0x8A32 /* become a pickup now */
+#define DT_CODE_PICKUP_TAKE          0x8B21 /* Scrooge takes a pickup */
+#define DT_CODE_PICKUP_EXTRA_DOT     0x8B38 /* item $2B: one more HP dot */
+#define DT_CODE_HUD_RESTORE_DOT      0x8B82 /* the first lost HP dot becomes full */
+#define DT_CODE_MONEY_ADD            0x8BBF /* add A to money digit Y */
+#define DT_CODE_PICKUP_TREASURE      0x8C13 /* a land treasure */
+#define DT_CODE_OBJ_SHOW_ITEM        0x8CAC /* the slot shows item A */
+#define DT_CODE_OBJ_BECOME_BLOCK     0x8CE1 /* the slot becomes a block */
+#define DT_CODE_OBJ_DESPAWN          0xF179 /* free the slot (fixed bank) */
+#define DT_CODE_OBJ_SET_SPEED        0xF312 /* speed by index (fixed bank) */
+#define DT_CODE_OBJ_TOUCH_BLOCK_H    0xF332 /* the block a slot overlaps, horizontal (fixed bank) */
+#define DT_CODE_OBJ_TOUCH_BLOCK_V    0xF3B7 /* the same, vertical (fixed bank) */
+#define DT_CODE_OBJ_DISTANCE_Y       0xF7CC /* |Scrooge's Y - the slot's| (fixed bank) */
+#define DT_CODE_OBJ_DIFFICULT_ACTION 0xF822 /* actions on Difficult (fixed bank) */
+#define DT_CODE_MONEY_MAX            0xF83F /* money capped at 9,999,990 (fixed bank) */
 
 /* ---- hook sites of the event system (src/game/events.c) ----
  * config/game.toml declares each with a length/crc32 content key, so another
