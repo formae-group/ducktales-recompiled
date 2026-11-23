@@ -35,6 +35,9 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - Replace mode made a decompiled routine's PPU writes back to back. The PPU acts on `$2006`/`$2007`
   writes a few cycles late, so every byte of a VRAM queue landed one address off; the writes are
   now spread over the original routine's cycles.
+- `tests/decomp_test.py --from-state` starts only from a golden state where the game's scheduler is
+  idle. `full_moon` saved at frame 500 inside a task, and replace mode failed on its first frame
+  from there, because the run resumed the original's task while replace ran the C.
 
 ## [1.0.0] - 2026-11-23
 
