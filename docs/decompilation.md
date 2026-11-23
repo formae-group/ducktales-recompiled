@@ -584,7 +584,7 @@ bytes**, in 217 routines (main 7287c73, 12 routes and 24 poke cases).
 317 of those bytes are also run by original routines (shared tails). `Input_ReadControllers` is
 not counted: replace mode gives every call to the original. The largest routines still original
 are the object kinds of bank 6 that `Obj_UpdateAll` hands to the original (`$A6D3` 469 bytes,
-`$A8D6` 466, `$A065` 367, `$AAE1` 342), bank 5 `$80BE` (381, under the entry `$8003`) and the NMI `$C000` (308).
+`$A8D6` 466, `$A065` 367, `$AAE1` 342) and the NMI `$C000` (308).
 
 ### Adding a routine
 
