@@ -9,6 +9,7 @@ routine reached that way from original code needs its site too.
 
     py -3 -I tools/decomp_callers.py --inside E354-ED04 F234-F2C7 F752-F76F -- E354 E3B8 ...
 """
+
 import argparse
 import re
 import sys
