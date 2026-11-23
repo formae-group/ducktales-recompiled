@@ -20,6 +20,8 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   states to their route; three of them press Select.
 - Decompiled: the row change (`$E8C0`), as task code with its own site. A task routine may now pop
   its own return address before it hands off.
+- `src/decomp/player.c` calls the C of the background probe (`$D120`) and its four snaps instead
+  of running their originals through `Decomp_Call`.
 
 ### Fixed
 

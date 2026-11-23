@@ -191,7 +191,7 @@ leave the jump vector in `$00/$01` as the original's loop does.
 |---|---|---|---|
 | `Obj_ApplyVelocityY`, `Obj_ApplyGravity`, `Obj_MoveRight`, `Obj_MoveLeft`, `Obj_AddVelocityY`, `Obj_SubVelocityY` | X = slot | A, X, Y, P | callers test the flags of the last `ADC`/`SBC` (`$F298` keeps the Y move's carry across the probe) |
 | `Music_Request`, `Sound_Request` | A = id, X | A, X, Y, P | the caller's X is left in `$00` and the id in `$01` |
-| `Player_Update` | X | none | X goes into the power-up music request; modes 15 and 16 run as the original |
+| `Player_Update` | X | hardware | X goes into the power-up music request; the probe's metatile lookup switches banks; modes 15 and 16 run as the original |
 | `Player_Walk`, `Player_Knockback` | X | none | X is the slot the push of `$73` moves when no direction is held, and what the sound request keeps in `$00` |
 | `Player_MoveRight`, `Player_MoveLeft`, `Player_Fall`, `Player_Rise`, `Player_ProbeVertical` | X (moves only) | X | X is what the probe or contact routine returned; callers pass it on |
 | `Player_ContactH` | none | X, C | X is the slot touched (0 for none, carry set); the cane swing reads its kind |
@@ -287,11 +287,11 @@ the HUD timer `timer_tick` (`$E28C`).
 
 Not decompiled yet, and still run as the original from the C:
 
-- Through `Decomp_Call`: the background probe `$D120` and its snaps `$D49A`/`$D4B2`/`$D4C8`/`$D4D6`
-  (decompiled in `collision.c`, but `player.c` still calls their originals), one probe point
-  `$D350` (where `Player_ContactV` can fall through to), the climbing steps `$F192`/`$F1A8`, the
-  walls move `$F0F8` and the HP refill `$F812`. The last four belong with the object code (`$F179`,
-  `$F1BE`, `$F1F9`), so they are decompiled there.
+- Through `Decomp_Call`: one probe point `$D350` (where `Player_ContactV` falls through to, with
+  its own entry registers and carry result), the climbing steps `$F192`/`$F1A8`, the walls move
+  `$F0F8` and the HP refill `$F812`. The last four belong with the object code (`$F179`, `$F1BE`,
+  `$F1F9`), so they are decompiled there. The background probe `$D120` and its snaps
+  `$D49A`/`$D4B2`/`$D4C8`/`$D4D6` are the C of `collision.c`, which `player.c` calls directly.
 - Through `Decomp_RunOriginal`: `Player_Update` in modes 15 (`$ED05`, message or item) and 16
   (`$EF62`, treasure), and every call that reaches the row change: that call runs as the original,
   which then reaches `Player_RowChange` at its own site.
@@ -299,9 +299,9 @@ Not decompiled yet, and still run as the original from the C:
 **Coverage of Scrooge's code.** His own code in the fixed bank is `$E2FE-$EFE1` (3,300 bytes).
 The decompiled routines cover `$E2FE-$ED04`: 2,567 bytes or 78%. With the collision and movement
 helpers he shares with other objects (`$D120-$D4E5` and `$F0F8-$F233`, 1,281 bytes, of which the
-contact tests `$D202-$D34F` are decompiled) it is 2,901 of 4,581 bytes, 63%. By routine, 37 of the
-49 routines his code runs are C (76%): the 37 `Player_*`, motion and sound rows above against the
-12 listed as not decompiled.
+probe, its snaps and the contact tests `$D120-$D4E5` are decompiled) it is 3,533 of 4,581 bytes,
+77%. By routine, 42 of the 49 routines his code runs are C (86%): the 37 `Player_*`, motion and
+sound rows above and the probe with its four snaps, against the 7 listed as not decompiled.
 The motion (`$F234-$F2C6` but `$F298`) and sound (`$F752`) primitives are decompiled too, and they
 also serve every other object.
 
@@ -313,8 +313,7 @@ the boss trigger `$CF93`, the tile edit `$F574` and the background probe with it
 scroll (`$E9`), the tile-edit metatile helper `$F697` and the room transitions, which the flow's
 task code runs.
 
-**Next routines, in order:** `player.c` calling the C of the background probe and its snaps
-instead of their originals, then modes 15 and 16 with the flow's task hand-off.
+**Next routines:** modes 15 and 16 with the flow's task hand-off.
 
 ### Adding a routine
 

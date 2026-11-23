@@ -17,10 +17,11 @@
  * and the routines not decompiled yet, which get the registers the original
  * gives them.
  *
- * Not decompiled yet and called through Decomp_Call: the background probe
- * $D120 and its snaps $D49A/$D4B2/$D4C8/$D4D6, one probe point $D350 (where
- * the vertical contact test can fall through to), and the climbing steps
- * $F192/$F1A8 and the walls move $F0F8, which every object kind shares.
+ * The background probe and its snaps are the C of collision.c. Not
+ * decompiled yet and called through Decomp_Call: one probe point $D350
+ * (where the vertical contact test can fall through to), the climbing steps
+ * $F192/$F1A8, the walls move $F0F8 and the HP refill $F812, which every
+ * object kind shares.
  * Given to the original routine (Decomp_RunOriginal): Player_Update in modes
  * 15 and 16 (message and treasure: they wait for frames) and every call that
  * reaches the row change at $E8C0. The row change is task code (decomp.h)
@@ -28,6 +29,7 @@
  * to the row scroll, which goes back into the frame loop.
  */
 #include "decomp/decomp.h"
+#include "decomp/level.h"
 #include "decomp/motion.h"
 #include "decomp/sound.h"
 
@@ -290,18 +292,18 @@ static uint8_t Player_ProbeVertical(void)
     uint8_t flags = gObjects->flags[P_], hits = gProbeHits, feet = gFeetClass;
     gProbeFirst = (vdir & 4) ? PROBE_FEET : PROBE_HEAD;
     gProbeCount = 2;
-    Regs r = Decomp_Call(DT_CODE_BG_PROBE, gProbeFirst, 0, 2);
+    Bg_Probe(P_);
     if (gProbeHits & 1) {
         if (gTemp08 & 4) {
-            r = Decomp_Call(DT_CODE_SNAP_FEET, 4, r.x, r.y);
+            Bg_SnapFeet(P_);
         } else {
-            r = Decomp_Call(DT_CODE_SNAP_HEAD, 0, r.x, r.y);
+            Bg_SnapHead(P_);
         }
     }
     gFeetClass |= feet;
     gProbeHits |= hits;
     gObjects->flags[P_] = flags;
-    return r.x;
+    return P_;
 }
 
 /* $EA1A: the pose while airborne: pogo with B+Down (or in a bounce), the
@@ -411,16 +413,16 @@ static uint8_t Player_ProbeSide(void)
     uint8_t hits = gProbeHits;
     gProbeFirst = (gPlayerMoveSide & 2) ? PROBE_LEFT : PROBE_RIGHT;
     gProbeCount = 2;
-    Regs r = Decomp_Call(DT_CODE_BG_PROBE, gProbeFirst, 0, 2);
+    Bg_Probe(P_);
     if (gProbeHits & 1) {
         if (gPlayerMoveSide & 1) {
-            r = Decomp_Call(DT_CODE_SNAP_RIGHT, 1, r.x, r.y);
+            Bg_SnapRight(P_);
         } else {
-            r = Decomp_Call(DT_CODE_SNAP_LEFT, 0, r.x, r.y);
+            Bg_SnapLeft(P_);
         }
     }
     gProbeHits |= hits;
-    return r.x;
+    return P_;
 }
 
 static uint8_t Player_MoveRight(uint8_t x)
@@ -711,7 +713,7 @@ static void Player_GrabClimb(void)
     }
     gProbeFirst = PROBE_CLIMB;
     gProbeCount = 3;
-    Decomp_Call(DT_CODE_BG_PROBE, 3, 0, 0);
+    Bg_Probe(P_);
     if (gProbeHits & 1) {
         return;
     }
@@ -1057,13 +1059,13 @@ static void Player_Carried(void)
     }
     gProbeFirst = PROBE_LEFT;
     gProbeCount = 2;
-    Regs r = Decomp_Call(DT_CODE_BG_PROBE, 3, 0, 2);
+    Bg_Probe(P_);
     if (!(gProbeHits & 1)) {
         return;
     }
     gObjects->y[P_] += 8;
     gPlayerMode = PLAYER_MODE_KNOCKBACK;
-    Player_Knockback(r.x);
+    Player_Knockback(P_);
 }
 
 /* Mode 12, $EC2D (not studied): a scripted fall and drift to the right. */
@@ -1372,7 +1374,7 @@ static void Run_SelectRefill(Regs *r)
  * the damage event runs at its own [[mod_function_hook]] there (declared
  * first, so it fires first), and the adapter is the routine without it. */
 const DecompRoutine gPlayerRoutines[] = {
-    { DT_CODE_PLAYER_UPDATE, "ducktales.decomp.E354", "Player_Update", Run_Update, 0 },
+    { DT_CODE_PLAYER_UPDATE, "ducktales.decomp.E354", "Player_Update", Run_Update, OUT_HW },
     { DT_CODE_PLAYER_GROUND, NULL, "Player_Ground", Run_Ground, 0 },
     { DT_CODE_JUMP_START, NULL, "Player_StartJump", Run_StartJump, 0 },
     { DT_CODE_PLAYER_WALK, NULL, "Player_Walk", Run_Walk, 0 },

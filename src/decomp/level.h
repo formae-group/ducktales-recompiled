@@ -19,3 +19,8 @@ uint8_t Level_MetatileAt(uint8_t x);
 uint8_t Scroll_StreamBlocks(void);
 uint8_t Vram_FlushQueue(void);
 uint8_t Camera_Update(uint8_t x);
+void Bg_Probe(int slot);
+void Bg_SnapRight(int slot);
+void Bg_SnapLeft(int slot);
+void Bg_SnapHead(int slot);
+void Bg_SnapFeet(int slot);
