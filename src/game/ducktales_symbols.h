@@ -330,7 +330,8 @@
     0x004F /* slot | $80 of a marked object, $3C when it despawns; cleared at land load, respawn and scenes (code; meaning unknown) */
 #define DT_ADDR_MINES_BOSS_05E7     0x05E7 /* set to $55 when the African Mines boss starts (code; meaning unknown) */
 #define DT_ADDR_HIMALAYAS_BOSS_05A0 0x05A0 /* set to $11 when the Himalayas boss starts (code; meaning unknown) */
-#define DT_ADDR_ROW_CHR_STATE       0x0050 /* row sprite-CHR stream state, negative = done (verified) */
+#define DT_ADDR_BOSS_05AF        0x05AF /* set to $44 when the Moon and Amazon bosses start (code; meaning unknown) */
+#define DT_ADDR_ROW_CHR_STATE    0x0050 /* row sprite-CHR stream state, negative = done (verified) */
 #define DT_ADDR_BLOCK_OPENED     0x005B /* a block was launched or uncovered this frame; cleared every frame (code) */
 #define DT_ADDR_TILE_EDIT_OFFSET 0x005C /* write offset of the $0440 queue (verified) */
 #define DT_ADDR_LAND_LEFT        0x005D /* land left: back to Land Select (verified) */
@@ -613,6 +614,7 @@
 #define DT_CODE_KIND_FLYER           0x916C /* kind $0D */
 #define DT_CODE_KIND_SWING           0x9225 /* kind $0E */
 #define DT_CODE_KIND_SWOOPER         0x9430 /* kind $11 */
+#define DT_CODE_KIND_MOON_BOSS       0xAAE1 /* kind $29 */
 #define DT_CODE_KIND_HIMALAYAS_BOSS  0xA8D6 /* kind $2A */
 #define DT_CODE_KIND_MINES_BOSS      0xA6D3 /* kind $28 */
 #define DT_CODE_KIND_THIEF           0xAC3D /* kind $30 */

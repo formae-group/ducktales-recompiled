@@ -3029,6 +3029,116 @@ static void Obj_HimalayasBoss(uint8_t x)
     Sound_Request(SFX_BOSS_TURN, x);
 }
 
+/* The Moon boss back in the middle: pose $67, 30 frames facing Scrooge. */
+static void Obj_MoonBossRestart(uint8_t x)
+{
+    gObjects->worldX[x] = 0x80;
+    gObjects->unk_06C0[x]--;
+    gObjects->state[x]--;
+    gObjects->action[x] = 0x67;
+    ResetAnim(x);
+    gObjects->unk_06D0[x] = 0x1E;
+}
+
+/* Kind $29 ($AAE1): the Moon boss. It enters at world X $80 (pose $67) and
+ * for 15 frames faces Scrooge, then (pose $66) walks a random way at a
+ * random speed, $03C0 or $01CC, the slow one jumping first (pose $68,
+ * vertical velocity $06EE). Landing from a jump it jumps again ($0548),
+ * turned round; walls turn it too. After a turn, back within 4 px of the
+ * middle on the floor, or landing after its second jump, it starts over
+ * from the middle with 30 frames facing Scrooge. Its random steps add the
+ * carry the dispatch left. A counted hit goes to the boss hit $F6D7; the
+ * last one beats it. */
+static void Obj_MoonBoss(uint8_t x, bool carry)
+{
+    static const uint16_t speeds[2] = { 0x03C0, 0x01CC };
+
+    Decomp_Enter(DT_CODE_KIND_MOON_BOSS, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0) {
+        if (Boss_Hit(&x)) {
+            Obj_Defeat(x);
+            return;
+        }
+        carry = false;
+    }
+    if (Step(x) == 0) {
+        Obj_SetVelocityY(x, 0);
+        gObjects->worldX[x] = 0x80;
+        RAM_U8(DT_ADDR_BOSS_05AF) = 0x44;
+        gObjects->state[x]++;
+        gObjects->unk_06D0[x] = 0x0F;
+        gObjects->action[x] = 0x67;
+    }
+    if (gObjects->unk_06D0[x] != 0) {
+        gObjects->unk_06D0[x]--;
+        uint8_t facing = gObjects->worldX[x] >= gObjects->worldX[P_] ? 0 : OBJ_FLAG_FACING_RIGHT;
+        gObjects->flags[x] = (uint8_t)((gObjects->flags[x] & (uint8_t)~OBJ_FLAG_FACING_RIGHT) | facing);
+        return;
+    }
+    if (!(gObjects->state[x] & 2)) {
+        gObjects->state[x]++;
+        gObjects->timer[x] = 0;
+        gObjects->unk_06C0[x] = 0;
+        ResetAnim(x);
+        gObjects->action[x] = 0x66;
+        unsigned sum = gRandom(0) + gRandom(1) + carry;
+        gRandom(3) = (uint8_t)sum;
+        gObjects->dir[x] = (uint8_t)((sum & 1) + 1);
+        sum = gRandom(2) + gRandom(3) + (sum >> 8);
+        gRandom(1) = (uint8_t)sum;
+        uint8_t slow = sum & 1;
+        gObjects->timer[x] = slow;
+        Obj_SetSpeed(x, speeds[slow]);
+        if (slow) {
+            gObjects->timer[x]++;
+            Obj_SetVelocityY(x, 0x06EE);
+            gObjects->action[x] = 0x68;
+        }
+    }
+    if (gObjects->timer[x] != 0) {
+        if (!(gObjects->timer[x] & 1)) {
+            x = Obj_Rise(x, 0x5E, 2);
+            if (gObjects->vy[x] & 0x80) {
+                gObjects->timer[x]--;
+                Obj_SetVelocityY(x, 0);
+            }
+        } else {
+            x = Obj_Fall(x, 0x5B, 2);
+            if (gProbeHits & 1) {
+                if (gObjects->unk_06C0[x] != 0) {
+                    Obj_MoonBossRestart(x);
+                    return;
+                }
+                Obj_SetVelocityY(x, 0x0548);
+                gObjects->timer[x]++;
+                gObjects->unk_06C0[x]++;
+                gObjects->dir[x] ^= 3;
+                return;
+            }
+        }
+    }
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        x = Obj_WalkRight(x, 0x55, 2);
+    } else {
+        x = Obj_WalkLeft(x, 0x58, 2);
+    }
+    if (gProbeHits & 1) {
+        gObjects->dir[x] ^= 3;
+        gObjects->unk_06C0[x]++;
+        return;
+    }
+    if (gObjects->timer[x] != 0 || gObjects->unk_06C0[x] == 0) {
+        return;
+    }
+    uint8_t off = (uint8_t)(gObjects->worldX[x] - 0x80);
+    if (gObjects->worldX[x] < 0x80) {
+        off = (uint8_t)-off;
+    }
+    if (off < 4) {
+        Obj_MoonBossRestart(x);
+    }
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -3148,6 +3258,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_MINES_BOSS:
             Obj_MinesBoss(slot);
+            break;
+        case OBJ_KIND_MOON_BOSS:
+            Obj_MoonBoss(slot, r->p & P_C);
             break;
         case OBJ_KIND_HIMALAYAS_BOSS:
             Obj_HimalayasBoss(slot);
@@ -3440,6 +3553,11 @@ static void Run_HimalayasBoss(Regs *r)
     Obj_HimalayasBoss(r->x);
 }
 
+static void Run_MoonBoss(Regs *r)
+{
+    Obj_MoonBoss(r->x, r->p & P_C);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -3609,6 +3727,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_MOON_BOSS, NULL, "Obj_MoonBoss", Run_MoonBoss, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_HIMALAYAS_BOSS, NULL, "Obj_HimalayasBoss", Run_HimalayasBoss, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_MINES_BOSS, NULL, "Obj_MinesBoss", Run_MinesBoss, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_THIEF, NULL, "Obj_Thief", Run_Thief, 0, .bank = DT_BANK_OBJECTS },
