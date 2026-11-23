@@ -163,6 +163,7 @@ static int s_stores;
 typedef struct {
     uint16_t start, stop_pc;
     uint8_t start_s, call_s, stop_s, stop_bank;
+    uint8_t ret[2]; /* the isolated call's return address, where the RTS observer left it */
     bool fixup, stop_armed, stopped, returned;
     CycModRegs regs;
     uint64_t entry_cycles, cycles, io;
@@ -837,6 +838,8 @@ static int task_isolated_site(uint16_t addr)
     }
     s_run.stopped = true;
     s_run.regs = r;
+    cyc_mod_poke((uint16_t)(0x100 | (uint8_t)(s_run.call_s - 1)), s_run.ret[0]);
+    cyc_mod_poke((uint16_t)(0x100 | s_run.call_s), s_run.ret[1]);
     r.s = (uint8_t)(s_run.call_s - 2);
     cyc_mod_set_regs(&r);
     return 1;
@@ -1001,7 +1004,12 @@ static bool task_replace(int i, const CycModRegs *in)
     }
     const uint8_t *ram = cyc_cpu_ram();
     for (uint16_t a = 0; a < GAME_RAM_SIZE; a++) {
-        if (task_live(a) && ram[a] != s_image[a]) {
+        /* The routine's own return address is not compared (the isolated run
+         * has its own there), but a C that popped it and pushed another (the
+         * row change) leaves the bytes the original would. */
+        bool own_return = (a & 0xFF00) == 0x0100 &&
+                          ((uint8_t)a == s_run.call_s || (uint8_t)a == (uint8_t)(s_run.call_s - 1));
+        if ((task_live(a) || own_return) && ram[a] != s_image[a]) {
             cyc_mod_poke(a, s_image[a]);
         }
     }
@@ -1054,6 +1062,8 @@ static void on_return(void)
         if (s_run_active && s_run.fixup) {
             s_run.fixup = false;
             s_run.entry_cycles = hw_isolated_cycles;
+            s_run.ret[0] = cyc_cpu_ram()[0x100 | (uint8_t)(s_run.call_s - 1)];
+            s_run.ret[1] = cyc_cpu_ram()[0x100 | s_run.call_s];
             CycModRegs r;
             cyc_mod_regs(&r);
             r.s = s_run.start_s;

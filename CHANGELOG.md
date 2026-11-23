@@ -40,6 +40,10 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   (1,989,532 calls compared on the 12 routes) and RAM-identical in replace mode; poke cases cover
   the lift, the extra HP dot and the money cap, which no route reaches. Hook sites only where
   original code calls them.
+- Decompiled: the row change (`$E8C0`), as task code with its own site. A task routine may now pop
+  its own return address before it hands off.
+- `src/decomp/player.c` calls the C of the background probe (`$D120`) and its four snaps instead
+  of running their originals through `Decomp_Call`.
 
 ### Fixed
 

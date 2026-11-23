@@ -1402,5 +1402,6 @@ const int gFlowRoutineCount = sizeof gFlowRoutines / sizeof gFlowRoutines[0];
 const DecompStop gFlowStops[] = {
     STOP(DT_CODE_TASK_YIELD, "FFAC"),  STOP(DT_CODE_RESET, "FEE0"), STOP(DT_B6_SPAWN, "AEA0.6"),
     STOP(DT_CODE_LAND_SELECT, "D630"), STOP(DT_CODE_SCENE, "DF27"), STOP(DT_CODE_ENDING, "E1AF"),
+    STOP(DT_CODE_ROW_SCROLL, "C976"),
 };
 const int gFlowStopCount = sizeof gFlowStops / sizeof gFlowStops[0];
