@@ -85,6 +85,24 @@ uint32_t native_frame_number(void);
  * instruction templates instead), and bus reads the runtime does not model. */
 uint64_t native_fallback_instructions(void);
 uint64_t native_unmodeled_reads(void);
+/* The PRG image, and what a CPU read of RAM or ROM returns / a store to CPU
+ * RAM (any mirror) without bus cycles: for hook callbacks (cyc_mod_peek). */
+const uint8_t *native_prg(size_t *size);
+bool native_peek(uint16_t addr, uint8_t *value);
+bool native_poke(uint16_t addr, uint8_t value);
+/* The whole machine between frames: CPU, bus, video. Save returns the size
+ * (and writes nothing when out is NULL or cap too small); load refuses a
+ * blob of another size or an impossible one. */
+size_t native_state_save(uint8_t *out, size_t cap);
+bool   native_state_load(const uint8_t *in, size_t size);
+
+/* ---- native_hooks.c: game.toml hook sites (cyc_hooks.h) ---- */
+/* Bind the plugins registered with mod_function_hooks.h to the program's
+ * sites and keep cyc_hooks_armed current; false when a plugin names a site
+ * the program does not declare. */
+bool native_hooks_init(void);
+bool native_hooks_due(uint16_t pc);
+void native_hooks_fire(uint16_t pc);
 
 /* ---- native_video.c ---- */
 void    video_power_on(void);
@@ -96,6 +114,8 @@ void    video_oam_dma(uint8_t page, const uint8_t data[256], uint64_t cycle);
 void    video_frame_begin(uint32_t frame, uint64_t cycle);
 void    video_frame_end(uint64_t cycle);
 void    video_log_apu(uint16_t addr, uint8_t value, uint64_t cycle);
+size_t  video_state_save(uint8_t *out, size_t cap);
+bool    video_state_load(const uint8_t *in, size_t size);
 
 /* ---- native_bus.c, called by native_video.c ---- */
 bool native_vblank_deferred(bool picture_on);

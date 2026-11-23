@@ -64,6 +64,39 @@ frame 1230 equals the headless presented picture with the feature on and the mac
 off. With the feature linked and on by default, `tests/verify_routes.py --build build/headless` passes all
 twelve routes at all four alignments with 100.0% native cycles (2026-11-22).
 
+## Release package (automated)
+
+`py -3 -I tests/package_test.py --build build/windows` (2026-11-22, all checks pass, on a
+clean tree at this change, so the archive is `DuckTalesRecompiled-<commit>-win64.zip`): the archive
+holds exactly the release files in one top-level folder and no ROM, source, symbols or test tool;
+its name carries the version the executable reports; neither `ducktales.exe` (static `/MT` runtime;
+imports COMDLG32, IMM32, KERNEL32, SDL2, SHELL32, USER32, WS2_32) nor `SDL2.dll` (system DLLs and
+msvcrt) imports a Visual C++ runtime DLL; unpacked into a temporary folder and run there with PATH
+reduced to the Windows folders, the executable imports a copy of the ROM with `--import-rom`, starts
+from the imported copy hidden for 300 frames, writes `config.ini` next to itself, and the menu
+self-test draws all 14 pages. `tests/window_smoke.py --build build/windows` also passes all 16 checks
+on the `/MT` build.
+
+## Menu on formae-ui (automated)
+
+The menu moved to formae-ui 0.1.0 (`external/formae-ui`) with no visible change (2026-11-22). The
+window build of main (`64ef62e`'s tree) and of this change were each configured with `git describe`
+unavailable, so the About page shows the same version (`unknown`) and date in both, and run with
+`DUCKTALES_UI_SELFTEST` at fixed paths (the menu run and the first-run run with a modified ROM).
+Decoded RGB of the 16 PNGs, compared pixel by pixel over 5 runs before and 6 runs after:
+
+- 15 PNGs are identical in every run of both builds: the 14 menu pages other than the Reset
+  confirmation (the 768x720 window, 1280x720 and both 3840x2160 off-screen pages included) and both
+  first-run screens.
+- `menu_13_reset` varies from run to run in the unmodified build as well (up to 6 levels per
+  channel, uniformly over the picture): the shot is taken during ImGui's modal dim fade-in, whose
+  progress depends on frame timing. One run before and two runs after are identical to each other on
+  all 16 PNGs.
+
+With the change, `tests/window_smoke.py --build build/windows` passes all 16 checks and
+`tests/package_test.py --build build/windows` all 12; the package now also carries
+`licenses/formae-ui-LICENSE.txt`.
+
 ## Native runtime
 
 `tests/native_routes.py` holds the native-runtime prototype (`ducktales_native`, faithful lag mode)
@@ -71,13 +104,144 @@ to the recompiled build: CPU RAM, cycles and registers equal on every frame of e
 (82,621 frames). `tests/lag_modes.py` measures lag on the full_* routes and compares the
 no-slowdown mode per logic step. Details: [native-runtime.md](native-runtime.md).
 
+## Native renderer (automated)
+
+`tests/native_render_test.py` draws every frame of the five `full_*` routes with the native renderer
+(no PPU) from the frame's video state and compares it with the PPU's picture: 47,440 frames, every
+pixel equal except on the HUD split line, where the console's mid-line write lands at a column that
+depends on the CPU's polling phase. With that column placed, 115 frames (all vertical row
+transitions) still differ on that one line. Details in [native-render.md](native-render.md).
+
+## Native player (automated)
+
+The player build (`ducktales.exe` on the native runtime, docs/native-runtime.md "The player build"),
+2026-11-22:
+
+- `py -3 -I tests/native_player_test.py --build build/windows --routes full_amazon full_moon
+  full_himalayas --frames 6000 --every 20`: the presented picture (1x, default presentation: clean
+  HUD split, No sprite flicker on) of `ducktales.exe --lag faithful` and of
+  `ducktales_cycle.exe --extra-scanlines 0` is identical pixel for pixel in all 900 pictures (300 per
+  route, every 20th frame of frames 0-5999), and in 40 of 40 on `amazon_intro` (frames 0-1999,
+  every 50).
+- `py -3 -I tests/window_smoke.py --build build/windows`: all 16 checks pass on the native
+  `ducktales.exe` (start, ROM import and refusals, config.ini round trips, presentation sizes and
+  VSync, the menu self-test's 14 pages, the first-run screen), and with `--exe ducktales_cycle.exe`.
+- Save state round trip: `ducktales.exe --frames 3000 --input tests/routes/full_amazon.txt --lag
+  faithful --state-check 2000`: saved after frame 2000, CPU RAM, the cycle count and the video
+  memories identical on all 300 frames run again after loading it.
+- Enhancement hooks on the native runtime, `full_amazon` frames 0-2999 with every enhancement on
+  (`--jump-scale 150 --no-damage on --infinite-time on --infinite-lives on --start-lives 5`): the
+  jump, damage and new-game-lives sites fired (14, 12 and 1 times). The higher jump reaches
+  `$EAB9-$EAC1` in bank 6, which no route seeds, so 694 instructions ran on the interpreter there
+  (347 with `--jump-scale 150` alone); none without enhancements (`fallback_instructions=0`).
+- With the player's bus changes (hook dispatch, the `$2002` latch-reset log, `native_route.c`):
+  `tests/native_routes.py --build build/headless` passes all 12 routes (RAM, cycles and registers
+  identical on every frame; PPU memory hashes differ on the same frame counts as before, 2-42 per
+  route), and `tests/verify_routes.py` on `amazon_intro` and `full_moon` passes at all four
+  alignments (100.0% native, oracle and interpreter match).
+- `tests/package_test.py --build build/windows`: all checks pass with the native `ducktales.exe`
+  in the ZIP (imports AVRT, COMDLG32, IMM32, KERNEL32, SDL2, SHELL32, USER32 and WINMM only).
+- Hidden window pacing: 600 frames with `--hidden --exit-after 600` took 12.0 s including start-up
+  (600 frames are 9.98 s at 60.0988 Hz); 3,000 frames `--uncapped` took 7.8 s.
+## Native synth
+
+`tests/audio_compare.py` records each route twice from power-on at 48 kHz: the cycle host's APU
+(`ducktales.exe --wav-out`) and the native runtime's synth (`ducktales_native --lag faithful
+--wav-out`, [audio.md](audio.md#native-synth)). Both runs also write `--ram-hash-out`; RAM and cycle
+count were equal on every frame of all ten routes below, so the synth was fed exactly the register
+writes the APU received, at the same cycles. The two WAVs had the same number of samples on every
+route.
+
+Each frame (800 samples) is compared three ways, none of which depends on waveform phase:
+
+- **level**: |dB difference| of the frame's RMS, on audible frames (APU RMS above 150);
+- **spectral**: log-spectral distance over 1/3-octave bands from 50 Hz to 12.5 kHz (2048-sample
+  Hann window per frame, bands 60 dB under the loudest one floored);
+- **pitch per channel**: for pulse 1, pulse 2 and the triangle, wherever the driver's channel record
+  ([audio.md](audio.md#channel-records)) holds one period for five frames, the spectral peak
+  within half a semitone of that note in each WAV (4096-sample window, 8x zero padding, parabolic
+  interpolation), kept when the APU's peak stands 10 dB over the frame's median and no harmonic
+  1-8 of another tone channel lies within a semitone; the difference in cents.
+
+**Why these tolerances.** Phase cannot be compared: during a rest the driver writes period 0, the
+triangle then steps once per CPU cycle until the next quarter-frame clock stops it, so the step it
+resumes from depends on single cycles of write timing, and so does the noise LFSR's phase. The
+pulses do stay sample-locked (least-squares fit of the APU mix to the synth's solo channels: pulse
+coefficients mostly 0.9-1.0 over 20-frame windows of `amazon_intro`, against -1 to +1 for the
+triangle), but the sum's short-term band energies move by a
+few dB with the triangle's phase. The yardstick is therefore the console against itself: the APU
+recorded at CPU/PPU alignment 1 against alignment 0, the same route and input (power-on alignment
+is random on a console, so a player hears either). A group passes if level median <= 0.5 dB and p95
+<= 2 dB (1 dB is about the smallest loudness step a listener notices), spectral median <= 3 dB and
+p95 <= 7 dB, every channel's pitch median <= 3 cents (pitch steps of 5-10 cents are the smallest
+heard), or if a value over its limit is within 1.1 x that noise floor. The pitch p95 is reported,
+not judged: it is 20-100 cents in the noise floor too, because a peak in a four-channel mix is
+sometimes another channel's partial. On `full_amazon`, `full_transylvania`, `full_african_mines`
+and `full_himalayas` the alignment change sends the game down another path, so their floor is not
+used (`audio_compare.py` uses a route's floor only when its own medians are within the limits).
+
+Results (2026-11-22, `py -3 -I tests/audio_compare.py --jobs 2 --floor`): **pass**, 72,974 frames
+(67,122 audible) over ten routes. Median / p95 of |difference|:
+
+| Route | Frames | Level dB | Spectral dB | Pulse 1 cents (n) | Pulse 2 cents (n) | Triangle cents (n) | Floor: level / spectral |
+|---|---|---|---|---|---|---|---|
+| `amazon_intro` | 5,083 | 0.18 / 1.07 | 1.79 / 4.85 | 0.13 / 33 (1,054) | 0.57 / 60 (1,070) | 0.71 / 55 (3,109) | 0.22 / 1.53, 2.20 / 5.72 |
+| `transylvania_intro` | 5,103 | 0.20 / 1.07 | 1.76 / 4.94 | 0.31 / 31 (1,731) | 0.25 / 58 (1,178) | 0.56 / 29 (3,135) | 0.22 / 1.20, 2.38 / 5.32 |
+| `african_mines_intro` | 5,123 | 0.18 / 1.13 | 1.53 / 4.93 | 0.04 / 22 (1,346) | 0.07 / 57 (1,151) | 0.58 / 46 (2,749) | 0.24 / 1.47, 2.39 / 5.65 |
+| `himalayas_intro` | 5,143 | 0.24 / 1.30 | 2.29 / 5.17 | 0.18 / 55 (1,004) | 0.24 / 72 (669) | 1.22 / 90 (3,168) | 0.34 / 2.46, 2.92 / 7.20 |
+| `moon_intro` | 5,163 | 0.15 / 0.99 | 1.30 / 4.91 | 0.01 / 25 (995) | 0.02 / 49 (1,034) | 0.37 / 84 (2,968) | 0.17 / 1.08, 1.65 / 5.13 |
+| `full_amazon` | 9,584 | 0.22 / 1.25 | 2.09 / 5.03 | 0.35 / 78 (2,696) | 0.71 / 69 (1,185) | 1.17 / 58 (4,750) | not in step |
+| `full_transylvania` | 7,108 | 0.22 / 1.25 | 1.93 / 4.96 | 0.37 / 87 (2,501) | 0.36 / 42 (1,117) | 0.69 / 33 (3,274) | not in step |
+| `full_african_mines` | 13,497 | 0.20 / 1.21 | 1.94 / 5.04 | 0.15 / 87 (3,820) | 0.16 / 52 (1,843) | 0.54 / 57 (5,893) | not in step |
+| `full_himalayas` | 6,189 | 0.19 / 1.08 | 1.21 / 3.73 | 0.18 / 34 (1,474) | 0.24 / 23 (767) | 0.89 / 51 (3,727) | not in step |
+| `full_moon` | 10,981 | 0.18 / 1.07 | 2.08 / 5.10 | 0.55 / 77 (2,877) | 0.56 / 69 (1,659) | 0.73 / 18 (7,682) | 0.23 / 1.35, 2.40 / 5.57 |
+
+Per track, all ten routes together (the track is the music id in `$C5` while `$D0` says music is
+playing):
+
+| Track | Frames | Level dB | Spectral dB | Pulse 1 cents | Pulse 2 cents | Triangle cents |
+|---|---|---|---|---|---|---|
+| no music (effects only) | 3,705 | 0.00 / 0.35 | 0.07 / 3.21 | - | 0.00 / 0.03 | - |
+| `$00` The Amazon | 8,993 | 0.20 / 1.16 | 2.22 / 5.05 | 0.56 / 29 | 1.32 / 67 | 1.38 / 50 |
+| `$01` Transylvania | 13,799 | 0.19 / 1.12 | 2.04 / 4.99 | 0.38 / 30 | 0.44 / 62 | 0.86 / 32 |
+| `$02` African Mines | 3,091 | 0.17 / 1.28 | 2.30 / 5.23 | - | - | 0.60 / 92 |
+| `$03` The Himalayas | 6,166 | 0.22 / 1.22 | 1.87 / 4.83 | 0.77 / 45 | 0.84 / 41 | 2.10 / 88 |
+| `$04` The Moon | 9,974 | 0.16 / 1.01 | 2.15 / 5.10 | 0.66 / 53 | 0.33 / 68 | 0.73 / 14 |
+| `$05` Land Select | 7,550 | 0.19 / 0.95 | 0.83 / 2.44 | 0.01 / 1.5 | 0.01 / 1.2 | 0.16 / 2.2 |
+| `$06` Boss fight | 12,347 | 0.26 / 1.38 | 2.23 / 5.15 | 0.16 / 97 | 1.08 / 56 | 0.82 / 58 |
+| `$07` Title | 5,213 | 0.19 / 1.37 | 2.16 / 5.18 | 1.29 / 79 | 1.77 / 92 | 1.80 / 92 |
+| `$08` Invincibility | 687 | 0.21 / 1.15 | 1.68 / 5.63 | 0.27 / 1.8 | 0.31 / 62 | 16.31 / 88 * |
+| `$09` Game over | 483 | 0.14 / 1.05 | 0.59 / 3.56 | 0.00 / 2.3 | 0.01 / 13 | 0.07 / 84 |
+| `$0A` Death | 910 | 0.24 / 0.81 | 0.44 / 3.34 | 0.01 / 2.6 | 0.01 / 12 | 0.07 / 77 |
+
+\* Over the 3-cent limit and within the noise floor: the APU against itself gives 17.76 cents on the
+same 229 frames, so this is the measurement, not the synth.
+Every other value is within its fixed limit. `$0B` (Launchpad ride) is on no route. The six
+in-step routes were run again on their own with the corrected floor selection: same synth numbers,
+pass.
+
+The synth adds no machine state and the cycle build is unchanged. With it, `tests/verify_routes.py`
+passes `re_amazon_moves`, `amazon_intro` and `full_himalayas` at all four alignments with 100.0%
+native cycles, and `tests/native_routes.py` finds RAM, cycles and registers identical on every frame
+of the same three routes (2,128, 5,092 and 6,200 frames; PPU memories differ on 3, 14 and 24 frames,
+the known one-frame store lag of `$2007` writes). With the synth running (`--wav-out`), the native
+runtime's RAM and cycles equalled the cycle host's on every frame of the ten routes above.
+
 ## Not verified
 
+- The release package on a clean Windows installation without the Visual C++ redistributable: the
+  test checks the import tables but runs on a developer machine that has the runtime installed. A
+  Debug (`/MTd`) window build and a package from a tagged commit have not been built either.
 - A complete playthrough of any land on Easy or Difficult, secret treasures, the Transylvania return, the
   ending and the three endings' conditions.
 - Difficult mode (the "difficult" route was found to select Easy and was renamed).
 - Comparison with Mesen2 (not installed on this machine yet); the TriCNES oracle is the only
   independent reference so far.
+- The native player's sound (silent until the native synth), its window by eye, F8/F9 by hand, and
+  `HudSplit = original` against the cycle build.
+- The native synth by ear, and in a window (the window build still plays the cycle host's APU);
+  Launchpad ride music `$0B`; effects alone are covered only where routes trigger them (the
+  "no music" row and the effects inside the music rows).
 - Window presentation as a person sees it on the 144 Hz monitor, gamepads, audio quality by ear,
   fullscreen, and the sprite presentation by eye in play: needs a person at the machine. The
   application-side pacing, DPI and picture measurements are in [presentation.md](presentation.md).

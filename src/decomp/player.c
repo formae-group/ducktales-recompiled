@@ -4,9 +4,10 @@
  *
  * Player_Update runs once per frame from the frame loop: it loads gravity,
  * counts the invulnerability and power-up timers down and runs the handler of
- * the current mode. Every routine below replaces the original one at its
- * entry (decomp.c); the address of each is in its comment and in
- * ducktales_symbols.h.
+ * the current mode. Every routine below replaces the original one (decomp.c);
+ * the address of each is in its comment and in ducktales_symbols.h. The
+ * others call one another in C; only those original code calls have a site
+ * (the table at the end).
  *
  * Where the original passes a value in a register to code whose effect
  * depends on it, the C passes it explicitly: "x" is the X register of the
@@ -94,6 +95,7 @@ static void Player_SetAction(uint8_t action)
  * the facing flags and ORs the probe results into the ones of the move. */
 static uint8_t Player_ProbeVertical(void)
 {
+    Decomp_Enter(DT_CODE_PROBE_VERTICAL, 0, 0, 0);
     uint8_t vdir = gObjects->vdir[P_];
     if (gTemp08 != gObjects->y[P_]) vdir = gTemp08 > gObjects->y[P_] ? 8 : 4;
     gTemp08 = vdir;
@@ -130,6 +132,7 @@ static void Player_AirPose(void)
 /* $E970: falling, or standing (the floor stops the fall every frame). */
 static uint8_t Player_Fall(void)
 {
+    Decomp_Enter(DT_CODE_PLAYER_FALL, 0, 0, 0);
     gProbeHits = 0;
     gFeetClass = 0;
     gObjects->vdir[P_] = 4;
@@ -160,6 +163,7 @@ static uint8_t Player_StopRising(void)
  * is below its hold threshold; a ceiling ends the rise. */
 static uint8_t Player_Rise(void)
 {
+    Decomp_Enter(DT_CODE_PLAYER_RISE, 0, 0, 0);
     if (gObjects->vy[P_] & 0x80) return Player_Fall();
     if (gPlayerMode < PLAYER_MODE_HURT) {
         uint16_t hold = (gPlayerMode & 2) ? POGO_HOLD_MIN : JUMP_HOLD_MIN;
@@ -207,6 +211,7 @@ static uint8_t Player_ProbeSide(void)
 
 static uint8_t Player_MoveRight(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_MOVE_RIGHT, 0, x, 0);
     gPlayerMoveSide = 1;
     Obj_MoveRight(x);
     gObjects->flags[P_] |= 0x40;
@@ -221,6 +226,7 @@ static uint8_t Player_MoveRight(uint8_t x)
 
 static uint8_t Player_MoveLeft(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_MOVE_LEFT, 0, x, 0);
     gPlayerMoveSide = 2;
     Obj_MoveLeft(x);
     gObjects->flags[P_] &= ~0x40;
@@ -305,6 +311,7 @@ static void Player_WalkMomentum(void)
 /* $E482: horizontal movement for this frame. */
 static void Player_Walk(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_PLAYER_WALK, 0, x, 0);
     uint8_t action = gObjects->action[P_];
     if (action != PLAYER_ACTION_JUMP && action != PLAYER_ACTION_POGO && (gPlayerSlippery || gPlayerMomentumDir)) {
         Player_WalkMomentum();
@@ -325,6 +332,7 @@ static void Player_StartCane(void)
 /* Mode 0, $E3B8: standing, walking, crouching, pushing. */
 static void Player_Ground(void)
 {
+    Decomp_Enter(DT_CODE_PLAYER_GROUND, 0, 0, 0);
     uint8_t x = Player_Fall();
     if (gPlayerMode != PLAYER_MODE_GROUND) {
         Player_Walk(x);
@@ -377,6 +385,7 @@ static void Player_Ground(void)
 /* $E3F2: take off with the land's jump velocity ($0790/$07A0). */
 static void Player_StartJump(void)
 {
+    Decomp_Enter(DT_CODE_JUMP_START, 0, 0, 0);
     Obj_SetVelocityY(P_, Player_GetJumpVelocity());
     Decomp_RaiseEvent(EVENT_JUMP_START);
     gPlayerMode = PLAYER_MODE_AIR;
@@ -429,6 +438,7 @@ static void Player_DropToRowBelow(void)
  * side found it, to its row. */
 static void Player_GrabClimb(void)
 {
+    Decomp_Enter(DT_CODE_GRAB_CLIMB, 0, 0, 0);
     static const uint8_t COLUMN_OFFSET[4] = { 0x00, 0x00, 0x08, 0x08 };
     if (!(gPadHeld & DT_PAD_UP)) return;
     gProbeFirst = PROBE_CLIMB;
@@ -462,6 +472,7 @@ static void Player_GrabClimb(void)
  * bouncing); otherwise Scrooge lands. */
 static void Player_Air(void)
 {
+    Decomp_Enter(DT_CODE_PLAYER_AIR, 0, 0, 0);
     gPlayerPushCounter = PUSH_FRAMES;
     uint8_t x = Player_Rise();
     if (gObjects->action[P_] == PLAYER_ACTION_PUSH && (gPadNew & DT_PAD_B)) {
@@ -501,6 +512,7 @@ static void Player_Air(void)
  * B alone keeps the bounce at full height. */
 static void Player_Pogo(void)
 {
+    Decomp_Enter(DT_CODE_PLAYER_POGO, 0, 0, 0);
     gPlayerPushCounter = PUSH_FRAMES;
     gScratch0 = (uint8_t)(gPadHeld << 1) & DT_PAD_A;
     gPadHeld |= gScratch0;
@@ -520,6 +532,7 @@ static void Player_LetGo(void)
  * bottom of the screen changes the row. */
 static void Player_Climb(void)
 {
+    Decomp_Enter(DT_CODE_PLAYER_CLIMB, 0, 0, 0);
     gPlayerPushCounter = PUSH_FRAMES;
     uint8_t dir = gPadHeld & (DT_PAD_UP | DT_PAD_DOWN);
     if (!dir) {
@@ -551,6 +564,7 @@ static void Player_Climb(void)
  * CANE_HIT_FRAMES. */
 static void Player_Cane(void)
 {
+    Decomp_Enter(DT_CODE_PLAYER_CANE, 0, 0, 0);
     uint8_t x = Player_Rise();
     if (gObjects->action[P_] == PLAYER_ACTION_CANE_HIT) {
         if (gObjects->animTimer[P_] == 0 && gObjects->animFrame[P_] == 0 && --gObjects->timer[P_] == 0) {
@@ -586,6 +600,7 @@ static void Player_Cane(void)
  * full HP dot is marked lost. */
 static void Player_MarkDamage(void)
 {
+    Decomp_Enter(DT_CODE_TAKE_DAMAGE, 0, 0, 0);
     if (gDifficulty == DIFFICULTY_EASY && (++gPlayerEasyHits & 1)) return;
     uint8_t y = 0;
     do {
@@ -629,6 +644,7 @@ static void Player_HurtMove(uint8_t x)
  * already over, the hit is taken now. */
 static void Player_Hurt(void)
 {
+    Decomp_Enter(DT_CODE_PLAYER_HURT, 0, 0, 0);
     uint8_t timer = gPlayerInvulnerable;
     if (timer == 0) {
         gPlayerMode = PLAYER_MODE_GROUND;
@@ -646,6 +662,7 @@ static void Player_Hurt(void)
  * hit; then he drifts back under gravity until KNOCKBACK_END. */
 static void Player_Knockback(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_PLAYER_KNOCKBACK, 0, x, 0);
     if (gPlayerInvulnerable == 0) {
         Sound_Request(SFX_HURT, x);
         Obj_SetVelocityY(P_, KNOCKBACK_VY);
@@ -671,6 +688,7 @@ static void Player_Knockback(uint8_t x)
 /* Mode 7, $EB82: stuck in snow; a jump frees him. */
 static void Player_Stuck(void)
 {
+    Decomp_Enter(DT_CODE_PLAYER_STUCK, 0, 0, 0);
     if (gObjects->action[P_] != PLAYER_ACTION_STUCK) {
         Player_SetAction(PLAYER_ACTION_STUCK);
         gObjects->y[P_] += STUCK_SINK;
@@ -681,6 +699,7 @@ static void Player_Stuck(void)
 /* $EBB4: fell into a pit: request the respawn that costs a life. */
 static void Player_PitDeath(void)
 {
+    Decomp_Enter(DT_CODE_PIT_DEATH, 0, 0, 0);
     uint8_t p = 0;
     gRespawn = Alu_Adc(Alu_Adc(gLand, 0x87, &p), gBossCheckpoint, &p);
     gPlayerMode = PLAYER_MODE_GROUND;
@@ -692,6 +711,7 @@ static void Player_PitDeath(void)
 /* Mode 8, $EBA7: falling; below PIT_Y it is a pit death. */
 static void Player_Pit(void)
 {
+    Decomp_Enter(DT_CODE_PLAYER_PIT, 0, 0, 0);
     uint8_t x = Player_Fall();
     if (gObjects->y[P_] < PIT_Y) {
         Player_Walk(x);
@@ -703,6 +723,7 @@ static void Player_Pit(void)
 /* Mode 9, $EBC9: waits for A. */
 static void Player_Mode9(void)
 {
+    Decomp_Enter(DT_CODE_PLAYER_MODE9, 0, 0, 0);
     if (gPadNew & DT_PAD_A) gPlayerMode = PLAYER_MODE_GROUND;
     gObjects->animTimer[P_] = 0;
 }
@@ -711,6 +732,7 @@ static void Player_Mode9(void)
  * mode 11, and a wall under the carrier knocks Scrooge back. */
 static void Player_Carried(void)
 {
+    Decomp_Enter(DT_CODE_PLAYER_CARRIED, 0, 0, 0);
     gPlayerMoveDir = 2;
     gPlayerMoveSide = 2;
     gObjects->state[P_] = (gPadHeld & DT_PAD_DOWN) ? 0 : 0xA0;
@@ -731,6 +753,7 @@ static void Player_Carried(void)
 /* Mode 12, $EC2D (not studied): a scripted fall and drift to the right. */
 static void Player_Mode12(void)
 {
+    Decomp_Enter(DT_CODE_PLAYER_MODE12, 0, 0, 0);
     if (gObjects->vdir[P_] != 0) {
         gObjects->state[P_] = 0xE0;
         Obj_ApplyGravity(P_);
@@ -757,6 +780,7 @@ static void Player_Mode12(void)
  * right; off the bottom it is the pit death request. */
 static void Player_Death(void)
 {
+    Decomp_Enter(DT_CODE_PLAYER_DEATH, 0, 0, 0);
     if ((gObjects->state[P_] & 0x0F) == 0) {
         gObjects->vdir[P_] = 0;
         gObjects->animFrame[P_] = 0;
@@ -786,11 +810,16 @@ static void Player_Death(void)
 }
 
 /* Mode 14, $ECFF */
-static void Player_Mode14(void) { gObjects->animTimer[P_] = 0; }
+static void Player_Mode14(void)
+{
+    Decomp_Enter(DT_CODE_PLAYER_MODE14, 0, 0, 0);
+    gObjects->animTimer[P_] = 0;
+}
 
 /* $E354: once per frame from the frame loop. */
 static void Player_Update(const Regs *in)
 {
+    Decomp_Enter(DT_CODE_PLAYER_UPDATE, in->a, in->x, in->y);
     gGravity = PLAYER_GRAVITY;
     if (gPlayerInvulnerable != 0 && !(gPlayerInvulnerable & 0x80)) gPlayerInvulnerable--;
     if (gPlayerPower != 0 && !(gPlayerPower & 0x80)) {
@@ -856,33 +885,36 @@ static void Run_Mode12(Regs *r) { (void)r; Player_Mode12(); }
 static void Run_Death(Regs *r) { (void)r; Player_Death(); }
 static void Run_Mode14(Regs *r) { (void)r; Player_Mode14(); }
 
-/* The damage site's event runs at its own [[mod_function_hook]] (declared
- * first, so it fires first); the adapter is the routine without it. */
+/* Sites only where original code calls a routine: the frame loop calls
+ * Player_Update, the original modes 15 and 16 jump to Player_PitDeath. The
+ * damage routine keeps its site for replace mode's measuring call (decomp.c);
+ * the damage event runs at its own [[mod_function_hook]] there (declared
+ * first, so it fires first), and the adapter is the routine without it. */
 const DecompRoutine gPlayerRoutines[] = {
     { DT_CODE_PLAYER_UPDATE, "ducktales.decomp.E354", "Player_Update", Run_Update, 0 },
-    { DT_CODE_PLAYER_GROUND, "ducktales.decomp.E3B8", "Player_Ground", Run_Ground, 0 },
-    { DT_CODE_JUMP_START, "ducktales.decomp.E3F2", "Player_StartJump", Run_StartJump, 0 },
-    { DT_CODE_PLAYER_WALK, "ducktales.decomp.E482", "Player_Walk", Run_Walk, 0 },
-    { DT_CODE_MOVE_RIGHT, "ducktales.decomp.E593", "Player_MoveRight", Run_MoveRight, OUT_X },
-    { DT_CODE_MOVE_LEFT, "ducktales.decomp.E5C3", "Player_MoveLeft", Run_MoveLeft, OUT_X },
-    { DT_CODE_PLAYER_AIR, "ducktales.decomp.E63B", "Player_Air", Run_Air, 0 },
-    { DT_CODE_GRAB_CLIMB, "ducktales.decomp.E740", "Player_GrabClimb", Run_GrabClimb, 0 },
-    { DT_CODE_PLAYER_POGO, "ducktales.decomp.E7EA", "Player_Pogo", Run_Pogo, 0 },
-    { DT_CODE_PLAYER_CLIMB, "ducktales.decomp.E806", "Player_Climb", Run_Climb, 0 },
-    { DT_CODE_PLAYER_CANE, "ducktales.decomp.E8EB", "Player_Cane", Run_Cane, 0 },
-    { DT_CODE_PLAYER_FALL, "ducktales.decomp.E970", "Player_Fall", Run_Fall, OUT_X },
-    { DT_CODE_PLAYER_RISE, "ducktales.decomp.E9BA", "Player_Rise", Run_Rise, OUT_X },
-    { DT_CODE_PROBE_VERTICAL, "ducktales.decomp.EA5E", "Player_ProbeVertical", Run_ProbeVertical, OUT_X },
-    { DT_CODE_PLAYER_HURT, "ducktales.decomp.EAB9", "Player_Hurt", Run_Hurt, 0 },
-    { DT_CODE_PLAYER_KNOCKBACK, "ducktales.decomp.EB00", "Player_Knockback", Run_Knockback, 0 },
+    { DT_CODE_PLAYER_GROUND, NULL, "Player_Ground", Run_Ground, 0 },
+    { DT_CODE_JUMP_START, NULL, "Player_StartJump", Run_StartJump, 0 },
+    { DT_CODE_PLAYER_WALK, NULL, "Player_Walk", Run_Walk, 0 },
+    { DT_CODE_MOVE_RIGHT, NULL, "Player_MoveRight", Run_MoveRight, OUT_X },
+    { DT_CODE_MOVE_LEFT, NULL, "Player_MoveLeft", Run_MoveLeft, OUT_X },
+    { DT_CODE_PLAYER_AIR, NULL, "Player_Air", Run_Air, 0 },
+    { DT_CODE_GRAB_CLIMB, NULL, "Player_GrabClimb", Run_GrabClimb, 0 },
+    { DT_CODE_PLAYER_POGO, NULL, "Player_Pogo", Run_Pogo, 0 },
+    { DT_CODE_PLAYER_CLIMB, NULL, "Player_Climb", Run_Climb, 0 },
+    { DT_CODE_PLAYER_CANE, NULL, "Player_Cane", Run_Cane, 0 },
+    { DT_CODE_PLAYER_FALL, NULL, "Player_Fall", Run_Fall, OUT_X },
+    { DT_CODE_PLAYER_RISE, NULL, "Player_Rise", Run_Rise, OUT_X },
+    { DT_CODE_PROBE_VERTICAL, NULL, "Player_ProbeVertical", Run_ProbeVertical, OUT_X },
+    { DT_CODE_PLAYER_HURT, NULL, "Player_Hurt", Run_Hurt, 0 },
+    { DT_CODE_PLAYER_KNOCKBACK, NULL, "Player_Knockback", Run_Knockback, 0 },
     { DT_CODE_TAKE_DAMAGE, "ducktales.decomp.EB5E", "Player_TakeDamage", Run_TakeDamage, 0 },
-    { DT_CODE_PLAYER_STUCK, "ducktales.decomp.EB82", "Player_Stuck", Run_Stuck, 0 },
-    { DT_CODE_PLAYER_PIT, "ducktales.decomp.EBA7", "Player_Pit", Run_Pit, 0 },
+    { DT_CODE_PLAYER_STUCK, NULL, "Player_Stuck", Run_Stuck, 0 },
+    { DT_CODE_PLAYER_PIT, NULL, "Player_Pit", Run_Pit, 0 },
     { DT_CODE_PIT_DEATH, "ducktales.decomp.EBB4", "Player_PitDeath", Run_PitDeath, 0 },
-    { DT_CODE_PLAYER_MODE9, "ducktales.decomp.EBC9", "Player_Mode9", Run_Mode9, 0 },
-    { DT_CODE_PLAYER_CARRIED, "ducktales.decomp.EBD9", "Player_Carried", Run_Carried, 0 },
-    { DT_CODE_PLAYER_MODE12, "ducktales.decomp.EC2D", "Player_Mode12", Run_Mode12, 0 },
-    { DT_CODE_PLAYER_DEATH, "ducktales.decomp.EC9B", "Player_Death", Run_Death, 0 },
-    { DT_CODE_PLAYER_MODE14, "ducktales.decomp.ECFF", "Player_Mode14", Run_Mode14, 0 },
+    { DT_CODE_PLAYER_MODE9, NULL, "Player_Mode9", Run_Mode9, 0 },
+    { DT_CODE_PLAYER_CARRIED, NULL, "Player_Carried", Run_Carried, 0 },
+    { DT_CODE_PLAYER_MODE12, NULL, "Player_Mode12", Run_Mode12, 0 },
+    { DT_CODE_PLAYER_DEATH, NULL, "Player_Death", Run_Death, 0 },
+    { DT_CODE_PLAYER_MODE14, NULL, "Player_Mode14", Run_Mode14, 0 },
 };
 const int gPlayerRoutineCount = sizeof gPlayerRoutines / sizeof gPlayerRoutines[0];
