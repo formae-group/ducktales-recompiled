@@ -95,6 +95,29 @@ POKES = [
     ('select-poor', {0x34A: 0x01}, ['Player_SelectRefill'], {POKE_FRAME + 8: 'LEFT+SELECT', POKE_FRAME + 10: 'LEFT'}),
     ('select-full', {}, ['Player_SelectRefill'], {POKE_FRAME + 8: 'LEFT+SELECT', POKE_FRAME + 10: 'LEFT'}),
     ('hud-total', {0xAB: 0x01}, ['Hud_RefreshTotal']),
+    ('scene-1', {0x78: 0x81}, ['Scene_Placed', 'Scene_Done']),
+    ('scene-2', {0x78: 0x82}, ['Scene_Placed', 'Scene_Done']),
+    ('final-trip', {100: {0x5E: 0x01}}, ['LandSelect_FinalWait', 'LandSelect_FinalScene']),
+    ('all-treasures', {100: {0x5D: 0x01, 0xA0: 0x1F}}, ['LandSelect_Banked', 'LandSelect_FinalWait']),
+    (
+        'total-max',
+        {
+            100: {
+                0x5D: 0x01,
+                0x322: 0x07,
+                0x323: 0x2C,
+                0x324: 0x24,
+                0x325: 0x24,
+                0x326: 0x01,
+                0x327: 0x05,
+                0x328: 0x00,
+                0x329: 0x00,
+                0x32A: 0x00,
+                **{0x334 + i: 0x09 for i in range(5)},
+            }
+        },
+        ['BankTransfer_Next'],
+    ),
     # slot 9 made a pickup on Scrooge (step 2, waiting): the extra HP dot; a big diamond with money at 999...
     (
         'extra-dot',
