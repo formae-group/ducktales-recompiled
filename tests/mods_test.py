@@ -312,6 +312,43 @@ dt.on("frame", function(frame)
     if frame == 1000 or frame == 1400 then
         dt.log("state", frame, dt.state.land, dt.state.lives, dt.state.time, dt.state.hp)
     end
+    if frame == 1200 then
+        dt.toast("sandbox")
+    end
+end)
+'''
+
+API_LUA = r'''
+local ok, err = pcall(dt.set.lives, 3)
+dt.log("outside", ok, err)
+local runs = (dt.store.get("runs") or 0) + 1
+dt.store.set("runs", runs)
+dt.store.set("text", "a\nb\\c = d")
+dt.store.set("half", 3.5)
+dt.store.set("flag", true)
+dt.log("store", runs, dt.store.get("text") == "a\nb\\c = d", dt.store.get("half"), dt.store.get("flag"))
+local big_ok, big_err = pcall(dt.store.set, "big", string.rep("x", 70000))
+dt.log("store-cap", big_ok, big_err)
+local type_ok = pcall(dt.store.set, "table", {})
+local key_ok = pcall(dt.store.set, "../escape", 1)
+dt.log("store-refused", type_ok, key_ok)
+dt.on("frame", function(frame)
+    if frame == 900 then
+        dt.log("toasts", dt.toast("Hello from api"), dt.toast("too soon"))
+    end
+    if frame == 1000 then
+        dt.log("before", dt.state.lives, dt.state.time, dt.state.hp, dt.state.money)
+        dt.set.lives(5)
+        dt.set.time(123)
+        dt.set.hp(1)
+        dt.set.money(12340)
+        dt.log("deferred", dt.state.lives)
+        local range_ok, range_err = pcall(dt.set.lives, 10)
+        dt.log("range", range_ok, range_err)
+    end
+    if frame == 1001 then
+        dt.log("after", dt.state.lives, dt.state.time, dt.state.hp, dt.state.money)
+    end
 end)
 '''
 
@@ -355,11 +392,17 @@ def script_checks(exe, route, native):
     with tempfile.TemporaryDirectory() as t:
         tmp = Path(t)
 
-        def run(name, mods, frames=1500):
-            cmd = [exe, ROM, '--frames', str(frames), '--input', route, '--mods', 'on', '--mods-dir', mods]
+        data = tmp / 'data'
+        data.mkdir()
+        env = dict(os.environ, DUCKTALES_DATA_DIR=str(data))
+
+        def run(name, mods, frames=1500, extra=()):
+            cmd = [exe, ROM, '--frames', str(frames), '--input', route, *extra]
+            if mods:
+                cmd += ['--mods', 'on', '--mods-dir', mods]
             if native:
                 cmd += ['--lag', 'faithful', '--config', tmp / 'x.ini']
-            p = subprocess.run([str(c) for c in cmd], capture_output=True, text=True, timeout=3600)
+            p = subprocess.run([str(c) for c in cmd], capture_output=True, text=True, timeout=3600, env=env)
             if p.returncode:
                 print(p.stdout + p.stderr)
                 raise SystemExit(f'{host} scripts {name}: exit {p.returncode}')
@@ -408,6 +451,73 @@ def script_checks(exe, route, native):
             log,
         )
 
+        api_dir = tmp / 'mods_api'
+        api_dir.mkdir()
+        script_mod(api_dir, 'api', API_LUA)
+        shots = tmp / 'shots_api'
+        shots.mkdir()
+        log = run('api', api_dir, frames=1101, extra=('--present-out', shots / 'p.png', '--present-every', '900'))
+        lines = {
+            line.split(': ', 1)[1].split('\t')[0]: line.split(': ', 1)[1].split('\t')[1:]
+            for line in log.splitlines()
+            if line.startswith('[ducktales] Mod api: ') and '\t' in line
+        }
+        check(
+            lines.get('outside', [''])[0] == 'false' and 'dt.set.lives is called in dt.on callbacks' in log,
+            f'{host}: dt.set outside a callback is refused',
+            log,
+        )
+        before, after = lines.get('before', []), lines.get('after', [])
+        check(
+            lines.get('deferred') == before[:1]
+            and after[:1] == ['5']
+            and after[1:2] in (['123'], ['122'])
+            and after[2:3] == ['1']
+            and after[3:4] == ['12340'],
+            f'{host}: dt.set.lives/time/hp/money apply at the frame\'s end (before {before}, after {after})',
+            log,
+        )
+        check(
+            lines.get('range', [''])[0] == 'false' and 'dt.set.lives(10): out of range 0 to 9' in log,
+            f'{host}: dt.set checks the range',
+            log,
+        )
+        check(
+            lines.get('toasts') == ['true', 'false'] and 'Mod api: toast: Hello from api' in log,
+            f'{host}: dt.toast shows a notice and refuses a second one within a second',
+            log,
+        )
+        check(
+            lines.get('store') == ['1', 'true', '3.5', 'true'],
+            f'{host}: dt.store keeps each type ({lines.get("store")})',
+            log,
+        )
+        check(
+            lines.get('store-cap', [''])[0] == 'false'
+            and 'more than 65536 bytes' in log
+            and lines.get('store-refused') == ['false', 'false'],
+            f'{host}: dt.store refuses more than 64 KiB, tables and a key with a path in it',
+            log,
+        )
+        base_dir = tmp / 'shots_base'
+        base_dir.mkdir()
+        run('plain', None, frames=901, extra=('--present-out', base_dir / 'p.png', '--present-every', '900'))
+        shot, plain = png_read(shots / 'p_00900.png')[2], png_read(base_dir / 'p_00900.png')[2]
+        rows = sorted({i // 256 for i, (x, y) in enumerate(zip(shot, plain)) if x != y})
+        check(
+            rows and rows[-1] < 120,
+            f'{host}: the toast is drawn over the presented picture near the top (rows {rows[:1]}-{rows[-1:]})',
+        )
+        log = run('api-again', api_dir, frames=10)
+        stored = (data / 'mods-data' / 'api.ini').read_text() if (data / 'mods-data' / 'api.ini').exists() else ''
+        check(
+            'Mod api: store\t2\ttrue\t3.5\ttrue' in log
+            and 'runs = i:2' in stored
+            and 'text = s:a\\nb\\\\c = d' in stored,
+            f'{host}: dt.store comes back in the next run from mods-data/api.ini',
+            log + stored,
+        )
+
         reload_dir = tmp / 'mods_reload'
         script = reload_dir / 'reload' / 'scripts' / 'main.lua'
         script.parent.mkdir(parents=True)
@@ -421,7 +531,9 @@ def script_checks(exe, route, native):
         cmd = [exe, ROM, '--frames', '2000000', '--input', route, '--mods', 'on', '--mods-dir', reload_dir]
         if native:
             cmd += ['--config', tmp / 'x.ini']
-        p = subprocess.Popen([str(c) for c in cmd], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        p = subprocess.Popen(
+            [str(c) for c in cmd], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env
+        )
         steps = [
             ('Mod reload: version one', 1),
             ('Mod reload: script stopped: scripts/main.lua:1:', 2),

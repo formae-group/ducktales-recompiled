@@ -4,7 +4,8 @@
  * (docs/mods.md). Assets change only what the window shows and what the
  * speakers play: nothing here writes to the machine, so its state, its own
  * picture and every verified hash stay the console's. Scripts read the game's
- * state and may cancel the cancelable game events (app_mods_lua.c).
+ * state, may cancel the cancelable game events and may write the fields the
+ * game declares writable (src/mods/core/fm_script.c, src/mods/ducktales).
  *
  *   catalogue   every *.dtmod archive (a zip) and every folder holding a
  *               mod.toml in the mods folders, in the player's order; a mod
@@ -34,6 +35,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "mods/core/fm_mods.h"
 #include "native/native_render.h"
 
 #ifdef __cplusplus
@@ -44,21 +46,8 @@ extern "C" {
 #define APP_MODS_PRG_SHA256 "8ba8baed01a9fbaf1e9ff29e0c9825db1963ac2aff211d6f1f3bcfd3839e2013"
 #define APP_MODS_EXTENSION  ".dtmod"
 
-typedef struct {
-    char id[64]; /* mod.toml id; the file or folder name when it could not be read */
-    char name[128];
-    char version[32];
-    char author[128];
-    char description[512];
-    char path[1024]; /* the archive or folder */
-    bool folder;     /* a loose folder (development) */
-    bool enabled;    /* the player's checkbox */
-    bool loaded;     /* its assets are in use since the start */
-    char error[320]; /* non-empty: refused or unreadable, never loaded */
-    int tiles, palettes, music, sfx;
-    bool script;            /* ships scripts/main.lua */
-    char script_error[320]; /* non-empty: its script stopped (error or limit) and why */
-} AppMod;
+/* A mod of the catalogue (fm_mods.h). */
+typedef FmMod AppMod;
 
 /* ---- folders and settings ---- */
 
@@ -109,14 +98,15 @@ void app_mods_rescan(void);
 /* Enabled, the enabled mods or their order differ from what was loaded. */
 bool app_mods_restart_needed(void);
 
-/* ---- scripts (app_mods_lua.c) ---- */
+/* ---- scripts (src/mods/core/fm_script.c) ---- */
 
 /* After each machine frame: "frame" handlers, then scripts whose file changed start again. */
 void app_mods_scripts_frame(void);
 
 /* ---- video ---- */
 
-/* A tile or palette replacement is loaded, or a key dump is on. */
+/* A tile or palette replacement is loaded, a key dump is on, or a script
+ * runs (its notices are drawn over the picture). */
 bool app_mods_video_active(void);
 /* Paints the replacements over argb, the 256x240 picture drawn from video
  * with options (NULL: the console's rules). A pixel changes only where argb
@@ -127,6 +117,9 @@ void app_mods_video_apply(const NvVideo *video, const NvRenderOptions *options, 
 /* Developer: from now on write every tile drawn, once, into dir as
  * <key>.png (from the player's own ROM; never distribute them). */
 bool app_mods_dump_dir(const char *dir);
+/* Draws the script notice showing now (dt.toast) over a presented picture,
+ * never the machine's (cyc_overlay.h). */
+void app_mods_draw_overlay(uint32_t *argb, int width, int height);
 /* The colour of 9-bit palette index under the palette mod of the last picture
  * painted, or argb when none applies (presentation that redraws pixels after
  * the compositor, ui/app_present.c). */

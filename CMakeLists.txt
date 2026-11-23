@@ -39,19 +39,21 @@ if(DUCKTALES_HEADLESS)
 endif()
 # Mods (docs/mods.md): replacement tiles, palettes, music and effects from
 # .dtmod archives. They decode PNG, OGG Vorbis and zip deflate with stb
-# (external/stb, MIT or public domain), compiled into app_mods_codec.c only.
+# (external/stb, MIT or public domain), compiled into src/mods/core/fm_codec.c only.
 # Every host links them, the native player included.
 set(STB_ROOT "${CMAKE_SOURCE_DIR}/external/stb")
 if(NOT EXISTS "${STB_ROOT}/stb_vorbis.c")
     message(FATAL_ERROR "external/stb is missing; run: git submodule update --init external/stb")
 endif()
 set(_ducktales_mods
-    "${CMAKE_SOURCE_DIR}/src/mods/app_mods.c"
-    "${CMAKE_SOURCE_DIR}/src/mods/app_mods_archive.c"
-    "${CMAKE_SOURCE_DIR}/src/mods/app_mods_audio.c"
-    "${CMAKE_SOURCE_DIR}/src/mods/app_mods_codec.c"
-    "${CMAKE_SOURCE_DIR}/src/mods/app_mods_lua.c")
-set_property(SOURCE "${CMAKE_SOURCE_DIR}/src/mods/app_mods_codec.c" APPEND PROPERTY INCLUDE_DIRECTORIES "${STB_ROOT}")
+    "${CMAKE_SOURCE_DIR}/src/mods/core/fm_archive.c"
+    "${CMAKE_SOURCE_DIR}/src/mods/core/fm_catalog.c"
+    "${CMAKE_SOURCE_DIR}/src/mods/core/fm_codec.c"
+    "${CMAKE_SOURCE_DIR}/src/mods/core/fm_script.c"
+    "${CMAKE_SOURCE_DIR}/src/mods/nes/fm_nes.c"
+    "${CMAKE_SOURCE_DIR}/src/mods/ducktales/dt_mods.c"
+    "${CMAKE_SOURCE_DIR}/src/mods/ducktales/dt_mods_audio.c")
+set_property(SOURCE "${CMAKE_SOURCE_DIR}/src/mods/core/fm_codec.c" APPEND PROPERTY INCLUDE_DIRECTORIES "${STB_ROOT}")
 # Script mods (docs/mods.md "Scripts") run in Lua 5.4 (external/lua, the
 # official repository at a v5.4 tag, MIT), built here as a static library of
 # the core and the libraries the sandbox opens: the io, os, package and debug
@@ -67,7 +69,7 @@ list(TRANSFORM _lua_sources APPEND ".c")
 add_library(ducktales_lua STATIC ${_lua_sources})
 target_include_directories(ducktales_lua PUBLIC "${LUA_ROOT}")
 set_target_properties(ducktales_lua PROPERTIES LINKER_LANGUAGE C)
-set_property(SOURCE "${CMAKE_SOURCE_DIR}/src/mods/app_mods_lua.c" APPEND PROPERTY INCLUDE_DIRECTORIES "${LUA_ROOT}")
+set_property(SOURCE "${CMAKE_SOURCE_DIR}/src/mods/core/fm_script.c" APPEND PROPERTY INCLUDE_DIRECTORIES "${LUA_ROOT}")
 # The licence the package carries: lua.h's own notice.
 file(READ "${LUA_ROOT}/lua.h" _lua_header)
 string(REGEX MATCH "\n\\* Copyright \\(C\\) 1994-[^\n]*\n(\\*[^\n]*\n)*" _lua_notice "${_lua_header}")

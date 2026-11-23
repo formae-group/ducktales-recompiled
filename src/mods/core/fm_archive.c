@@ -1,5 +1,5 @@
 /*
- * app_mods_archive.c - a mod's files (mods_internal.h): a .dtmod archive, a
+ * fm_archive.c - a mod's files (fm_mods.h): a .dtmod archive, a
  * zip read into memory whose entries are stored or deflated, or a loose
  * folder on disk. The archive is checked as it is read: its central
  * directory, every entry's local header and its CRC-32. Encrypted entries,
@@ -8,7 +8,7 @@
  * mod folder), that folder is the mod's root. Paths are UTF-8; Windows
  * gets them through the wide calls.
  */
-#include "mods/mods_internal.h"
+#include "mods/core/fm_mods.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,7 +35,7 @@ static uint32_t u32(const uint8_t *p)
     return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
 }
 
-uint32_t mod_crc32(const uint8_t *data, size_t size)
+uint32_t fm_crc32(const uint8_t *data, size_t size)
 {
     static uint32_t table[256];
     if (!table[1]) {
@@ -80,7 +80,7 @@ static FILE *open_utf8(const char *path, const char *mode)
     return f;
 }
 
-bool mod_is_dir(const char *path)
+bool fm_is_dir(const char *path)
 {
     wchar_t *w = wide(path);
     if (!w) {
@@ -91,9 +91,9 @@ bool mod_is_dir(const char *path)
     return attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY);
 }
 
-bool mod_make_dir(const char *path)
+bool fm_make_dir(const char *path)
 {
-    if (mod_is_dir(path)) {
+    if (fm_is_dir(path)) {
         return true;
     }
     wchar_t *w = wide(path);
@@ -105,7 +105,7 @@ bool mod_make_dir(const char *path)
     return ok;
 }
 
-void mod_list_dir(const char *dir, void (*fn)(void *user, const char *name, bool folder), void *user)
+void fm_list_dir(const char *dir, void (*fn)(void *user, const char *name, bool folder), void *user)
 {
     char pattern[1100];
     snprintf(pattern, sizeof pattern, "%s\\*", dir);
@@ -120,7 +120,7 @@ void mod_list_dir(const char *dir, void (*fn)(void *user, const char *name, bool
         return;
     }
     do {
-        char name[MOD_NAME_MAX * 3];
+        char name[FM_NAME_MAX * 3];
         if (!WideCharToMultiByte(CP_UTF8, 0, fd.cFileName, -1, name, sizeof name, NULL, NULL)) {
             continue;
         }
@@ -133,7 +133,7 @@ void mod_list_dir(const char *dir, void (*fn)(void *user, const char *name, bool
 }
 #endif
 
-uint8_t *mod_read_file(const char *path, size_t *size)
+uint8_t *fm_read_file(const char *path, size_t *size)
 {
     FILE *f = open_utf8(path, "rb");
     if (!f) {
@@ -157,9 +157,9 @@ uint8_t *mod_read_file(const char *path, size_t *size)
     return data;
 }
 
-static bool add_entry(ModArchive *a, const ModEntry *e)
+static bool add_entry(FmArchive *a, const FmEntry *e)
 {
-    ModEntry *grown = realloc(a->entries, (size_t)(a->count + 1) * sizeof *grown);
+    FmEntry *grown = realloc(a->entries, (size_t)(a->count + 1) * sizeof *grown);
     if (!grown) {
         return false;
     }
@@ -169,26 +169,26 @@ static bool add_entry(ModArchive *a, const ModEntry *e)
 }
 
 typedef struct {
-    ModArchive *a;
-    char base[MOD_NAME_MAX];
+    FmArchive *a;
+    char base[FM_NAME_MAX];
     int depth;
 } Walk;
 
 static void walk_folder(void *user, const char *name, bool folder);
 
-static void walk(ModArchive *a, const char *base, int depth)
+static void walk(FmArchive *a, const char *base, int depth)
 {
     char dir[1400];
     snprintf(dir, sizeof dir, "%s%s%s", a->root, base[0] ? "\\" : "", base);
     Walk w = { a, "", depth };
     snprintf(w.base, sizeof w.base, "%s", base);
-    mod_list_dir(dir, walk_folder, &w);
+    fm_list_dir(dir, walk_folder, &w);
 }
 
 static void walk_folder(void *user, const char *name, bool folder)
 {
     Walk *w = user;
-    char rel[MOD_NAME_MAX];
+    char rel[FM_NAME_MAX];
     if (snprintf(rel, sizeof rel, "%s%s%s", w->base, w->base[0] ? "/" : "", name) >= (int)sizeof rel) {
         return;
     }
@@ -198,7 +198,7 @@ static void walk_folder(void *user, const char *name, bool folder)
         }
         return;
     }
-    ModEntry e;
+    FmEntry e;
     memset(&e, 0, sizeof e);
     snprintf(e.name, sizeof e.name, "%s", rel);
     add_entry(w->a, &e);
@@ -210,7 +210,7 @@ static bool fail(char *err, size_t cap, const char *what)
     return false;
 }
 
-static bool open_zip(ModArchive *a, char *err, size_t cap)
+static bool open_zip(FmArchive *a, char *err, size_t cap)
 {
     const uint8_t *d = a->data;
     size_t n = a->data_size;
@@ -248,14 +248,14 @@ static bool open_zip(ModArchive *a, char *err, size_t cap)
         if (next > eocd) {
             return fail(err, cap, "Broken zip archive (central directory).");
         }
-        ModEntry e;
+        FmEntry e;
         memset(&e, 0, sizeof e);
         e.crc = u32(d + at + 16);
         e.packed = u32(d + at + 20);
         e.size = u32(d + at + 24);
         e.offset = u32(d + at + 42);
         e.method = method;
-        if (name_len >= MOD_NAME_MAX) {
+        if (name_len >= FM_NAME_MAX) {
             return fail(err, cap, "Broken zip archive (a name is too long).");
         }
         memcpy(e.name, d + at + 46, name_len);
@@ -290,7 +290,7 @@ static bool open_zip(ModArchive *a, char *err, size_t cap)
     return true;
 }
 
-static void find_prefix(ModArchive *a)
+static void find_prefix(FmArchive *a)
 {
     a->prefix[0] = 0;
     const char *found = NULL;
@@ -311,7 +311,7 @@ static void find_prefix(ModArchive *a)
     }
 }
 
-bool mod_archive_open(ModArchive *a, const char *path, bool folder, char *err, size_t cap)
+bool fm_archive_open(FmArchive *a, const char *path, bool folder, char *err, size_t cap)
 {
     memset(a, 0, sizeof *a);
     a->folder = folder;
@@ -320,36 +320,36 @@ bool mod_archive_open(ModArchive *a, const char *path, bool folder, char *err, s
         walk(a, "", 0);
         return true;
     }
-    a->data = mod_read_file(path, &a->data_size);
+    a->data = fm_read_file(path, &a->data_size);
     if (!a->data) {
         return fail(err, cap, "Cannot read the file.");
     }
     if (!open_zip(a, err, cap)) {
-        mod_archive_close(a);
+        fm_archive_close(a);
         return false;
     }
     find_prefix(a);
     return true;
 }
 
-void mod_archive_close(ModArchive *a)
+void fm_archive_close(FmArchive *a)
 {
     free(a->data);
     free(a->entries);
     memset(a, 0, sizeof *a);
 }
 
-const char *mod_archive_name(const ModArchive *a, int index)
+const char *fm_archive_name(const FmArchive *a, int index)
 {
     const char *n = a->entries[index].name;
     size_t k = strlen(a->prefix);
     return strncmp(n, a->prefix, k) ? NULL : n + k;
 }
 
-int mod_archive_find(const ModArchive *a, const char *name)
+int fm_archive_find(const FmArchive *a, const char *name)
 {
     for (int i = 0; i < a->count; i++) {
-        const char *n = mod_archive_name(a, i);
+        const char *n = fm_archive_name(a, i);
         if (n && !strcmp(n, name)) {
             return i;
         }
@@ -357,9 +357,9 @@ int mod_archive_find(const ModArchive *a, const char *name)
     return -1;
 }
 
-uint8_t *mod_archive_read(const ModArchive *a, int index, size_t *size, char *err, size_t cap)
+uint8_t *fm_archive_read(const FmArchive *a, int index, size_t *size, char *err, size_t cap)
 {
-    const ModEntry *e = &a->entries[index];
+    const FmEntry *e = &a->entries[index];
     if (a->folder) {
         char path[1400];
         snprintf(path, sizeof path, "%s\\%s", a->root, e->name);
@@ -368,7 +368,7 @@ uint8_t *mod_archive_read(const ModArchive *a, int index, size_t *size, char *er
                 *c = '\\';
             }
         }
-        uint8_t *data = mod_read_file(path, size);
+        uint8_t *data = fm_read_file(path, size);
         if (!data) {
             snprintf(err, cap, "%s: cannot read the file.", e->name);
         }
@@ -395,14 +395,14 @@ uint8_t *mod_archive_read(const ModArchive *a, int index, size_t *size, char *er
             memcpy(out, d + start, e->size);
         }
     } else {
-        out = mod_inflate(d + start, e->packed, e->size);
+        out = fm_inflate(d + start, e->packed, e->size);
     }
     if (!out) {
         snprintf(err, cap, "%s: cannot be decompressed.", e->name);
         return NULL;
     }
     out[e->size] = 0;
-    if (mod_crc32(out, e->size) != e->crc) {
+    if (fm_crc32(out, e->size) != e->crc) {
         free(out);
         snprintf(err, cap, "%s: CRC-32 mismatch (damaged archive).", e->name);
         return NULL;

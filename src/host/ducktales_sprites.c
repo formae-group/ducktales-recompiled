@@ -322,6 +322,7 @@ static void paint_mods(uint32_t *out, const Sprite *list, int n, uint16_t hud_ta
         options = (NvRenderOptions){ 0, sprites, n };
     }
     app_mods_video_apply(&video, &options, s_ram[1], out);
+    app_mods_draw_overlay(out, 256, 240);
 }
 
 static int compose(uint32_t *out, int width, int height, int native_x0, const uint32_t *native, void *user)

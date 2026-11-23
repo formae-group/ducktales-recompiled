@@ -34,7 +34,9 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   it changes the machine. `--mods`, `--mods-dir`, `--mods-order` and `--mods-dump` on both hosts.
 - Script mods: `scripts/main.lua` runs in a Lua 5.4 sandbox per mod with `dt.on` over the game
   events and `frame`, read-only `dt.state`, an instruction limit per callback, a 16 MiB memory cap
-  and hot reload; an error or a limit stops only that mod's script.
+  and hot reload; an error or a limit stops only that mod's script. `dt.toast` notices over the
+  presented picture, a per-mod `dt.store` in `mods-data/<id>.ini`, and `dt.set` for the declared
+  writable fields (lives, hp, money, time), applied at the frame's end.
 - Mod Menu: Settings, Mods with Enable mods, a reorderable mod list (formae-ui 0.2.0), Open mods
   folder, Rescan, a restart note and each mod's error.
 - The player build on the native runtime: `ducktales.exe` runs the recompiled game on the native

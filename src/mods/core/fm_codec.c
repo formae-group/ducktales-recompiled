@@ -1,5 +1,5 @@
 /*
- * app_mods_codec.c - the file formats mods use (mods_internal.h): PNG in and
+ * fm_codec.c - the file formats mods use (fm_mods.h): PNG in and
  * out (stb_image, stb_image_write), raw deflate for the archive reader
  * (stb_image's zlib decoder), and sounds: OGG Vorbis streamed from the file
  * as it plays (stb_vorbis) and WAV PCM, both mixed down to mono.
@@ -8,7 +8,7 @@
  * stb (external/stb) is MIT or public domain; it is compiled here, static,
  * so no other copy in the program can clash with it.
  */
-#include "mods/mods_internal.h"
+#include "mods/core/fm_mods.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,7 +33,7 @@
 #pragma warning(pop)
 #endif
 
-uint32_t *mod_png_decode(const uint8_t *data, size_t size, int *w, int *h)
+uint32_t *fm_png_decode(const uint8_t *data, size_t size, int *w, int *h)
 {
     int comp;
     if (size > 0x7FFFFFFF) {
@@ -59,7 +59,7 @@ static void write_to_file(void *context, void *data, int size)
     fwrite(data, 1, (size_t)size, (FILE *)context);
 }
 
-bool mod_png_write(const char *path, const uint32_t *argb, int w, int h)
+bool fm_png_write(const char *path, const uint32_t *argb, int w, int h)
 {
     unsigned char *rgba = malloc((size_t)w * (size_t)h * 4);
     if (!rgba) {
@@ -80,7 +80,7 @@ bool mod_png_write(const char *path, const uint32_t *argb, int w, int h)
     return ok;
 }
 
-uint8_t *mod_inflate(const uint8_t *data, size_t packed, size_t size)
+uint8_t *fm_inflate(const uint8_t *data, size_t packed, size_t size)
 {
     if (packed > 0x7FFFFFFF || size > 0x7FFFFFFE) {
         return NULL;
@@ -97,7 +97,7 @@ uint8_t *mod_inflate(const uint8_t *data, size_t packed, size_t size)
     return out;
 }
 
-struct ModSound {
+struct FmSound {
     stb_vorbis *ogg;
     float *pcm;    /* WAV: mono samples */
     size_t frames; /* WAV: sample count */
@@ -117,7 +117,7 @@ static uint16_t le16(const uint8_t *p)
     return (uint16_t)(p[0] | p[1] << 8);
 }
 
-static ModSound *open_wav(const uint8_t *d, size_t size, char *err, size_t cap)
+static FmSound *open_wav(const uint8_t *d, size_t size, char *err, size_t cap)
 {
     const uint8_t *fmt = NULL, *data = NULL;
     size_t data_size = 0;
@@ -152,7 +152,7 @@ static ModSound *open_wav(const uint8_t *d, size_t size, char *err, size_t cap)
         return NULL;
     }
     size_t step = channels * (bits / 8), frames = data_size / step;
-    ModSound *s = calloc(1, sizeof *s);
+    FmSound *s = calloc(1, sizeof *s);
     float *pcm = malloc((frames ? frames : 1) * sizeof *pcm);
     if (!s || !pcm) {
         free(s);
@@ -175,7 +175,7 @@ static ModSound *open_wav(const uint8_t *d, size_t size, char *err, size_t cap)
     return s;
 }
 
-static ModSound *open_ogg(const uint8_t *d, size_t size, char *err, size_t cap)
+static FmSound *open_ogg(const uint8_t *d, size_t size, char *err, size_t cap)
 {
     int e = 0;
     if (size > 0x7FFFFFFF) {
@@ -193,7 +193,7 @@ static ModSound *open_ogg(const uint8_t *d, size_t size, char *err, size_t cap)
         snprintf(err, cap, "OGG with %d channels at %u Hz is not supported.", info.channels, info.sample_rate);
         return NULL;
     }
-    ModSound *s = calloc(1, sizeof *s);
+    FmSound *s = calloc(1, sizeof *s);
     if (!s) {
         stb_vorbis_close(v);
         return NULL;
@@ -211,7 +211,7 @@ static ModSound *open_ogg(const uint8_t *d, size_t size, char *err, size_t cap)
     return s;
 }
 
-ModSound *mod_sound_open(const uint8_t *file, size_t size, char *err, size_t cap)
+FmSound *fm_sound_open(const uint8_t *file, size_t size, char *err, size_t cap)
 {
     if (size >= 12 && !memcmp(file, "RIFF", 4) && !memcmp(file + 8, "WAVE", 4)) {
         return open_wav(file, size, err, cap);
@@ -223,7 +223,7 @@ ModSound *mod_sound_open(const uint8_t *file, size_t size, char *err, size_t cap
     return NULL;
 }
 
-void mod_sound_close(ModSound *s)
+void fm_sound_close(FmSound *s)
 {
     if (!s) {
         return;
@@ -235,17 +235,17 @@ void mod_sound_close(ModSound *s)
     free(s);
 }
 
-int mod_sound_rate(const ModSound *s)
+int fm_sound_rate(const FmSound *s)
 {
     return s->rate;
 }
 
-long mod_sound_loop_start(const ModSound *s)
+long fm_sound_loop_start(const FmSound *s)
 {
     return s->loop_start;
 }
 
-void mod_sound_rewind(ModSound *s)
+void fm_sound_rewind(FmSound *s)
 {
     if (s->ogg) {
         stb_vorbis_seek_start(s->ogg);
@@ -253,7 +253,7 @@ void mod_sound_rewind(ModSound *s)
     s->at = 0;
 }
 
-static size_t read_once(ModSound *s, float *out, size_t count)
+static size_t read_once(FmSound *s, float *out, size_t count)
 {
     if (!s->ogg) {
         size_t n = s->frames - s->at < count ? s->frames - s->at : count;
@@ -283,7 +283,7 @@ static size_t read_once(ModSound *s, float *out, size_t count)
     return done;
 }
 
-size_t mod_sound_read(ModSound *s, float *out, size_t count, bool loop)
+size_t fm_sound_read(FmSound *s, float *out, size_t count, bool loop)
 {
     size_t done = read_once(s, out, count);
     while (loop && done < count) {

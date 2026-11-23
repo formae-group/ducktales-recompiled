@@ -266,7 +266,9 @@ src/ui/app_rom.[ch]      ROM check, import and the data folder (UTF-8 paths, _w*
 src/ui/app_settings.[ch] config.ini copy, live settings, bindings, menu shortcut, menu settings
 src/ui/app_present.[ch]  the picture the window shows: HUD split, overscan, scaling, aspect, pacing
 src/ui/app_ui.cpp        the first-run screen and the menu on formae-ui and Dear ImGui
-src/mods/                mods: loader, archives, codecs, audio mixer, Lua sandbox (docs/mods.md)
+src/mods/core/           mods, game-agnostic: catalogue, archives, codecs, Lua sandbox (docs/mods.md)
+src/mods/nes/            mods for NES games: tile keys, .pal palettes
+src/mods/ducktales/      mods for DuckTales: assets, events, fields, audio
 external/formae-ui       the menu library (submodule, docs/architecture.md "formae-ui")
 assets/brand/formae.png  the About page's logo, embedded by formae_ui_embed_file
 ```
@@ -385,12 +387,13 @@ player calls the same entry points as the cycle host:
 |---|---|
 | start (cycle host `ducktales_host.c`, native player `native_window.c`) | `app_mods_use_player_folders` (window only: `[Mods]` and the data folder), `app_mods_start` with the PRG |
 | power-on and state load | `app_mods_reset` (forget the sounds playing) |
-| frame end | `app_mods_audio_frame_end` (request ids from RAM), `app_mods_scripts_frame` ("frame" handlers, hot reload) |
+| frame end | `app_mods_audio_frame_end` (request ids from RAM), `app_mods_scripts_frame` ("frame" handlers, queued `dt.set` writes, toasts, hot reload, stores) |
 | audio | the mute mask before the synth or the APU mix, `app_mods_audio_mix` after it |
-| picture | `app_mods_video_apply` from the stock compositor (`ducktales_sprites.c`); `app_mods_color` for the pixels `app_present.c` redraws |
+| picture | `app_mods_video_apply` and `app_mods_draw_overlay` (toasts) from the stock compositor (`ducktales_sprites.c`); `app_mods_color` for the pixels `app_present.c` redraws |
 | menu | the Settings, Mods page in `app_ui.cpp` (catalogue, order, rescan, restart note, script errors) |
 
-Asset mods only read the machine. Scripts register handlers on the game events
+Asset mods only read the machine. Scripts write it only through `dt.set` (declared fields, at the
+frame's end) and event cancels. Scripts register handlers on the game events
 (`include/ducktales/events.h`), so a site's hook is enabled only while a script handles it, exactly
 as for the enhancements; with mods off nothing is registered.
 

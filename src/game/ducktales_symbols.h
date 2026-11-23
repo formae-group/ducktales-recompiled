@@ -156,7 +156,7 @@
 #define DT_ADDR_HUD_GROUP_TIME  0x0140
 
 /* ---- sound driver (bank 3, docs/audio.md) ----
- * Read by the mods' music and effect replacements (src/mods/app_mods_audio.c). */
+ * Read by the mods' music and effect replacements (src/mods/ducktales/dt_mods_audio.c). */
 #define DT_SOUND_BANK           3      /* PRG bank of the driver and its sound table */
 #define DT_SOUND_TABLE          0x8A40 /* 2-byte header pointers by request id $00-$37 (verified) */
 #define DT_SOUND_IDS            0x38

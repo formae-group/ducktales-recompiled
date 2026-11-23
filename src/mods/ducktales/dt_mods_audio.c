@@ -1,5 +1,5 @@
 /*
- * app_mods_audio.c - music and effect replacements (app_mods.h, docs/mods.md
+ * dt_mods_audio.c - music and effect replacements (app_mods.h, docs/mods.md
  * "Music and effects"), following the game's sound driver from its RAM
  * (docs/audio.md):
  *
@@ -25,7 +25,7 @@
  * host's audio-only mask), so the machine is the console's.
  */
 #include "mods/app_mods.h"
-#include "mods/mods_internal.h"
+#include "mods/ducktales/dt_mods_internal.h"
 
 #include "game/ducktales_symbols.h"
 
@@ -37,12 +37,12 @@
 #define MUSIC_IDS DT_SOUND_MUSIC_IDS
 
 typedef struct {
-    ModSound *sound;
+    FmSound *sound;
     uint8_t *file;
 } Replacement;
 
 typedef struct {
-    ModSound *sound;
+    FmSound *sound;
     bool on, loop, held;
     float buf[1024];
     size_t len, pos;
@@ -102,7 +102,7 @@ bool mods_audio_add(bool music, int id, uint8_t *file, size_t size, char *err, s
         free(file);
         return true;
     }
-    ModSound *s = mod_sound_open(file, size, err, cap);
+    FmSound *s = fm_sound_open(file, size, err, cap);
     if (!s) {
         free(file);
         return false;
@@ -119,10 +119,10 @@ static void voice_stop(Voice *v)
     v->sound = NULL;
 }
 
-static void voice_start(Voice *v, ModSound *s, bool loop)
+static void voice_start(Voice *v, FmSound *s, bool loop)
 {
     memset(v, 0, sizeof *v);
-    mod_sound_rewind(s);
+    fm_sound_rewind(s);
     v->sound = s;
     v->loop = loop;
     v->on = true;
@@ -143,7 +143,7 @@ void mods_audio_clear(void)
 {
     app_mods_reset();
     for (int i = 0; i < SOUND_IDS; i++) {
-        mod_sound_close(s_rep[i].sound);
+        fm_sound_close(s_rep[i].sound);
         free(s_rep[i].file);
     }
     memset(s_rep, 0, sizeof s_rep);
@@ -252,7 +252,7 @@ static void apply_next(void)
 static bool next_sample(Voice *v, float *out)
 {
     if (v->pos >= v->len) {
-        v->len = mod_sound_read(v->sound, v->buf, sizeof v->buf / sizeof v->buf[0], v->loop);
+        v->len = fm_sound_read(v->sound, v->buf, sizeof v->buf / sizeof v->buf[0], v->loop);
         v->pos = 0;
         if (!v->len) {
             return false;
@@ -293,7 +293,7 @@ void app_mods_audio_mix(int16_t *samples, size_t count, int rate)
         if (!v->on || v->held || !v->sound) {
             continue;
         }
-        double step = (double)mod_sound_rate(v->sound) / rate;
+        double step = (double)fm_sound_rate(v->sound) / rate;
         for (size_t i = 0; i < count && v->on; i++) {
             long mixed = samples[i] + lrintf(voice_sample(v, step) * 32767.0f);
             samples[i] = (int16_t)(mixed > 32767 ? 32767 : mixed < -32768 ? -32768 : mixed);
