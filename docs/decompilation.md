@@ -199,7 +199,7 @@ call can do. `flow.c` decompiles that code as **task code** (`DecompRoutine.task
   enters through an RTS (`$FFAB`) whose return the observer moves to the start, at the routine's
   true S, with the isolated call's return address in place of the routine's own (at S + locals
   + 1). When the C hands off, the original stops where it reaches the same routine at the same
-  depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`, 11 of
+  depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`, 10 of
   them). Check compares RAM, the stack down to that depth, the registers the hand-off uses and the
   number of device writes.
 - Replace mode stores the C's results, makes its device writes, spends the original's cycles up to
@@ -364,6 +364,10 @@ RAM-identical in replace mode.
 | `MainTask` and `Title_*` (13 resume points) | `$D4E6-$D609` | checked | 12 | - | not measured |
 | `BossTrigger` (2 resume points) | `$CF93-$D04C` | checked | 12 (the arena scroll in 4) | - | not measured; the Transylvania redirect to Land Select |
 | `LandLoad` (12 resume points) | `$D79B-$D8A5` | checked | 12 | - | not measured |
+| `LandSelect` (16 resume points) | `$D630-$D79A` | checked | 12 (the return from a land in 5) | final-trip, all-treasures | not measured; the take-off scene (bank 4 `$BE00`) runs as the original |
+| `BankTransfer` (1 resume point) | `$D8D9-$D9BD` | checked | 5 | all-treasures (no money), total-max (TOTAL at 99999) | not measured |
+| `Scene` (6 resume points) | `$DF27-$DFEC` | checked | 0 | scene-1, scene-2 | not measured |
+| `WaitA` (1 resume point) | `$D9BE` | checked | 5 | final-trip | not measured |
 | `FrameLoop` and its resume points | `$DB36-$DC3D` | checked | 12 | - | not measured; the scene request (`$DBC5`) |
 | `DeathOrWarp`, `Death_*` and `Respawn_*` | `$DC3E`, `$DD4E`, `$DD52` | checked | 10 | - | not measured |
 | `DeathPause` | `$DD23` | checked | 10 | - | not measured |
@@ -372,14 +376,16 @@ RAM-identical in replace mode.
 
 **Game flow** (branch `decomp/flow`, `src/decomp/flow.c`): the main task's flow in the fixed bank,
 `$D4E6-$E353`, and the boss trigger `$CF93-$D04C`. Decompiled: the title and difficulty select
-(`$D4E6-$D620`), the land load (`$D79B-$D8A5`), the per-land tables and palettes (`$D9CA-$DA0F`),
-the frame loop with pause, the boss checkpoint, death, warps, respawn, game over and land exit
-(`$DB36-$DF26`), the HUD timer (`$E28C-$E2FD`) and the boss trigger with the arena scroll
-(`$CF93-$D04C`): 1,961 of the 3,880 bytes, or 51% (tables inside the ranges included). Not yet: Land
-Select and the banking of money (`$D630-$D79A`, `$D8A6-$D9C9`), the scenes and the ending
-(`$DF27-$E28B`) and the Select refill `$E2FE` (Scrooge's), which still run as the original: the flow
-hands off to them. The flow has 18 sites: 7 entries that original code reaches and 11 stop sites
-(four of them, `$FFA5`, `$DFED`, `$D068` and bank 5 `$B580`, for Scrooge's message box).
+(`$D4E6-$D620`), Land Select with its tables, the bank transfer of money and the wait for A
+(`$D630-$D79A`, `$D8A6-$D9C9`), the land load (`$D79B-$D8A5`), the per-land tables and palettes
+(`$D9CA-$DA0F`), the frame loop with pause, the boss checkpoint, death, warps, respawn, game over and
+land exit (`$DB36-$DF26`), the special scenes with their tables (`$DF27-$DFEC`), the HUD timer
+(`$E28C-$E2FD`) and the boss trigger with the arena scroll (`$CF93-$D04C`): 2,814 of the 3,880 bytes,
+or 73% (tables inside the ranges included). Not yet: the scene set-up that Scrooge's code calls
+(`$DFED-$E053`), the ending (`$E054-$E28B`) and the Select refill `$E2FE` (Scrooge's), which still run
+as the original: the flow hands off to them. The flow has 18 sites: 8 entries that original code
+reaches and 10 stop sites (one for `Player_RowChange`'s hand-off to the row scroll `$C976`, and three
+for Scrooge's message box: the scene set-up `$DFED`, the block draw `$D068` and bank 5 `$B580`).
 
 Not decompiled yet, and still run as the original from the C:
 
@@ -654,6 +660,7 @@ the events check covers.
 
 What has not been verified:
 
-- Replace mode with the window build in real play.
+- Replace mode in long real play. One owner session on the window build's cycle host covered one
+  land, about 8,400 frames (docs/validation.md). The native player cannot run replace mode yet.
 - Paths no route or poke case reaches (table above). They are written from the code, and check mode
   will stop on any of them that is wrong, the first time a route reaches it.
