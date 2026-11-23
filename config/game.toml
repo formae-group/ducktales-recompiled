@@ -490,3 +490,17 @@ length = 8
 crc32 = 0x51C43FB5
 
 # END game flow
+
+# Obj_ClimbDown
+[[mod_function_hook]]
+id = "ducktales.decomp.F192"
+addr = 0xF192
+length = 8
+crc32 = 0xC368F144
+
+# Obj_ClimbUp
+[[mod_function_hook]]
+id = "ducktales.decomp.F1A8"
+addr = 0xF1A8
+length = 8
+crc32 = 0x4ACB0A80

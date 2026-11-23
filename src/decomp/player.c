@@ -17,11 +17,11 @@
  * and the routines not decompiled yet, which get the registers the original
  * gives them.
  *
- * The background probe and its snaps are the C of collision.c. Not
- * decompiled yet and called through Decomp_Call: one probe point $D350
- * (where the vertical contact test can fall through to), the climbing steps
- * $F192/$F1A8, the walls move $F0F8 and the HP refill $F812, which every
- * object kind shares.
+ * The background probe and its snaps are the C of collision.c, the climbing
+ * steps $F192/$F1A8 the C of objcommon.c. Not decompiled yet and called
+ * through Decomp_Call: one probe point $D350 (where the vertical contact
+ * test can fall through to), the walls move $F0F8 and the HP refill $F812,
+ * which every object kind shares.
  * Given to the original routine (Decomp_RunOriginal): Player_Update in modes
  * 15 and 16 (message and treasure: they wait for frames) and every call that
  * reaches the row change at $E8C0. The row change is task code (decomp.h)
@@ -31,6 +31,7 @@
 #include "decomp/decomp.h"
 #include "decomp/collision.h"
 #include "decomp/motion.h"
+#include "decomp/objcommon.h"
 #include "decomp/sound.h"
 
 #include "ducktales/events.h"
@@ -835,7 +836,7 @@ static void Player_Climb(void)
     gObjects->vyFrac[P_] = gObjects->speedFrac[P_];
     gObjects->vy[P_] = gObjects->speed[P_];
     if (dir != DT_PAD_UP) {
-        Decomp_Call(DT_CODE_CLIMB_DOWN, 0x10, 0, 3);
+        (void)Obj_ClimbDown(P_, 0x10, 3);
         if (gClimbClass != 2) {
             Player_LetGo();
         } else if (gObjects->y[P_] >= ROW_BOTTOM_Y) {
@@ -843,7 +844,7 @@ static void Player_Climb(void)
         }
         return;
     }
-    Decomp_Call(DT_CODE_CLIMB_UP, 0x14, 0, 3);
+    (void)Obj_ClimbUp(P_, 0x14, 3);
     if (gClimbClass != 2) {
         Player_LetGo();
     } else if (gObjects->y[P_] < ROW_TOP_Y_CLIMBING) {
