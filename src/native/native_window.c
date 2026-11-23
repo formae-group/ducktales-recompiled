@@ -178,7 +178,8 @@ static int run_off_screen(long frames, const char *input, int lag, const char *p
     if (input && !native_route_load(&route, input)) return 2;
     FILE *wav = wav_out ? fopen(wav_out, "wb") : NULL;
     if (wav_out && !wav) {
-        fprintf(stderr, "cannot write %s\n", wav_out);
+        fprintf(stderr, "cannot write %s
+", wav_out);
         return 2;
     }
     uint32_t wav_samples = 0;

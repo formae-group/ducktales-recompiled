@@ -1,0 +1,888 @@
+/*
+ * player.c - Scrooge, decompiled from the fixed bank (docs/player.md,
+ * docs/decompilation.md).
+ *
+ * Player_Update runs once per frame from the frame loop: it loads gravity,
+ * counts the invulnerability and power-up timers down and runs the handler of
+ * the current mode. Every routine below replaces the original one at its
+ * entry (decomp.c); the address of each is in its comment and in
+ * ducktales_symbols.h.
+ *
+ * Where the original passes a value in a register to code whose effect
+ * depends on it, the C passes it explicitly: "x" is the X register of the
+ * original at that point. It matters for three things only: the slot the
+ * walking code moves when it is entered without its own set-up (the push of
+ * $73 with no direction held), the scratch byte $00 a sound request leaves,
+ * and the routines not decompiled yet, which get the registers the original
+ * gives them.
+ *
+ * Not decompiled yet and called through Decomp_Call: the background probe
+ * $D120 and its snaps $D49A/$D4B2/$D4C8/$D4D6, the object contact tests
+ * $D202/$D291, the climbing steps $F192/$F1A8, the walls move $F0F8 and the
+ * Select refill $E2FE. Given to the original routine (Decomp_RunOriginal):
+ * Player_Update in modes 15 and 16 (message and treasure: they wait for
+ * frames) and every call that reaches the row change at $E8C0 (it scrolls
+ * the screen and re-enters the frame loop).
+ */
+#include "decomp/decomp.h"
+#include "decomp/motion.h"
+#include "decomp/sound.h"
+
+#include "ducktales/events.h"
+#include "ducktales/game.h"
+#include "ducktales/hud.h"
+#include "ducktales/objects.h"
+#include "ducktales/player.h"
+
+#define P_ PLAYER_SLOT
+
+#define PLAYER_GRAVITY       0x33
+#define PUSH_FRAMES          0x10
+#define JUMP_HOLD_MIN        0x042D  /* below this a released A ends a jump's rise */
+#define POGO_HOLD_MIN        0x05D2  /* the same for a pogo bounce */
+#define POGO_BOUNCE_VY       0x05A8
+#define KNOCKBACK_VY         0x0169
+#define KNOCKBACK_FRAMES     0x46    /* invulnerability after a hit */
+#define KNOCKBACK_END        0x3C    /* the knock-back ends 10 frames after the hit */
+#define DEATH_VY             0x0400
+#define WALK_SPEED           0x0180
+#define MOMENTUM_MAX         0x0280
+#define FALL_SPEED_LIMIT     0xF4    /* gravity stops while the velocity's whole byte is this */
+#define PIT_Y                0xD0
+#define ROW_BOTTOM_Y         0xE0
+#define ROW_TOP_Y_CLIMBING   0x39
+#define FINAL_ARENA_DROP_Y   0xC0
+#define POGO_CEILING_Y       0xA0
+#define CANE_HIT_FRAMES      5
+#define STUCK_SINK           4
+
+#define PROBE_RIGHT          0
+#define PROBE_LEFT           3
+#define PROBE_FEET           6
+#define PROBE_HEAD           9
+#define PROBE_CLIMB          12
+
+#define gProbeHits     RAM_U8(DT_ADDR_PROBE_HITS)
+#define gContactDepth  RAM_U8(DT_ADDR_CONTACT_DEPTH)
+#define gProbeFirst    RAM_U8(DT_ADDR_PROBE_FIRST)
+#define gProbeCount    RAM_U8(DT_ADDR_PROBE_COUNT)
+#define gProbeClass(i) RAM_U8(DT_ADDR_PROBE_CLASS + (i))
+#define gFeetClass     RAM_U8(DT_ADDR_FEET_CLASS)
+#define gClimbClass    RAM_U8(DT_ADDR_CLIMB_CLASS)
+#define gTemp08        RAM_U8(DT_ADDR_TEMP08)
+#define gTemp09        RAM_U8(DT_ADDR_TEMP09)
+#define gScratch0      RAM_U8(DT_ADDR_SCRATCH0)
+#define gScratch1      RAM_U8(DT_ADDR_SCRATCH1)
+
+static void Player_Air(void);
+static void Player_Walk(uint8_t x);
+static uint8_t Player_Fall(void);
+static void Player_StartJump(void);
+static void Player_Knockback(uint8_t x);
+static void Player_PitDeath(void);
+static void Player_Death(void);
+
+static void Player_SetAction(uint8_t action)
+{
+    gObjects->action[P_] = action;
+    gObjects->animFrame[P_] = 0;
+    gObjects->animTimer[P_] = 0;
+}
+
+/* $EA5E: after a vertical move, test the feet (moving down or standing) or
+ * the head (moving up) against the background and snap Y to the tile. Keeps
+ * the facing flags and ORs the probe results into the ones of the move. */
+static uint8_t Player_ProbeVertical(void)
+{
+    uint8_t vdir = gObjects->vdir[P_];
+    if (gTemp08 != gObjects->y[P_]) vdir = gTemp08 > gObjects->y[P_] ? 8 : 4;
+    gTemp08 = vdir;
+    uint8_t flags = gObjects->flags[P_], hits = gProbeHits, feet = gFeetClass;
+    gProbeFirst = (vdir & 4) ? PROBE_FEET : PROBE_HEAD;
+    gProbeCount = 2;
+    Regs r = Decomp_Call(DT_CODE_BG_PROBE, gProbeFirst, 0, 2);
+    if (gProbeHits & 1) {
+        if (gTemp08 & 4) r = Decomp_Call(DT_CODE_SNAP_FEET, 4, r.x, r.y);
+        else r = Decomp_Call(DT_CODE_SNAP_HEAD, 0, r.x, r.y);
+    }
+    gFeetClass |= feet;
+    gProbeHits |= hits;
+    gObjects->flags[P_] = flags;
+    return r.x;
+}
+
+/* $EA1A: the pose while airborne: pogo with B+Down (or in a bounce), the
+ * push pose kept against a wall, otherwise jumping. */
+static void Player_AirPose(void)
+{
+    if (gPlayerMode == PLAYER_MODE_CANE) return;
+    if (gPlayerMode == PLAYER_MODE_POGO || (gPadHeld & (DT_PAD_B | DT_PAD_DOWN)) == (DT_PAD_B | DT_PAD_DOWN)) {
+        if (gObjects->action[P_] == PLAYER_ACTION_POGO) return;
+        gObjects->action[P_] = PLAYER_ACTION_POGO;
+        gObjects->animTimer[P_] = 0x80;
+        gObjects->animFrame[P_] = 0;
+        return;
+    }
+    if (gObjects->action[P_] == PLAYER_ACTION_PUSH && (gPadHeld & (DT_PAD_LEFT | DT_PAD_RIGHT)) == gPlayerPushDir) return;
+    Player_SetAction(PLAYER_ACTION_JUMP);
+}
+
+/* $E970: falling, or standing (the floor stops the fall every frame). */
+static uint8_t Player_Fall(void)
+{
+    gProbeHits = 0;
+    gFeetClass = 0;
+    gObjects->vdir[P_] = 4;
+    if (gObjects->vy[P_] != FALL_SPEED_LIMIT) Obj_ApplyGravity(P_);
+    gTemp08 = gObjects->y[P_];
+    Obj_ApplyVelocityY(P_);
+    Regs r = Decomp_Call(DT_CODE_CONTACT_V, gObjects->y[P_], 0, 0);
+    if (!(r.p & P_C)) gObjects->y[P_] -= gContactDepth;
+    uint8_t x = Player_ProbeVertical();
+    if (gProbeHits & 1) {
+        Obj_SetVelocityY(P_, 0);
+        return x;
+    }
+    if (gPlayerMode == PLAYER_MODE_GROUND) gPlayerMode = PLAYER_MODE_AIR;
+    Player_AirPose();
+    return x;
+}
+
+/* $EA07: a jump's rise ends: no velocity left, fall from here. */
+static uint8_t Player_StopRising(void)
+{
+    Obj_SetVelocityY(P_, 0);
+    gObjects->yFrac[P_] = 0;
+    return Player_Fall();
+}
+
+/* $E9BA: rising. Releasing A cuts a jump or a pogo bounce once the velocity
+ * is below its hold threshold; a ceiling ends the rise. */
+static uint8_t Player_Rise(void)
+{
+    if (gObjects->vy[P_] & 0x80) return Player_Fall();
+    if (gPlayerMode < PLAYER_MODE_HURT) {
+        uint16_t hold = (gPlayerMode & 2) ? POGO_HOLD_MIN : JUMP_HOLD_MIN;
+        if (Obj_GetVelocityY(P_) < hold && !(gPadHeld & DT_PAD_A)) return Player_StopRising();
+    }
+    gObjects->vdir[P_] = 8;
+    gTemp08 = gObjects->y[P_];
+    gProbeHits = 0;
+    gFeetClass = 0;
+    Obj_ApplyVelocityY(P_);
+    Regs r = Decomp_Call(DT_CODE_CONTACT_V, gObjects->y[P_], 0, 0);
+    if (!(r.p & P_C)) gObjects->y[P_] += (uint8_t)(gContactDepth + 1);
+    Player_ProbeVertical();
+    if (gProbeHits & 1) return Player_StopRising();
+    Obj_ApplyGravity(P_);
+    Player_AirPose();
+    return 0;
+}
+
+/* $E593 / $E5C3: move one step right or left at the current speed, stop
+ * against objects ($D202) and walls (the side probes), and note which way the
+ * step went in the end. x is the slot moved (0 in every path but one). */
+static uint8_t Player_FinishMove(void)
+{
+    uint16_t before = (uint16_t)(gTemp09 << 8 | gTemp08);
+    uint16_t after = Obj_GetWorldX(P_);
+    gTemp08 = (uint8_t)(before - after);
+    if (before != after) gPlayerMoveSide = before >= after ? 1 : 2;
+    return 0;
+}
+
+static uint8_t Player_ProbeSide(void)
+{
+    uint8_t hits = gProbeHits;
+    gProbeFirst = (gPlayerMoveSide & 2) ? PROBE_LEFT : PROBE_RIGHT;
+    gProbeCount = 2;
+    Regs r = Decomp_Call(DT_CODE_BG_PROBE, gProbeFirst, 0, 2);
+    if (gProbeHits & 1) {
+        if (gPlayerMoveSide & 1) r = Decomp_Call(DT_CODE_SNAP_RIGHT, 1, r.x, r.y);
+        else r = Decomp_Call(DT_CODE_SNAP_LEFT, 0, r.x, r.y);
+    }
+    gProbeHits |= hits;
+    return r.x;
+}
+
+static uint8_t Player_MoveRight(uint8_t x)
+{
+    gPlayerMoveSide = 1;
+    Obj_MoveRight(x);
+    gObjects->flags[P_] |= 0x40;
+    Regs r = Decomp_Call(DT_CODE_CONTACT_H, gObjects->flags[P_], x, 0);
+    if (!(r.p & P_C)) {
+        if (gContactDepth > 0x0C) gContactDepth = 0x0C;
+        Obj_SetWorldX(P_, (uint16_t)(Obj_GetWorldX(P_) - gContactDepth));
+        Player_FinishMove();
+    }
+    return Player_ProbeSide();
+}
+
+static uint8_t Player_MoveLeft(uint8_t x)
+{
+    gPlayerMoveSide = 2;
+    Obj_MoveLeft(x);
+    gObjects->flags[P_] &= ~0x40;
+    Regs r = Decomp_Call(DT_CODE_CONTACT_H, gObjects->flags[P_], x, 0);
+    if (!(r.p & P_C)) {
+        if (gContactDepth > 0x0C) gContactDepth = 0x0C;
+        Obj_SetWorldX(P_, (uint16_t)(Obj_GetWorldX(P_) + gContactDepth));
+        Player_FinishMove();
+    }
+    return Player_ProbeSide();
+}
+
+/* $E57F: a step in the held direction. */
+static void Player_Move(uint8_t dir)
+{
+    gProbeHits = 0;
+    gPlayerMoveDir = dir;
+    gTemp08 = gObjects->worldX[P_];
+    gTemp09 = gObjects->worldPage[P_];
+    if (dir & DT_PAD_LEFT) Player_MoveLeft(0);
+    else Player_MoveRight(0);
+}
+
+/* $E495: walking at the normal speed, plus the one-frame push of $73. */
+static void Player_WalkNormal(uint8_t x)
+{
+    gPlayerMomentumDir = 0;
+    Obj_SetSpeed(P_, WALK_SPEED);
+    if (gPlayerPushRight) {
+        gPlayerPushRight = 0;
+        if (!(gPadHeld & (DT_PAD_LEFT | DT_PAD_RIGHT))) {
+            Player_MoveRight(x);
+            return;
+        }
+        uint32_t pos = (uint32_t)Obj_GetWorldX(P_) << 8 | gObjects->xFrac[P_];
+        pos += WALK_SPEED;
+        gObjects->xFrac[P_] = (uint8_t)pos;
+        Obj_SetWorldX(P_, (uint16_t)(pos >> 8));
+    }
+    uint8_t dir = gPadHeld & (DT_PAD_LEFT | DT_PAD_RIGHT);
+    if (dir) Player_Move(dir);
+}
+
+/* $E4A6: on slippery floor the speed builds up to MOMENTUM_MAX while a
+ * direction is held, slides down to WALK_SPEED when released and brakes
+ * faster when reversed. */
+static void Player_WalkMomentum(void)
+{
+    gPlayerSlippery = 0;
+    uint8_t dir = gPadHeld & (DT_PAD_LEFT | DT_PAD_RIGHT);
+    uint16_t speed = Obj_GetSpeed(P_);
+    if (gPlayerMomentumDir == 0) {
+        if (!dir) return;
+        gPlayerMomentumDir = dir;
+    } else if (!dir) {
+        speed -= 6;
+        Obj_SetSpeed(P_, speed);
+        if (speed < WALK_SPEED && speed >= 0x0100) {
+            gObjects->speedFrac[P_] = 0x80;
+            gPlayerMomentumDir = 0;
+            return;
+        }
+        if (gPlayerMomentumDir & 3) Player_Move(gPlayerMomentumDir & 3);
+        return;
+    } else if (dir != gPlayerMomentumDir) {
+        speed -= 0x10;
+        Obj_SetSpeed(P_, speed);
+        if (speed < WALK_SPEED && speed >= 0x0100) {
+            gObjects->speedFrac[P_] = 0x80;
+            gPlayerMomentumDir = 0;
+        }
+        if (gPlayerMomentumDir & 3) Player_Move(gPlayerMomentumDir & 3);
+        gObjects->flags[P_] = (uint8_t)((gObjects->flags[P_] & ~0x40) | ((gPadHeld & DT_PAD_RIGHT) ? 0x40 : 0));
+        return;
+    }
+    speed += 0x10;
+    Obj_SetSpeed(P_, speed);
+    if (speed >= MOMENTUM_MAX && speed < 0x0300) gObjects->speedFrac[P_] = 0x80;
+    if (gPlayerMomentumDir & 3) Player_Move(gPlayerMomentumDir & 3);
+}
+
+/* $E482: horizontal movement for this frame. */
+static void Player_Walk(uint8_t x)
+{
+    uint8_t action = gObjects->action[P_];
+    if (action != PLAYER_ACTION_JUMP && action != PLAYER_ACTION_POGO && (gPlayerSlippery || gPlayerMomentumDir)) {
+        Player_WalkMomentum();
+        return;
+    }
+    Player_WalkNormal(x);
+}
+
+/* $E3D8 / $E64F: B in the push pose swings the cane. */
+static void Player_StartCane(void)
+{
+    gObjects->action[P_] = PLAYER_ACTION_CANE;
+    gObjects->animTimer[P_] = 0;
+    gObjects->animFrame[P_] = 0;
+    gPlayerMode = PLAYER_MODE_CANE;
+}
+
+/* Mode 0, $E3B8: standing, walking, crouching, pushing. */
+static void Player_Ground(void)
+{
+    uint8_t x = Player_Fall();
+    if (gPlayerMode != PLAYER_MODE_GROUND) {
+        Player_Walk(x);
+        return;
+    }
+    if (gPadNew & DT_PAD_SELECT) x = Decomp_Call(DT_CODE_SELECT_REFILL, DT_PAD_SELECT, x, 0).x;
+    if (gObjects->action[P_] == PLAYER_ACTION_PUSH && (gPadNew & DT_PAD_B)) {
+        Player_StartCane();
+        Player_WalkNormal(x);
+        return;
+    }
+    if (gPadNew & DT_PAD_A) {
+        Player_StartJump();
+        return;
+    }
+    uint8_t held = gPadHeld & (DT_PAD_DOWN | DT_PAD_LEFT | DT_PAD_RIGHT);
+    if (!held) {
+        if (gObjects->action[P_] != PLAYER_ACTION_LANDED) {
+            Player_SetAction(PLAYER_ACTION_STAND);
+            gPlayerPushCounter = PUSH_FRAMES;
+        }
+        Player_Walk(x);
+        return;
+    }
+    if (held & DT_PAD_DOWN) {
+        if (gObjects->action[P_] != PLAYER_ACTION_CROUCH) {
+            gObjects->action[P_] = PLAYER_ACTION_CROUCH;
+            gObjects->animTimer[P_] = 0;
+            gObjects->animFrame[P_] = 0x80;
+            gObjects->pose[P_] = 1;
+            gPlayerPushCounter = PUSH_FRAMES;
+        }
+        return;
+    }
+    Player_Walk(x);
+    if (gProbeHits & 1) {
+        if (gObjects->action[P_] == PLAYER_ACTION_PUSH) return;
+        if (--gPlayerPushCounter == 0) {
+            gPlayerPushDir = gPadHeld & (DT_PAD_LEFT | DT_PAD_RIGHT);
+            Player_SetAction(PLAYER_ACTION_PUSH);
+            return;
+        }
+    } else {
+        gPlayerPushCounter = PUSH_FRAMES;
+    }
+    if (gObjects->action[P_] == PLAYER_ACTION_WALK) return;
+    Player_SetAction(PLAYER_ACTION_WALK);
+}
+
+/* $E3F2: take off with the land's jump velocity ($0790/$07A0). */
+static void Player_StartJump(void)
+{
+    Obj_SetVelocityY(P_, Player_GetJumpVelocity());
+    Decomp_RaiseEvent(EVENT_JUMP_START);
+    gPlayerMode = PLAYER_MODE_AIR;
+    Player_Air();
+}
+
+/* $E878: Scrooge left the screen row: in the final arena that ends the
+ * fight's drop; otherwise move to the row above or below if the map has one
+ * there. The move itself ($E8C0) scrolls the screen and goes back into the
+ * frame loop, so a call that gets there runs as the original. */
+static void Player_LeaveRow(void)
+{
+    if (gFinalArena && gObjects->y[P_] >= FINAL_ARENA_DROP_Y) {
+        RAM_U8(DT_ADDR_SCENE_STEP) = 0x0C;
+        gPlayerMode = PLAYER_MODE_MESSAGE;
+        return;
+    }
+    if (gCameraX != 0 || !(gCameraPage & 1)) return;
+    bool up = (gPadHeld & DT_PAD_UP) != 0;
+    uint8_t p = 0;
+    uint8_t step = Alu_Adc((uint8_t)(gMapStride ^ (up ? 0xFF : 0x00)), up ? 1 : 0, &p);
+    uint8_t screen = Alu_Adc(step, gCameraScreen, &p);
+    p = 0;
+    gScratch0 = Alu_Adc(step, gStreamScreen, &p);
+    uint16_t grid = Ram_GetU16(DT_ADDR_MAP_GRID, DT_ADDR_MAP_GRID + 1);
+    uint16_t cell = (uint16_t)(grid + screen);
+    if ((cell < GAME_RAM_SIZE ? gRam[cell] : Game_ReadRom(cell)) == 0xFF) return;
+    p = 0;
+    uint8_t row = Alu_Adc(gMapRow, up ? 0xFF : 0x01, &p);
+    if (row >= gMapRows) return;
+    Decomp_RunOriginal();
+}
+
+/* $E719: falling off the bottom of the screen drops into the row below. */
+static void Player_DropToRowBelow(void)
+{
+    if ((uint8_t)(gMapRow + 1) == gMapRows) return;
+    if (gCameraX & 0x80) {
+        gCameraPage++;
+        gCameraScreen++;
+    }
+    gCameraX = 0;
+    gStreamPos = (gStreamDir & 1) ? 0x1F : 0x20;
+    gPadHeld = DT_PAD_DOWN;
+    Player_LeaveRow();
+}
+
+/* $E740: with Up held, grab a climbable tile (class 2) near the middle of
+ * Scrooge: snap to its column and, when only one of the two probes of that
+ * side found it, to its row. */
+static void Player_GrabClimb(void)
+{
+    static const uint8_t COLUMN_OFFSET[4] = { 0x00, 0x00, 0x08, 0x08 };
+    if (!(gPadHeld & DT_PAD_UP)) return;
+    gProbeFirst = PROBE_CLIMB;
+    gProbeCount = 3;
+    Decomp_Call(DT_CODE_BG_PROBE, 3, 0, 0);
+    if (gProbeHits & 1) return;
+    int i;
+    for (i = 3; i >= 0; i--)
+        if (((gObjects->worldX[P_] + COLUMN_OFFSET[i]) & 0x0F) < 8 && gProbeClass(i) == 2) break;
+    if (i < 0) return;
+    uint8_t within = gObjects->worldX[P_] & 0x0F;
+    gScratch0 = within;
+    if (i >= 2) {
+        Obj_SetWorldX(P_, (uint16_t)(Obj_GetWorldX(P_) + 16 - within));
+        gPlayerMoveDir = 1;
+    } else {
+        Obj_SetWorldX(P_, (uint16_t)(Obj_GetWorldX(P_) - within));
+        gPlayerMoveDir = 2;
+    }
+    int pair = i & 2;
+    if (gProbeClass(pair) != gProbeClass(pair + 1)) {
+        uint8_t row = gObjects->y[P_] & 0xF0;
+        gObjects->y[P_] = (uint8_t)(((i & 1) ? (uint8_t)(row - 0x10) : row) | 8);
+    }
+    Player_SetAction(PLAYER_ACTION_CLIMB);
+    gPlayerMode = PLAYER_MODE_CLIMB;
+}
+
+/* Mode 1, $E63B: in the air. Landing bounces on the pogo when the middle
+ * feet probe stands on something solid with B held (and Down, or already
+ * bouncing); otherwise Scrooge lands. */
+static void Player_Air(void)
+{
+    gPlayerPushCounter = PUSH_FRAMES;
+    uint8_t x = Player_Rise();
+    if (gObjects->action[P_] == PLAYER_ACTION_PUSH && (gPadNew & DT_PAD_B)) {
+        Player_StartCane();
+        return;
+    }
+    if ((gObjects->vdir[P_] & 4) && (gProbeHits & 1)) {
+        bool bounce = false;
+        if (gObjects->action[P_] != PLAYER_ACTION_PUSH && gPlayerMode != PLAYER_MODE_CANE) {
+            bounce = (gFeetClass & 1) && (gPlayerMode == PLAYER_MODE_POGO || (gPadHeld & DT_PAD_DOWN)) &&
+                     (gPadHeld & DT_PAD_B) && (!RAM_U8(DT_ADDR_POGO_CEILING) || gObjects->y[P_] < POGO_CEILING_Y);
+            if (bounce) {
+                Sound_Request(SFX_POGO_BOUNCE, x);
+                Obj_SetVelocityY(P_, POGO_BOUNCE_VY);
+                gObjects->action[P_] = PLAYER_ACTION_POGO;
+                gObjects->animTimer[P_] = 0;
+                gObjects->pose[P_] = 2;
+                gObjects->animFrame[P_] = 0x81;
+                gPlayerMode = PLAYER_MODE_POGO;
+            } else {
+                Sound_Request(SFX_LAND, x);
+                gObjects->action[P_] = PLAYER_ACTION_LANDED;
+                gObjects->animTimer[P_] = 0;
+                gObjects->animFrame[P_] = 0x80;
+                gObjects->pose[P_] = 1;
+            }
+        }
+        if (!bounce) gPlayerMode = PLAYER_MODE_GROUND;
+    }
+    Player_Walk(x);
+    if (gObjects->action[P_] == PLAYER_ACTION_PUSH && !(gProbeHits & 1)) Player_SetAction(PLAYER_ACTION_JUMP);
+    Player_GrabClimb();
+    if ((gObjects->vdir[P_] & 4) && !(gPad2Held & DT_PAD_UP) && gObjects->y[P_] >= ROW_BOTTOM_Y) Player_DropToRowBelow();
+}
+
+/* Mode 2, $E7EA: a pogo bounce is the air mode with B standing in for A, so
+ * B alone keeps the bounce at full height. */
+static void Player_Pogo(void)
+{
+    gPlayerPushCounter = PUSH_FRAMES;
+    gScratch0 = (uint8_t)(gPadHeld << 1) & DT_PAD_A;
+    gPadHeld |= gScratch0;
+    if (!(gPadHeld & DT_PAD_A)) gPlayerMode = PLAYER_MODE_AIR;
+    Player_Air();
+}
+
+/* $E86D */
+static void Player_LetGo(void)
+{
+    gPlayerMode = PLAYER_MODE_GROUND;
+    Obj_SetVelocityY(P_, 0);
+}
+
+/* Mode 3, $E806: climbing. Up/Down step along the rope at the walking speed;
+ * A with neither lets go; leaving the rope's tiles drops off; the top or
+ * bottom of the screen changes the row. */
+static void Player_Climb(void)
+{
+    gPlayerPushCounter = PUSH_FRAMES;
+    uint8_t dir = gPadHeld & (DT_PAD_UP | DT_PAD_DOWN);
+    if (!dir) {
+        if (gPadNew & DT_PAD_A) {
+            Player_LetGo();
+            return;
+        }
+        gObjects->animTimer[P_] |= 0x80;
+        return;
+    }
+    gObjects->animTimer[P_] &= 0x7F;
+    if (gObjects->animTimer[P_] == 0) Sound_Request(SFX_CLIMB, dir);
+    gObjects->vyFrac[P_] = gObjects->speedFrac[P_];
+    gObjects->vy[P_] = gObjects->speed[P_];
+    if (dir != DT_PAD_UP) {
+        Decomp_Call(DT_CODE_CLIMB_DOWN, 0x10, 0, 3);
+        if (gClimbClass != 2) Player_LetGo();
+        else if (gObjects->y[P_] >= ROW_BOTTOM_Y) Player_LeaveRow();
+        return;
+    }
+    Decomp_Call(DT_CODE_CLIMB_UP, 0x14, 0, 3);
+    if (gClimbClass != 2) Player_LetGo();
+    else if (gObjects->y[P_] < ROW_TOP_Y_CLIMBING) Player_LeaveRow();
+}
+
+/* Mode 4, $E8EB: the cane swing. On animation frame 2 the swing tests the
+ * object in front; at frame 6 it returns to the ground (in the push pose if
+ * the push direction is still held). A connecting swing recoils for
+ * CANE_HIT_FRAMES. */
+static void Player_Cane(void)
+{
+    uint8_t x = Player_Rise();
+    if (gObjects->action[P_] == PLAYER_ACTION_CANE_HIT) {
+        if (gObjects->animTimer[P_] == 0 && gObjects->animFrame[P_] == 0 && --gObjects->timer[P_] == 0) {
+            gPlayerMode = PLAYER_MODE_GROUND;
+            gPlayerPushCounter = PUSH_FRAMES;
+        }
+        return;
+    }
+    if (gObjects->animFrame[P_] == 6) {
+        if (gPadHeld & gPlayerPushDir) {
+            Player_SetAction(PLAYER_ACTION_PUSH);
+            gPlayerMode = PLAYER_MODE_GROUND;
+            return;
+        }
+        gPlayerMode = PLAYER_MODE_GROUND;
+        gPlayerPushCounter = PUSH_FRAMES;
+    }
+    if (gObjects->animTimer[P_] != 0 || gObjects->animFrame[P_] != 2) return;
+    Sound_Request(SFX_CANE_SWING, x);
+    Regs r = Decomp_Call(DT_CODE_CONTACT_H, 0, x, 0);
+    if (!(r.p & P_C)) {
+        uint8_t kind = gObjects->kind[r.x];
+        if (kind == 0x08 || kind == 0x15 || kind == 0x42) return;
+    }
+    gObjects->animTimer[P_] = 0;
+    gObjects->animFrame[P_] = 0;
+    gObjects->timer[P_] = CANE_HIT_FRAMES;
+    gObjects->action[P_] = PLAYER_ACTION_CANE_HIT;
+    Sound_Request(SFX_CANE_HIT, r.x);
+}
+
+/* $EB5E without its event: on Easy only every other hit counts; the last
+ * full HP dot is marked lost. */
+static void Player_MarkDamage(void)
+{
+    if (gDifficulty == DIFFICULTY_EASY && (++gPlayerEasyHits & 1)) return;
+    uint8_t y = 0;
+    do {
+        if ((HUD_RECORD(0)[y] & 0x80) || HUD_RECORD(0)[y + 2] != 0) break;
+        y = (uint8_t)(y + 4);
+    } while (y != 0);
+    gRam[DT_ADDR_HUD_SPRITES - 2 + y] = DT_HP_DOT_LOST;
+}
+
+/* $EB5E: a hit costs an HP dot (EVENT_PLAYER_DAMAGED can cancel it). */
+static void Player_TakeDamage(void)
+{
+    if (Decomp_RaiseEvent(EVENT_PLAYER_DAMAGED) == EVENT_CANCEL) return;
+    Player_MarkDamage();
+}
+
+static bool Player_OutOfHp(void) { return HUD_RECORD(0)[2] != 0; }
+
+/* $EB4F: the first HP dot is gone: death. */
+static void Player_Die(void)
+{
+    gPlayerMode = PLAYER_MODE_DEATH;
+    gObjects->state[P_] &= 0xF0;
+    Player_Death();
+}
+
+/* $EADC: the hurt pose drifts one step against the facing, which is kept. */
+static void Player_HurtMove(uint8_t x)
+{
+    gObjects->action[P_] = PLAYER_ACTION_HURT;
+    if (gObjects->flags[P_] & 0x40) {
+        Player_MoveLeft(x);
+        gObjects->flags[P_] |= 0x40;
+    } else {
+        Player_MoveRight(x);
+        gObjects->flags[P_] &= ~0x40;
+    }
+}
+
+/* Mode 5, $EAB9: hurt, waiting for the invulnerability timer; when it is
+ * already over, the hit is taken now. */
+static void Player_Hurt(void)
+{
+    uint8_t timer = gPlayerInvulnerable;
+    if (timer == 0) {
+        gPlayerMode = PLAYER_MODE_GROUND;
+        Obj_SetSpeed(P_, WALK_SPEED);
+        Player_TakeDamage();
+        if (Player_OutOfHp()) Player_Die();
+        return;
+    }
+    if (timer >= 8) return;
+    Player_HurtMove(Player_Fall());
+}
+
+/* Mode 6, $EB00: knocked back by a harmful object. The first frame plays the
+ * hurt sound, throws Scrooge up, starts the invulnerability and takes the
+ * hit; then he drifts back under gravity until KNOCKBACK_END. */
+static void Player_Knockback(uint8_t x)
+{
+    if (gPlayerInvulnerable == 0) {
+        Sound_Request(SFX_HURT, x);
+        Obj_SetVelocityY(P_, KNOCKBACK_VY);
+        gObjects->animTimer[P_] = 0;
+        gObjects->animFrame[P_] = 0;
+        gObjects->speedFrac[P_] = 0;
+        gPlayerInvulnerable = KNOCKBACK_FRAMES;
+        Player_TakeDamage();
+        if (Player_OutOfHp()) {
+            Player_Die();
+            return;
+        }
+    }
+    x = (gObjects->vy[P_] & 0x80) ? Player_Fall() : Player_Rise();
+    if (gPlayerInvulnerable == KNOCKBACK_END) {
+        gObjects->speedFrac[P_] = 0x80;
+        gPlayerMode = PLAYER_MODE_GROUND;
+    }
+    gObjects->action[P_] = PLAYER_ACTION_HURT;
+    Player_HurtMove(x);
+}
+
+/* Mode 7, $EB82: stuck in snow; a jump frees him. */
+static void Player_Stuck(void)
+{
+    if (gObjects->action[P_] != PLAYER_ACTION_STUCK) {
+        Player_SetAction(PLAYER_ACTION_STUCK);
+        gObjects->y[P_] += STUCK_SINK;
+    }
+    if (gPadNew & DT_PAD_A) Player_StartJump();
+}
+
+/* $EBB4: fell into a pit: request the respawn that costs a life. */
+static void Player_PitDeath(void)
+{
+    uint8_t p = 0;
+    gRespawn = Alu_Adc(Alu_Adc(gLand, 0x87, &p), gBossCheckpoint, &p);
+    gPlayerMode = PLAYER_MODE_GROUND;
+    gPlayerHazard = 0;
+    gObjects->state[P_] = 0;
+    gPlayerEasyHits = 0;
+}
+
+/* Mode 8, $EBA7: falling; below PIT_Y it is a pit death. */
+static void Player_Pit(void)
+{
+    uint8_t x = Player_Fall();
+    if (gObjects->y[P_] < PIT_Y) {
+        Player_Walk(x);
+        return;
+    }
+    Player_PitDeath();
+}
+
+/* Mode 9, $EBC9: waits for A. */
+static void Player_Mode9(void)
+{
+    if (gPadNew & DT_PAD_A) gPlayerMode = PLAYER_MODE_GROUND;
+    gObjects->animTimer[P_] = 0;
+}
+
+/* Modes 10 and 11, $EBD9: carried (hypothesis); Down drops, A jumps off in
+ * mode 11, and a wall under the carrier knocks Scrooge back. */
+static void Player_Carried(void)
+{
+    gPlayerMoveDir = 2;
+    gPlayerMoveSide = 2;
+    gObjects->state[P_] = (gPadHeld & DT_PAD_DOWN) ? 0 : 0xA0;
+    if (gPlayerMode != PLAYER_MODE_CARRIED_A && !(gPadHeld & DT_PAD_DOWN) && gPadNew == DT_PAD_A) {
+        Player_StartJump();
+        return;
+    }
+    if (gObjects->state[P_] == 0) return;
+    gProbeFirst = PROBE_LEFT;
+    gProbeCount = 2;
+    Regs r = Decomp_Call(DT_CODE_BG_PROBE, 3, 0, 2);
+    if (!(gProbeHits & 1)) return;
+    gObjects->y[P_] += 8;
+    gPlayerMode = PLAYER_MODE_KNOCKBACK;
+    Player_Knockback(r.x);
+}
+
+/* Mode 12, $EC2D (not studied): a scripted fall and drift to the right. */
+static void Player_Mode12(void)
+{
+    if (gObjects->vdir[P_] != 0) {
+        gObjects->state[P_] = 0xE0;
+        Obj_ApplyGravity(P_);
+        Obj_ApplyVelocityY(P_);
+    } else if (gObjects->y[P_] >= 0x18) {
+        Obj_ApplyVelocityY(P_);
+        Obj_ApplyGravity(P_);
+    }
+    gPlayerMoveDir = 1;
+    gPlayerMoveSide = 1;
+    Decomp_Call(DT_CODE_MOVE_WITH_WALLS, 0, 0, 2);
+    if (gObjects->vdir[P_] == 0 && gObjects->worldPage[P_] == 7) {
+        gObjects->vdir[P_]++;
+        Obj_SetVelocityY(P_, 0);
+    }
+    if (gProbeHits & 1) {
+        gPlayerMode = PLAYER_MODE_GROUND;
+        Obj_SetSpeed(P_, WALK_SPEED);
+    }
+    Player_SetAction(PLAYER_ACTION_JUMP);
+}
+
+/* Mode 13, $EC9B: the death jump: up, then down off the screen, drifting
+ * right; off the bottom it is the pit death request. */
+static void Player_Death(void)
+{
+    if ((gObjects->state[P_] & 0x0F) == 0) {
+        gObjects->vdir[P_] = 0;
+        gObjects->animFrame[P_] = 0;
+        gObjects->action[P_] = PLAYER_ACTION_HURT;
+        gObjects->dir[P_] = 1;
+        Obj_SetVelocityY(P_, DEATH_VY);
+        Obj_SetSpeed(P_, 0x0080);
+        gObjects->state[P_]++;
+    }
+    if (gObjects->vdir[P_] == 0) {
+        Obj_ApplyVelocityY(P_);
+        Obj_ApplyGravity(P_);
+        if (gObjects->vy[P_] & 0x80) {
+            gObjects->vdir[P_]++;
+            Obj_SetVelocityY(P_, 0);
+            return;
+        }
+    } else {
+        Obj_ApplyGravity(P_);
+        Obj_ApplyVelocityY(P_);
+        if (gObjects->y[P_] >= ROW_BOTTOM_Y) {
+            Player_PitDeath();
+            return;
+        }
+    }
+    Obj_MoveRight(P_);
+}
+
+/* Mode 14, $ECFF */
+static void Player_Mode14(void) { gObjects->animTimer[P_] = 0; }
+
+/* $E354: once per frame from the frame loop. */
+static void Player_Update(const Regs *in)
+{
+    gGravity = PLAYER_GRAVITY;
+    if (gPlayerInvulnerable != 0 && !(gPlayerInvulnerable & 0x80)) gPlayerInvulnerable--;
+    if (gPlayerPower != 0 && !(gPlayerPower & 0x80)) {
+        if (gMusic != MUSIC_POWER) Music_Request(MUSIC_POWER, in->x);
+        uint8_t p = P_C;
+        RAM_U8(DT_ADDR_POWER_FRAMES) = Alu_Sbc(RAM_U8(DT_ADDR_POWER_FRAMES), 1, &p);
+        RAM_U8(DT_ADDR_POWER_FRAMES + 1) = Alu_Sbc(RAM_U8(DT_ADDR_POWER_FRAMES + 1), 0, &p);
+        if (Player_GetPowerFrames() == 0) {
+            gPlayerPower = 0;
+            Music_Request(gLand, in->x);
+        }
+    }
+    uint8_t mode = gPlayerMode;
+    gScratch0 = Game_ReadRom((uint16_t)(DT_CODE_MODE_LO + mode));
+    gScratch1 = Game_ReadRom((uint16_t)(DT_CODE_MODE_HI + mode));
+    switch (mode) {
+    case PLAYER_MODE_GROUND: Player_Ground(); break;
+    case PLAYER_MODE_AIR: Player_Air(); break;
+    case PLAYER_MODE_POGO: Player_Pogo(); break;
+    case PLAYER_MODE_CLIMB: Player_Climb(); break;
+    case PLAYER_MODE_CANE: Player_Cane(); break;
+    case PLAYER_MODE_HURT: Player_Hurt(); break;
+    case PLAYER_MODE_KNOCKBACK: Player_Knockback(mode); break;
+    case PLAYER_MODE_STUCK: Player_Stuck(); break;
+    case PLAYER_MODE_PIT: Player_Pit(); break;
+    case PLAYER_MODE_9: Player_Mode9(); break;
+    case PLAYER_MODE_CARRIED_A:
+    case PLAYER_MODE_CARRIED_B: Player_Carried(); break;
+    case PLAYER_MODE_12: Player_Mode12(); break;
+    case PLAYER_MODE_DEATH: Player_Death(); break;
+    case PLAYER_MODE_14: Player_Mode14(); break;
+    default:
+        Decomp_RunOriginal();
+        break;
+    }
+}
+
+/* ---- site adapters ---- */
+
+static void Run_Update(Regs *r) { Player_Update(r); }
+static void Run_Ground(Regs *r) { (void)r; Player_Ground(); }
+static void Run_StartJump(Regs *r) { (void)r; Player_StartJump(); }
+static void Run_Walk(Regs *r) { Player_Walk(r->x); }
+static void Run_MoveRight(Regs *r) { r->x = Player_MoveRight(r->x); }
+static void Run_MoveLeft(Regs *r) { r->x = Player_MoveLeft(r->x); }
+static void Run_Air(Regs *r) { (void)r; Player_Air(); }
+static void Run_GrabClimb(Regs *r) { (void)r; Player_GrabClimb(); }
+static void Run_Pogo(Regs *r) { (void)r; Player_Pogo(); }
+static void Run_Climb(Regs *r) { (void)r; Player_Climb(); }
+static void Run_Cane(Regs *r) { (void)r; Player_Cane(); }
+static void Run_Fall(Regs *r) { r->x = Player_Fall(); }
+static void Run_Rise(Regs *r) { r->x = Player_Rise(); }
+static void Run_ProbeVertical(Regs *r) { r->x = Player_ProbeVertical(); }
+static void Run_Hurt(Regs *r) { (void)r; Player_Hurt(); }
+static void Run_Knockback(Regs *r) { Player_Knockback(r->x); }
+static void Run_TakeDamage(Regs *r) { (void)r; Player_MarkDamage(); }
+static void Run_Stuck(Regs *r) { (void)r; Player_Stuck(); }
+static void Run_Pit(Regs *r) { (void)r; Player_Pit(); }
+static void Run_PitDeath(Regs *r) { (void)r; Player_PitDeath(); }
+static void Run_Mode9(Regs *r) { (void)r; Player_Mode9(); }
+static void Run_Carried(Regs *r) { (void)r; Player_Carried(); }
+static void Run_Mode12(Regs *r) { (void)r; Player_Mode12(); }
+static void Run_Death(Regs *r) { (void)r; Player_Death(); }
+static void Run_Mode14(Regs *r) { (void)r; Player_Mode14(); }
+
+/* The damage site's event runs at its own [[mod_function_hook]] (declared
+ * first, so it fires first); the adapter is the routine without it. */
+const DecompRoutine gPlayerRoutines[] = {
+    { DT_CODE_PLAYER_UPDATE, "ducktales.decomp.E354", "Player_Update", Run_Update, 0 },
+    { DT_CODE_PLAYER_GROUND, "ducktales.decomp.E3B8", "Player_Ground", Run_Ground, 0 },
+    { DT_CODE_JUMP_START, "ducktales.decomp.E3F2", "Player_StartJump", Run_StartJump, 0 },
+    { DT_CODE_PLAYER_WALK, "ducktales.decomp.E482", "Player_Walk", Run_Walk, 0 },
+    { DT_CODE_MOVE_RIGHT, "ducktales.decomp.E593", "Player_MoveRight", Run_MoveRight, OUT_X },
+    { DT_CODE_MOVE_LEFT, "ducktales.decomp.E5C3", "Player_MoveLeft", Run_MoveLeft, OUT_X },
+    { DT_CODE_PLAYER_AIR, "ducktales.decomp.E63B", "Player_Air", Run_Air, 0 },
+    { DT_CODE_GRAB_CLIMB, "ducktales.decomp.E740", "Player_GrabClimb", Run_GrabClimb, 0 },
+    { DT_CODE_PLAYER_POGO, "ducktales.decomp.E7EA", "Player_Pogo", Run_Pogo, 0 },
+    { DT_CODE_PLAYER_CLIMB, "ducktales.decomp.E806", "Player_Climb", Run_Climb, 0 },
+    { DT_CODE_PLAYER_CANE, "ducktales.decomp.E8EB", "Player_Cane", Run_Cane, 0 },
+    { DT_CODE_PLAYER_FALL, "ducktales.decomp.E970", "Player_Fall", Run_Fall, OUT_X },
+    { DT_CODE_PLAYER_RISE, "ducktales.decomp.E9BA", "Player_Rise", Run_Rise, OUT_X },
+    { DT_CODE_PROBE_VERTICAL, "ducktales.decomp.EA5E", "Player_ProbeVertical", Run_ProbeVertical, OUT_X },
+    { DT_CODE_PLAYER_HURT, "ducktales.decomp.EAB9", "Player_Hurt", Run_Hurt, 0 },
+    { DT_CODE_PLAYER_KNOCKBACK, "ducktales.decomp.EB00", "Player_Knockback", Run_Knockback, 0 },
+    { DT_CODE_TAKE_DAMAGE, "ducktales.decomp.EB5E", "Player_TakeDamage", Run_TakeDamage, 0 },
+    { DT_CODE_PLAYER_STUCK, "ducktales.decomp.EB82", "Player_Stuck", Run_Stuck, 0 },
+    { DT_CODE_PLAYER_PIT, "ducktales.decomp.EBA7", "Player_Pit", Run_Pit, 0 },
+    { DT_CODE_PIT_DEATH, "ducktales.decomp.EBB4", "Player_PitDeath", Run_PitDeath, 0 },
+    { DT_CODE_PLAYER_MODE9, "ducktales.decomp.EBC9", "Player_Mode9", Run_Mode9, 0 },
+    { DT_CODE_PLAYER_CARRIED, "ducktales.decomp.EBD9", "Player_Carried", Run_Carried, 0 },
+    { DT_CODE_PLAYER_MODE12, "ducktales.decomp.EC2D", "Player_Mode12", Run_Mode12, 0 },
+    { DT_CODE_PLAYER_DEATH, "ducktales.decomp.EC9B", "Player_Death", Run_Death, 0 },
+    { DT_CODE_PLAYER_MODE14, "ducktales.decomp.ECFF", "Player_Mode14", Run_Mode14, 0 },
+};
+const int gPlayerRoutineCount = sizeof gPlayerRoutines / sizeof gPlayerRoutines[0];

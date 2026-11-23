@@ -36,6 +36,9 @@ ROM-derived code locally.
   sharp scaling, 8:7 pixel aspect and overscan crop.
 - **Enhancements.** Optional gameplay changes, all off by default; when off, the original code runs.
 - **Input.** Keyboard, mouse and SDL game controllers, fully rebindable.
+- **A start on decompilation.** A typed C API over the game's RAM, game events for mods, and
+  Scrooge's per-frame routines decompiled to C, checked against the original on every call
+  (`--decomp check`) and able to run in its place (`--decomp replace`). Off by default.
 
 ## Supported ROM
 
@@ -195,6 +198,7 @@ the CPU registers, and must be identical on every frame. The oracle's hashes are
 | `tests/verify_routes.py` | Recompiled, interpreter and oracle equality on every route |
 | `tests/sprites_test.py` | Sprite presentation versus the machine picture |
 | `tests/enhancements_test.py` | Each enhancement's effect, and identity with the original when off |
+| `tests/decomp_test.py` | Decompiled routines against the original on every call, and the routes with them running in its place |
 | `tests/window_smoke.py` | Start-up, ROM import and refusal, settings persistence, every menu tab and category |
 | `tests/package_test.py` | The release ZIP's contents, and the game starting from it unpacked |
 
@@ -214,6 +218,7 @@ build\headless\Release\ducktales.exe "roms\DuckTales (USA).nes" --input tests\ro
 | [rendering.md](docs/rendering.md) | Screen data, sprite builder, flicker analysis |
 | [presentation.md](docs/presentation.md) | Pacing, DPI, scaling and picture measurements |
 | [native-runtime.md](docs/native-runtime.md) | Native runtime, the player build and lag analysis |
+| [decompilation.md](docs/decompilation.md) | Game API, events and the decompiled routines |
 | [memory-map.md](docs/memory-map.md), [functions.md](docs/functions.md) | RAM and routine reference |
 | [player.md](docs/player.md), [game-state.md](docs/game-state.md), [levels.md](docs/levels.md), [audio.md](docs/audio.md) | Reverse-engineering notes |
 

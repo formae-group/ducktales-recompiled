@@ -1,12 +1,12 @@
 #include "enhancements.h"
-#include "enhancements_sites.h"
 #include "ducktales_jump.h"
-#include "ducktales_symbols.h"
+
+#include "ducktales/events.h"
+#include "ducktales/game.h"
+#include "ducktales/hud.h"
 
 #include "cpu6502.h"
 #include "cyc_mod.h"
-#include "mod_function_hooks.h"
-#include "mod_runtime.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -75,70 +75,67 @@ const char *dt_enh_format(DtEnh e, int value, char *buf, unsigned cap)
     return buf;
 }
 
-/* ---- the hook callbacks (cyc_hooks.h): before the site's instruction ---- */
+/* ---- the event handlers (ducktales/events.h) ---- */
 
-/* The damage routine's entry: return as its RTS would, so no dot is marked
- * and the Easy hit counter $5F is left alone. */
-static int on_damage(uint16_t addr)
+/* A hit about to cost an HP dot: cancel it, so no dot is marked and the Easy
+ * hit counter $5F is left alone. The knock-back is done by the callers and
+ * still happens. */
+static EventResult no_damage(EventId id, void *user)
 {
-    (void)addr;
+    (void)id;
+    (void)user;
     s_applied[DT_ENH_NO_DAMAGE]++;
-    return 1;
+    return EVENT_CANCEL;
 }
 
-/* Before the timer decrements $B0: give it a full second again, so the
+/* A frame of the HUD timer: cancel it, so $B0 gets a full second again, the
  * decrement never reaches 0 and the HUD time never drops. */
-static int on_timer_tick(uint16_t addr)
+static EventResult infinite_time(EventId id, void *user)
 {
-    (void)addr;
-    if (cyc_mod_peek(DT_ADDR_TICK_FRAMES) == 1) s_applied[DT_ENH_INFINITE_TIME]++;
-    cyc_mod_poke(DT_ADDR_TICK_FRAMES, DT_TICK_FRAMES_RELOAD);
-    return 0;
+    (void)id;
+    (void)user;
+    if (gTickFrames == 1) s_applied[DT_ENH_INFINITE_TIME]++;
+    return EVENT_CANCEL;
 }
 
-/* Before the lives decrement: one more, so the decrement leaves the count as
- * it was. The counter is 1-9 here (0 went to game over before this point). */
-static int on_life_lost(uint16_t addr)
+/* A death about to cost a life: cancel it, so the count stays. The counter
+ * is 1-9 here (0 went to game over before this point). */
+static EventResult infinite_lives(EventId id, void *user)
 {
-    (void)addr;
-    uint8_t lives = cyc_mod_peek(DT_ADDR_LIVES);
-    if (lives == 0xFF) return 0;
-    cyc_mod_poke(DT_ADDR_LIVES, (uint8_t)(lives + 1));
+    (void)id;
+    (void)user;
+    if (gLives == 0xFF) return EVENT_CONTINUE;
     s_applied[DT_ENH_INFINITE_LIVES]++;
-    return 0;
+    return EVENT_CANCEL;
 }
 
-/* After the title set-up copied the HUD template (lives = 2): the player's
- * count instead. */
-static int on_new_game_lives(uint16_t addr)
+/* The title set-up copied the HUD template (lives = 2): the player's count
+ * instead. */
+static EventResult start_lives(EventId id, void *user)
 {
-    (void)addr;
-    cyc_mod_poke(DT_ADDR_LIVES, (uint8_t)s_value[DT_ENH_START_LIVES]);
+    (void)id;
+    (void)user;
+    gLives = (uint8_t)s_value[DT_ENH_START_LIVES];
     s_applied[DT_ENH_START_LIVES]++;
-    return 0;
+    return EVENT_CONTINUE;
 }
 
-static const char *const HOOK_ID[DT_ENH_COUNT] = {
-    [DT_ENH_NO_DAMAGE] = DT_SITE_DAMAGE_ID,
-    [DT_ENH_INFINITE_TIME] = DT_SITE_TIMER_TICK_ID,
-    [DT_ENH_INFINITE_LIVES] = DT_SITE_LIFE_LOST_ID,
-    [DT_ENH_START_LIVES] = DT_SITE_NEW_GAME_LIVES_ID,
+static const struct { EventId event; EventHandler fn; } HANDLER[DT_ENH_COUNT] = {
+    [DT_ENH_NO_DAMAGE] = { EVENT_PLAYER_DAMAGED, no_damage },
+    [DT_ENH_INFINITE_TIME] = { EVENT_TIMER_TICK, infinite_time },
+    [DT_ENH_INFINITE_LIVES] = { EVENT_LIFE_LOST, infinite_lives },
+    [DT_ENH_START_LIVES] = { EVENT_NEW_GAME, start_lives },
 };
-
-NES_MOD_CONSTRUCTOR(dt_register_enhancement_hooks)
-{
-    nes_mod_register_function_entry_plugin(DT_SITE_DAMAGE_ID, DT_SITE_DAMAGE, on_damage);
-    nes_mod_register_function_entry_plugin(DT_SITE_TIMER_TICK_ID, DT_SITE_TIMER_TICK, on_timer_tick);
-    nes_mod_register_function_entry_plugin(DT_SITE_LIFE_LOST_ID, DT_SITE_LIFE_LOST, on_life_lost);
-    nes_mod_register_function_entry_plugin(DT_SITE_NEW_GAME_LIVES_ID, DT_SITE_NEW_GAME_LIVES, on_new_game_lives);
-}
 
 bool dt_enh_set(DtEnh e, int value)
 {
     if (e >= DT_ENH_COUNT || value < INFO[e].min || value > INFO[e].max) return false;
     if (e == DT_ENH_JUMP_SCALE && !dt_jump_set_scale(value)) return false;
     s_value[e] = value;
-    if (HOOK_ID[e]) nes_mod_set_function_hook_enabled(HOOK_ID[e], value != INFO[e].stock);
+    if (HANDLER[e].fn) {
+        if (value != INFO[e].stock) Events_On(HANDLER[e].event, HANDLER[e].fn, NULL);
+        else Events_Off(HANDLER[e].event, HANDLER[e].fn, NULL);
+    }
     return true;
 }
 

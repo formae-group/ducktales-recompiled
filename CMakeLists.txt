@@ -38,13 +38,21 @@ if(DUCKTALES_HEADLESS)
     list(APPEND _ducktales_options HEADLESS)
 endif()
 # The port's systems layer (docs/architecture.md): typed game state, the hook
-# sites it alters behaviour at, settings and options. Both hosts link it.
+# sites it alters behaviour at, settings and options; the typed game API and
+# its events (include/ducktales/) and the decompiled routines (src/decomp/,
+# docs/decompilation.md). Both hosts link it.
 set(_ducktales_extras
     "${CMAKE_SOURCE_DIR}/src/game/ducktales_state.c"
+    "${CMAKE_SOURCE_DIR}/src/game/game_ram.c"
+    "${CMAKE_SOURCE_DIR}/src/game/events.c"
     "${CMAKE_SOURCE_DIR}/src/game/ducktales_jump.c"
     "${CMAKE_SOURCE_DIR}/src/game/enhancements.c"
     "${CMAKE_SOURCE_DIR}/src/host/ducktales_sprites.c"
     "${CMAKE_SOURCE_DIR}/src/host/ducktales_host.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/decomp.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/motion.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/sound.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/player.c"
     "${CMAKE_SOURCE_DIR}/src/host/ducktales_settings.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_render.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_cycle.c")
@@ -86,7 +94,7 @@ nesrecomp_add_cycle_game(ducktales
     GAME_CONFIG "${CMAKE_SOURCE_DIR}/config/game.toml"
     ${_ducktales_options}
     HOST_EXTRAS ${_ducktales_extras})
-target_include_directories(ducktales PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_include_directories(ducktales PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/include")
 if(NOT DUCKTALES_HEADLESS)
     # The ROM identity the first-run import checks (docs/rom.md: SHA-256 of
     # the whole file), taken from the ROM this build was generated from.
@@ -173,7 +181,7 @@ set(_native_runtime
 function(ducktales_native_target target)
     include("${CMAKE_CURRENT_BINARY_DIR}/cycle-ducktales/sources.cmake")
     target_sources(${target} PRIVATE ${_native_runtime} ${CYC_PROJECT_SOURCES})
-    target_include_directories(${target} PRIVATE "${CMAKE_SOURCE_DIR}/src" "${_nes_cyc}"
+    target_include_directories(${target} PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/include" "${_nes_cyc}"
         "${NESRECOMP_ROOT}/runner/include" "${NESRECOMP_ROOT}")
     target_compile_definitions(${target} PRIVATE NESRECOMP_NATIVE_INTERVALS=0
         NESRECOMP_HEADROOM_COUNTERS=0 NESRECOMP_NATIVE_PRG_GUARDS=0 _CRT_SECURE_NO_WARNINGS)
@@ -201,6 +209,8 @@ if(NOT DUCKTALES_HEADLESS)
         "${CMAKE_SOURCE_DIR}/src/native/native_render.c"
         "${CMAKE_SOURCE_DIR}/src/native/native_cycle.c"
         "${CMAKE_SOURCE_DIR}/src/game/ducktales_state.c"
+        "${CMAKE_SOURCE_DIR}/src/game/game_ram.c"
+        "${CMAKE_SOURCE_DIR}/src/game/events.c"
         "${CMAKE_SOURCE_DIR}/src/game/ducktales_jump.c"
         "${CMAKE_SOURCE_DIR}/src/game/enhancements.c"
         "${CMAKE_SOURCE_DIR}/src/host/ducktales_sprites.c"

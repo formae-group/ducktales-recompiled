@@ -14,46 +14,270 @@ cycle_seed_file = "ducktales.seeds"
 bank = 7
 addr = 0xD4E6
 
-# Jump experiment hook site (src/game/ducktales_jump.c, docs/architecture.md).
-# The instruction that follows the jump start's two velocity stores; the
-# content key (CRC32 of the 8 bytes there) keeps the site tied to this
-# revision's code. Nothing fires unless --jump-scale / [Game] JumpScale is
-# set to something other than 100.
-[[mod_function_hook]]
-id = "ducktales.jump-scale"
-addr = 0xE3FE
-length = 8
-crc32 = 0xC37F991F
+# Event sites (src/game/events.c, docs/decompilation.md "Events"). Each
+# fires only while its event has a handler (an enhancement that differs from
+# the original game, or a mod); the content keys are CRC32s of the 8 bytes at
+# each site. They come before the decompilation's sites, so at an address
+# both use ($EB5E) the event runs first.
 
-# Enhancement hook sites (src/game/enhancements.c, docs/architecture.md
-# "Enhancements"). Each fires only while its enhancement differs from the
-# original game; the content keys are CRC32s of the 8 bytes at each site.
-
-# Entry of the damage routine; the callback returns from it (No damage).
+# Entry of the damage routine; a cancel returns from it.
 [[mod_function_hook]]
-id = "ducktales.no-damage"
+id = "ducktales.event.player-damaged"
 addr = 0xEB5E
 length = 8
 crc32 = 0xE8776DC5
 
-# The timer's decrement of the frames-per-tick counter $B0 (Infinite time).
+# The timer's decrement of the frames-per-tick counter $B0.
 [[mod_function_hook]]
-id = "ducktales.infinite-time"
+id = "ducktales.event.timer-tick"
 addr = 0xE2A6
 length = 8
 crc32 = 0x1FF60228
 
-# The only decrement of the lives counter $0361 (Infinite lives).
+# The only decrement of the lives counter $0361.
 [[mod_function_hook]]
-id = "ducktales.infinite-lives"
+id = "ducktales.event.life-lost"
 addr = 0xDCB0
 length = 8
 crc32 = 0x5E982A4B
 
-# After the title set-up copied the HUD template that sets $0361 to 2
-# (Extra lives at start).
+# After the title set-up copied the HUD template that sets $0361 to 2.
 [[mod_function_hook]]
-id = "ducktales.start-lives"
+id = "ducktales.event.new-game"
 addr = 0xD59C
 length = 8
 crc32 = 0xB92CE193
+
+# The instruction that follows the jump start's two velocity stores.
+[[mod_function_hook]]
+id = "ducktales.event.jump-start"
+addr = 0xE3FE
+length = 8
+crc32 = 0xC37F991F
+
+# The decrement of the boss hits left $B1, reached only for a hit that counts.
+[[mod_function_hook]]
+id = "ducktales.event.boss-hit"
+addr = 0xF6DD
+length = 8
+crc32 = 0xA509A34C
+
+# Decompiled routines (src/decomp/, docs/decompilation.md): one site at each
+# routine's entry, enabled only with --decomp check or replace.
+
+# Obj_ApplyVelocityY
+[[mod_function_hook]]
+id = "ducktales.decomp.F2A1"
+addr = 0xF2A1
+length = 8
+crc32 = 0x94C209F4
+
+# Obj_ApplyGravity
+[[mod_function_hook]]
+id = "ducktales.decomp.F2B5"
+addr = 0xF2B5
+length = 8
+crc32 = 0xC861F10C
+
+# Obj_MoveRight
+[[mod_function_hook]]
+id = "ducktales.decomp.F234"
+addr = 0xF234
+length = 8
+crc32 = 0x520D3935
+
+# Obj_MoveLeft
+[[mod_function_hook]]
+id = "ducktales.decomp.F252"
+addr = 0xF252
+length = 8
+crc32 = 0x7E95A00A
+
+# Music_Request
+[[mod_function_hook]]
+id = "ducktales.decomp.F752"
+addr = 0xF752
+length = 8
+crc32 = 0xE4E4E38D
+
+# Sound_Request
+[[mod_function_hook]]
+id = "ducktales.decomp.F754"
+addr = 0xF754
+length = 8
+crc32 = 0x8E2E80FD
+
+# Player_Update
+[[mod_function_hook]]
+id = "ducktales.decomp.E354"
+addr = 0xE354
+length = 8
+crc32 = 0x981F7EF4
+
+# Player_Ground
+[[mod_function_hook]]
+id = "ducktales.decomp.E3B8"
+addr = 0xE3B8
+length = 8
+crc32 = 0x9510AD3B
+
+# Player_StartJump
+[[mod_function_hook]]
+id = "ducktales.decomp.E3F2"
+addr = 0xE3F2
+length = 8
+crc32 = 0x3A9326C0
+
+# Player_Walk
+[[mod_function_hook]]
+id = "ducktales.decomp.E482"
+addr = 0xE482
+length = 8
+crc32 = 0xF84BF35C
+
+# Player_MoveRight
+[[mod_function_hook]]
+id = "ducktales.decomp.E593"
+addr = 0xE593
+length = 8
+crc32 = 0x1AB47A51
+
+# Player_MoveLeft
+[[mod_function_hook]]
+id = "ducktales.decomp.E5C3"
+addr = 0xE5C3
+length = 8
+crc32 = 0x6706D75E
+
+# Player_Air
+[[mod_function_hook]]
+id = "ducktales.decomp.E63B"
+addr = 0xE63B
+length = 8
+crc32 = 0xA8B27F84
+
+# Player_GrabClimb
+[[mod_function_hook]]
+id = "ducktales.decomp.E740"
+addr = 0xE740
+length = 8
+crc32 = 0xBD1DE187
+
+# Player_Pogo
+[[mod_function_hook]]
+id = "ducktales.decomp.E7EA"
+addr = 0xE7EA
+length = 8
+crc32 = 0x3DD17A9F
+
+# Player_Climb
+[[mod_function_hook]]
+id = "ducktales.decomp.E806"
+addr = 0xE806
+length = 8
+crc32 = 0xC87CD9B9
+
+# Player_Cane
+[[mod_function_hook]]
+id = "ducktales.decomp.E8EB"
+addr = 0xE8EB
+length = 8
+crc32 = 0x1EF17231
+
+# Player_Fall
+[[mod_function_hook]]
+id = "ducktales.decomp.E970"
+addr = 0xE970
+length = 8
+crc32 = 0xE7054618
+
+# Player_Rise
+[[mod_function_hook]]
+id = "ducktales.decomp.E9BA"
+addr = 0xE9BA
+length = 8
+crc32 = 0xB2127B5B
+
+# Player_ProbeVertical
+[[mod_function_hook]]
+id = "ducktales.decomp.EA5E"
+addr = 0xEA5E
+length = 8
+crc32 = 0xC7D4B7F0
+
+# Player_Hurt
+[[mod_function_hook]]
+id = "ducktales.decomp.EAB9"
+addr = 0xEAB9
+length = 8
+crc32 = 0xB039F37B
+
+# Player_Knockback
+[[mod_function_hook]]
+id = "ducktales.decomp.EB00"
+addr = 0xEB00
+length = 8
+crc32 = 0x8441AD8D
+
+# Player_TakeDamage
+[[mod_function_hook]]
+id = "ducktales.decomp.EB5E"
+addr = 0xEB5E
+length = 8
+crc32 = 0xE8776DC5
+
+# Player_Stuck
+[[mod_function_hook]]
+id = "ducktales.decomp.EB82"
+addr = 0xEB82
+length = 8
+crc32 = 0x9982568C
+
+# Player_Pit
+[[mod_function_hook]]
+id = "ducktales.decomp.EBA7"
+addr = 0xEBA7
+length = 8
+crc32 = 0xCAB2E625
+
+# Player_PitDeath
+[[mod_function_hook]]
+id = "ducktales.decomp.EBB4"
+addr = 0xEBB4
+length = 8
+crc32 = 0xDB4C6AB4
+
+# Player_Mode9
+[[mod_function_hook]]
+id = "ducktales.decomp.EBC9"
+addr = 0xEBC9
+length = 8
+crc32 = 0x7BF1D3EB
+
+# Player_Carried
+[[mod_function_hook]]
+id = "ducktales.decomp.EBD9"
+addr = 0xEBD9
+length = 8
+crc32 = 0x97C8C4AB
+
+# Player_Mode12
+[[mod_function_hook]]
+id = "ducktales.decomp.EC2D"
+addr = 0xEC2D
+length = 8
+crc32 = 0xC28A9A22
+
+# Player_Death
+[[mod_function_hook]]
+id = "ducktales.decomp.EC9B"
+addr = 0xEC9B
+length = 8
+crc32 = 0x19983867
+
+# Player_Mode14
+[[mod_function_hook]]
+id = "ducktales.decomp.ECFF"
+addr = 0xECFF
+length = 8
+crc32 = 0xC7E90C41
