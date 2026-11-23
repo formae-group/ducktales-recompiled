@@ -1676,6 +1676,39 @@ static void Obj_Charger(uint8_t x)
     Obj_SetVelocityY(x, 0x02D4);
 }
 
+/* Kind $20 ($9E51): an enemy that bobs up and down at 1 px a frame, first
+ * for 22 frames, then turning every 44; it faces Scrooge as it appears. A
+ * hit beats it. */
+static void Obj_Bobber(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_BOBBER, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0) {
+        Obj_Defeat(x);
+        return;
+    }
+    if (Step(x) == 0) {
+        Obj_SetVelocityY(x, 0x0100);
+        gObjects->timer[x] = 0x16;
+        gObjects->state[x]++;
+        Obj_FaceScrooge(x);
+        if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+            gObjects->flags[x] |= OBJ_FLAG_FACING_RIGHT;
+        } else {
+            gObjects->flags[x] &= (uint8_t)~OBJ_FLAG_FACING_RIGHT;
+        }
+    }
+    (void)Obj_TouchScrooge(x);
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        Obj_SubVelocityY(x);
+    } else {
+        Obj_AddVelocityY(x);
+    }
+    if (--gObjects->timer[x] == 0) {
+        gObjects->dir[x] ^= 3;
+        gObjects->timer[x] = 0x2C;
+    }
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -1756,6 +1789,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_PATROLLER:
             Obj_Patroller(slot);
+            break;
+        case OBJ_KIND_BOBBER:
+            Obj_Bobber(slot);
             break;
         case OBJ_KIND_DOOR:
             Obj_Door(slot);
@@ -1881,6 +1917,11 @@ static void Run_Patroller(Regs *r)
 static void Run_Charger(Regs *r)
 {
     Obj_Charger(r->x);
+}
+
+static void Run_Bobber(Regs *r)
+{
+    Obj_Bobber(r->x);
 }
 
 static void Run_Swooper(Regs *r)
@@ -2052,6 +2093,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_BOBBER, NULL, "Obj_Bobber", Run_Bobber, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_CHARGER, NULL, "Obj_Charger", Run_Charger, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_PATROLLER, NULL, "Obj_Patroller", Run_Patroller, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_PICKUP, NULL, "Obj_Pickup", Run_Pickup, 0, .bank = DT_BANK_OBJECTS },
