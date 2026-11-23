@@ -37,8 +37,9 @@ ROM-derived code locally.
 - **Enhancements.** Optional gameplay changes, all off by default; when off, the original code runs.
 - **Input.** Keyboard, mouse and SDL game controllers, fully rebindable.
 - **A start on decompilation.** A typed C API over the game's RAM, game events for mods, and
-  Scrooge's per-frame routines decompiled to C, checked against the original on every call
-  (`--decomp check`) and able to run in its place (`--decomp replace`). Off by default.
+  C versions of Scrooge's per-frame routines and parts of the game loop and HUD. The cycle host can
+  compare them with the original (`--decomp check`) or run them in its place
+  (`--decomp replace`). Off by default.
 
 ## Supported ROM
 

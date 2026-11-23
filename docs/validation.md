@@ -308,6 +308,15 @@ then the music under `$13` is heard until `$13` gives the channel back. With `$1
 running song, the music is heard from the first frame. From frame 15 or 16 on, the rows are equal:
 the channel is the music's again.
 
+## Decompiled flow and HUD
+
+On the integrated tree, all three Release builds and the hidden window smoke test passed.
+`decomp_test.py` passed check and replace on `amazon_intro` and `full_moon` (16,092 frames
+in replace), plus 11 poke cases and both event cases. At default decompilation settings,
+`verify_routes.py` passed `amazon_intro` at all four alignments with 100% native CPU cycles
+and matching oracle and interpreter output. The full 12-route decompilation suite passed on
+the flow branch before integration; it has not been rerun in full on this merge.
+
 ## Not verified
 
 - The release package on a clean Windows installation without the Visual C++ redistributable: the

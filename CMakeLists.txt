@@ -53,6 +53,7 @@ set(_ducktales_extras
     "${CMAKE_SOURCE_DIR}/src/decomp/motion.c"
     "${CMAKE_SOURCE_DIR}/src/decomp/sound.c"
     "${CMAKE_SOURCE_DIR}/src/decomp/player.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/flow.c"
     "${CMAKE_SOURCE_DIR}/src/host/ducktales_settings.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_render.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_cycle.c")

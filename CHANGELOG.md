@@ -49,6 +49,8 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   lands played to their LAND CLEAR screens, at four CPU/PPU alignments, with the oracle's results
   cached between runs.
 - Mesen2 differential harness, sprite, enhancement and window smoke tests.
+- Handwritten C for parts of the game loop and HUD, including death, respawn and the timer.
+  The cycle host can check or run these routines; the default still runs the recompiled code.
 - Reverse-engineering references: memory map, functions, Scrooge's movement, game state, levels,
   rendering pipeline and sound driver.
 
