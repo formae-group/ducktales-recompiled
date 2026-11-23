@@ -618,31 +618,6 @@ static void Chr_StreamRow(void)
     Vram_EndQueue(3 + CHR_CHUNK, CHR_CHUNK);
 }
 
-/* $CF93, every frame after the camera: the boss room starts when Scrooge
- * reaches the land's boss row and page (his X taken 8 pixels ahead in the
- * scroll direction). In Transylvania without the other treasures but with
- * the Mines' one it sends him back to Land Select instead. The scroll into
- * the arena waits for frames, so it runs as the original. */
-static void Boss_CheckTrigger(void)
-{
-    Decomp_Enter(DT_CODE_BOSS_TRIGGER, 0, 0, 0);
-    uint8_t land = gLand;
-    if (gMapRow != rom((uint16_t)(DT_CODE_BOSS_ROW + land))) {
-        return;
-    }
-    uint8_t dir = rom((uint16_t)(DT_CODE_BOSS_SCROLL + land)) & 2;
-    uint16_t ahead = (uint16_t)(rom((uint16_t)(DT_CODE_BOSS_LOOK_AHEAD + dir)) |
-                                rom((uint16_t)(DT_CODE_BOSS_LOOK_AHEAD + dir + 1)) << 8);
-    if ((uint8_t)((Obj_GetWorldX(P_) + ahead) >> 8) != rom((uint16_t)(DT_CODE_BOSS_PAGE + land))) {
-        return;
-    }
-    if (land == LAND_TRANSYLVANIA && (gTreasures & 0x1F) != 0x1F && (gTreasures & 0x02)) {
-        gLandRedirect = 0x80;
-        return;
-    }
-    Decomp_RunOriginal();
-}
-
 /* $F574: replace the metatile under the object in slot (its world X and
  * the Y in $0740) by entry $08 of the table at $F653: two 2-tile entries and
  * an attribute entry in the $0440 queue at $5C, and the new collision class
@@ -745,12 +720,6 @@ static void Run_CameraUpdate(Regs *r)
     r->x = Camera_Update(r->x);
 }
 
-static void Run_BossCheckTrigger(Regs *r)
-{
-    (void)r;
-    Boss_CheckTrigger();
-}
-
 static void Run_TileEdit(Regs *r)
 {
     Level_TileEdit(r->x);
@@ -770,7 +739,6 @@ const DecompRoutine gLevelRoutines[] = {
     { DT_CODE_VRAM_FLUSH, "ducktales.decomp.C139", "Vram_FlushQueue", Run_VramFlush, OUT_X | OUT_HW },
     { DT_CODE_TILE_EDIT_FLUSH, "ducktales.decomp.C15E", "Vram_FlushTileEdits", Run_TileEditFlush, OUT_HW },
     { DT_CODE_CAMERA_UPDATE, "ducktales.decomp.EFE2", "Camera_Update", Run_CameraUpdate, OUT_X | OUT_HW },
-    { DT_CODE_BOSS_TRIGGER, "ducktales.decomp.CF93", "Boss_CheckTrigger", Run_BossCheckTrigger, 0 },
     { DT_CODE_TILE_EDIT, "ducktales.decomp.F574", "Level_TileEdit", Run_TileEdit, OUT_HW },
     { DT_CODE_SCREEN_POINTER, NULL, "Level_ScreenPointer", Run_ScreenPointer, OUT_X },
     { DT_CODE_DECODE_BLOCK, NULL, "Level_DecodeBlock", Run_DecodeBlock, OUT_X },

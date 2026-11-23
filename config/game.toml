@@ -94,6 +94,20 @@ addr = 0xF252
 length = 8
 crc32 = 0x7E95A00A
 
+# Obj_AddVelocityY
+[[mod_function_hook]]
+id = "ducktales.decomp.F270"
+addr = 0xF270
+length = 8
+crc32 = 0xB85A90CB
+
+# Obj_SubVelocityY
+[[mod_function_hook]]
+id = "ducktales.decomp.F284"
+addr = 0xF284
+length = 8
+crc32 = 0x94C209F4
+
 # Music_Request
 [[mod_function_hook]]
 id = "ducktales.decomp.F752"
@@ -128,178 +142,6 @@ id = "ducktales.decomp.EBB4"
 addr = 0xEBB4
 length = 8
 crc32 = 0xDB4C6AB4
-
-# Game flow (src/decomp/flow.c, docs/decompilation.md "Task code"): the
-# entries of the main task's decompiled code that original code reaches (its
-# resume points have no site: the RTS observer starts them), then the
-# routines it hands off to, where an isolated run of the original stops.
-
-# Hud_Reset
-[[mod_function_hook]]
-id = "ducktales.decomp.D60A"
-addr = 0xD60A
-length = 8
-crc32 = 0xE0BA6A38
-
-# Land_ApplyTables
-[[mod_function_hook]]
-id = "ducktales.decomp.D9CA"
-addr = 0xD9CA
-length = 8
-crc32 = 0x064DF66E
-
-# Land_LoadPalette
-[[mod_function_hook]]
-id = "ducktales.decomp.D9F5"
-addr = 0xD9F5
-length = 8
-crc32 = 0x1FB8AD30
-
-# FrameLoop
-[[mod_function_hook]]
-id = "ducktales.decomp.DB36"
-addr = 0xDB36
-length = 8
-crc32 = 0xD74F1957
-
-# Respawn_PlaceAt
-[[mod_function_hook]]
-id = "ducktales.decomp.DD52"
-addr = 0xDD52
-length = 8
-crc32 = 0x6C7EAD65
-
-# LandLoad
-[[mod_function_hook]]
-id = "ducktales.decomp.D79B"
-addr = 0xD79B
-length = 8
-crc32 = 0xDACBE679
-
-[[mod_function_hook]]
-id = "ducktales.decomp.stop.FFAC"
-addr = 0xFFAC
-length = 8
-crc32 = 0x937EB346
-
-[[mod_function_hook]]
-id = "ducktales.decomp.stop.FEE0"
-addr = 0xFEE0
-length = 8
-crc32 = 0x446DE306
-
-[[mod_function_hook]]
-id = "ducktales.decomp.stop.C279"
-addr = 0xC279
-length = 8
-crc32 = 0x4BEACFCA
-
-[[mod_function_hook]]
-id = "ducktales.decomp.stop.C282"
-addr = 0xC282
-length = 8
-crc32 = 0xA8DC18AB
-
-
-[[mod_function_hook]]
-id = "ducktales.decomp.stop.8000.6"
-addr = 0x8000
-length = 8
-crc32 = 0x6DA2AF28
-
-[[mod_function_hook]]
-id = "ducktales.decomp.stop.AEA0.6"
-addr = 0xAEA0
-length = 8
-crc32 = 0x2CF3FD6D
-
-[[mod_function_hook]]
-id = "ducktales.decomp.stop.D630"
-addr = 0xD630
-length = 8
-crc32 = 0xDACBE679
-
-[[mod_function_hook]]
-id = "ducktales.decomp.stop.DF27"
-addr = 0xDF27
-length = 8
-crc32 = 0x7C77B11E
-
-[[mod_function_hook]]
-id = "ducktales.decomp.stop.E1AF"
-addr = 0xE1AF
-length = 8
-crc32 = 0xD1E4F218
-
-# END game flow
-
-# The system layer and the sound driver (src/decomp/system.c, sprites.c,
-# audio.c). Their sites also stop the isolated runs of task code that hands
-# off to them (Ppu_Blank, Ppu_Unblank, Ppu_FillNametable, Chr_LoadList and
-# Text_DrawStrings).
-
-# Bank_Select
-[[mod_function_hook]]
-id = "ducktales.decomp.FFDE"
-addr = 0xFFDE
-length = 8
-crc32 = 0x132BF327
-
-# Bank_SelectTemp
-[[mod_function_hook]]
-id = "ducktales.decomp.FFE0"
-addr = 0xFFE0
-length = 8
-crc32 = 0x906ED902
-
-# Input_ReadControllers
-[[mod_function_hook]]
-id = "ducktales.decomp.C1AB"
-addr = 0xC1AB
-length = 8
-crc32 = 0xB6DF6899
-
-# Ppu_Blank
-[[mod_function_hook]]
-id = "ducktales.decomp.C197"
-addr = 0xC197
-length = 8
-crc32 = 0xB236959A
-
-# Ppu_Unblank
-[[mod_function_hook]]
-id = "ducktales.decomp.C1A1"
-addr = 0xC1A1
-length = 8
-crc32 = 0x9490DE2F
-
-# Ppu_FillNametable
-[[mod_function_hook]]
-id = "ducktales.decomp.C203"
-addr = 0xC203
-length = 8
-crc32 = 0x1F68DC28
-
-# Oam_Clear
-[[mod_function_hook]]
-id = "ducktales.decomp.C267"
-addr = 0xC267
-length = 8
-crc32 = 0xED4A869E
-
-# Random_Next
-[[mod_function_hook]]
-id = "ducktales.decomp.C2E6"
-addr = 0xC2E6
-length = 8
-crc32 = 0x709D5E99
-
-# Chr_LoadList
-[[mod_function_hook]]
-id = "ducktales.decomp.C301"
-addr = 0xC301
-length = 8
-crc32 = 0xFD794306
 
 # Camera, scrolling and level (src/decomp/level.c, collision.c). The sites of
 # $C71D, $C830, $EFE2, $CF93 and $C42C also stop the isolated runs of the game
@@ -389,13 +231,6 @@ addr = 0xD4D6
 length = 8
 crc32 = 0x18A40AC9
 
-# Boss_CheckTrigger
-[[mod_function_hook]]
-id = "ducktales.decomp.CF93"
-addr = 0xCF93
-length = 8
-crc32 = 0x54FB3F07
-
 # Level_TileEdit
 [[mod_function_hook]]
 id = "ducktales.decomp.F574"
@@ -410,14 +245,278 @@ addr = 0xC42C
 length = 8
 crc32 = 0xC14ABEE7
 
-# Palette_LoadScene
+# Obj_UpdateAll (bank 6)
+[[mod_function_hook]]
+id = "ducktales.decomp.6.8000"
+bank = 6
+addr = 0x8000
+length = 8
+crc32 = 0x6DA2AF28
+
+# Obj_TouchScrooge
+[[mod_function_hook]]
+id = "ducktales.decomp.F436"
+addr = 0xF436
+length = 8
+crc32 = 0x50BEDDDC
+
+# Obj_WalkRight
+[[mod_function_hook]]
+id = "ducktales.decomp.F0F8"
+addr = 0xF0F8
+length = 8
+crc32 = 0xB4FBD458
+
+# Obj_WalkLeft
+[[mod_function_hook]]
+id = "ducktales.decomp.F13B"
+addr = 0xF13B
+length = 8
+crc32 = 0xC3CF4302
+
+# Obj_Fall
+[[mod_function_hook]]
+id = "ducktales.decomp.F1BE"
+addr = 0xF1BE
+length = 8
+crc32 = 0xA40336AB
+
+# Obj_Rise
+[[mod_function_hook]]
+id = "ducktales.decomp.F1F9"
+addr = 0xF1F9
+length = 8
+crc32 = 0x9496E318
+
+# Obj_SetSpeedIndex
+[[mod_function_hook]]
+id = "ducktales.decomp.F312"
+addr = 0xF312
+length = 8
+crc32 = 0x86C3C87D
+
+# Obj_FaceScrooge
+[[mod_function_hook]]
+id = "ducktales.decomp.F6BD"
+addr = 0xF6BD
+length = 8
+crc32 = 0xA4CA0EC3
+
+# Obj_FindFreeSlot
+[[mod_function_hook]]
+id = "ducktales.decomp.F7BE"
+addr = 0xF7BE
+length = 8
+crc32 = 0x5A610BF8
+
+# Obj_DistanceY
+[[mod_function_hook]]
+id = "ducktales.decomp.F7CC"
+addr = 0xF7CC
+length = 8
+crc32 = 0xCEC41FA7
+
+# Obj_DistanceX
+[[mod_function_hook]]
+id = "ducktales.decomp.F7DA"
+addr = 0xF7DA
+length = 8
+crc32 = 0x6C8400A8
+
+# Obj_MarkConsumed
+[[mod_function_hook]]
+id = "ducktales.decomp.F7F0"
+addr = 0xF7F0
+length = 8
+crc32 = 0x353FCE0E
+
+# Hud_RefillHp
+[[mod_function_hook]]
+id = "ducktales.decomp.F812"
+addr = 0xF812
+length = 8
+crc32 = 0x1394DA66
+
+# Money_Max
+[[mod_function_hook]]
+id = "ducktales.decomp.F83F"
+addr = 0xF83F
+length = 8
+crc32 = 0xFAC618EC
+# Game flow (src/decomp/flow.c, docs/decompilation.md "Task code"): the
+# entries of the main task's decompiled code that original code reaches (its
+# resume points have no site: the RTS observer starts them), then the
+# routines it hands off to, where an isolated run of the original stops.
+
+# Hud_Reset
+[[mod_function_hook]]
+id = "ducktales.decomp.D60A"
+addr = 0xD60A
+length = 8
+crc32 = 0xE0BA6A38
+
+# Land_ApplyTables
+[[mod_function_hook]]
+id = "ducktales.decomp.D9CA"
+addr = 0xD9CA
+length = 8
+crc32 = 0x064DF66E
+
+# Land_LoadPalette
+[[mod_function_hook]]
+id = "ducktales.decomp.D9F5"
+addr = 0xD9F5
+length = 8
+crc32 = 0x1FB8AD30
+
+# FrameLoop
+[[mod_function_hook]]
+id = "ducktales.decomp.DB36"
+addr = 0xDB36
+length = 8
+crc32 = 0xD74F1957
+
+# Respawn_PlaceAt
+[[mod_function_hook]]
+id = "ducktales.decomp.DD52"
+addr = 0xDD52
+length = 8
+crc32 = 0x6C7EAD65
+
+# MainTask
+[[mod_function_hook]]
+id = "ducktales.decomp.D4E6"
+addr = 0xD4E6
+length = 8
+crc32 = 0x53CB8BF8
+
+# LandLoad
+[[mod_function_hook]]
+id = "ducktales.decomp.D79B"
+addr = 0xD79B
+length = 8
+crc32 = 0xDACBE679
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.FFAC"
+addr = 0xFFAC
+length = 8
+crc32 = 0x937EB346
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.FEE0"
+addr = 0xFEE0
+length = 8
+crc32 = 0x446DE306
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.C279"
+addr = 0xC279
+length = 8
+crc32 = 0x4BEACFCA
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.C282"
+addr = 0xC282
+length = 8
+crc32 = 0xA8DC18AB
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.AEA0.6"
+addr = 0xAEA0
+length = 8
+crc32 = 0x2CF3FD6D
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.D630"
+addr = 0xD630
+length = 8
+crc32 = 0xDACBE679
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.DF27"
+addr = 0xDF27
+length = 8
+crc32 = 0x7C77B11E
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.E1AF"
+addr = 0xE1AF
+length = 8
+crc32 = 0xD1E4F218
+
+# END game flow
+
+# The system layer and the sound driver (src/decomp/system.c, sprites.c,
+# audio.c). Their sites also stop the isolated runs of task code that hands
+# off to them (Ppu_Blank, Ppu_Unblank, Ppu_FillNametable, Chr_LoadList and
+# Text_DrawStrings).
+
+# Bank_Select
+[[mod_function_hook]]
+id = "ducktales.decomp.FFDE"
+addr = 0xFFDE
+length = 8
+crc32 = 0x132BF327
+
+[[mod_function_hook]]
+id = "ducktales.decomp.FFE0"
+addr = 0xFFE0
+length = 8
+crc32 = 0x906ED902
+
+[[mod_function_hook]]
+id = "ducktales.decomp.C1AB"
+addr = 0xC1AB
+length = 8
+crc32 = 0xB6DF6899
+
+[[mod_function_hook]]
+id = "ducktales.decomp.C197"
+addr = 0xC197
+length = 8
+crc32 = 0xB236959A
+
+[[mod_function_hook]]
+id = "ducktales.decomp.C1A1"
+addr = 0xC1A1
+length = 8
+crc32 = 0x9490DE2F
+
+[[mod_function_hook]]
+id = "ducktales.decomp.C203"
+addr = 0xC203
+length = 8
+crc32 = 0x1F68DC28
+
+[[mod_function_hook]]
+id = "ducktales.decomp.C267"
+addr = 0xC267
+length = 8
+crc32 = 0xED4A869E
+
+[[mod_function_hook]]
+id = "ducktales.decomp.C2E6"
+addr = 0xC2E6
+length = 8
+crc32 = 0x709D5E99
+
+[[mod_function_hook]]
+id = "ducktales.decomp.C301"
+addr = 0xC301
+length = 8
+crc32 = 0xFD794306
+
+# Camera, scrolling and level (src/decomp/level.c, collision.c). The sites of
+# $C71D, $C830, $EFE2, $CF93 and $C42C also stop the isolated runs of the game
+# flow's task code, which hands off to them.
+
 [[mod_function_hook]]
 id = "ducktales.decomp.F76D"
 addr = 0xF76D
 length = 8
 crc32 = 0x3F37AFAC
 
-# Oam_Build
 [[mod_function_hook]]
 id = "ducktales.decomp.5.8000"
 addr = 0x8000
@@ -425,7 +524,6 @@ bank = 5
 length = 8
 crc32 = 0x82DC07A5
 
-# Text_DrawStrings
 [[mod_function_hook]]
 id = "ducktales.decomp.5.BAB0"
 addr = 0xBAB0
@@ -433,7 +531,6 @@ bank = 5
 length = 8
 crc32 = 0xEDE7D6B8
 
-# Sound_Update
 [[mod_function_hook]]
 id = "ducktales.decomp.3.8000"
 addr = 0x8000
@@ -441,7 +538,6 @@ bank = 3
 length = 8
 crc32 = 0x70A73177
 
-# Sound_Play
 [[mod_function_hook]]
 id = "ducktales.decomp.3.8003"
 addr = 0x8003
@@ -449,8 +545,6 @@ bank = 3
 length = 8
 crc32 = 0xD13796E4
 
-# RTI of the NMI handler: replace mode spends there the cycles a replaced
-# routine still owed when the NMI came (src/decomp/decomp.c)
 [[mod_function_hook]]
 id = "ducktales.decomp.nmi-exit"
 addr = 0xC138

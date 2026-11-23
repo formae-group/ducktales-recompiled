@@ -146,6 +146,7 @@ static char s_orig_regs[REGS_TEXT], s_c_regs[REGS_TEXT];
 static FILE *s_dump;
 static int s_played, s_loads;
 static uint64_t s_early, s_nmi_debt;
+static bool s_regs_text;
 static uint8_t s_c_bank, s_handoff_bank;
 static uint8_t s_cur_s;
 static bool s_handoff_set;
@@ -260,7 +261,17 @@ static void device_regs(char *regs)
     regs[used] = 0;
 }
 
-static HwState hw_state(char *regs)
+/* The device registers the text of device_regs lists, and the cartridge's
+ * bank registers, as one hash: the same field tables nesrecomp dumps. */
+static uint64_t device_hash(void)
+{
+    uint64_t h[4] = { hw_cart_state_hash(0), ppu_state_hash(0), apu_state_hash(0),
+                      (uint64_t)hw_extra_timing.extra_scanlines | (uint64_t)hw_extra_timing.line << 16 |
+                          (uint64_t)hw_extra_timing.active << 32 };
+    return fnv((const uint8_t *)h, sizeof h);
+}
+
+static HwState hw_state(void)
 {
     size_t n = 0;
     HwState s;
@@ -270,8 +281,7 @@ static HwState hw_state(char *regs)
     const uint8_t *chr = cyc_chr_ram(&n);
     s.chr = fnv(chr, n);
     s.oam = fnv(cyc_ppu_oam(), 256);
-    device_regs(regs);
-    s.regs = fnv((const uint8_t *)regs, strlen(regs));
+    s.regs = device_hash();
     s.bank = hw_prg_bank4(0x8000);
     return s;
 }
@@ -302,7 +312,12 @@ static bool call_in_scope(uint16_t routine, CycModRegs *r)
 
 Regs Decomp_Call(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
 {
-    CycModRegs r = { a, x, y, s_cur_s, s_entry_p, 0 };
+    return Decomp_CallP(routine, a, x, y, s_entry_p);
+}
+
+Regs Decomp_CallP(uint16_t routine, uint8_t a, uint8_t x, uint8_t y, uint8_t p)
+{
+    CycModRegs r = { a, x, y, s_cur_s, p, 0 };
     if (!call_in_scope(routine, &r)) {
         fail("an original routine called from C did not return", routine);
     }
@@ -485,7 +500,10 @@ static uint64_t run_original(const DecompRoutine *rt, const CycModRegs *in, CycM
     cyc_mod_stats(&after);
     memcpy(s_orig, cyc_cpu_ram(), GAME_RAM_SIZE);
     if (rt->out & OUT_HW) {
-        s_orig_hw = hw_state(s_orig_regs);
+        s_orig_hw = hw_state();
+        if (s_regs_text) {
+            device_regs(s_orig_regs);
+        }
     }
     cyc_mod_isolate_end();
     return returned ? after.cycles - before.cycles : 0;
@@ -536,6 +554,9 @@ static bool agree(const DecompRoutine *rt, uint8_t entry_s, bool returned, const
     if ((rt->out & OUT_P) && ((orig->p ^ c->p) & (P_N | P_V | P_Z | P_C))) {
         return false;
     }
+    if ((rt->out & OUT_C) && ((orig->p ^ c->p) & P_C)) {
+        return false;
+    }
     return true;
 }
 
@@ -572,27 +593,41 @@ static void report(const DecompRoutine *rt, const CycModRegs *in, const char *ca
 
 /* The C's bus operations made on a copy of the machine at entry must leave
  * the PPU's memories and the PRG bank as the original left them. */
-static void check_hw(const DecompRoutine *rt, uint64_t cycles)
+/* Check mode's hardware verdict. The register hashes differ also when only
+ * the fields device_regs leaves out do; then both sides' register texts are
+ * compared, the original's from a second run of it. */
+static void check_hw(const DecompRoutine *rt, const CycModRegs *in, uint64_t cycles)
 {
     if (!cyc_mod_isolate_begin()) {
         fail("cannot open an isolated scope", rt->addr);
     }
     play_ops(0, spare_cycles(cycles), rt->addr);
-    HwState c = hw_state(s_c_regs);
+    HwState c = hw_state();
+    bool regs_same = c.regs == s_orig_hw.regs;
+    if (!regs_same) {
+        device_regs(s_c_regs);
+    }
     cyc_mod_isolate_end();
+    if (!regs_same) {
+        CycModRegs o;
+        s_regs_text = true;
+        run_original(rt, in, &o, false);
+        s_regs_text = false;
+        regs_same = !strcmp(s_orig_regs, s_c_regs);
+    }
     if (c.ciram == s_orig_hw.ciram && c.palette == s_orig_hw.palette && c.chr == s_orig_hw.chr &&
-        c.oam == s_orig_hw.oam && c.regs == s_orig_hw.regs && c.bank == s_orig_hw.bank) {
+        c.oam == s_orig_hw.oam && regs_same && c.bank == s_orig_hw.bank) {
         return;
     }
     fprintf(stderr, "[decomp] MISMATCH %s ($%04X) at frame %llu: hardware differs:%s%s%s%s%s%s (%d bus operations)\n",
             rt->name, rt->addr, (unsigned long long)cyc_ring_frame, c.ciram != s_orig_hw.ciram ? " CIRAM" : "",
             c.palette != s_orig_hw.palette ? " palette" : "", c.chr != s_orig_hw.chr ? " CHR-RAM" : "",
-            c.oam != s_orig_hw.oam ? " OAM" : "", c.regs != s_orig_hw.regs ? " registers" : "",
+            c.oam != s_orig_hw.oam ? " OAM" : "", !regs_same ? " registers" : "",
             c.bank != s_orig_hw.bank ? " PRG bank" : "", s_nops);
     if (c.bank != s_orig_hw.bank) {
         fprintf(stderr, "[decomp]   PRG bank original %u decompiled %u (4 KiB units)\n", s_orig_hw.bank, c.bank);
     }
-    const char *o = s_orig_regs, *d = s_c_regs;
+    const char *o = regs_same ? "" : s_orig_regs, *d = s_c_regs;
     for (int shown = 0; *o && *d && shown < 24;) {
         size_t lo = strcspn(o, "\n"), ld = strcspn(d, "\n");
         if (lo != ld || memcmp(o, d, lo)) {
@@ -623,7 +658,7 @@ static void check(int i, const CycModRegs *in)
         report(rt, in, NULL, cycles != 0, s_orig, &orig, s_image, &c);
     }
     if (rt->out & OUT_HW) {
-        check_hw(rt, cycles);
+        check_hw(rt, in, cycles);
     }
     s_stats[i].compared++;
 }
@@ -689,14 +724,16 @@ void Decomp_Enter(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
         s_top_entered = true;
         return;
     }
-    if (s_mode != DECOMP_CHECK || s_inner) {
-        return;
-    }
     for (int i = 0; i < s_count; i++) {
-        if (s_routine[i]->addr != routine) {
+        if (s_routine[i]->addr != routine || (routine < 0xC000 && s_routine[i]->bank != s_c_bank)) {
             continue;
         }
-        if (!s_routine[i]->site_id && !s_routine[i]->task) {
+        if (s_inner) {
+            return;
+        }
+        if (s_routine[i]->task) {
+            s_stats[i].calls++;
+        } else if (s_mode == DECOMP_CHECK && !s_routine[i]->site_id) {
             check_inner(i, (Regs){ a, x, y, s_entry_p }, false);
         }
         return;
@@ -844,15 +881,19 @@ static void run_task_original(const DecompRoutine *rt, const CycModRegs *in)
 }
 
 /* Bytes both runs must agree on: page 1 only above the C's final S, and never
- * the slot of the isolated call's return address. */
+ * the slot of the isolated call's return address (which wraps to the bottom of
+ * page 1 for the main task's start, entered with S = $FF). */
 static bool task_live(uint16_t a)
 {
-    if ((a & 0xFF00) != 0x0100 || a < DT_ADDR_STACK_FLOOR) {
+    if ((a & 0xFF00) != 0x0100) {
         return true;
     }
     uint8_t off = (uint8_t)a;
     if (off == s_run.call_s || off == (uint8_t)(s_run.call_s - 1)) {
         return false;
+    }
+    if (a < DT_ADDR_STACK_FLOOR) {
+        return true;
     }
     return s_handoff_set ? off > s_cur_s : off >= s_cur_s + 3u;
 }
@@ -1111,6 +1152,8 @@ NES_MOD_CONSTRUCTOR(dt_register_decomp_sites)
     add_table(gMotionRoutines, gMotionRoutineCount);
     add_table(gSoundRoutines, gSoundRoutineCount);
     add_table(gPlayerRoutines, gPlayerRoutineCount);
+    add_table(gObjCommonRoutines, gObjCommonRoutineCount);
+    add_table(gObjectRoutines, gObjectRoutineCount);
     add_table(gLevelRoutines, gLevelRoutineCount);
     add_table(gCollisionRoutines, gCollisionRoutineCount);
     add_table(gFlowRoutines, gFlowRoutineCount);

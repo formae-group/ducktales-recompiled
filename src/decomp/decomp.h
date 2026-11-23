@@ -48,9 +48,11 @@ typedef struct Regs {
 #define OUT_X 0x02
 #define OUT_Y 0x04
 #define OUT_P 0x08 /* N, V, Z and C */
+#define OUT_C 0x20 /* C only */
 #define OUT_HW \
-    0x10 /* accesses a device (Decomp_BusWrite, Decomp_BusRead, Decomp_BusLoad): check also compares the
+    0x10           /* accesses a device (Decomp_BusWrite, Decomp_BusRead, Decomp_BusLoad): check also compares the
                         PPU's memories, OAM, the device registers and the PRG bank, replace replays the writes */
+#define OUT_C 0x20 /* C only */
 
 typedef struct DecompRoutine {
     uint16_t addr;
@@ -61,7 +63,7 @@ typedef struct DecompRoutine {
     bool task;      /* task code: may end by handing off to the original (below) */
     uint8_t locals; /* task code: bytes the routine keeps on the stack at its start */
     bool resume;    /* task code: started where an RTS returns to its address, with no site */
-    uint8_t bank;   /* a routine at $8000-$BFFF: the 16 KiB PRG bank it is in */
+    uint8_t bank;   /* entries below $C000: the bank mapped at $8000 */
 } DecompRoutine;
 
 typedef enum DecompMode {
@@ -81,6 +83,8 @@ void Decomp_Enter(uint16_t routine, uint8_t a, uint8_t x, uint8_t y);
 /* Run an original routine that is not decompiled yet, with these registers;
  * returns the registers it returned with. */
 Regs Decomp_Call(uint16_t routine, uint8_t a, uint8_t x, uint8_t y);
+/* The same with the status flags the original routine is entered with. */
+Regs Decomp_CallP(uint16_t routine, uint8_t a, uint8_t x, uint8_t y, uint8_t p);
 /* Give this call to the original routine: the C's changes are dropped and
  * the original runs from its entry. The C must return without doing anything
  * else. */
@@ -190,6 +194,10 @@ extern const DecompRoutine gSoundRoutines[];
 extern const int gSoundRoutineCount;
 extern const DecompRoutine gPlayerRoutines[];
 extern const int gPlayerRoutineCount;
+extern const DecompRoutine gObjCommonRoutines[];
+extern const int gObjCommonRoutineCount;
+extern const DecompRoutine gObjectRoutines[];
+extern const int gObjectRoutineCount;
 extern const DecompRoutine gLevelRoutines[];
 extern const int gLevelRoutineCount;
 extern const DecompRoutine gCollisionRoutines[];

@@ -18,9 +18,10 @@
  * gives them.
  *
  * Not decompiled yet and called through Decomp_Call: the background probe
- * $D120 and its snaps $D49A/$D4B2/$D4C8/$D4D6, the object contact tests
- * $D202/$D291, the climbing steps $F192/$F1A8, the walls move $F0F8 and the
- * Select refill $E2FE. Given to the original routine (Decomp_RunOriginal):
+ * $D120 and its snaps $D49A/$D4B2/$D4C8/$D4D6, one probe point $D350 (where
+ * the vertical contact test can fall through to), and the climbing steps
+ * $F192/$F1A8 and the walls move $F0F8, which every object kind shares.
+ * Given to the original routine (Decomp_RunOriginal):
  * Player_Update in modes 15 and 16 (message and treasure: they wait for
  * frames) and every call that reaches the row change at $E8C0 (it scrolls
  * the screen and re-enters the frame loop).
@@ -56,6 +57,16 @@
 #define POGO_CEILING_Y     0xA0
 #define CANE_HIT_FRAMES    5
 #define STUCK_SINK         4
+#define SELECT_REFILL_COST 3 /* taken from TOTAL's two leading digits */
+
+#define OBJ_FLAG_ON_SCREEN  0x80
+#define OBJ_FLAG_NO_LANDING 0x02 /* skipped by the vertical contact test (code) */
+#define OBJ_KIND_BLOCK      0x08
+#define OBJ_KIND_15         0x15
+#define OBJ_KIND_42         0x42
+#define HITBOX_SOLID        0x80
+#define HITBOX_INDEX        0x7F
+#define HITBOX_HARMFUL      0x70
 
 #define PROBE_RIGHT 0
 #define PROBE_LEFT  3
@@ -72,8 +83,9 @@
 #define gClimbClass    RAM_U8(DT_ADDR_CLIMB_CLASS)
 #define gTemp08        RAM_U8(DT_ADDR_TEMP08)
 #define gTemp09        RAM_U8(DT_ADDR_TEMP09)
-#define gScratch0      RAM_U8(DT_ADDR_SCRATCH0)
-#define gScratch1      RAM_U8(DT_ADDR_SCRATCH1)
+#define gScratch(i)    RAM_U8(DT_ADDR_SCRATCH0 + (i))
+#define gHudTotalDirty RAM_U8(DT_ADDR_HUD_TOTAL_DIRTY)
+#define gTotalDigit(i) RAM_U8(DT_ADDR_TOTAL_DIGITS + (i))
 
 static void Player_Air(void);
 static void Player_Walk(uint8_t x);
@@ -88,6 +100,179 @@ static void Player_SetAction(uint8_t action)
     gObjects->action[P_] = action;
     gObjects->animFrame[P_] = 0;
     gObjects->animTimer[P_] = 0;
+}
+
+static uint8_t HitboxHeight(uint8_t box)
+{
+    return Game_ReadRom((uint16_t)(DT_CODE_HITBOX_HEIGHT + box));
+}
+
+static uint8_t HitboxWidth(uint8_t box)
+{
+    return Game_ReadRom((uint16_t)(DT_CODE_HITBOX_WIDTH + box));
+}
+
+/* How far a slot is from Scrooge as the contact tests measure it: the low
+ * byte of the distance. Vertically a crouching Scrooge counts 8 px further
+ * from a harmful hitbox. */
+static uint8_t Player_DistanceX(uint8_t slot)
+{
+    uint16_t a = Obj_GetWorldX(P_), b = Obj_GetWorldX(slot);
+    return (uint8_t)(a >= b ? a - b : b - a);
+}
+
+static uint8_t Player_DistanceY(uint8_t slot)
+{
+    uint8_t a = gObjects->y[P_], b = gObjects->y[slot];
+    uint8_t d = (uint8_t)(a >= b ? a - b : b - a);
+    if ((gObjects->hitbox[slot] & HITBOX_HARMFUL) && gObjects->action[P_] == PLAYER_ACTION_CROUCH) {
+        d = (uint8_t)(d + 8);
+    }
+    return d;
+}
+
+/* $D202: the object Scrooge runs into after a horizontal move: a slot on
+ * screen with a solid hitbox that he overlaps, searched from slot 15 down.
+ * While he is invulnerable only blocks (kind 8) and kind $15 stop him. The
+ * overlap goes to $11 and bit 0 of $10 is set; a harmful hitbox starts the
+ * knock-back (mode 6), or with the power-up hurts the object ($0690).
+ * Returns the slot, 0 for none (the original's carry set). */
+static uint8_t Player_ContactH(void)
+{
+    Decomp_Enter(DT_CODE_CONTACT_H, 0, 0, 0);
+    for (uint8_t x = OBJ_SLOTS - 1; x != 0; x--) {
+        if (!(gObjects->flags[x] & OBJ_FLAG_ON_SCREEN) || !(gObjects->hitbox[x] & HITBOX_SOLID)) {
+            continue;
+        }
+        uint8_t box = gObjects->hitbox[x] & HITBOX_INDEX;
+        if (Player_DistanceY(x) >= HitboxHeight(box)) {
+            continue;
+        }
+        gScratch(0) = (uint8_t)(HitboxWidth(box) + 1);
+        uint8_t dx = Player_DistanceX(x);
+        if (dx >= gScratch(0)) {
+            continue;
+        }
+        gScratch(0) = dx;
+        if (gPlayerInvulnerable && gObjects->kind[x] != OBJ_KIND_BLOCK && gObjects->kind[x] != OBJ_KIND_15) {
+            continue;
+        }
+        gContactDepth = (uint8_t)(HitboxWidth(box) - dx);
+        gProbeHits |= 1;
+        if (gObjects->hitbox[x] & HITBOX_HARMFUL) {
+            if (gPlayerPower) {
+                gObjects->unk_0690[x]++;
+            } else {
+                gPlayerMode = PLAYER_MODE_KNOCKBACK;
+            }
+        }
+        return x;
+    }
+    return 0;
+}
+
+/* $D291: the objects Scrooge overlaps after a vertical move, the same test
+ * with the axes swapped, over the slots without $0600 bit 1; $00 counts
+ * them. While he is invulnerable harmful ones are ignored. The first one a
+ * pogo fall lands on is a bounce: feet class 1 and the object hurt ($0690).
+ * Returns true for a contact (the original's carry clear). A $0690 that
+ * wraps to 0 under the power-up falls through into $D350, whose return is
+ * the test's. */
+static bool Player_ContactV(void)
+{
+    Decomp_Enter(DT_CODE_CONTACT_V, 0, 0, 0);
+    gScratch(0) = 0;
+    gScratch(1) = 0;
+    for (uint8_t x = OBJ_SLOTS - 1; x != 0; x--) {
+        uint8_t flags = gObjects->flags[x];
+        if (!(flags & OBJ_FLAG_ON_SCREEN) || (flags & OBJ_FLAG_NO_LANDING) || !(gObjects->hitbox[x] & HITBOX_SOLID)) {
+            continue;
+        }
+        uint8_t box = gObjects->hitbox[x] & HITBOX_INDEX;
+        uint8_t harmful = gObjects->hitbox[x] & HITBOX_HARMFUL;
+        uint8_t dx = Player_DistanceX(x);
+        if (dx >= HitboxWidth(box)) {
+            continue;
+        }
+        gScratch(3) = dx;
+        gScratch(2) = (uint8_t)(HitboxHeight(box) + 1);
+        uint8_t dy = Player_DistanceY(x);
+        if (dy >= gScratch(2)) {
+            continue;
+        }
+        gScratch(2) = dy;
+        if (gPlayerInvulnerable && harmful) {
+            continue;
+        }
+        gScratch(0)++;
+        gContactDepth = (uint8_t)(HitboxHeight(box) - dy);
+        gProbeHits |= 1;
+        if (gScratch(1) == 0 && (gObjects->vy[P_] & 0x80) && gObjects->action[P_] == PLAYER_ACTION_POGO &&
+            (gObjects->vdir[P_] & 4)) {
+            gFeetClass = 1;
+            gScratch(1)++;
+            if (++gObjects->unk_0690[x] != 0) {
+                continue;
+            }
+        }
+        if (!harmful) {
+            continue;
+        }
+        if (!gPlayerPower) {
+            gPlayerMode = PLAYER_MODE_KNOCKBACK;
+            continue;
+        }
+        if (++gObjects->unk_0690[x] != 0) {
+            continue;
+        }
+        return !(Decomp_Call(DT_CODE_PROBE_POINT, gPlayerPower, x, box).p & P_C);
+    }
+    return gScratch(0) != 0;
+}
+
+/* $E2FE: Select on the ground. When the last HP dot is lost and TOTAL is
+ * 3,000,000 or more, TOTAL pays for a refill: its two leading digits drop by
+ * 3 (leading zeros blanked again), every dot is full ($F812) and TOTAL is
+ * redrawn.
+ * Returns X as the original leaves it. */
+static uint8_t Player_SelectRefill(void)
+{
+    Decomp_Enter(DT_CODE_SELECT_REFILL, 0, 0, 0);
+    uint8_t x = 0;
+    do {
+        if (gRam[DT_ADDR_HUD_SPRITES + x] & 0x80) {
+            break;
+        }
+        x += 4;
+    } while (x != 0);
+    if (gRam[DT_ADDR_HUD_SPRITES - 2 + x] == 0) {
+        return x;
+    }
+    uint8_t p = P_C;
+    gScratch(0) = SELECT_REFILL_COST;
+    for (int i = 1; i >= 0; i--) {
+        uint8_t digit = gTotalDigit(i);
+        if (digit == DT_MONEY_TILE_BLANK) {
+            digit = 0;
+        }
+        digit = Alu_Sbc(digit, gScratch(0), &p);
+        if (!(p & P_C)) {
+            digit = (uint8_t)(digit + 10);
+        }
+        gScratch(1 + i) = digit;
+        gScratch(0) = 0;
+    }
+    if (!(p & P_C)) {
+        return 0xFF;
+    }
+    gTotalDigit(0) = gScratch(1);
+    gTotalDigit(1) = gScratch(2);
+    for (x = 0; x < DT_TOTAL_DIGIT_COUNT && gTotalDigit(x) == 0; x++) {
+        gTotalDigit(x) = DT_MONEY_TILE_BLANK;
+    }
+    Decomp_Call(DT_CODE_HUD_REFILL_HP, 0, x, 0);
+    gHudTotalDirty++;
+    return x;
 }
 
 /* $EA5E: after a vertical move, test the feet (moving down or standing) or
@@ -152,8 +337,7 @@ static uint8_t Player_Fall(void)
     }
     gTemp08 = gObjects->y[P_];
     Obj_ApplyVelocityY(P_);
-    Regs r = Decomp_Call(DT_CODE_CONTACT_V, gObjects->y[P_], 0, 0);
-    if (!(r.p & P_C)) {
+    if (Player_ContactV()) {
         gObjects->y[P_] -= gContactDepth;
     }
     uint8_t x = Player_ProbeVertical();
@@ -195,8 +379,7 @@ static uint8_t Player_Rise(void)
     gProbeHits = 0;
     gFeetClass = 0;
     Obj_ApplyVelocityY(P_);
-    Regs r = Decomp_Call(DT_CODE_CONTACT_V, gObjects->y[P_], 0, 0);
-    if (!(r.p & P_C)) {
+    if (Player_ContactV()) {
         gObjects->y[P_] += (uint8_t)(gContactDepth + 1);
     }
     Player_ProbeVertical();
@@ -245,8 +428,7 @@ static uint8_t Player_MoveRight(uint8_t x)
     gPlayerMoveSide = 1;
     Obj_MoveRight(x);
     gObjects->flags[P_] |= 0x40;
-    Regs r = Decomp_Call(DT_CODE_CONTACT_H, gObjects->flags[P_], x, 0);
-    if (!(r.p & P_C)) {
+    if (Player_ContactH()) {
         if (gContactDepth > 0x0C) {
             gContactDepth = 0x0C;
         }
@@ -262,8 +444,7 @@ static uint8_t Player_MoveLeft(uint8_t x)
     gPlayerMoveSide = 2;
     Obj_MoveLeft(x);
     gObjects->flags[P_] &= ~0x40;
-    Regs r = Decomp_Call(DT_CODE_CONTACT_H, gObjects->flags[P_], x, 0);
-    if (!(r.p & P_C)) {
+    if (Player_ContactH()) {
         if (gContactDepth > 0x0C) {
             gContactDepth = 0x0C;
         }
@@ -388,7 +569,7 @@ static void Player_Ground(void)
         return;
     }
     if (gPadNew & DT_PAD_SELECT) {
-        x = Decomp_Call(DT_CODE_SELECT_REFILL, DT_PAD_SELECT, x, 0).x;
+        x = Player_SelectRefill();
     }
     if (gObjects->action[P_] == PLAYER_ACTION_PUSH && (gPadNew & DT_PAD_B)) {
         Player_StartCane();
@@ -466,7 +647,7 @@ static void Player_LeaveRow(void)
     uint8_t step = Alu_Adc((uint8_t)(gMapStride ^ (up ? 0xFF : 0x00)), up ? 1 : 0, &p);
     uint8_t screen = Alu_Adc(step, gCameraScreen, &p);
     p = 0;
-    gScratch0 = Alu_Adc(step, gStreamScreen, &p);
+    gScratch(0) = Alu_Adc(step, gStreamScreen, &p);
     uint16_t grid = Ram_GetU16(DT_ADDR_MAP_GRID, DT_ADDR_MAP_GRID + 1);
     uint16_t cell = (uint16_t)(grid + screen);
     if ((cell < GAME_RAM_SIZE ? gRam[cell] : Game_ReadRom(cell)) == 0xFF) {
@@ -522,7 +703,7 @@ static void Player_GrabClimb(void)
         return;
     }
     uint8_t within = gObjects->worldX[P_] & 0x0F;
-    gScratch0 = within;
+    gScratch(0) = within;
     if (i >= 2) {
         Obj_SetWorldX(P_, (uint16_t)(Obj_GetWorldX(P_) + 16 - within));
         gPlayerMoveDir = 1;
@@ -592,8 +773,8 @@ static void Player_Pogo(void)
 {
     Decomp_Enter(DT_CODE_PLAYER_POGO, 0, 0, 0);
     gPlayerPushCounter = PUSH_FRAMES;
-    gScratch0 = (uint8_t)(gPadHeld << 1) & DT_PAD_A;
-    gPadHeld |= gScratch0;
+    gScratch(0) = (uint8_t)(gPadHeld << 1) & DT_PAD_A;
+    gPadHeld |= gScratch(0);
     if (!(gPadHeld & DT_PAD_A)) {
         gPlayerMode = PLAYER_MODE_AIR;
     }
@@ -674,10 +855,10 @@ static void Player_Cane(void)
         return;
     }
     Sound_Request(SFX_CANE_SWING, x);
-    Regs r = Decomp_Call(DT_CODE_CONTACT_H, 0, x, 0);
-    if (!(r.p & P_C)) {
-        uint8_t kind = gObjects->kind[r.x];
-        if (kind == 0x08 || kind == 0x15 || kind == 0x42) {
+    uint8_t slot = Player_ContactH();
+    if (slot) {
+        uint8_t kind = gObjects->kind[slot];
+        if (kind == OBJ_KIND_BLOCK || kind == OBJ_KIND_15 || kind == OBJ_KIND_42) {
             return;
         }
     }
@@ -685,7 +866,7 @@ static void Player_Cane(void)
     gObjects->animFrame[P_] = 0;
     gObjects->timer[P_] = CANE_HIT_FRAMES;
     gObjects->action[P_] = PLAYER_ACTION_CANE_HIT;
-    Sound_Request(SFX_CANE_HIT, r.x);
+    Sound_Request(SFX_CANE_HIT, slot);
 }
 
 /* $EB5E without its event: on Easy only every other hit counts; the last
@@ -950,8 +1131,8 @@ static void Player_Update(const Regs *in)
         }
     }
     uint8_t mode = gPlayerMode;
-    gScratch0 = Game_ReadRom((uint16_t)(DT_CODE_MODE_LO + mode));
-    gScratch1 = Game_ReadRom((uint16_t)(DT_CODE_MODE_HI + mode));
+    gScratch(0) = Game_ReadRom((uint16_t)(DT_CODE_MODE_LO + mode));
+    gScratch(1) = Game_ReadRom((uint16_t)(DT_CODE_MODE_HI + mode));
     switch (mode) {
         case PLAYER_MODE_GROUND:
             Player_Ground();
@@ -1146,6 +1327,22 @@ static void Run_Mode14(Regs *r)
     Player_Mode14();
 }
 
+static void Run_ContactH(Regs *r)
+{
+    r->x = Player_ContactH();
+    r->p = (uint8_t)((r->p & ~P_C) | (r->x ? 0 : P_C));
+}
+
+static void Run_ContactV(Regs *r)
+{
+    r->p = (uint8_t)((r->p & ~P_C) | (Player_ContactV() ? 0 : P_C));
+}
+
+static void Run_SelectRefill(Regs *r)
+{
+    r->x = Player_SelectRefill();
+}
+
 /* Sites only where original code calls a routine: the frame loop calls
  * Player_Update, the original modes 15 and 16 jump to Player_PitDeath. The
  * damage routine keeps its site for replace mode's measuring call (decomp.c);
@@ -1177,5 +1374,8 @@ const DecompRoutine gPlayerRoutines[] = {
     { DT_CODE_PLAYER_MODE12, NULL, "Player_Mode12", Run_Mode12, 0 },
     { DT_CODE_PLAYER_DEATH, NULL, "Player_Death", Run_Death, 0 },
     { DT_CODE_PLAYER_MODE14, NULL, "Player_Mode14", Run_Mode14, 0 },
+    { DT_CODE_CONTACT_H, NULL, "Player_ContactH", Run_ContactH, OUT_X | OUT_C },
+    { DT_CODE_CONTACT_V, NULL, "Player_ContactV", Run_ContactV, OUT_C },
+    { DT_CODE_SELECT_REFILL, NULL, "Player_SelectRefill", Run_SelectRefill, OUT_X },
 };
 const int gPlayerRoutineCount = sizeof gPlayerRoutines / sizeof gPlayerRoutines[0];

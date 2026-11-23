@@ -70,14 +70,14 @@ static uint16_t rom_pointer(uint16_t lo_table, uint16_t hi_table, uint8_t index)
 static void free_slot(int slot)
 {
     gObjects->flags[slot] = 0;
-    gObjects->unk_07F0[slot] = 0xFF;
+    gObjects->record[slot] = 0xFF;
 }
 
 static void delete_slot(int slot)
 {
     gObjects->flags[slot] = 0;
     gObjects->state[slot] = 0;
-    gObjects->unk_07F0[slot] = 0xFF;
+    gObjects->record[slot] = 0xFF;
 }
 
 /* Screen X from world X; false when the slot is not drawn this frame. An
