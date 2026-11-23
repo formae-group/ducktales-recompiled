@@ -169,6 +169,13 @@ addr = 0xDD52
 length = 8
 crc32 = 0x6C7EAD65
 
+# LandLoad
+[[mod_function_hook]]
+id = "ducktales.decomp.D79B"
+addr = 0xD79B
+length = 8
+crc32 = 0xDACBE679
+
 [[mod_function_hook]]
 id = "ducktales.decomp.stop.FFAC"
 addr = 0xFFAC
@@ -224,10 +231,22 @@ length = 8
 crc32 = 0xDACBE679
 
 [[mod_function_hook]]
-id = "ducktales.decomp.stop.D79B"
-addr = 0xD79B
+id = "ducktales.decomp.stop.C203"
+addr = 0xC203
 length = 8
-crc32 = 0xDACBE679
+crc32 = 0x1F68DC28
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.C301"
+addr = 0xC301
+length = 8
+crc32 = 0xFD794306
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.BAB0.5"
+addr = 0xBAB0
+length = 8
+crc32 = 0xEDE7D6B8
 
 [[mod_function_hook]]
 id = "ducktales.decomp.stop.DF27"
@@ -244,7 +263,7 @@ crc32 = 0xD1E4F218
 # END game flow
 
 # Camera, scrolling and level (src/decomp/level.c, collision.c). The sites of
-# $C830, $EFE2, $CF93 and $C42C also stop the isolated runs of the game
+# $C71D, $C830, $EFE2, $CF93 and $C42C also stop the isolated runs of the game
 # flow's task code, which hands off to them.
 
 # Map_LoadHeader

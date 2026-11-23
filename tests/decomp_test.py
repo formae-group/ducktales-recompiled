@@ -26,6 +26,12 @@
 
     py -3 -I tests/decomp_test.py --build build/headless [--dev-build build/headless-dev]
            [--routes tests/routes/X.txt ...] [--modes check replace pokes events] [--jobs 2]
+           [--changed RANGE ... [--from-state [--span N]]] [--golden DIR]
+
+--changed [BANK:]ADDR[-ADDR] ... keeps only the routes whose quick_verify coverage (the golden
+directory, tests/quick_verify.py) executes those PRG addresses; --from-state starts each of them
+from the golden save state just before the first segment that does, and --span N stops N frames
+later. That is the loop for one routine; the merge gate is every route from power-on.
 
 DUCKTALES_DECOMP=check py -3 -I tests/verify_routes.py runs the oracle comparison with
 the checks on.
@@ -41,6 +47,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
+sys.path.insert(0, str(ROOT / 'tests'))
+import quick_verify  # noqa: E402
 from romfile import default_rom  # noqa: E402
 
 RAM = 0x800
@@ -85,8 +93,33 @@ def route_frames(path):
     return last + 120
 
 
-def route_case(route):
-    return {'name': route.stem, 'route': route, 'frames': route_frames(route), 'extra': [], 'want': []}
+def route_case(route, start=0, state=None, span=None):
+    case = {'name': route.stem, 'route': route, 'frames': route_frames(route), 'extra': [], 'want': []}
+    if span:
+        case['frames'] = min(case['frames'], start + span)
+    if state:
+        case['extra'] = ['--load-state', str(state)]
+    return case
+
+
+def select_routes(routes, args):
+    rom = Path(args.rom)
+    golden = Path(args.golden) / quick_verify.file_sha256(rom)
+    ranges = quick_verify.parse_specs(args.changed, rom.read_bytes()[4])
+    selected = []
+    for route in routes:
+        cover = golden / f'{route.stem}.cover'
+        if not cover.exists():
+            sys.exit(f'{route.stem}: no coverage in {golden}; record it with tests/quick_verify.py --record')
+        reach = [s for s, offs in quick_verify.read_cover(cover) if quick_verify.hits(offs, ranges)]
+        if reach:
+            start = reach[0] if args.from_state else 0
+            state = quick_verify.state_path(golden, route, start) if start else None
+            selected.append(route_case(route, start, state, args.span))
+            print(f'{route.stem}: executes {" ".join(args.changed)} from the segment at frame {reach[0]}')
+    if not selected:
+        sys.exit(f'no route executes {" ".join(args.changed)}; add a route that does')
+    return selected
 
 
 def poke_case(name, pokes, want):
@@ -196,9 +229,15 @@ def main():
     ap.add_argument('--routes', nargs='*')
     ap.add_argument('--modes', nargs='+', default=['check', 'replace', 'pokes', 'events'])
     ap.add_argument('--jobs', type=int, default=2)
+    ap.add_argument('--golden', default=str(ROOT / 'build' / 'golden'), help='quick_verify golden root')
+    ap.add_argument('--changed', nargs='+', metavar='RANGE', help='only routes executing these PRG addresses')
+    ap.add_argument('--from-state', action='store_true', help='with --changed: start from the golden state')
+    ap.add_argument('--span', type=int, help='with --from-state: frames to run from the start')
     args = ap.parse_args()
+    if (args.from_state and not args.changed) or (args.span and not args.from_state):
+        ap.error('--from-state needs --changed, --span needs --from-state')
     routes = [Path(r) for r in args.routes] if args.routes else sorted((ROOT / 'tests' / 'routes').glob('*.txt'))
-    cases = [route_case(r) for r in routes]
+    cases = select_routes(routes, args) if args.changed else [route_case(r) for r in routes]
     pokes = [poke_case(*p) for p in POKES]
     events = [event_case(*e) for e in EVENTS]
     exe = ROOT / args.build / args.config / 'ducktales.exe'

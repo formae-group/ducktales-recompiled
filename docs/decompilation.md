@@ -248,24 +248,24 @@ RAM-identical in replace mode.
 | `Player_Mode12` | `$EC2D` | checked (pokes only) | 0 | mode12, mode12-page7 | no vertical direction with Y below `$18` |
 | `Player_Death` | `$EC9B` | checked | 8 | hurt-last-dot | none |
 | `Player_Mode14` | `$ECFF` | checked | 1 | - | none |
-| `Camera_Update` | `$EFE2` | claimed (decomp/level) | - | - | - |
-| `Map_LoadHeader` | `$C7B0` | claimed (decomp/level) | - | - | - |
-| `Level_DrawStartColumns` | `$C71D` | claimed (decomp/level) | - | - | - |
-| `Level_DrawScreen` | `$C78F` | claimed (decomp/level) | - | - | - |
-| `Scroll_StreamBlocks` | `$C830` | claimed (decomp/level) | - | - | - |
-| `Level_DecodeBlock` | `$CCBD` | claimed (decomp/level) | - | - | - |
-| `Level_MetatileAt` | `$CDE2` | claimed (decomp/level) | - | - | - |
-| `Level_ScreenPointer` | `$CE2C` | claimed (decomp/level) | - | - | - |
-| `Vram_FlushQueue` | `$C139` | claimed (decomp/level) | - | - | - |
-| `Vram_FlushTileEdits` | `$C15E` | claimed (decomp/level) | - | - | - |
-| `Bg_Probe` | `$D120` | claimed (decomp/level) | - | - | - |
-| `Bg_SnapRight` | `$D49A` | claimed (decomp/level) | - | - | - |
-| `Bg_SnapLeft` | `$D4B2` | claimed (decomp/level) | - | - | - |
-| `Bg_SnapHead` | `$D4C8` | claimed (decomp/level) | - | - | - |
-| `Bg_SnapFeet` | `$D4D6` | claimed (decomp/level) | - | - | - |
-| `Boss_CheckTrigger` | `$CF93` | claimed (decomp/level) | - | - | - |
-| `Level_TileEdit` | `$F574` | claimed (decomp/level) | - | - | - |
-| `Chr_StreamRow` | `$C42C` | claimed (decomp/level) | - | - | - |
+| `Camera_Update` | `$EFE2` | checked | 12 | 11 of 11 | not measured |
+| `Map_LoadHeader` | `$C7B0` | checked | 12 | 11 of 11 | not measured |
+| `Level_DrawStartColumns` | `$C71D` | checked | 12 | 11 of 11 | not measured |
+| `Level_DrawScreen` | `$C78F` | checked | 12 | 11 of 11 | not measured |
+| `Scroll_StreamBlocks` | `$C830` | checked | 12 | 11 of 11 | not measured |
+| `Level_DecodeBlock` | `$CCBD` | checked | 12 | 11 of 11 | not measured |
+| `Level_MetatileAt` | `$CDE2` | checked | 6 | - | not measured |
+| `Level_ScreenPointer` | `$CE2C` | checked | 12 | 11 of 11 | not measured |
+| `Vram_FlushQueue` | `$C139` | checked | 12 | 11 of 11 | not measured |
+| `Vram_FlushTileEdits` | `$C15E` | checked | 9 | - | not measured |
+| `Bg_Probe` | `$D120` | checked | 12 | 11 of 11 | not measured |
+| `Bg_SnapRight` | `$D49A` | checked | 10 | 2 of 11 | not measured |
+| `Bg_SnapLeft` | `$D4B2` | checked | 11 | - | not measured |
+| `Bg_SnapHead` | `$D4C8` | checked | 9 | - | not measured |
+| `Bg_SnapFeet` | `$D4D6` | checked | 12 | 11 of 11 | not measured |
+| `Boss_CheckTrigger` | `$CF93` | checked | 12 | 11 of 11 | not measured; the arena start (5 calls) runs as the original |
+| `Level_TileEdit` | `$F574` | checked | 9 | - | not measured |
+| `Chr_StreamRow` | `$C42C` | checked | 12 | 11 of 11 | not measured |
 
 **Claimed, in progress** (branch `decomp/flow`, `src/decomp/flow.c`): the game flow of the main task in the fixed
 bank, `$D4E6-$E353` and the boss trigger `$CF93-$D04C`: title and difficulty select (`$D4E6`), Land Select and the
@@ -276,8 +276,8 @@ the HUD timer `timer_tick` (`$E28C`).
 
 Not decompiled yet, and still run as the original from the C:
 
-- Through `Decomp_Call`: the background probe `$D120` and its snaps `$D49A`/`$D4B2`/`$D4C8`/`$D4D6`,
-  the object contact tests `$D202`/`$D291`, the climbing steps `$F192`/`$F1A8`, the walls move
+- Through `Decomp_Call`: the background probe `$D120` and its snaps `$D49A`/`$D4B2`/`$D4C8`/`$D4D6`
+  (decompiled in `collision.c`, but `player.c` still calls their originals), the object contact tests `$D202`/`$D291`, the climbing steps `$F192`/`$F1A8`, the walls move
   `$F0F8` and the Select refill `$E2FE`.
 - Through `Decomp_RunOriginal`: `Player_Update` in modes 15 (`$ED05`, message or item) and 16
   (`$EF62`, treasure), and every call that reaches the row change at `$E8C0`.
@@ -288,8 +288,16 @@ or 76%. With the collision and movement helpers he shares with other objects (`$
 `$F0F8-$F233`, 1,281 bytes) it is 54%. The motion (`$F234-$F2C6`) and sound (`$F752`) primitives
 are decompiled too, and they also serve every other object.
 
-**Next routines, in order:** the background probe `$D120` with its snaps (every move uses them),
-the contact tests `$D202`/`$D291`, the climbing steps and the walls move, the Select refill, then
+**Level routines** (`level.c`, `collision.c`): the camera `$EFE2-$F0E0`, the column streaming
+`$C7C5-$C969`, the map header `$C7B0`, the start and Land Select draws `$C71D-$C7AF`, the block
+decoding `$CCBD-$CE56`, the queue uploads `$C139-$C182`, the row's sprite CHR stream `$C42C-$C507`,
+the boss trigger `$CF93`, the tile edit `$F574` and the background probe with its snaps
+`$D120-$D4E5`. Branch coverage of these two files was not measured. Not decompiled yet: the row
+scroll (`$E9`), the tile-edit metatile helper `$F697` and the room transitions, which the flow's
+task code runs.
+
+**Next routines, in order:** `player.c` calling the C of the background probe and its snaps
+instead of their originals, the contact tests `$D202`/`$D291`, the climbing steps and the walls move, the Select refill, then
 modes 15 and 16 and the row change. Those last three wait for frames, so they need a C form of
 `task_yield` before they can leave `Decomp_RunOriginal`. After that comes `death_or_warp` (`$DC3E`,
 called from the frame loop at `$DBAD`) and the frame loop itself.
@@ -318,6 +326,16 @@ py -3 -I tests/verify_routes.py --build build/headless --jobs 3
 $env:DUCKTALES_DECOMP = 'check'; py -3 -I tests/verify_routes.py --build build/headless --jobs 3
 py -3 -I tests/enhancements_test.py --build build/headless --dev-build build/headless-dev
 ```
+
+While writing a routine, check only the routes that run it, from the golden save state just before
+it (`tests/quick_verify.py` golden files, `--golden` when they live in another worktree):
+
+```powershell
+py -3 -I tests/decomp_test.py --build build/headless --dev-build build/headless-dev --changed DF08-DF40 --from-state --span 600 --modes check replace
+```
+
+A routine every route runs at power-on selects frame 0 and saves nothing; run the full
+`decomp_test` before a merge in every case.
 
 | Check | What it shows |
 |---|---|
