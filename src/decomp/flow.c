@@ -42,29 +42,45 @@
 #define MUSIC_GAME_OVER 0x09
 #define MUSIC_DEATH     0x0A
 
-#define RESPAWN_PENDING     0x80
-#define RESPAWN_LIFE        0x87 /* entries from here cost a life */
-#define RESPAWN_ARENA       0x85 /* the warp into a boss arena */
-#define LAND_ARENA          5
-#define HAZARD_SPIKES       6 /* hazard mode that invulnerability ignores */
-#define CHECKPOINT_SET      5
-#define TIME_LOW_TENS       3
-#define DEATH_PAUSE_FALL    0xB4 /* frames after a death */
-#define DEATH_PAUSE_WARP    0x3C /* frames after a warp */
-#define GAME_OVER_FRAMES    0xF0
-#define LAND_EXIT_FRAMES    0xB4
-#define SPLIT_ON            0x40
-#define ROW_SCROLL_ADDR     0xC0
-#define SCROOGE_RESPAWN     0xA0 /* $0700 of Scrooge after a respawn */
-#define RESPAWN_ENTRY_LEN   9
-#define NT_FILL_ADDR        0x20 /* $C203: nametables from $2000 */
-#define NT_FILL_TILE        0x24
-#define PPU_STRINGS_LAND    0 /* $BAB0 set drawn at every land load */
-#define ROW_SCROLL_HI       0x24
-#define SCROOGE_START_Y     0x40
-#define SCROOGE_JUMP_VY     0x04BB /* take-off velocity, whole and fraction */
-#define SCROOGE_START_SPEED 0x0180
-#define SPRITE0_Y           0x2C
+#define RESPAWN_PENDING       0x80
+#define RESPAWN_LIFE          0x87 /* entries from here cost a life */
+#define RESPAWN_ARENA         0x85 /* the warp into a boss arena */
+#define LAND_ARENA            5
+#define HAZARD_SPIKES         6 /* hazard mode that invulnerability ignores */
+#define CHECKPOINT_SET        5
+#define TIME_LOW_TENS         3
+#define DEATH_PAUSE_FALL      0xB4 /* frames after a death */
+#define DEATH_PAUSE_WARP      0x3C /* frames after a warp */
+#define GAME_OVER_FRAMES      0xF0
+#define LAND_EXIT_FRAMES      0xB4
+#define SPLIT_ON              0x40
+#define ROW_SCROLL_ADDR       0xC0
+#define SCROOGE_RESPAWN       0xA0 /* $0700 of Scrooge after a respawn */
+#define RESPAWN_ENTRY_LEN     9
+#define NT_FILL_ADDR          0x20 /* $C203: nametables from $2000 */
+#define NT_FILL_TILE          0x24
+#define PPU_STRINGS_LAND      0 /* $BAB0 set drawn at every land load */
+#define ROW_SCROLL_HI         0x24
+#define SCROOGE_START_Y       0x40
+#define SCROOGE_JUMP_VY       0x04BB /* take-off velocity, whole and fraction */
+#define SCROOGE_START_SPEED   0x0180
+#define SPRITE0_Y             0x2C
+#define ALL_TREASURES         0x1F
+#define TREASURE_TRANSYLVANIA 0x02
+#define REDIRECT_LAND_SELECT  0x80
+#define MAIN_TASK_STACK       0xBF
+#define TITLE_SEED            0x88
+#define TITLE_OBJECTS         2
+#define TITLE_STRINGS         2 /* $BAB0 set of the title */
+#define TITLE_CHR             6 /* $C301 set of the title */
+#define TITLE_PALETTE         0x60
+#define TITLE_COLOUR_TEXT     0x11
+#define TITLE_COLOUR_A        0x2C
+#define TITLE_COLOUR_B        0x20
+#define TITLE_PAD_MOVE        (DT_PAD_SELECT | DT_PAD_LEFT | DT_PAD_RIGHT)
+#define TITLE_BLINK_FRAMES    0xB4
+#define SFX_CURSOR            0x2F
+#define DIFFICULTY_COUNT      3
 
 #define gScratch0        RAM_U8(DT_ADDR_SCRATCH0)
 #define gStreamSteps     RAM_U8(DT_ADDR_SCRATCH4)
@@ -76,8 +92,8 @@
 #define gStreamPage      RAM_U8(DT_ADDR_STREAM_PAGE)
 #define gStreamRequest   RAM_U8(DT_ADDR_MOVE_DIR)
 #define gUnk2E           RAM_U8(DT_ADDR_UNK_2E)
-#define gUnk4F           RAM_U8(DT_ADDR_UNK_4F)
-#define gUnk5B           RAM_U8(DT_ADDR_UNK_5B)
+#define gHeldSlot        RAM_U8(DT_ADDR_HELD_SLOT)
+#define gBlockOpened     RAM_U8(DT_ADDR_BLOCK_OPENED)
 #define gRowChrState     RAM_U8(DT_ADDR_ROW_CHR_STATE)
 #define gLandLeft        RAM_U8(DT_ADDR_LAND_LEFT)
 #define gMessage         RAM_U8(DT_ADDR_MESSAGE)
@@ -519,7 +535,7 @@ static void Death_Fade(Regs *r)
 static void Death_Blank(Regs *r)
 {
     Decomp_Enter(DT_FLOW_DEATH_BLANK, r->a, r->x, r->y);
-    gUnk4F = 0;
+    gHeldSlot = 0;
     gBossFight = 0;
     for (int i = 0x0B; i >= 0; i--) {
         gRam[DT_ADDR_HAZARD + i] = 0;
@@ -643,6 +659,8 @@ static void Death_Done(Regs *r)
 /* ---- the frame loop ---- */
 
 static void FrameLoop_End(Regs *r);
+static void BossTrigger(Regs *r);
+static void FrameLoop_AfterBossTrigger(Regs *r);
 static void LandLoad(Regs *r);
 static void FrameLoop_Yield(Regs *r);
 static void FrameLoop_Requests(Regs *r);
@@ -711,7 +729,9 @@ static void FrameLoop_AfterObjects(Regs *r)
 static void FrameLoop_AfterCamera(Regs *r)
 {
     Decomp_Enter(DT_FLOW_AFTER_CAMERA, r->a, r->x, r->y);
-    Jsr(DT_CODE_BOSS_TRIGGER, DT_FLOW_AFTER_BOSS_TRIGGER, 0);
+    if (Gosub(BossTrigger, r, DT_FLOW_AFTER_BOSS_TRIGGER)) {
+        FrameLoop_AfterBossTrigger(r);
+    }
 }
 
 /* $DB8F: a land redirect loads Transylvania (positive) or returns to Land
@@ -786,7 +806,7 @@ static void FrameLoop_AfterSpawn(Regs *r)
     Decomp_Enter(DT_FLOW_AFTER_SPAWN, r->a, r->x, r->y);
     gPrevCameraX = gCameraX;
     gUnk2E = 0;
-    gUnk5B = 0;
+    gBlockOpened = 0;
     uint8_t hazard = gHazard;
     if (hazard) {
         gHazard = 0;
@@ -817,6 +837,300 @@ static void FrameLoop_Yield(Regs *r)
 {
     Call(r, DT_CODE_RANDOM);
     Yield(DT_FLOW_NEXT_FRAME);
+}
+
+/* ---- title and difficulty ---- */
+
+static void Title_Loop(Regs *r);
+
+/* $D4E6: the main task starts (power-on and every reset): the title. */
+static void MainTask(Regs *r)
+{
+    Decomp_Enter(DT_CODE_MAIN_TASK, r->a, r->x, r->y);
+    r->x = MAIN_TASK_STACK;
+    Decomp_SetStack(MAIN_TASK_STACK);
+    r->a = RAM_U8(DT_ADDR_PPU_CTRL);
+    Decomp_Store(DT_PPU_CTRL, r->a);
+    Yield(DT_FLOW_TITLE_START);
+}
+
+/* $D4F1: the generator's seed, the HUD packets, the title music; fade out. */
+static void Title_Start(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_START, r->a, r->x, r->y);
+    RAM_U8(DT_ADDR_RANDOM) = TITLE_SEED;
+    Hud_Reset(r);
+    MusicRequest(r, DT_MUSIC_TITLE);
+    Jsr(DT_CODE_FADE_OUT, DT_FLOW_TITLE_FADED, 0);
+}
+
+/* $D500 */
+static void Title_Faded(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_FADED, r->a, r->x, r->y);
+    gHudSplit = 0;
+    gPlayerInvulnerable = 0;
+    r->a = 0;
+    Yield(DT_FLOW_TITLE_BLACK);
+}
+
+/* $D509 */
+static void Title_Black(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_BLACK, r->a, r->x, r->y);
+    Jsr(DT_CODE_SCREEN_OFF, DT_FLOW_TITLE_SCREEN_OFF, 0);
+}
+
+/* $D50C: no scroll, both nametables cleared. */
+static void Title_ScreenOff(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_SCREEN_OFF, r->a, r->x, r->y);
+    RAM_U8(DT_ADDR_SCROLL_X) = 0;
+    RAM_U8(DT_ADDR_SCROLL_Y) = 0;
+    gCameraPage = 0;
+    gCameraX = 0;
+    r->a = NT_FILL_ADDR;
+    r->x = NT_FILL_TILE;
+    r->y = 0;
+    Jsr(DT_CODE_NT_FILL, DT_FLOW_TITLE_FILLED, OUT_A | OUT_X | OUT_Y);
+}
+
+/* $D51F: the title's strings. */
+static void Title_Filled(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_FILLED, r->a, r->x, r->y);
+    Call(r, DT_CODE_OAM_CLEAR);
+    Call(r, DT_CODE_CLEAR_OBJECTS);
+    SelectBank(r, DT_BANK_SPRITES);
+    r->x = TITLE_STRINGS;
+    Jsr(DT_B5_PPU_STRINGS, DT_FLOW_TITLE_STRINGS, OUT_X);
+}
+
+/* $D52F: the title's CHR. */
+static void Title_Strings(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_STRINGS, r->a, r->x, r->y);
+    r->x = TITLE_CHR;
+    Jsr(DT_CODE_CHR_LOAD, DT_FLOW_TITLE_CHR, OUT_X);
+}
+
+/* $D534: the title's palette and its two objects (Scrooge and the
+ * difficulty cursor). */
+static void Title_Chr(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_CHR, r->a, r->x, r->y);
+    r->x = TITLE_PALETTE;
+    Land_LoadPalette(r, TITLE_PALETTE);
+    gRam[DT_ADDR_PALETTE_SHOWN + 0x10] = gRam[DT_ADDR_PALETTE + 0x10] = TITLE_COLOUR_TEXT;
+    for (int slot = TITLE_OBJECTS - 1; slot >= 0; slot--) {
+        uint16_t e = (uint16_t)(DT_DATA_TITLE_OBJECTS + 3 * slot);
+        gObjects->state[slot] = 0x80;
+        gObjects->flags[slot] = 0x80;
+        gObjects->action[slot] = Rom(e);
+        gObjects->y[slot] = Rom((uint16_t)(e + 1));
+        gObjects->worldX[slot] = Rom((uint16_t)(e + 2));
+        gObjects->animTimer[slot] = 0;
+        gObjects->animFrame[slot] = 0;
+        gObjects->worldPage[slot] = 0;
+    }
+    r->x = 0xFF;
+    r->y = 0xFD;
+    gRam[DT_ADDR_PALETTE_SHOWN + 0x1A] = gRam[DT_ADDR_PALETTE + 0x1A] = TITLE_COLOUR_A;
+    gRam[DT_ADDR_PALETTE_SHOWN + 0x1E] = gRam[DT_ADDR_PALETTE + 0x1E] = TITLE_COLOUR_B;
+    gRam[DT_ADDR_PALETTE_SHOWN + 0x1F] = gRam[DT_ADDR_PALETTE + 0x1F] = TITLE_COLOUR_A;
+    r->a = TITLE_COLOUR_A;
+    Jsr(DT_CODE_SCREEN_ON, DT_FLOW_TITLE_SHOWN, 0);
+}
+
+/* $D58B */
+static void Title_Shown(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_SHOWN, r->a, r->x, r->y);
+    Yield(DT_FLOW_TITLE_FADE_IN);
+}
+
+/* $D58E */
+static void Title_FadeIn(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_FADE_IN, r->a, r->x, r->y);
+    Jsr(DT_CODE_FADE_IN, DT_FLOW_TITLE_LIT, 0);
+}
+
+/* $D591: the lives group of the HUD as a game starts it. */
+static void Title_Lit(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_LIT, r->a, r->x, r->y);
+    CopyRom(DT_ADDR_HUD_GROUP_LIVES, DT_DATA_HUD_LIVES, DT_HUD_LIVES_LEN);
+    r->a = Rom(DT_DATA_HUD_LIVES);
+    r->y = 0xFF;
+    Yield(DT_FLOW_TITLE_READY);
+}
+
+/* $D59F: Normal is preselected. */
+static void Title_Ready(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_READY, r->a, r->x, r->y);
+    gDifficulty = 1;
+    Title_Loop(r);
+}
+
+static void Title_Frame(Regs *r);
+
+/* $D5A3 (and $D5D1 after each frame): Start goes to Land Select; Select,
+ * Left or Right moves the cursor through the three difficulties (Left
+ * upward, wrapping). */
+static void Title_Loop(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_LOOP, r->a, r->x, r->y);
+    r->a = gPadNew & DT_PAD_START;
+    if (r->a) {
+        Jump(DT_CODE_LAND_SELECT, 0);
+        return;
+    }
+    r->a = gPadNew & TITLE_PAD_MOVE;
+    if (r->a) {
+        r->y = r->a & DT_PAD_LEFT;
+        uint8_t difficulty = (uint8_t)(gDifficulty + Rom((uint16_t)(DT_DATA_DIFFICULTY_STEP + r->y)));
+        if (difficulty >= DIFFICULTY_COUNT) {
+            difficulty = (uint8_t)(difficulty + Rom((uint16_t)(DT_DATA_DIFFICULTY_STEP + r->y + 1)));
+        }
+        gDifficulty = difficulty;
+        r->y = difficulty;
+        gObjects->worldX[1] = Rom((uint16_t)(DT_DATA_DIFFICULTY_X + difficulty));
+        SoundRequest(r, SFX_CURSOR);
+    }
+    if (Gosub(Title_Frame, r, DT_FLOW_TITLE_LOOP)) {
+        Title_Loop(r);
+    }
+}
+
+/* $D5D7: Scrooge's idle animation picks a new variant at random every 180
+ * builder frames; the sprites, and the next frame. */
+static void Title_Frame(Regs *r)
+{
+    Decomp_Enter(DT_CODE_TITLE_FRAME, r->a, r->x, r->y);
+    if (gObjects->animFrame[P_] == 0 && gObjects->animTimer[P_] == 1) {
+        gObjects->animTimer[P_] = 0;
+        r->a = 0;
+        r->x = gSpritePhase;
+        if (gSpritePhase == TITLE_BLINK_FRAMES) {
+            gSpritePhase = 0;
+            uint8_t *random = &gRam[DT_ADDR_RANDOM];
+            random[0] = (uint8_t)(random[0] + random[1] + 1);
+            gObjects->animFrame[P_] = random[0] & 1;
+            r->a = random[0] & 1;
+        }
+    }
+    Call(r, DT_CODE_OAM_CLEAR);
+    SelectBank(r, DT_BANK_SPRITES);
+    Call(r, DT_B5_BUILD_OAM);
+    Yield(DT_FLOW_TITLE_FRAME_DONE);
+}
+
+/* $D609 */
+static void Title_FrameDone(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_TITLE_FRAME_DONE, r->a, r->x, r->y);
+}
+
+/* ---- boss trigger ---- */
+
+static uint16_t Rom16(uint16_t addr)
+{
+    return (uint16_t)(Rom(addr) | Rom((uint16_t)(addr + 1)) << 8);
+}
+
+static void BossTrigger_Scroll(Regs *r);
+
+/* $CF93: Scrooge reached the land's boss trigger (row, and his X page taken
+ * 8 pixels ahead or behind). In Transylvania with its treasure taken and not
+ * all five held, back to Land Select; otherwise the camera scrolls into the
+ * arena (map 5 at row = land, or row 5 for the final arena), with the land and
+ * row kept on the stack. */
+static void BossTrigger(Regs *r)
+{
+    Decomp_Enter(DT_CODE_BOSS_TRIGGER, r->a, r->x, r->y);
+    uint8_t land = gLand;
+    r->y = land;
+    r->a = gMapRow;
+    if (gMapRow != Rom((uint16_t)(DT_DATA_BOSS_ROW + land))) {
+        return;
+    }
+    uint8_t dir = Rom((uint16_t)(DT_DATA_BOSS_DIR + land));
+    r->x = dir & DT_PAD_LEFT;
+    uint16_t ahead = Rom16((uint16_t)(DT_DATA_BOSS_AHEAD + r->x));
+    uint8_t carry = gObjects->worldX[P_] + (ahead & 0xFF) > 0xFF;
+    r->a = (uint8_t)(gObjects->worldPage[P_] + (ahead >> 8) + carry);
+    if (r->a != Rom((uint16_t)(DT_DATA_BOSS_PAGE + land))) {
+        return;
+    }
+    uint8_t treasures = gTreasures & ALL_TREASURES;
+    if (land == LAND_TRANSYLVANIA && treasures != ALL_TREASURES && (treasures & TREASURE_TRANSYLVANIA)) {
+        gLandRedirect = REDIRECT_LAND_SELECT;
+        r->a = REDIRECT_LAND_SELECT;
+        return;
+    }
+    gStreamRequest = dir;
+    r->a = dir;
+    Call(r, DT_CODE_CLEAR_OBJECTS);
+    Decomp_Push(gLand);
+    Decomp_Push(gMapRow);
+    if (treasures == ALL_TREASURES) {
+        gMapRow = LAND_ARENA;
+        gFinalArena = LAND_ARENA;
+    } else {
+        gMapRow = r->y;
+    }
+    gLand = LAND_ARENA;
+    gRowChrState = 0;
+    BossTrigger_Scroll(r);
+}
+
+/* $CFF4: one pixel of the scroll, Scrooge carried along; the new columns'
+ * CHR streams in. */
+static void BossTrigger_Scroll(Regs *r)
+{
+    r->y = gStreamRequest & DT_PAD_LEFT;
+    uint16_t camera = (uint16_t)((gCameraX | gCameraPage << 8) + Rom16((uint16_t)(DT_DATA_BOSS_CAMERA_STEP + r->y)));
+    gCameraX = (uint8_t)camera;
+    gCameraPage = (uint8_t)(camera >> 8);
+    uint16_t step = Rom16((uint16_t)(DT_DATA_BOSS_X_STEP + r->y));
+    uint16_t frac = (uint16_t)(gObjects->xFrac[P_] + (step & 0xFF));
+    gObjects->xFrac[P_] = (uint8_t)frac;
+    gObjects->worldX[P_] = (uint8_t)(gObjects->worldX[P_] + (step >> 8) + (frac >> 8));
+    r->a = gObjects->worldX[P_];
+    Jsr(DT_CODE_ROW_CHR_STREAM, DT_FLOW_BOSS_STREAMED, 0);
+}
+
+/* $D01E (the land and row on the stack): until the camera is page-aligned,
+ * the sprites and the next frame; then the land and row back, the boss music,
+ * and the fight starts. */
+static void BossTrigger_Streamed(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_BOSS_STREAMED, r->a, r->x, r->y);
+    if (gCameraX != 0) {
+        gPrevCameraX = gCameraX;
+        gUnk2E = 0;
+        r->a = 0;
+        Call(r, DT_CODE_OAM_CLEAR);
+        SelectBank(r, DT_BANK_SPRITES);
+        Call(r, DT_B5_BUILD_OAM);
+        Yield(DT_FLOW_BOSS_NEXT);
+        return;
+    }
+    gMapRow = Decomp_Pull();
+    gLand = Decomp_Pull();
+    MusicRequest(r, MUSIC_BOSS);
+    gBossFight = 0xFF;
+    RAM_U8(DT_ADDR_PALETTE_REQUEST) = 0xFF;
+    r->a = 0xFF;
+}
+
+/* $D038 (the land and row on the stack) */
+static void BossTrigger_Next(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_BOSS_NEXT, r->a, r->x, r->y);
+    BossTrigger_Scroll(r);
 }
 
 /* ---- land load ---- */
@@ -964,7 +1278,7 @@ static void LandLoad_Done(Regs *r)
 {
     Decomp_Enter(DT_FLOW_LOAD_DONE, r->a, r->x, r->y);
     gBossFight = 0;
-    gUnk4F = 0;
+    gHeldSlot = 0;
     gPlayerMode = 0;
     gLandLeft = 0;
     gPrevCameraX = 0;
@@ -983,7 +1297,7 @@ static void LandLoad_Done(Regs *r)
     gTickFrames = DT_TICK_FRAMES_RELOAD;
     gObjects->state[1] = 0xFF;
     gObjects->flags[1] = 0xFF;
-    gObjects->unk_07F0[1] = 0xFF;
+    gObjects->record[1] = 0xFF;
     gHudGate = 0xFF;
     gObjects->y[1] = 0;
     gObjects->worldX[1] = 0;
@@ -1046,6 +1360,24 @@ const DecompRoutine gFlowRoutines[] = {
     RESUME(DT_FLOW_GAME_OVER_NEXT, "GameOver_Next", GameOver_Next, 1),
     TASK(DT_CODE_LAND_EXIT, NULL, "LandExit", LandExit, 0),
     RESUME(DT_FLOW_LAND_EXIT_NEXT, "LandExit_Next", LandExit_Next, 1),
+    TASK(DT_CODE_MAIN_TASK, SITE("D4E6"), "MainTask", MainTask, 0),
+    RESUME(DT_FLOW_TITLE_START, "Title_Start", Title_Start, 0),
+    RESUME(DT_FLOW_TITLE_FADED, "Title_Faded", Title_Faded, 0),
+    RESUME(DT_FLOW_TITLE_BLACK, "Title_Black", Title_Black, 0),
+    RESUME(DT_FLOW_TITLE_SCREEN_OFF, "Title_ScreenOff", Title_ScreenOff, 0),
+    RESUME(DT_FLOW_TITLE_FILLED, "Title_Filled", Title_Filled, 0),
+    RESUME(DT_FLOW_TITLE_STRINGS, "Title_Strings", Title_Strings, 0),
+    RESUME(DT_FLOW_TITLE_CHR, "Title_Chr", Title_Chr, 0),
+    RESUME(DT_FLOW_TITLE_SHOWN, "Title_Shown", Title_Shown, 0),
+    RESUME(DT_FLOW_TITLE_FADE_IN, "Title_FadeIn", Title_FadeIn, 0),
+    RESUME(DT_FLOW_TITLE_LIT, "Title_Lit", Title_Lit, 0),
+    RESUME(DT_FLOW_TITLE_READY, "Title_Ready", Title_Ready, 0),
+    RESUME(DT_FLOW_TITLE_LOOP, "Title_Loop", Title_Loop, 0),
+    TASK(DT_CODE_TITLE_FRAME, NULL, "Title_Frame", Title_Frame, 0),
+    RESUME(DT_FLOW_TITLE_FRAME_DONE, "Title_FrameDone", Title_FrameDone, 0),
+    TASK(DT_CODE_BOSS_TRIGGER, NULL, "BossTrigger", BossTrigger, 0),
+    RESUME(DT_FLOW_BOSS_STREAMED, "BossTrigger_Streamed", BossTrigger_Streamed, 2),
+    RESUME(DT_FLOW_BOSS_NEXT, "BossTrigger_Next", BossTrigger_Next, 2),
     TASK(DT_CODE_LAND_LOAD, SITE("D79B"), "LandLoad", LandLoad, 0),
     RESUME(DT_FLOW_LOAD_FADED, "LandLoad_Faded", LandLoad_Faded, 0),
     RESUME(DT_FLOW_LOAD_BLACK, "LandLoad_Black", LandLoad_Black, 0),
@@ -1064,13 +1396,14 @@ const int gFlowRoutineCount = sizeof gFlowRoutines / sizeof gFlowRoutines[0];
 
 #define STOP(addr, id) { addr, "ducktales.decomp.stop." id }
 
-/* The routines here with a decompiled C of their own ($C42C, $C71D, $C830, $EFE2,
- * $CF93, level.c) stop the isolated runs at their own sites. */
+/* The routines the flow hands off to that have a decompiled C of their own
+ * ($C42C, $C71D, $C830, $EFE2 in level.c, $E354 in player.c, $8000 bank 6 in
+ * objects.c) stop the isolated runs at their own sites. */
 const DecompStop gFlowStops[] = {
-    STOP(DT_CODE_TASK_YIELD, "FFAC"), STOP(DT_CODE_RESET, "FEE0"),      STOP(DT_CODE_FADE_IN, "C279"),
-    STOP(DT_CODE_FADE_OUT, "C282"),   STOP(DT_CODE_SCREEN_OFF, "C197"), STOP(DT_CODE_SCREEN_ON, "C1A1"),
-    STOP(DT_B6_OBJECTS, "8000.6"),    STOP(DT_B6_SPAWN, "AEA0.6"),      STOP(DT_CODE_LAND_SELECT, "D630"),
-    STOP(DT_CODE_NT_FILL, "C203"),    STOP(DT_CODE_CHR_LOAD, "C301"),   STOP(DT_B5_PPU_STRINGS, "BAB0.5"),
-    STOP(DT_CODE_SCENE, "DF27"),      STOP(DT_CODE_ENDING, "E1AF"),     STOP(DT_CODE_ROW_SCROLL, "C976"),
+    STOP(DT_CODE_TASK_YIELD, "FFAC"), STOP(DT_CODE_RESET, "FEE0"),       STOP(DT_CODE_FADE_IN, "C279"),
+    STOP(DT_CODE_FADE_OUT, "C282"),   STOP(DT_CODE_SCREEN_OFF, "C197"),  STOP(DT_CODE_SCREEN_ON, "C1A1"),
+    STOP(DT_B6_SPAWN, "AEA0.6"),      STOP(DT_CODE_LAND_SELECT, "D630"), STOP(DT_CODE_NT_FILL, "C203"),
+    STOP(DT_CODE_CHR_LOAD, "C301"),   STOP(DT_B5_PPU_STRINGS, "BAB0.5"), STOP(DT_CODE_SCENE, "DF27"),
+    STOP(DT_CODE_ENDING, "E1AF"),     STOP(DT_CODE_ROW_SCROLL, "C976"),
 };
 const int gFlowStopCount = sizeof gFlowStops / sizeof gFlowStops[0];

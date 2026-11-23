@@ -31,8 +31,9 @@
 
 --changed [BANK:]ADDR[-ADDR] ... keeps only the routes whose quick_verify coverage (the golden
 directory, tests/quick_verify.py) executes those PRG addresses; --from-state starts each of them
-from the golden save state just before the first segment that does, and --span N stops N frames
-later. That is the loop for one routine; the merge gate is every route from power-on.
+from the latest golden save state at or before the first segment that does where the game's
+scheduler is idle (S = $FF on the frame before it: a state inside a task would resume the original's
+task while replace mode runs the C), and --span N stops N frames after that segment's start. That is the loop for one routine; the merge gate is every route from power-on.
 
 DUCKTALES_DECOMP=check py -3 -I tests/verify_routes.py runs the oracle comparison with
 the checks on.
@@ -93,6 +94,33 @@ POKES = [
     ),
     ('select-poor', {0x34A: 0x01}, ['Player_SelectRefill'], {POKE_FRAME + 8: 'LEFT+SELECT', POKE_FRAME + 10: 'LEFT'}),
     ('select-full', {}, ['Player_SelectRefill'], {POKE_FRAME + 8: 'LEFT+SELECT', POKE_FRAME + 10: 'LEFT'}),
+    ('hud-total', {0xAB: 0x01}, ['Hud_RefreshTotal']),
+    # slot 9 made a pickup on Scrooge (step 2, waiting): the extra HP dot; a big diamond with money at 999...
+    (
+        'extra-dot',
+        {0x709: 0xA2, 0x719: 0x13, 0x629: 0x2B, 0x649: 0xA6, 0x729: 0x62, 0x739: 0x00, 0x7D9: 0x01, 0x609: 0x80},
+        ['Pickup_Take', 'Pickup_ExtraDot', 'Hud_RefillHp'],
+    ),
+    (
+        'money-max',
+        {
+            0x709: 0xA2,
+            0x719: 0x13,
+            0x629: 0x61,
+            0x6B9: 0xFF,
+            0x649: 0xA6,
+            0x729: 0x62,
+            0x739: 0x00,
+            0x7D9: 0x01,
+            0x609: 0x80,
+            0x324: 0x09,
+            0x325: 0x09,
+            0x326: 0x09,
+        },
+        ['Money_Add', 'Money_Max'],
+    ),
+    # slot 9 made a lift (kind $0F) under Scrooge
+    ('lift', {0x709: 0xA0, 0x719: 0x0F, 0x649: 0xB0, 0x729: 0x62, 0x739: 0x00, 0x609: 0x80}, ['Obj_Lift']),
 ]
 
 # name, route, options, routines that must be compared
@@ -130,10 +158,20 @@ def select_routes(routes, args):
             sys.exit(f'{route.stem}: no coverage in {golden}; record it with tests/quick_verify.py --record')
         reach = [s for s, offs in quick_verify.read_cover(cover) if quick_verify.hits(offs, ranges)]
         if reach:
-            start = reach[0] if args.from_state else 0
+            start = 0
+            if args.from_state:
+                idle = {
+                    int(m[1]) + 1
+                    for m in re.finditer(r'^(\d+) .*\bS=FF\b', (golden / f'{route.stem}.txt').read_text(), re.M)
+                }
+                start = max(
+                    (s for s in idle if s <= reach[0] and quick_verify.state_path(golden, route, s).exists()), default=0
+                )
             state = quick_verify.state_path(golden, route, start) if start else None
-            selected.append(route_case(route, start, state, args.span))
-            print(f'{route.stem}: executes {" ".join(args.changed)} from the segment at frame {reach[0]}')
+            selected.append(route_case(route, reach[0] if args.from_state else 0, state, args.span))
+            print(
+                f'{route.stem}: executes {" ".join(args.changed)} from the segment at frame {reach[0]}, run from frame {start}'
+            )
     if not selected:
         sys.exit(f'no route executes {" ".join(args.changed)}; add a route that does')
     return selected

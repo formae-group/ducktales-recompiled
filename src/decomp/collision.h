@@ -1,0 +1,11 @@
+/*
+ * collision.h - the background probe and its snaps (collision.c). X = slot
+ * in the original; here the slot is the argument, which they leave as it is.
+ */
+#pragma once
+
+void Bg_Probe(int slot);
+void Bg_SnapRight(int slot);
+void Bg_SnapLeft(int slot);
+void Bg_SnapHead(int slot);
+void Bg_SnapFeet(int slot);

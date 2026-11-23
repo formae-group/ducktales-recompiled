@@ -244,7 +244,12 @@ static bool call_in_scope(uint16_t routine, CycModRegs *r)
 
 Regs Decomp_Call(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
 {
-    CycModRegs r = { a, x, y, s_cur_s, s_entry_p, 0 };
+    return Decomp_CallP(routine, a, x, y, s_entry_p);
+}
+
+Regs Decomp_CallP(uint16_t routine, uint8_t a, uint8_t x, uint8_t y, uint8_t p)
+{
+    CycModRegs r = { a, x, y, s_cur_s, p, 0 };
     if (!call_in_scope(routine, &r)) {
         fail("an original routine called from C did not return", routine);
     }
@@ -586,14 +591,16 @@ void Decomp_Enter(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
         s_top_entered = true;
         return;
     }
-    if (s_mode != DECOMP_CHECK || s_inner) {
-        return;
-    }
     for (int i = 0; i < s_count; i++) {
         if (s_routine[i]->addr != routine) {
             continue;
         }
-        if (!s_routine[i]->site_id && !s_routine[i]->task) {
+        if (s_inner) {
+            return;
+        }
+        if (s_routine[i]->task) {
+            s_stats[i].calls++;
+        } else if (s_mode == DECOMP_CHECK && !s_routine[i]->site_id) {
             check_inner(i, (Regs){ a, x, y, s_entry_p }, false);
         }
         return;
@@ -739,15 +746,19 @@ static void run_task_original(const DecompRoutine *rt, const CycModRegs *in)
 }
 
 /* Bytes both runs must agree on: page 1 only above the C's final S, and never
- * the slot of the isolated call's return address. */
+ * the slot of the isolated call's return address (which wraps to the bottom of
+ * page 1 for the main task's start, entered with S = $FF). */
 static bool task_live(uint16_t a)
 {
-    if ((a & 0xFF00) != 0x0100 || a < DT_ADDR_STACK_FLOOR) {
+    if ((a & 0xFF00) != 0x0100) {
         return true;
     }
     uint8_t off = (uint8_t)a;
     if (off == s_run.call_s || off == (uint8_t)(s_run.call_s - 1)) {
         return false;
+    }
+    if (a < DT_ADDR_STACK_FLOOR) {
+        return true;
     }
     return s_handoff_set ? off > s_cur_s : off >= s_cur_s + 3u;
 }
@@ -953,6 +964,9 @@ static int on_entry(uint16_t addr)
         if (s_routine[i]->addr != addr || !s_routine[i]->site_id) {
             continue;
         }
+        if (addr < 0xC000 && cyc_cpu_ram()[DT_ADDR_BANK] != s_routine[i]->bank) {
+            continue;
+        }
         CycModRegs in;
         cyc_mod_regs(&in);
         if (s_routine[i]->task) {
@@ -993,6 +1007,8 @@ NES_MOD_CONSTRUCTOR(dt_register_decomp_sites)
     add_table(gMotionRoutines, gMotionRoutineCount);
     add_table(gSoundRoutines, gSoundRoutineCount);
     add_table(gPlayerRoutines, gPlayerRoutineCount);
+    add_table(gObjCommonRoutines, gObjCommonRoutineCount);
+    add_table(gObjectRoutines, gObjectRoutineCount);
     add_table(gLevelRoutines, gLevelRoutineCount);
     add_table(gCollisionRoutines, gCollisionRoutineCount);
     add_table(gFlowRoutines, gFlowRoutineCount);

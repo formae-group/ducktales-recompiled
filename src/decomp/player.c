@@ -29,7 +29,7 @@
  * to the row scroll, which goes back into the frame loop.
  */
 #include "decomp/decomp.h"
-#include "decomp/level.h"
+#include "decomp/collision.h"
 #include "decomp/motion.h"
 #include "decomp/sound.h"
 
@@ -679,7 +679,7 @@ static void Player_RowChange(Regs *r)
     gStreamScreen = gScratch(0);
     Decomp_Pull();
     Decomp_Pull();
-    RAM_U8(DT_ADDR_UNK_4F) = 0;
+    RAM_U8(DT_ADDR_HELD_SLOT) = 0;
     gObjects->flags[P_] &= 0xFC;
     r->a = gObjects->flags[P_];
     Decomp_Handoff(DT_CODE_ROW_SCROLL, DT_CODE_ROW_CHANGE_END, 0);

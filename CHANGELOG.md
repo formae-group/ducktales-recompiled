@@ -7,6 +7,10 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- The game flow is decompiled as task code (`src/decomp/flow.c`, docs/decompilation.md "Task
+  code"): the title and difficulty select, the land load, the frame loop with pause, death, warps,
+  respawn, game over and land exit, the HUD timer and refreshes, and the boss trigger with the
+  arena scroll. Its resume points start from the RTS observer, with no hook site.
 - `tests/decomp_test.py --changed <ranges> --from-state --span N` checks only the routes that run
   a decompiled routine, from the golden save state before it: 32 s instead of 689 s for a routine
   the routes reach late.
@@ -18,6 +22,13 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - Decompiled: Scrooge's object contact tests (`$D202`/`$D291`), the Select refill (`$E2FE`) and
   the vertical velocity moves (`$F270`/`$F284`). `tests/decomp_test.py` poke cases can add pad
   states to their route; three of them press Select.
+- The object system is decompiled (`src/decomp/objects.c`, `src/decomp/objcommon.c`): the per-frame
+  dispatch of bank 6, 21 of the 67 object kinds (the Amazon's enemies, the Himalayas' dangler,
+  Transylvania's swooper, blocks, pickups and what taking each item does, hidden items, chests,
+  doors, the lift and talking characters) and the shared helpers: contact with Scrooge, the movers,
+  block tests, money and HP. 60 routines, each checked on its own at every call (1,643,275 calls
+  compared on the 12 routes) and RAM-identical in replace mode; poke cases cover the lift, the extra
+  HP dot and the money cap, which no route reaches. Hook sites only where original code calls them.
 - Decompiled: the row change (`$E8C0`), as task code with its own site. A task routine may now pop
   its own return address before it hands off.
 - `src/decomp/player.c` calls the C of the background probe (`$D120`) and its four snaps instead
@@ -28,6 +39,9 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - Replace mode made a decompiled routine's PPU writes back to back. The PPU acts on `$2006`/`$2007`
   writes a few cycles late, so every byte of a VRAM queue landed one address off; the writes are
   now spread over the original routine's cycles.
+- `tests/decomp_test.py --from-state` starts only from a golden state where the game's scheduler is
+  idle. `full_moon` saved at frame 500 inside a task, and replace mode failed on its first frame
+  from there, because the run resumed the original's task while replace ran the C.
 
 ## [1.0.0] - 2026-11-23
 
