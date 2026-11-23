@@ -325,7 +325,7 @@ RAM-identical in replace mode.
 | `Palette_FadeWait` (resume point after `task_yield`) | `$C2B2` | checked | 12 | - | not measured |
 | `Random_Next` | `$C2E6` | checked | 12 | - | not measured |
 | `Chr_LoadList` | `$C301` | checked | 12 | - | not measured |
-| `Palette_LoadScene` | `$F76D` | written, not compared | 0 | - | every branch (no route calls it; needs a poke case) |
+| `Palette_LoadScene` | `$F76D` | checked (pokes only) | 0 | ending | not measured |
 | `Bank_Select` | `$FFDE` | checked | 12 | - | not measured |
 | `Bank_SelectTemp` | `$FFE0` | checked | 12 | - | not measured |
 | `Oam_Build` | bank 5 `$8000` | checked | 12 | - | not measured |

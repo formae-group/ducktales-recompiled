@@ -23,6 +23,8 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   their site only with their bank mapped.
 - The palette fades `$C279`/`$C282` are decompiled as task code: each step yields through
   `task_yield` with its frame count on the stack, and the resume point `$C2B2` carries on.
+- `tests/decomp_test.py` has an `ending` poke case (`$AC` set): the ending starts and its first scene
+  loads its palettes, the only call of `Palette_LoadScene` (`$F76D`) a test reaches.
 - `tests/decomp_test.py` names each differing RAM address with its `ducktales_symbols.h` name.
 - The camera, the column streaming, the map and block decoding, the VRAM queue uploads and the
   background probe with its four snaps are decompiled (`src/decomp/level.c`, `src/decomp/collision.c`):
