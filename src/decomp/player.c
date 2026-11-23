@@ -28,6 +28,7 @@
  */
 #include "decomp/decomp.h"
 #include "decomp/motion.h"
+#include "decomp/objcommon.h"
 #include "decomp/sound.h"
 
 #include "ducktales/events.h"
@@ -811,7 +812,7 @@ static void Player_Climb(void)
     gObjects->vyFrac[P_] = gObjects->speedFrac[P_];
     gObjects->vy[P_] = gObjects->speed[P_];
     if (dir != DT_PAD_UP) {
-        Decomp_Call(DT_CODE_CLIMB_DOWN, 0x10, 0, 3);
+        (void)Obj_ClimbDown(P_, 0x10, 3);
         if (gClimbClass != 2) {
             Player_LetGo();
         } else if (gObjects->y[P_] >= ROW_BOTTOM_Y) {
@@ -819,7 +820,7 @@ static void Player_Climb(void)
         }
         return;
     }
-    Decomp_Call(DT_CODE_CLIMB_UP, 0x14, 0, 3);
+    (void)Obj_ClimbUp(P_, 0x14, 3);
     if (gClimbClass != 2) {
         Player_LetGo();
     } else if (gObjects->y[P_] < ROW_TOP_Y_CLIMBING) {

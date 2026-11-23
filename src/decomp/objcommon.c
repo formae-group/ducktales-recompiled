@@ -289,6 +289,48 @@ uint8_t Obj_Rise(uint8_t slot, uint8_t first, uint8_t count)
     return x;
 }
 
+/* $F192: a climbing step down: Y += the vertical velocity, then the probes
+ * first..first+count. A slot whose Y carries out (past the bottom of the
+ * screen) is despawned; a hit snaps its feet onto the tile. */
+uint8_t Obj_ClimbDown(uint8_t slot, uint8_t first, uint8_t count)
+{
+    Decomp_Enter(DT_CODE_CLIMB_DOWN, first, slot, count);
+    gProbeFirst = first;
+    gProbeCount = count;
+    bool off = (uint32_t)(gObjects->y[slot] << 8 | gObjects->yFrac[slot]) + Obj_GetVelocityY(slot) > 0xFFFF;
+    Obj_AddVelocityY(slot);
+    if (off) {
+        Obj_Despawn(slot);
+        return slot;
+    }
+    Bg_Probe(slot);
+    if (gProbeHits & 1) {
+        Bg_SnapFeet(slot);
+    }
+    return slot;
+}
+
+/* $F1A8: a climbing step up: Y -= the vertical velocity, then the probes.
+ * A slot whose Y borrows (past the top) is despawned; a hit pushes it below
+ * the tile its head hit. */
+uint8_t Obj_ClimbUp(uint8_t slot, uint8_t first, uint8_t count)
+{
+    Decomp_Enter(DT_CODE_CLIMB_UP, first, slot, count);
+    gProbeFirst = first;
+    gProbeCount = count;
+    bool off = (uint16_t)(gObjects->y[slot] << 8 | gObjects->yFrac[slot]) < Obj_GetVelocityY(slot);
+    Obj_SubVelocityY(slot);
+    if (off) {
+        Obj_Despawn(slot);
+        return slot;
+    }
+    Bg_Probe(slot);
+    if (gProbeHits & 1) {
+        Bg_SnapHead(slot);
+    }
+    return slot;
+}
+
 /* $F6BD: direction towards Scrooge: 1 when he is right of the slot, 2 when
  * he is at it or left of it. */
 void Obj_FaceScrooge(uint8_t slot)
@@ -391,6 +433,16 @@ static void Run_Fall(Regs *r)
     r->x = Obj_Fall(r->x, r->a, r->y);
 }
 
+static void Run_ClimbDown(Regs *r)
+{
+    r->x = Obj_ClimbDown(r->x, r->a, r->y);
+}
+
+static void Run_ClimbUp(Regs *r)
+{
+    r->x = Obj_ClimbUp(r->x, r->a, r->y);
+}
+
 static void Run_Rise(Regs *r)
 {
     r->x = Obj_Rise(r->x, r->a, r->y);
@@ -464,6 +516,8 @@ const DecompRoutine gObjCommonRoutines[] = {
     { DT_CODE_OBJ_WALK_LEFT, "ducktales.decomp.F13B", "Obj_WalkLeft", Run_WalkLeft, OUT_X },
     { DT_CODE_OBJ_FALL, "ducktales.decomp.F1BE", "Obj_Fall", Run_Fall, OUT_X },
     { DT_CODE_OBJ_RISE, "ducktales.decomp.F1F9", "Obj_Rise", Run_Rise, OUT_X },
+    { DT_CODE_CLIMB_DOWN, "ducktales.decomp.F192", "Obj_ClimbDown", Run_ClimbDown, OUT_X },
+    { DT_CODE_CLIMB_UP, "ducktales.decomp.F1A8", "Obj_ClimbUp", Run_ClimbUp, OUT_X },
     { DT_CODE_OBJ_DESPAWN, NULL, "Obj_Despawn", Run_Despawn, 0 },
     { DT_CODE_OBJ_TOUCH_BLOCK_H, NULL, "Obj_TouchBlockH", Run_TouchBlockH, OUT_C },
     { DT_CODE_OBJ_TOUCH_BLOCK_V, NULL, "Obj_TouchBlockV", Run_TouchBlockV, OUT_C },
