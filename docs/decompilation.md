@@ -13,6 +13,11 @@ port's own files and all switched off by default:
   use, written as C on the API. Each replaces the recompiled routine at its entry, and
   each is checked against the original on every call of every route.
 
+The routines run only in the cycle host (`build/headless`, and `ducktales_cycle.exe` of a window
+build). The game as players run it, `ducktales.exe` of `build/windows`, is the native runtime's
+player by default (`DUCKTALES_PLAYER=native`), which does not link `src/decomp/`
+([native-runtime.md](native-runtime.md#the-player-build)).
+
 Addresses are named only in `src/game/ducktales_symbols.h`. Status words (verified, code,
 hypothesis) are used as in [memory-map.md](memory-map.md). Code addresses are in bank 7 (the fixed
 bank).
