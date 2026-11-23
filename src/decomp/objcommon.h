@@ -26,6 +26,8 @@ uint8_t Obj_WalkRight(uint8_t slot, uint8_t first, uint8_t count);
 uint8_t Obj_WalkLeft(uint8_t slot, uint8_t first, uint8_t count);
 uint8_t Obj_Fall(uint8_t slot, uint8_t first, uint8_t count);
 uint8_t Obj_Rise(uint8_t slot, uint8_t first, uint8_t count);
+uint8_t Obj_ClimbDown(uint8_t slot, uint8_t first, uint8_t count);
+uint8_t Obj_ClimbUp(uint8_t slot, uint8_t first, uint8_t count);
 void Obj_Despawn(uint8_t slot);
 void Obj_FaceScrooge(uint8_t slot);
 uint8_t Obj_DistanceX(uint8_t slot);

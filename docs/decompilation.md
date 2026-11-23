@@ -336,9 +336,9 @@ Not decompiled yet, and still run as the original from the C:
 
 - Through `Decomp_Call`: the background probe `$D120` and its snaps `$D49A`/`$D4B2`/`$D4C8`/`$D4D6`
   (decompiled in `collision.c`, but `player.c` still calls their originals), one probe point
-  `$D350` (where `Player_ContactV` can fall through to), the climbing steps `$F192`/`$F1A8`, the
-  walls move `$F0F8` and the HP refill `$F812`. The last four belong with the object code (`$F179`,
-  `$F1BE`, `$F1F9`), so they are decompiled there.
+  `$D350` (where `Player_ContactV` can fall through to), the walls move `$F0F8` and the HP refill
+  `$F812`. The last two are decompiled with the object code (`objcommon.c`, `objects.c`). The
+  climbing steps `$F192`/`$F1A8` are C there too, and `player.c` calls that C.
 - Through `Decomp_RunOriginal`: `Player_Update` in modes 15 (`$ED05`, message or item) and 16
   (`$EF62`, treasure), and every call that reaches the row change at `$E8C0`.
 
@@ -397,7 +397,7 @@ nothing the dispatch uses.
 |---|---|---|---|
 | `Obj_UpdateAll` | P | X | X = 16 when it returns; the timer after it passes X to a sound request, which keeps it in `$00` |
 | `Obj_TouchScrooge` | X = slot | X, C | C clear = contact; Y = hitbox index when the slot is on screen |
-| `Obj_WalkRight`, `Obj_WalkLeft`, `Obj_Fall`, `Obj_Rise` | A = first probe, Y = probe count - 1, X = slot | X | X is what the probe returned |
+| `Obj_WalkRight`, `Obj_WalkLeft`, `Obj_Fall`, `Obj_Rise`, `Obj_ClimbDown`, `Obj_ClimbUp` | A = first probe, Y = probe count - 1, X = slot | X | X is what the probe returned |
 | `Obj_TouchBlockH`, `Obj_TouchBlockV`, `Obj_HitOthers` | X = slot | C | C clear = a hit |
 | `Obj_FindFreeSlot`, `Obj_FindFreeSlotY` | - | X or Y, C | C set = no free slot |
 | `Obj_DistanceX`, `Obj_DistanceY`, `Obj_FaceScrooge` | X = slot | A | |
@@ -405,15 +405,15 @@ nothing the dispatch uses.
 
 **Hook sites: only the frontier.** A routine has a site only when original code calls it
 (`tools/decomp_callers.py`); everything the C calls is a plain C call that starts with
-`Decomp_Enter`, so check mode compares it on its own at every call. The 14 sites are the dispatch
-`$8000`, `Obj_TouchScrooge` and the four movers (called by the 46 handlers that are still
+`Decomp_Enter`, so check mode compares it on its own at every call. The 16 sites are the dispatch
+`$8000`, `Obj_TouchScrooge`, the four movers and the two climbing steps (called by the 46 handlers that are still
 original), and eight fixed-bank helpers that original code also calls: `$F312`, `$F6BD`, `$F7BE`,
 `$F7CC`, `$F7DA`, `$F7F0`, `$F812` (also the flow's respawn) and `$F83F`. The flow's stop at
 `$8000` (bank 6) is this site: `Obj_UpdateAll`'s hook ends an isolated run of the frame loop there
 too, so the flow has no separate stop for it. Routines with a site that the C calls are compared
 where original code calls them, not from the C.
 
-**Routines** (60: 21 kind handlers, the dispatch and 38 inner routines). "Routes" is the number of
+**Routines** (62: 21 kind handlers, the dispatch and 40 inner routines). "Routes" is the number of
 the 12 routes where check mode compared the routine, "Calls" the calls compared on them, "Pokes"
 the `tests/decomp_test.py` cases that reach it from a poked state. All were compared equal on every
 call and are RAM-identical in replace mode.
@@ -464,6 +464,8 @@ call and are RAM-identical in replace mode.
 | `Obj_Swooper` | `$9430` (bank 6) | - | - | checked | 4 | 2,370 | - |
 | `Obj_WalkRight` | `$F0F8` | yes | X | checked | 11 | 10,787 | - |
 | `Obj_WalkLeft` | `$F13B` | yes | X | checked | 11 | 13,317 | - |
+| `Obj_ClimbDown` | `$F192` | yes | X | checked | 6 | 3,178 | - |
+| `Obj_ClimbUp` | `$F1A8` | yes | X | checked | 7 | 2,944 | - |
 | `Obj_Despawn` | `$F179` | - | - | checked | 2 | 22 | - |
 | `Obj_Fall` | `$F1BE` | yes | X | checked | 11 | 19,854 | - |
 | `Obj_Rise` | `$F1F9` | yes | X | checked | 10 | 2,157 | - |
@@ -514,7 +516,7 @@ through `Obj_Defeat`), the vertical moves `$F270`/`$F284`/`$F298` and the seven 
 
 Not decompiled yet: the other 46 kinds, among them the bosses (their hit routine `$F6D7` raises
 `EVENT_BOSS_HIT`, so a C boss has to raise it itself), the spawner (bank 6 `$AE20-$AF61`), the tile
-edit `$F506` and the climbing step `$F1A8` (both through `Decomp_Call`). The movers test the
+edit `$F506` (through `Decomp_Call`). The movers and the climbing steps test the
 background through the C of the probe `$D120` and its snaps (`collision.c`).
 
 ### Adding a routine

@@ -26,9 +26,10 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   dispatch of bank 6, 21 of the 67 object kinds (the Amazon's enemies, the Himalayas' dangler,
   Transylvania's swooper, blocks, pickups and what taking each item does, hidden items, chests,
   doors, the lift and talking characters) and the shared helpers: contact with Scrooge, the movers,
-  block tests, money and HP. 60 routines, each checked on its own at every call (1,643,275 calls
-  compared on the 12 routes) and RAM-identical in replace mode; poke cases cover the lift, the extra
-  HP dot and the money cap, which no route reaches. Hook sites only where original code calls them.
+  block tests, the climbing steps, money and HP. 62 routines, each checked on its own at every call
+  (1,989,532 calls compared on the 12 routes) and RAM-identical in replace mode; poke cases cover
+  the lift, the extra HP dot and the money cap, which no route reaches. Hook sites only where
+  original code calls them.
 
 ### Fixed
 
