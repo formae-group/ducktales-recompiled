@@ -2073,6 +2073,21 @@ static void Obj_BlockDweller(uint8_t x)
     (void)Obj_TouchScrooge(x);
 }
 
+/* Kind $41 (fixed bank $FE50): a spot that, while Scrooge holds the key
+ * item the land asks for ($A3 & $F6), sets his special-tile bit ($0600 bit
+ * 2) when he touches it. */
+static void Obj_KeySpot(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_KEY_SPOT, 0x22, x, gObjects->kind[x]);
+    if ((gKeyItems & gLand) == 0) {
+        return;
+    }
+    gObjects->hitbox[x] = 0;
+    if (Obj_TouchScrooge(x)) {
+        gObjects->flags[P_] |= 4;
+    }
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -2177,6 +2192,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_TALKER:
             Obj_Talker(slot);
+            break;
+        case OBJ_KIND_KEY_SPOT:
+            Obj_KeySpot(slot);
             break;
         default:
             *r = Decomp_CallP((uint16_t)(gScratch1 << 8 | gScratch0), r->a, slot, r->y, r->p);
@@ -2341,6 +2359,11 @@ static void Run_BlockDweller(Regs *r)
 static void Run_DwellerLinkBlock(Regs *r)
 {
     Obj_DwellerLinkBlock(r->x);
+}
+
+static void Run_KeySpot(Regs *r)
+{
+    Obj_KeySpot(r->x);
 }
 
 static void Run_Swooper(Regs *r)
@@ -2512,6 +2535,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_KEY_SPOT, NULL, "Obj_KeySpot", Run_KeySpot, 0 },
     { DT_CODE_KIND_BLOCK_DWELLER, NULL, "Obj_BlockDweller", Run_BlockDweller, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_DWELLER_LINK_BLOCK, NULL, "Obj_DwellerLinkBlock", Run_DwellerLinkBlock, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_CEILING_HOPPER, NULL, "Obj_CeilingHopper", Run_CeilingHopper, 0, .bank = DT_BANK_OBJECTS },

@@ -489,6 +489,7 @@
 #define DT_CODE_KIND_FLYER           0x916C /* kind $0D */
 #define DT_CODE_KIND_SWING           0x9225 /* kind $0E */
 #define DT_CODE_KIND_SWOOPER         0x9430 /* kind $11 */
+#define DT_CODE_KIND_KEY_SPOT        0xFE50 /* kind $41 (fixed bank) */
 #define DT_CODE_KIND_BLOCK_DWELLER   0x9552 /* kind $12 */
 #define DT_CODE_DWELLER_LINK_BLOCK   0x9649 /* kind $12: find or make its block */
 #define DT_CODE_KIND_CEILING_HOPPER  0xA065 /* kind $25 */

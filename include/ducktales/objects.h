@@ -57,6 +57,7 @@ extern "C" {
 #define OBJ_KIND_DROPPING       0x2B /* something that drops and breaks on the floor (code) */
 #define OBJ_KIND_DOOR           0x2F /* a door: warp request (code) */
 #define OBJ_KIND_TALKER         0x35 /* a character that shows a message (code) */
+#define OBJ_KIND_KEY_SPOT       0x41 /* a spot that needs the land's key item (code) */
 
 /* $0700 bits 0-3: the handler's step (code). */
 #define OBJ_STATE_STEP 0x0F
