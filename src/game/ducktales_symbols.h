@@ -489,6 +489,7 @@
 #define DT_CODE_KIND_FLYER           0x916C /* kind $0D */
 #define DT_CODE_KIND_SWING           0x9225 /* kind $0E */
 #define DT_CODE_KIND_SWOOPER         0x9430 /* kind $11 */
+#define DT_CODE_KIND_RISING_SHOT     0xA5BE /* kind $27 */
 #define DT_CODE_KIND_LEAPER          0x9B10 /* kind $1C */
 #define DT_CODE_LEAPER_DUST          0x9C0A /* kind $1C: a puff of dust below the slot */
 #define DT_CODE_KIND_BOBBER          0x9E51 /* kind $20 */

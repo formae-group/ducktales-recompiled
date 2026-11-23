@@ -1798,6 +1798,26 @@ static void Obj_Leaper(uint8_t x)
     Obj_SpawnDust(x);
 }
 
+/* Kind $27 ($A5BE): a shot that flies up and sideways by its velocity and
+ * speed, harming Scrooge on contact; it is freed when it leaves the top of
+ * the screen. */
+static void Obj_RisingShot(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_RISING_SHOT, 0x22, x, gObjects->kind[x]);
+    (void)Obj_TouchScrooge(x);
+    bool off = (uint16_t)(gObjects->y[x] << 8 | gObjects->yFrac[x]) < Obj_GetVelocityY(x);
+    Obj_SubVelocityY(x);
+    if (off) {
+        gObjects->state[x] = 0;
+        return;
+    }
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        Obj_MoveRight(x);
+    } else {
+        Obj_MoveLeft(x);
+    }
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -1884,6 +1904,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_BOBBER:
             Obj_Bobber(slot);
+            break;
+        case OBJ_KIND_RISING_SHOT:
+            Obj_RisingShot(slot);
             break;
         case OBJ_KIND_DOOR:
             Obj_Door(slot);
@@ -2024,6 +2047,11 @@ static void Run_Leaper(Regs *r)
 static void Run_SpawnDust(Regs *r)
 {
     Obj_SpawnDust(r->x);
+}
+
+static void Run_RisingShot(Regs *r)
+{
+    Obj_RisingShot(r->x);
 }
 
 static void Run_Swooper(Regs *r)
@@ -2195,6 +2223,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_RISING_SHOT, NULL, "Obj_RisingShot", Run_RisingShot, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LEAPER, NULL, "Obj_Leaper", Run_Leaper, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_LEAPER_DUST, NULL, "Obj_SpawnDust", Run_SpawnDust, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_BOBBER, NULL, "Obj_Bobber", Run_Bobber, 0, .bank = DT_BANK_OBJECTS },
