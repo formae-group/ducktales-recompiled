@@ -20,13 +20,20 @@
 #include <windows.h>
 #endif
 
-#define ZIP_EOCD    0x06054b50u
-#define ZIP_CENTRAL 0x02014b50u
-#define ZIP_LOCAL   0x04034b50u
+#define ZIP_EOCD     0x06054b50u
+#define ZIP_CENTRAL  0x02014b50u
+#define ZIP_LOCAL    0x04034b50u
 #define MOD_FILE_MAX (512u << 20)
 
-static uint16_t u16(const uint8_t *p) { return (uint16_t)(p[0] | p[1] << 8); }
-static uint32_t u32(const uint8_t *p) { return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24; }
+static uint16_t u16(const uint8_t *p)
+{
+    return (uint16_t)(p[0] | p[1] << 8);
+}
+
+static uint32_t u32(const uint8_t *p)
+{
+    return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
+}
 
 uint32_t mod_crc32(const uint8_t *data, size_t size)
 {
@@ -34,12 +41,16 @@ uint32_t mod_crc32(const uint8_t *data, size_t size)
     if (!table[1]) {
         for (uint32_t i = 0; i < 256; i++) {
             uint32_t c = i;
-            for (int k = 0; k < 8; k++) c = (c & 1) ? 0xEDB88320u ^ (c >> 1) : c >> 1;
+            for (int k = 0; k < 8; k++) {
+                c = (c & 1) ? 0xEDB88320u ^ (c >> 1) : c >> 1;
+            }
             table[i] = c;
         }
     }
     uint32_t crc = 0xFFFFFFFFu;
-    for (size_t i = 0; i < size; i++) crc = table[(crc ^ data[i]) & 0xFF] ^ (crc >> 8);
+    for (size_t i = 0; i < size; i++) {
+        crc = table[(crc ^ data[i]) & 0xFF] ^ (crc >> 8);
+    }
     return crc ^ 0xFFFFFFFFu;
 }
 
@@ -47,16 +58,22 @@ uint32_t mod_crc32(const uint8_t *data, size_t size)
 static wchar_t *wide(const char *utf8)
 {
     int n = MultiByteToWideChar(CP_UTF8, 0, utf8, -1, NULL, 0);
-    if (n <= 0) return NULL;
+    if (n <= 0) {
+        return NULL;
+    }
     wchar_t *w = malloc((size_t)n * sizeof *w);
-    if (w) MultiByteToWideChar(CP_UTF8, 0, utf8, -1, w, n);
+    if (w) {
+        MultiByteToWideChar(CP_UTF8, 0, utf8, -1, w, n);
+    }
     return w;
 }
 
 static FILE *open_utf8(const char *path, const char *mode)
 {
     wchar_t *w = wide(path), wmode[8];
-    if (!w) return NULL;
+    if (!w) {
+        return NULL;
+    }
     MultiByteToWideChar(CP_UTF8, 0, mode, -1, wmode, 8);
     FILE *f = _wfopen(w, wmode);
     free(w);
@@ -66,7 +83,9 @@ static FILE *open_utf8(const char *path, const char *mode)
 bool mod_is_dir(const char *path)
 {
     wchar_t *w = wide(path);
-    if (!w) return false;
+    if (!w) {
+        return false;
+    }
     DWORD attr = GetFileAttributesW(w);
     free(w);
     return attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY);
@@ -74,9 +93,13 @@ bool mod_is_dir(const char *path)
 
 bool mod_make_dir(const char *path)
 {
-    if (mod_is_dir(path)) return true;
+    if (mod_is_dir(path)) {
+        return true;
+    }
     wchar_t *w = wide(path);
-    if (!w) return false;
+    if (!w) {
+        return false;
+    }
     bool ok = CreateDirectoryW(w, NULL) != 0;
     free(w);
     return ok;
@@ -87,15 +110,23 @@ void mod_list_dir(const char *dir, void (*fn)(void *user, const char *name, bool
     char pattern[1100];
     snprintf(pattern, sizeof pattern, "%s\\*", dir);
     wchar_t *w = wide(pattern);
-    if (!w) return;
+    if (!w) {
+        return;
+    }
     WIN32_FIND_DATAW fd;
     HANDLE h = FindFirstFileW(w, &fd);
     free(w);
-    if (h == INVALID_HANDLE_VALUE) return;
+    if (h == INVALID_HANDLE_VALUE) {
+        return;
+    }
     do {
         char name[MOD_NAME_MAX * 3];
-        if (!WideCharToMultiByte(CP_UTF8, 0, fd.cFileName, -1, name, sizeof name, NULL, NULL)) continue;
-        if (!strcmp(name, ".") || !strcmp(name, "..")) continue;
+        if (!WideCharToMultiByte(CP_UTF8, 0, fd.cFileName, -1, name, sizeof name, NULL, NULL)) {
+            continue;
+        }
+        if (!strcmp(name, ".") || !strcmp(name, "..")) {
+            continue;
+        }
         fn(user, name, (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0);
     } while (FindNextFileW(h, &fd));
     FindClose(h);
@@ -105,7 +136,9 @@ void mod_list_dir(const char *dir, void (*fn)(void *user, const char *name, bool
 uint8_t *mod_read_file(const char *path, size_t *size)
 {
     FILE *f = open_utf8(path, "rb");
-    if (!f) return NULL;
+    if (!f) {
+        return NULL;
+    }
     uint8_t *data = NULL;
     if (_fseeki64(f, 0, SEEK_END) == 0) {
         long long n = _ftelli64(f);
@@ -127,7 +160,9 @@ uint8_t *mod_read_file(const char *path, size_t *size)
 static bool add_entry(ModArchive *a, const ModEntry *e)
 {
     ModEntry *grown = realloc(a->entries, (size_t)(a->count + 1) * sizeof *grown);
-    if (!grown) return false;
+    if (!grown) {
+        return false;
+    }
     a->entries = grown;
     a->entries[a->count++] = *e;
     return true;
@@ -135,8 +170,8 @@ static bool add_entry(ModArchive *a, const ModEntry *e)
 
 typedef struct {
     ModArchive *a;
-    char        base[MOD_NAME_MAX];
-    int         depth;
+    char base[MOD_NAME_MAX];
+    int depth;
 } Walk;
 
 static void walk_folder(void *user, const char *name, bool folder);
@@ -154,9 +189,13 @@ static void walk_folder(void *user, const char *name, bool folder)
 {
     Walk *w = user;
     char rel[MOD_NAME_MAX];
-    if (snprintf(rel, sizeof rel, "%s%s%s", w->base, w->base[0] ? "/" : "", name) >= (int)sizeof rel) return;
+    if (snprintf(rel, sizeof rel, "%s%s%s", w->base, w->base[0] ? "/" : "", name) >= (int)sizeof rel) {
+        return;
+    }
     if (folder) {
-        if (w->depth < 4) walk(w->a, rel, w->depth + 1);
+        if (w->depth < 4) {
+            walk(w->a, rel, w->depth + 1);
+        }
         return;
     }
     ModEntry e;
@@ -175,7 +214,9 @@ static bool open_zip(ModArchive *a, char *err, size_t cap)
 {
     const uint8_t *d = a->data;
     size_t n = a->data_size;
-    if (n < 22) return fail(err, cap, "Not a zip archive (too short).");
+    if (n < 22) {
+        return fail(err, cap, "Not a zip archive (too short).");
+    }
     size_t eocd = (size_t)-1;
     size_t lowest = n > 22 + 0xFFFF ? n - 22 - 0xFFFF : 0;
     for (size_t at = n - 22 + 1; at-- > lowest;) {
@@ -184,17 +225,29 @@ static bool open_zip(ModArchive *a, char *err, size_t cap)
             break;
         }
     }
-    if (eocd == (size_t)-1) return fail(err, cap, "Not a zip archive (no end of central directory).");
+    if (eocd == (size_t)-1) {
+        return fail(err, cap, "Not a zip archive (no end of central directory).");
+    }
     uint32_t entries = u16(d + eocd + 10), dir_size = u32(d + eocd + 12), dir_at = u32(d + eocd + 16);
-    if (u16(d + eocd + 4) || u16(d + eocd + 6)) return fail(err, cap, "Split zip archives are not supported.");
-    if (dir_at == 0xFFFFFFFFu || entries == 0xFFFF) return fail(err, cap, "ZIP64 archives are not supported.");
-    if ((uint64_t)dir_at + dir_size > eocd) return fail(err, cap, "Broken zip archive (central directory out of range).");
+    if (u16(d + eocd + 4) || u16(d + eocd + 6)) {
+        return fail(err, cap, "Split zip archives are not supported.");
+    }
+    if (dir_at == 0xFFFFFFFFu || entries == 0xFFFF) {
+        return fail(err, cap, "ZIP64 archives are not supported.");
+    }
+    if ((uint64_t)dir_at + dir_size > eocd) {
+        return fail(err, cap, "Broken zip archive (central directory out of range).");
+    }
     size_t at = dir_at;
     for (uint32_t i = 0; i < entries; i++) {
-        if (at + 46 > eocd || u32(d + at) != ZIP_CENTRAL) return fail(err, cap, "Broken zip archive (central directory).");
+        if (at + 46 > eocd || u32(d + at) != ZIP_CENTRAL) {
+            return fail(err, cap, "Broken zip archive (central directory).");
+        }
         uint16_t flags = u16(d + at + 8), method = u16(d + at + 10), name_len = u16(d + at + 28);
         size_t next = at + 46 + name_len + u16(d + at + 30) + u16(d + at + 32);
-        if (next > eocd) return fail(err, cap, "Broken zip archive (central directory).");
+        if (next > eocd) {
+            return fail(err, cap, "Broken zip archive (central directory).");
+        }
         ModEntry e;
         memset(&e, 0, sizeof e);
         e.crc = u32(d + at + 16);
@@ -202,12 +255,19 @@ static bool open_zip(ModArchive *a, char *err, size_t cap)
         e.size = u32(d + at + 24);
         e.offset = u32(d + at + 42);
         e.method = method;
-        if (name_len >= MOD_NAME_MAX) return fail(err, cap, "Broken zip archive (a name is too long).");
+        if (name_len >= MOD_NAME_MAX) {
+            return fail(err, cap, "Broken zip archive (a name is too long).");
+        }
         memcpy(e.name, d + at + 46, name_len);
-        for (char *c = e.name; *c; c++)
-            if (*c == '\\') *c = '/';
+        for (char *c = e.name; *c; c++) {
+            if (*c == '\\') {
+                *c = '/';
+            }
+        }
         at = next;
-        if (name_len && e.name[name_len - 1] == '/') continue;
+        if (name_len && e.name[name_len - 1] == '/') {
+            continue;
+        }
         if (flags & 1) {
             snprintf(err, cap, "%s is encrypted; encrypted archives are not supported.", e.name);
             return false;
@@ -216,12 +276,16 @@ static bool open_zip(ModArchive *a, char *err, size_t cap)
             snprintf(err, cap, "%s uses compression method %u; only stored and deflate are supported.", e.name, method);
             return false;
         }
-        if (e.packed == 0xFFFFFFFFu || e.size == 0xFFFFFFFFu) return fail(err, cap, "ZIP64 archives are not supported.");
+        if (e.packed == 0xFFFFFFFFu || e.size == 0xFFFFFFFFu) {
+            return fail(err, cap, "ZIP64 archives are not supported.");
+        }
         if (e.size > MOD_FILE_MAX) {
             snprintf(err, cap, "%s is larger than 512 MiB.", e.name);
             return false;
         }
-        if (!add_entry(a, &e)) return fail(err, cap, "Out of memory.");
+        if (!add_entry(a, &e)) {
+            return fail(err, cap, "Out of memory.");
+        }
     }
     return true;
 }
@@ -232,13 +296,19 @@ static void find_prefix(ModArchive *a)
     const char *found = NULL;
     for (int i = 0; i < a->count; i++) {
         const char *n = a->entries[i].name, *slash = strchr(n, '/');
-        if (!strcmp(n, "mod.toml")) return;
+        if (!strcmp(n, "mod.toml")) {
+            return;
+        }
         if (slash && !strchr(slash + 1, '/') && !strcmp(slash + 1, "mod.toml")) {
-            if (found) return;
+            if (found) {
+                return;
+            }
             found = n;
         }
     }
-    if (found) snprintf(a->prefix, sizeof a->prefix, "%.*s", (int)(strchr(found, '/') - found + 1), found);
+    if (found) {
+        snprintf(a->prefix, sizeof a->prefix, "%.*s", (int)(strchr(found, '/') - found + 1), found);
+    }
 }
 
 bool mod_archive_open(ModArchive *a, const char *path, bool folder, char *err, size_t cap)
@@ -251,7 +321,9 @@ bool mod_archive_open(ModArchive *a, const char *path, bool folder, char *err, s
         return true;
     }
     a->data = mod_read_file(path, &a->data_size);
-    if (!a->data) return fail(err, cap, "Cannot read the file.");
+    if (!a->data) {
+        return fail(err, cap, "Cannot read the file.");
+    }
     if (!open_zip(a, err, cap)) {
         mod_archive_close(a);
         return false;
@@ -278,7 +350,9 @@ int mod_archive_find(const ModArchive *a, const char *name)
 {
     for (int i = 0; i < a->count; i++) {
         const char *n = mod_archive_name(a, i);
-        if (n && !strcmp(n, name)) return i;
+        if (n && !strcmp(n, name)) {
+            return i;
+        }
     }
     return -1;
 }
@@ -289,10 +363,15 @@ uint8_t *mod_archive_read(const ModArchive *a, int index, size_t *size, char *er
     if (a->folder) {
         char path[1400];
         snprintf(path, sizeof path, "%s\\%s", a->root, e->name);
-        for (char *c = path + strlen(a->root); *c; c++)
-            if (*c == '/') *c = '\\';
+        for (char *c = path + strlen(a->root); *c; c++) {
+            if (*c == '/') {
+                *c = '\\';
+            }
+        }
         uint8_t *data = mod_read_file(path, size);
-        if (!data) snprintf(err, cap, "%s: cannot read the file.", e->name);
+        if (!data) {
+            snprintf(err, cap, "%s: cannot read the file.", e->name);
+        }
         return data;
     }
     const uint8_t *d = a->data;
@@ -312,7 +391,9 @@ uint8_t *mod_archive_read(const ModArchive *a, int index, size_t *size, char *er
             return NULL;
         }
         out = malloc((size_t)e->size + 1);
-        if (out) memcpy(out, d + start, e->size);
+        if (out) {
+            memcpy(out, d + start, e->size);
+        }
     } else {
         out = mod_inflate(d + start, e->packed, e->size);
     }

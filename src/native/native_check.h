@@ -14,13 +14,22 @@
 #include <stdbool.h>
 
 #if DUCKTALES_NATIVE_CHECK
-#define NV_CHECK_OPTIONS \
+#define NV_CHECK_OPTIONS                                                                                             \
     { "--native-render-check", true, "check: native renderer vs the PPU every frame, report to FILE (- = stdout)" }, \
-    { "--native-render-dump", true, "check: first differing frames as PPM into DIR" },
+        { "--native-render-dump", true, "check: first differing frames as PPM into DIR" },
 bool nv_check_option(const char *name, const char *value);
 void nv_check_frame_end(void);
 #else
 #define NV_CHECK_OPTIONS
-static inline bool nv_check_option(const char *name, const char *value) { (void)name; (void)value; return false; }
-static inline void nv_check_frame_end(void) {}
+
+static inline bool nv_check_option(const char *name, const char *value)
+{
+    (void)name;
+    (void)value;
+    return false;
+}
+
+static inline void nv_check_frame_end(void)
+{
+}
 #endif

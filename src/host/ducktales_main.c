@@ -19,6 +19,11 @@
  * Direct3D 9, blocks in its VSync presents and drops pictures). The
  * SDL_RENDER_DRIVER environment variable still wins. docs/presentation.md.
  *
+ * The window build is a Windows program (no console of its own). Started from
+ * a terminal with nothing redirected, it attaches to that terminal so --help,
+ * --import-rom and errors still print there; pipes and files given by a test
+ * or script are used as they are.
+ *
  * --import-rom FILE verifies and imports without a window (exit 0 or 1), for
  * scripts and tests; DUCKTALES_DATA_DIR overrides the data folder. Everything
  * else goes to NESRecomp's host untouched, and the application UI is told which
@@ -49,7 +54,9 @@ int ducktales_host_main(int argc, char **argv);
 static int is_nes_file(const char *path)
 {
     FILE *f = fopen(path, "rb");
-    if (!f) return 0;
+    if (!f) {
+        return 0;
+    }
     unsigned char head[4] = { 0 };
     size_t n = fread(head, 1, 4, f);
     fclose(f);
@@ -60,13 +67,16 @@ static int is_nes_file(const char *path)
 static int headless_option(const char *a)
 {
     static const char *const HEADLESS[] = {
-        "--headless", "--frames", "--input", "--hash-out", "--trace-frame", "--trace-out", "--screenshot",
-        "--shot-every", "--state-frame", "--state-out", "--wav-out", "--mem-frame", "--mem-out", "--ring-out",
-        "--frame-log", "--load-state", "--miss-log", "--capture-log", "--acccoin", "--realtime", "--barcode",
-        "--zapper-input", "--replay-exact", "--ram-view-list",
+        "--headless",   "--frames",     "--input",       "--hash-out",     "--trace-frame",  "--trace-out",
+        "--screenshot", "--shot-every", "--state-frame", "--state-out",    "--wav-out",      "--mem-frame",
+        "--mem-out",    "--ring-out",   "--frame-log",   "--load-state",   "--miss-log",     "--capture-log",
+        "--acccoin",    "--realtime",   "--barcode",     "--zapper-input", "--replay-exact", "--ram-view-list",
     };
-    for (size_t i = 0; i < sizeof HEADLESS / sizeof HEADLESS[0]; i++)
-        if (!strcmp(a, HEADLESS[i])) return 1;
+    for (size_t i = 0; i < sizeof HEADLESS / sizeof HEADLESS[0]; i++) {
+        if (!strcmp(a, HEADLESS[i])) {
+            return 1;
+        }
+    }
     return 0;
 }
 
@@ -78,12 +88,16 @@ static void host_path(const char *utf8, char *out, size_t cap)
     snprintf(out, cap, "%s", utf8);
 #ifdef _WIN32
     wchar_t wide[1100], shortp[1100];
-    if (!MultiByteToWideChar(CP_UTF8, 0, utf8, -1, wide, 1100)) return;
+    if (!MultiByteToWideChar(CP_UTF8, 0, utf8, -1, wide, 1100)) {
+        return;
+    }
     DWORD n = GetShortPathNameW(wide, shortp, 1100);
     const wchar_t *use = n > 0 && n < 1100 ? shortp : wide;
     BOOL lossy = FALSE;
     char ansi[1100];
-    if (WideCharToMultiByte(CP_ACP, 0, use, -1, ansi, sizeof ansi, NULL, &lossy) && !lossy) snprintf(out, cap, "%s", ansi);
+    if (WideCharToMultiByte(CP_ACP, 0, use, -1, ansi, sizeof ansi, NULL, &lossy) && !lossy) {
+        snprintf(out, cap, "%s", ansi);
+    }
 #endif
 }
 
@@ -96,25 +110,54 @@ static void sdl_hints(void)
 #endif
 }
 
+static void attach_parent_console(void)
+{
+#ifdef _WIN32
+    HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (out != NULL && out != INVALID_HANDLE_VALUE) {
+        return;
+    }
+    if (!AttachConsole(ATTACH_PARENT_PROCESS)) {
+        return;
+    }
+    FILE *f = NULL;
+    freopen_s(&f, "CONOUT$", "w", stdout);
+    freopen_s(&f, "CONOUT$", "w", stderr);
+#endif
+}
+
 int main(int argc, char **argv)
 {
+    attach_parent_console();
     sdl_hints();
     char **args = (char **)calloc((size_t)argc + 2, sizeof *args);
-    if (!args) return 2;
+    if (!args) {
+        return 2;
+    }
     int n = 0;
     AppLaunch launch = { 0 };
     const char *import = NULL;
     int rom_given = 0, headless = 0;
     for (int i = 0; i < argc; i++) {
         const char *a = argv[i];
-        if (i > 0 && !strcmp(a, "--import-rom") && i + 1 < argc) { import = argv[++i]; continue; }
+        if (i > 0 && !strcmp(a, "--import-rom") && i + 1 < argc) {
+            import = argv[++i];
+            continue;
+        }
         if (i > 0) {
-            if (!strcmp(a, "--config") && i + 1 < argc) launch.config_path = argv[i + 1];
-            else if (!strcmp(a, "--hidden")) launch.hidden = true;
-            else if (!strcmp(a, "--uncapped")) launch.uncapped = true;
-            else if (!strcmp(a, "--window-input") || !strcmp(a, "--virtual-pad")) launch.scripted_input = true;
-            else if (headless_option(a)) headless = 1;
-            else if (a[0] != '-' && is_nes_file(a)) rom_given = 1;
+            if (!strcmp(a, "--config") && i + 1 < argc) {
+                launch.config_path = argv[i + 1];
+            } else if (!strcmp(a, "--hidden")) {
+                launch.hidden = true;
+            } else if (!strcmp(a, "--uncapped")) {
+                launch.uncapped = true;
+            } else if (!strcmp(a, "--window-input") || !strcmp(a, "--virtual-pad")) {
+                launch.scripted_input = true;
+            } else if (headless_option(a)) {
+                headless = 1;
+            } else if (a[0] != '-' && is_nes_file(a)) {
+                rom_given = 1;
+            }
         }
         args[n++] = argv[i];
     }
@@ -127,7 +170,9 @@ int main(int argc, char **argv)
             return 0;
         }
         fprintf(stderr, "%s: %s\n", import, app_rom_status_text(s));
-        if (s == APP_ROM_MISMATCH) fprintf(stderr, "  SHA-256 %s\n  expected %s\n", actual, DUCKTALES_ROM_SHA256);
+        if (s == APP_ROM_MISMATCH) {
+            fprintf(stderr, "  SHA-256 %s\n  expected %s\n", actual, DUCKTALES_ROM_SHA256);
+        }
         return 1;
     }
 
@@ -141,7 +186,9 @@ int main(int argc, char **argv)
             return 2;
         } else {
             int r = app_ui_first_run(DUCKTALES_ROM_SHA256, rom, sizeof rom);
-            if (r == 1) return 0;
+            if (r == 1) {
+                return 0;
+            }
             if (r != 0) {
                 fprintf(stderr, "The first-run screen could not open a window. Pass the ROM's path, or use "
                                 "--import-rom FILE.\n");

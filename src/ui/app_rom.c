@@ -9,13 +9,17 @@
 #ifdef _WIN32
 #include <direct.h>
 #include <windows.h>
+
 static wchar_t *wide(const char *s)
 {
     int n = MultiByteToWideChar(CP_UTF8, 0, s, -1, NULL, 0);
     wchar_t *w = n > 0 ? (wchar_t *)malloc((size_t)n * sizeof *w) : NULL;
-    if (w) MultiByteToWideChar(CP_UTF8, 0, s, -1, w, n);
+    if (w) {
+        MultiByteToWideChar(CP_UTF8, 0, s, -1, w, n);
+    }
     return w;
 }
+
 static FILE *open_file(const char *path, const char *mode)
 {
     wchar_t *p = wide(path), *m = wide(mode);
@@ -24,6 +28,7 @@ static FILE *open_file(const char *path, const char *mode)
     free(m);
     return f;
 }
+
 static int make_dir(const char *path)
 {
     wchar_t *p = wide(path);
@@ -31,6 +36,7 @@ static int make_dir(const char *path)
     free(p);
     return r;
 }
+
 static int remove_file(const char *path)
 {
     wchar_t *p = wide(path);
@@ -38,6 +44,7 @@ static int remove_file(const char *path)
     free(p);
     return r;
 }
+
 static int rename_file(const char *from, const char *to)
 {
     wchar_t *a = wide(from), *b = wide(to);
@@ -46,24 +53,30 @@ static int rename_file(const char *from, const char *to)
     free(b);
     return r;
 }
+
 static const char *env_utf8(const char *name, char *buf, size_t cap)
 {
     wchar_t *n = wide(name);
     const wchar_t *v = n ? _wgetenv(n) : NULL;
     free(n);
-    if (!v || !*v || !WideCharToMultiByte(CP_UTF8, 0, v, -1, buf, (int)cap, NULL, NULL)) return NULL;
+    if (!v || !*v || !WideCharToMultiByte(CP_UTF8, 0, v, -1, buf, (int)cap, NULL, NULL)) {
+        return NULL;
+    }
     return buf;
 }
 #else
 #include <sys/stat.h>
 #define make_dir(p) mkdir((p), 0755)
-#define open_file fopen
+#define open_file   fopen
 #define remove_file remove
 #define rename_file rename
+
 static const char *env_utf8(const char *name, char *buf, size_t cap)
 {
     const char *v = getenv(name);
-    if (!v || !*v) return NULL;
+    if (!v || !*v) {
+        return NULL;
+    }
     snprintf(buf, cap, "%s", v);
     return buf;
 }
@@ -87,8 +100,9 @@ static const uint32_t K[64] = {
 static void sha256_block(uint32_t h[8], const uint8_t *p)
 {
     uint32_t w[64];
-    for (int i = 0; i < 16; i++)
+    for (int i = 0; i < 16; i++) {
         w[i] = (uint32_t)p[4 * i] << 24 | (uint32_t)p[4 * i + 1] << 16 | (uint32_t)p[4 * i + 2] << 8 | p[4 * i + 3];
+    }
     for (int i = 16; i < 64; i++) {
         uint32_t s0 = ROR(w[i - 15], 7) ^ ROR(w[i - 15], 18) ^ (w[i - 15] >> 3);
         uint32_t s1 = ROR(w[i - 2], 17) ^ ROR(w[i - 2], 19) ^ (w[i - 2] >> 10);
@@ -98,24 +112,46 @@ static void sha256_block(uint32_t h[8], const uint8_t *p)
     for (int i = 0; i < 64; i++) {
         uint32_t t1 = hh + (ROR(e, 6) ^ ROR(e, 11) ^ ROR(e, 25)) + ((e & f) ^ (~e & g)) + K[i] + w[i];
         uint32_t t2 = (ROR(a, 2) ^ ROR(a, 13) ^ ROR(a, 22)) + ((a & b) ^ (a & c) ^ (b & c));
-        hh = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
+        hh = g;
+        g = f;
+        f = e;
+        e = d + t1;
+        d = c;
+        c = b;
+        b = a;
+        a = t1 + t2;
     }
-    h[0] += a; h[1] += b; h[2] += c; h[3] += d; h[4] += e; h[5] += f; h[6] += g; h[7] += hh;
+    h[0] += a;
+    h[1] += b;
+    h[2] += c;
+    h[3] += d;
+    h[4] += e;
+    h[5] += f;
+    h[6] += g;
+    h[7] += hh;
 }
 
 void app_sha256(const uint8_t *data, size_t len, uint8_t out[32])
 {
     uint32_t h[8] = { 0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19 };
     size_t i = 0;
-    for (; len - i >= 64; i += 64) sha256_block(h, data + i);
+    for (; len - i >= 64; i += 64) {
+        sha256_block(h, data + i);
+    }
     uint8_t tail[128] = { 0 };
     size_t rest = len - i;
-    if (rest) memcpy(tail, data + i, rest);
+    if (rest) {
+        memcpy(tail, data + i, rest);
+    }
     tail[rest] = 0x80;
     size_t blocks = rest + 9 > 64 ? 2 : 1;
     uint64_t bits = (uint64_t)len * 8;
-    for (int k = 0; k < 8; k++) tail[blocks * 64 - 1 - k] = (uint8_t)(bits >> (8 * k));
-    for (size_t b = 0; b < blocks; b++) sha256_block(h, tail + 64 * b);
+    for (int k = 0; k < 8; k++) {
+        tail[blocks * 64 - 1 - k] = (uint8_t)(bits >> (8 * k));
+    }
+    for (size_t b = 0; b < blocks; b++) {
+        sha256_block(h, tail + 64 * b);
+    }
     for (int k = 0; k < 8; k++) {
         out[4 * k] = (uint8_t)(h[k] >> 24);
         out[4 * k + 1] = (uint8_t)(h[k] >> 16);
@@ -139,36 +175,55 @@ void app_sha256_hex(const uint8_t digest[32], char out[65])
 static uint8_t *read_all(const char *path, size_t *len)
 {
     FILE *f = open_file(path, "rb");
-    if (!f) return NULL;
+    if (!f) {
+        return NULL;
+    }
     uint8_t *buf = NULL;
     size_t n = 0, cap = 0;
     for (;;) {
         if (n == cap) {
             cap = cap ? cap * 2 : 256 * 1024;
-            if (cap > 64u * 1024 * 1024) { free(buf); fclose(f); return NULL; }   /* no NES image is this large */
+            if (cap > 64u * 1024 * 1024) {
+                free(buf);
+                fclose(f);
+                return NULL;
+            } /* no NES image is this large */
             uint8_t *grown = (uint8_t *)realloc(buf, cap);
-            if (!grown) { free(buf); fclose(f); return NULL; }
+            if (!grown) {
+                free(buf);
+                fclose(f);
+                return NULL;
+            }
             buf = grown;
         }
         size_t got = fread(buf + n, 1, cap - n, f);
         n += got;
-        if (got == 0) break;
+        if (got == 0) {
+            break;
+        }
     }
     int err = ferror(f);
     fclose(f);
-    if (err) { free(buf); return NULL; }
+    if (err) {
+        free(buf);
+        return NULL;
+    }
     *len = n;
     return buf;
 }
 
 static AppRomStatus check(const uint8_t *data, size_t len, const char *expected_hex, char *actual_hex)
 {
-    if (len < 16 || memcmp(data, "NES\x1a", 4)) return APP_ROM_NOT_NES;
+    if (len < 16 || memcmp(data, "NES\x1a", 4)) {
+        return APP_ROM_NOT_NES;
+    }
     uint8_t digest[32];
     char hex[65];
     app_sha256(data, len, digest);
     app_sha256_hex(digest, hex);
-    if (actual_hex) memcpy(actual_hex, hex, 65);
+    if (actual_hex) {
+        memcpy(actual_hex, hex, 65);
+    }
     return strcmp(hex, expected_hex) ? APP_ROM_MISMATCH : APP_ROM_OK;
 }
 
@@ -176,7 +231,9 @@ AppRomStatus app_rom_verify(const char *path, const char *expected_hex, char *ac
 {
     size_t len;
     uint8_t *data = path ? read_all(path, &len) : NULL;
-    if (!data) return APP_ROM_UNREADABLE;
+    if (!data) {
+        return APP_ROM_UNREADABLE;
+    }
     AppRomStatus s = check(data, len, expected_hex, actual_hex);
     free(data);
     return s;
@@ -185,13 +242,17 @@ AppRomStatus app_rom_verify(const char *path, const char *expected_hex, char *ac
 const char *app_rom_status_text(AppRomStatus s)
 {
     switch (s) {
-    case APP_ROM_OK: return "This is the DuckTales (USA) cartridge image.";
-    case APP_ROM_UNREADABLE: return "The file could not be read.";
-    case APP_ROM_NOT_NES: return "This file is not an NES ROM image.";
-    case APP_ROM_MISMATCH:
-        return "This NES ROM is not an unmodified DuckTales (USA). Patched, translated or re-headered "
-               "files and other regions or revisions are not supported.";
-    case APP_ROM_WRITE_FAILED: return "The ROM was verified but could not be copied to the data folder.";
+        case APP_ROM_OK:
+            return "This is the DuckTales (USA) cartridge image.";
+        case APP_ROM_UNREADABLE:
+            return "The file could not be read.";
+        case APP_ROM_NOT_NES:
+            return "This file is not an NES ROM image.";
+        case APP_ROM_MISMATCH:
+            return "This NES ROM is not an unmodified DuckTales (USA). Patched, translated or re-headered "
+                   "files and other regions or revisions are not supported.";
+        case APP_ROM_WRITE_FAILED:
+            return "The ROM was verified but could not be copied to the data folder.";
     }
     return "";
 }
@@ -199,13 +260,19 @@ const char *app_rom_status_text(AppRomStatus s)
 static int make_dirs(char *path)
 {
     for (char *p = path + 1; *p; p++) {
-        if (*p != '/' && *p != '\\') continue;
-        if (p[-1] == ':') continue;   /* a drive root */
+        if (*p != '/' && *p != '\\') {
+            continue;
+        }
+        if (p[-1] == ':') {
+            continue; /* a drive root */
+        }
         char c = *p;
         *p = 0;
         int bad = make_dir(path) != 0 && errno != EEXIST;
         *p = c;
-        if (bad) return 0;
+        if (bad) {
+            return 0;
+        }
     }
     return make_dir(path) == 0 || errno == EEXIST;
 }
@@ -215,33 +282,48 @@ bool app_data_dir(char *out, size_t cap)
     char env[1024];
     const char *over = env_utf8("DUCKTALES_DATA_DIR", env, sizeof env);
     int n;
-    if (over && *over) n = snprintf(out, cap, "%s", over);
-    else {
+    if (over && *over) {
+        n = snprintf(out, cap, "%s", over);
+    } else {
 #if defined(_WIN32)
         char appdata[1024];
         const char *base = env_utf8("APPDATA", appdata, sizeof appdata);
-        if (!base || !*base) return false;
+        if (!base || !*base) {
+            return false;
+        }
         n = snprintf(out, cap, "%s\\DuckTales Recompiled", base);
 #elif defined(__APPLE__)
         const char *home = getenv("HOME");
-        if (!home || !*home) return false;
+        if (!home || !*home) {
+            return false;
+        }
         n = snprintf(out, cap, "%s/Library/Application Support/DuckTales Recompiled", home);
 #else
         const char *xdg = getenv("XDG_DATA_HOME"), *home = getenv("HOME");
-        if (xdg && *xdg) n = snprintf(out, cap, "%s/DuckTales Recompiled", xdg);
-        else if (home && *home) n = snprintf(out, cap, "%s/.local/share/DuckTales Recompiled", home);
-        else return false;
+        if (xdg && *xdg) {
+            n = snprintf(out, cap, "%s/DuckTales Recompiled", xdg);
+        } else if (home && *home) {
+            n = snprintf(out, cap, "%s/.local/share/DuckTales Recompiled", home);
+        } else {
+            return false;
+        }
 #endif
     }
-    if (n <= 0 || (size_t)n >= cap) return false;
-    while (n > 1 && (out[n - 1] == '/' || out[n - 1] == '\\')) out[--n] = 0;
+    if (n <= 0 || (size_t)n >= cap) {
+        return false;
+    }
+    while (n > 1 && (out[n - 1] == '/' || out[n - 1] == '\\')) {
+        out[--n] = 0;
+    }
     return make_dirs(out) != 0;
 }
 
 bool app_rom_stored_path(char *out, size_t cap)
 {
     char dir[1024];
-    if (!app_data_dir(dir, sizeof dir)) return false;
+    if (!app_data_dir(dir, sizeof dir)) {
+        return false;
+    }
 #ifdef _WIN32
     int n = snprintf(out, cap, "%s\\%s", dir, APP_ROM_FILE_NAME);
 #else
@@ -250,35 +332,53 @@ bool app_rom_stored_path(char *out, size_t cap)
     return n > 0 && (size_t)n < cap;
 }
 
-AppRomStatus app_rom_import(const char *src, const char *expected_hex, char *stored, size_t cap,
-                                  char *actual_hex)
+AppRomStatus app_rom_import(const char *src, const char *expected_hex, char *stored, size_t cap, char *actual_hex)
 {
     size_t len;
     uint8_t *data = src ? read_all(src, &len) : NULL;
-    if (!data) return APP_ROM_UNREADABLE;
+    if (!data) {
+        return APP_ROM_UNREADABLE;
+    }
     AppRomStatus s = check(data, len, expected_hex, actual_hex);
-    if (s != APP_ROM_OK) { free(data); return s; }
+    if (s != APP_ROM_OK) {
+        free(data);
+        return s;
+    }
     char dst[1100], tmp[1120];
-    if (!app_rom_stored_path(dst, sizeof dst)) { free(data); return APP_ROM_WRITE_FAILED; }
+    if (!app_rom_stored_path(dst, sizeof dst)) {
+        free(data);
+        return APP_ROM_WRITE_FAILED;
+    }
     snprintf(tmp, sizeof tmp, "%s.part", dst);
     FILE *f = open_file(tmp, "wb");
     int ok = f && fwrite(data, 1, len, f) == len;
-    if (f && fclose(f) != 0) ok = 0;
+    if (f && fclose(f) != 0) {
+        ok = 0;
+    }
     free(data);
     if (ok) {
         remove_file(dst);
         ok = rename_file(tmp, dst) == 0;
     }
-    if (!ok) { remove_file(tmp); return APP_ROM_WRITE_FAILED; }
-    if (stored) snprintf(stored, cap, "%s", dst);
+    if (!ok) {
+        remove_file(tmp);
+        return APP_ROM_WRITE_FAILED;
+    }
+    if (stored) {
+        snprintf(stored, cap, "%s", dst);
+    }
     return APP_ROM_OK;
 }
 
 bool app_rom_stored_valid(const char *expected_hex, char *out, size_t cap)
 {
     char path[1100];
-    if (!app_rom_stored_path(path, sizeof path)) return false;
-    if (app_rom_verify(path, expected_hex, NULL) != APP_ROM_OK) return false;
+    if (!app_rom_stored_path(path, sizeof path)) {
+        return false;
+    }
+    if (app_rom_verify(path, expected_hex, NULL) != APP_ROM_OK) {
+        return false;
+    }
     snprintf(out, cap, "%s", path);
     return true;
 }

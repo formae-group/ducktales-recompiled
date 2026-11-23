@@ -23,14 +23,20 @@ static void segment_of_line(const CycLine *l, int y, NvSegment *s)
 
 static bool continues(const NvSegment *last, const NvSegment *line)
 {
-    if (last->ctrl != line->ctrl || last->mask != line->mask) return false;
-    if (!(line->mask & (NV_MASK_BG | NV_MASK_SPRITES))) return true;
+    if (last->ctrl != line->ctrl || last->mask != line->mask) {
+        return false;
+    }
+    if (!(line->mask & (NV_MASK_BG | NV_MASK_SPRITES))) {
+        return true;
+    }
     return last->x == line->x && nv_advance_y(last->y, line->first_line - last->first_line) == line->y;
 }
 
 bool nv_cycle_fill(NvVideo *v)
 {
-    for (unsigned a = 0; a < 0x2000; a++) v->chr[a] = cyc_render_chr((uint16_t)a);
+    for (unsigned a = 0; a < 0x2000; a++) {
+        v->chr[a] = cyc_render_chr((uint16_t)a);
+    }
     bool mirrored = true;
     for (unsigned i = 0; i < 0x400; i++) {
         v->ciram[0][i] = cyc_render_nametable((uint16_t)(0x2000 + i));
@@ -39,14 +45,18 @@ bool nv_cycle_fill(NvVideo *v)
                     cyc_render_nametable((uint16_t)(0x2C00 + i)) == v->ciram[1][i];
     }
     v->mirroring = NV_MIRROR_VERTICAL;
-    for (int i = 0; i < 32; i++) v->palette[i] = cyc_render_palette(i);
+    for (int i = 0; i < 32; i++) {
+        v->palette[i] = cyc_render_palette(i);
+    }
     memcpy(v->oam, cyc_render_oam(), sizeof v->oam);
     const CycLine *lines = cyc_frame_lines();
     v->segment_count = 0;
     for (int y = 0; y < NV_HEIGHT; y++) {
         NvSegment s;
         segment_of_line(&lines[y], y, &s);
-        if (v->segment_count && continues(&v->segment[v->segment_count - 1], &s)) continue;
+        if (v->segment_count && continues(&v->segment[v->segment_count - 1], &s)) {
+            continue;
+        }
         v->segment[v->segment_count++] = s;
     }
     return mirrored;

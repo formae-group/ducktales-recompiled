@@ -36,6 +36,9 @@ ROM-derived code locally.
   sharp scaling, 8:7 pixel aspect and overscan crop.
 - **Enhancements.** Optional gameplay changes, all off by default; when off, the original code runs.
 - **Input.** Keyboard, mouse and SDL game controllers, fully rebindable.
+- **Mods.** `.dtmod` archives and loose folders replace tiles, palettes, music and sound effects,
+  and Lua 5.4 scripts react to the game's events in a sandbox. Off by default and ordered in the
+  Mod Menu; asset mods never touch the machine. See [docs/mods.md](docs/mods.md).
 - **A start on decompilation.** A typed C API over the game's RAM, game events for mods, and
   Scrooge's per-frame routines decompiled to C, checked against the original on every call
   (`--decomp check`) and able to run in its place (`--decomp replace`). Off by default.
@@ -128,6 +131,7 @@ choose a cell and press the new key or button: Escape cancels and Delete clears.
 | Settings, Audio | Master volume | 0% to 100% | `[Audio] Volume` |
 | Settings, Controls | Player 1 keyboard and controller bindings, Menu shortcut | | `[Keyboard.*]`, `[Gamepad.*]` |
 | Settings, Gameplay | No slowdown | On (default), off | `[Game] NoSlowdown` |
+| Settings, Mods | Enable mods, the mod list (order and switches), Open mods folder, Rescan | Off (default), on | `[Mods] Enabled`, `[Mods] Order` |
 | Enhancements, Gameplay | The enhancements below | | `[Game]` |
 | Enhancements, Restore defaults | Restore the original game | | |
 
@@ -219,6 +223,7 @@ build\headless\Release\ducktales.exe "roms\DuckTales (USA).nes" --input tests\ro
 | [presentation.md](docs/presentation.md) | Pacing, DPI, scaling and picture measurements |
 | [native-runtime.md](docs/native-runtime.md) | Native runtime, the player build and lag analysis |
 | [decompilation.md](docs/decompilation.md) | Game API, events and the decompiled routines |
+| [mods.md](docs/mods.md) | Using and making mods: tiles, palettes, sounds and Lua scripts |
 | [memory-map.md](docs/memory-map.md), [functions.md](docs/functions.md) | RAM and routine reference |
 | [player.md](docs/player.md), [game-state.md](docs/game-state.md), [levels.md](docs/levels.md), [audio.md](docs/audio.md) | Reverse-engineering notes |
 
@@ -227,7 +232,7 @@ build\headless\Release\ducktales.exe "roms\DuckTales (USA).nes" --input tests\ro
 The code in this repository is MIT licensed ([LICENSE](LICENSE)). NESRecomp is licensed under
 PolyForm Noncommercial 1.0.0 with additional permissions, so builds of this port must be distributed
 free of charge. [formae-ui](https://gitlab.com/formae/formae-ui) (MIT, Formae's menu library),
-Dear ImGui and SDL2 are used under their own licenses. See
+Dear ImGui, SDL2, stb and Lua are used under their own licenses. See
 [docs/licensing.md](docs/licensing.md).
 
 *DuckTales* is a trademark of Disney. This project is not affiliated with Disney or Capcom and

@@ -24,16 +24,16 @@
 #include <stdbool.h>
 
 #if DUCKTALES_DEV_DIAGNOSTICS
-#define DT_DIAG_OPTIONS \
-    { "--dt-state-log", true, "dev: typed game state per frame to FILE (- = stdout)" }, \
-    { "--dt-state-every", true, "dev: log every Nth frame" }, \
-    { "--dt-jump-at", true, "dev: FRAME:PERCENT jump scale change (repeatable)" }, \
-    { "--dt-enh-at", true, "dev: FRAME:KEY=VALUE enhancement change (repeatable)" }, \
-    { "--dt-reset-at", true, "dev: FRAME console reset (repeatable)" }, \
-    { "--dt-sprite-log", true, "dev: sprite compositor line per presented picture to FILE (- = stdout)" }, \
-    { "--dt-poke-at", true, "dev: FRAME:ADDR=VALUE CPU RAM store, hex (repeatable)" }, \
-    { "--dt-events-log", true, "dev: one line per game event to FILE (- = stdout)" }, \
-    { "--dt-ram-log", true, "dev: CPU RAM and S after every frame to FILE (raw)" },
+#define DT_DIAG_OPTIONS                                                                                        \
+    { "--dt-state-log", true, "dev: typed game state per frame to FILE (- = stdout)" },                        \
+        { "--dt-state-every", true, "dev: log every Nth frame" },                                              \
+        { "--dt-jump-at", true, "dev: FRAME:PERCENT jump scale change (repeatable)" },                         \
+        { "--dt-enh-at", true, "dev: FRAME:KEY=VALUE enhancement change (repeatable)" },                       \
+        { "--dt-reset-at", true, "dev: FRAME console reset (repeatable)" },                                    \
+        { "--dt-sprite-log", true, "dev: sprite compositor line per presented picture to FILE (- = stdout)" }, \
+        { "--dt-poke-at", true, "dev: FRAME:ADDR=VALUE CPU RAM store, hex (repeatable)" },                     \
+        { "--dt-events-log", true, "dev: one line per game event to FILE (- = stdout)" },                      \
+        { "--dt-ram-log", true, "dev: CPU RAM and S after every frame to FILE (raw)" },
 bool dt_diag_option(const char *name, const char *value);
 void dt_diag_power_on(void);
 void dt_diag_frame_begin(void);
@@ -41,9 +41,27 @@ void dt_diag_frame_end(void);
 void dt_diag_tcp_setup(void);
 #else
 #define DT_DIAG_OPTIONS
-static inline bool dt_diag_option(const char *name, const char *value) { (void)name; (void)value; return false; }
-static inline void dt_diag_power_on(void) {}
-static inline void dt_diag_frame_begin(void) {}
-static inline void dt_diag_frame_end(void) {}
-static inline void dt_diag_tcp_setup(void) {}
+
+static inline bool dt_diag_option(const char *name, const char *value)
+{
+    (void)name;
+    (void)value;
+    return false;
+}
+
+static inline void dt_diag_power_on(void)
+{
+}
+
+static inline void dt_diag_frame_begin(void)
+{
+}
+
+static inline void dt_diag_frame_end(void)
+{
+}
+
+static inline void dt_diag_tcp_setup(void)
+{
+}
 #endif

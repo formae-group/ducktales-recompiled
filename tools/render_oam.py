@@ -14,6 +14,7 @@ output with the OAM shadow at $0200. Prints numbers only; nothing from the ROM i
                                                    lines over 8 sprites, entries past 63, HUD left out
                                                    for Scrooge's Y, overlapping objects (by land/row/page)
 """
+
 import argparse
 import struct
 import sys
@@ -45,7 +46,7 @@ def hud_records(ram):
     for base in HUD_GROUPS:
         i = base
         while ram[i] != 0xFF and i < base + 0x40:
-            out.append(tuple(ram[i:i + 4]))
+            out.append(tuple(ram[i : i + 4]))
             i += 4
     return out
 
@@ -124,11 +125,15 @@ def cmd_check(rom, a):
     used = len(oam) // 4
     same = sum(oam[i] == shadow[i] for i in range(len(oam)))
     rest = sum(1 for i in range(len(oam), 252, 4) if shadow[i] >= 0xF0)
-    print('frame %d: $95=%02X ($97=%02X) predicted %d entries after sprite 0; %d/%d bytes equal $0204+;'
-          ' %d/%d remaining entries parked at Y>=$F0' % (log['frame'], ram[0x95], ram[0x97], used, same, len(oam),
-                                                       rest, 63 - used))
-    print('sprite 0 in shadow: Y=%02X tile=%02X attr=%02X X=%02X (NMI writes $FA=%02X,$21,$20,$08 when $EA)'
-          % (tuple(ram[0x200:0x204]) + (ram[0xFA],)))
+    print(
+        'frame %d: $95=%02X ($97=%02X) predicted %d entries after sprite 0; %d/%d bytes equal $0204+;'
+        ' %d/%d remaining entries parked at Y>=$F0'
+        % (log['frame'], ram[0x95], ram[0x97], used, same, len(oam), rest, 63 - used)
+    )
+    print(
+        'sprite 0 in shadow: Y=%02X tile=%02X attr=%02X X=%02X (NMI writes $FA=%02X,$21,$20,$08 when $EA)'
+        % (tuple(ram[0x200:0x204]) + (ram[0xFA],))
+    )
     if a.slots:
         for n, t in notes:
             print('  slot %2d: %s' % (n, t))
@@ -146,8 +151,10 @@ def cmd_budget(_rom, a):
             ram = f.read(lens[0])
             f.seek(sum(lens[1:]), 1)
             used = sum(1 for i in range(4, 256, 4) if ram[0x200 + i] < 0xF0)
-            print('frame %d: %2d/63 OAM entries visible, $97=%02X, slot order %s' % (
-                frame, used, ram[0x97], '0->15' if ram[0x95] & 1 == 0 else '15->0'))
+            print(
+                'frame %d: %2d/63 OAM entries visible, $97=%02X, slot order %s'
+                % (frame, used, ram[0x97], '0->15' if ram[0x95] & 1 == 0 else '15->0')
+            )
 
 
 def log_records(path, chr_ram=False):
@@ -155,7 +162,7 @@ def log_records(path, chr_ram=False):
     with open(path, 'rb') as f:
         if f.read(8) != b'CYCFRAME':
             raise SystemExit('not a frame log')
-        version, = struct.unpack('<I', f.read(4))
+        (version,) = struct.unpack('<I', f.read(4))
         nlen = 6 if version >= 2 else 5
         while True:
             head = f.read(12 + 4 * nlen)
@@ -212,8 +219,11 @@ def cmd_limits(rom, a):
         if hud_allowed(pram) and not hud_in_oam(pram):
             st["frames without HUD for Scrooge's Y"] += 1
         rects = [(g, s[0], s[3]) for g, ss in groups for s in ss if s[0] < 0xEF]
-        if any(p[0] != q[0] and abs(p[1] - q[1]) < h and abs(p[2] - q[2]) < 8
-               for i, p in enumerate(rects) for q in rects[i + 1:]):
+        if any(
+            p[0] != q[0] and abs(p[1] - q[1]) < h and abs(p[2] - q[2]) < 8
+            for i, p in enumerate(rects)
+            for q in rects[i + 1 :]
+        ):
             st['frames with overlapping objects'] += 1
     for k, v in st.items():
         print('%s: %d' % (k, v))

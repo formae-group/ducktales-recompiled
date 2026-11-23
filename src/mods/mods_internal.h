@@ -10,21 +10,21 @@
 #define MOD_NAME_MAX 256
 
 typedef struct {
-    char     name[MOD_NAME_MAX];   /* '/' separated, relative to the mod's root */
-    uint32_t offset;               /* archive: local header; folder: unused */
+    char name[MOD_NAME_MAX]; /* '/' separated, relative to the mod's root */
+    uint32_t offset;         /* archive: local header; folder: unused */
     uint32_t packed, size, crc;
     uint16_t method;
 } ModEntry;
 
 /* A mod's files: a zip read into memory, or a folder on disk. */
 typedef struct {
-    bool      folder;
-    char      root[1024];          /* the folder, or the archive's path */
-    char      prefix[MOD_NAME_MAX];/* the archive's folder holding mod.toml ("" at its root) */
-    uint8_t  *data;
-    size_t    data_size;
+    bool folder;
+    char root[1024];           /* the folder, or the archive's path */
+    char prefix[MOD_NAME_MAX]; /* the archive's folder holding mod.toml ("" at its root) */
+    uint8_t *data;
+    size_t data_size;
     ModEntry *entries;
-    int       count;
+    int count;
 } ModArchive;
 
 /* ---- app_mods_archive.c ---- */

@@ -36,9 +36,13 @@
 uint32_t *mod_png_decode(const uint8_t *data, size_t size, int *w, int *h)
 {
     int comp;
-    if (size > 0x7FFFFFFF) return NULL;
+    if (size > 0x7FFFFFFF) {
+        return NULL;
+    }
     unsigned char *rgba = stbi_load_from_memory(data, (int)size, w, h, &comp, 4);
-    if (!rgba) return NULL;
+    if (!rgba) {
+        return NULL;
+    }
     uint32_t *argb = malloc((size_t)*w * (size_t)*h * sizeof *argb);
     if (argb) {
         for (size_t i = 0, n = (size_t)*w * (size_t)*h; i < n; i++) {
@@ -50,12 +54,17 @@ uint32_t *mod_png_decode(const uint8_t *data, size_t size, int *w, int *h)
     return argb;
 }
 
-static void write_to_file(void *context, void *data, int size) { fwrite(data, 1, (size_t)size, (FILE *)context); }
+static void write_to_file(void *context, void *data, int size)
+{
+    fwrite(data, 1, (size_t)size, (FILE *)context);
+}
 
 bool mod_png_write(const char *path, const uint32_t *argb, int w, int h)
 {
     unsigned char *rgba = malloc((size_t)w * (size_t)h * 4);
-    if (!rgba) return false;
+    if (!rgba) {
+        return false;
+    }
     for (size_t i = 0, n = (size_t)w * (size_t)h; i < n; i++) {
         rgba[i * 4] = (unsigned char)(argb[i] >> 16);
         rgba[i * 4 + 1] = (unsigned char)(argb[i] >> 8);
@@ -64,16 +73,22 @@ bool mod_png_write(const char *path, const uint32_t *argb, int w, int h)
     }
     FILE *f = fopen(path, "wb");
     bool ok = f && stbi_write_png_to_func(write_to_file, f, w, h, 4, rgba, w * 4) != 0;
-    if (f) ok = fclose(f) == 0 && ok;
+    if (f) {
+        ok = fclose(f) == 0 && ok;
+    }
     free(rgba);
     return ok;
 }
 
 uint8_t *mod_inflate(const uint8_t *data, size_t packed, size_t size)
 {
-    if (packed > 0x7FFFFFFF || size > 0x7FFFFFFE) return NULL;
+    if (packed > 0x7FFFFFFF || size > 0x7FFFFFFE) {
+        return NULL;
+    }
     uint8_t *out = malloc(size + 1);
-    if (!out) return NULL;
+    if (!out) {
+        return NULL;
+    }
     int n = stbi_zlib_decode_noheader_buffer((char *)out, (int)size, (const char *)data, (int)packed);
     if (n != (int)size) {
         free(out);
@@ -84,16 +99,23 @@ uint8_t *mod_inflate(const uint8_t *data, size_t packed, size_t size)
 
 struct ModSound {
     stb_vorbis *ogg;
-    float      *pcm;        /* WAV: mono samples */
-    size_t      frames;     /* WAV: sample count */
-    size_t      at;         /* WAV: next sample */
-    int         rate;
-    int         channels;   /* OGG: the file's */
-    long        loop_start;
+    float *pcm;    /* WAV: mono samples */
+    size_t frames; /* WAV: sample count */
+    size_t at;     /* WAV: next sample */
+    int rate;
+    int channels; /* OGG: the file's */
+    long loop_start;
 };
 
-static uint32_t le32(const uint8_t *p) { return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24; }
-static uint16_t le16(const uint8_t *p) { return (uint16_t)(p[0] | p[1] << 8); }
+static uint32_t le32(const uint8_t *p)
+{
+    return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
+}
+
+static uint16_t le16(const uint8_t *p)
+{
+    return (uint16_t)(p[0] | p[1] << 8);
+}
 
 static ModSound *open_wav(const uint8_t *d, size_t size, char *err, size_t cap)
 {
@@ -102,10 +124,16 @@ static ModSound *open_wav(const uint8_t *d, size_t size, char *err, size_t cap)
     long loop = -1;
     for (size_t at = 12; at + 8 <= size;) {
         uint32_t n = le32(d + at + 4);
-        if (n > size - at - 8) n = (uint32_t)(size - at - 8);
-        if (!memcmp(d + at, "fmt ", 4) && n >= 16) fmt = d + at + 8;
-        else if (!memcmp(d + at, "data", 4)) data = d + at + 8, data_size = n;
-        else if (!memcmp(d + at, "smpl", 4) && n >= 36 + 24 && le32(d + at + 8 + 28) > 0) loop = (long)le32(d + at + 8 + 36 + 8);
+        if (n > size - at - 8) {
+            n = (uint32_t)(size - at - 8);
+        }
+        if (!memcmp(d + at, "fmt ", 4) && n >= 16) {
+            fmt = d + at + 8;
+        } else if (!memcmp(d + at, "data", 4)) {
+            data = d + at + 8, data_size = n;
+        } else if (!memcmp(d + at, "smpl", 4) && n >= 36 + 24 && le32(d + at + 8 + 28) > 0) {
+            loop = (long)le32(d + at + 8 + 36 + 8);
+        }
         at += 8 + (size_t)n + (n & 1);
     }
     if (!fmt || !data) {
@@ -175,33 +203,53 @@ static ModSound *open_ogg(const uint8_t *d, size_t size, char *err, size_t cap)
     s->channels = info.channels > 8 ? 8 : info.channels;
     s->loop_start = -1;
     stb_vorbis_comment c = stb_vorbis_get_comment(v);
-    for (int i = 0; i < c.comment_list_length; i++)
-        if (!_strnicmp(c.comment_list[i], "LOOPSTART=", 10)) s->loop_start = atol(c.comment_list[i] + 10);
+    for (int i = 0; i < c.comment_list_length; i++) {
+        if (!_strnicmp(c.comment_list[i], "LOOPSTART=", 10)) {
+            s->loop_start = atol(c.comment_list[i] + 10);
+        }
+    }
     return s;
 }
 
 ModSound *mod_sound_open(const uint8_t *file, size_t size, char *err, size_t cap)
 {
-    if (size >= 12 && !memcmp(file, "RIFF", 4) && !memcmp(file + 8, "WAVE", 4)) return open_wav(file, size, err, cap);
-    if (size >= 4 && !memcmp(file, "OggS", 4)) return open_ogg(file, size, err, cap);
+    if (size >= 12 && !memcmp(file, "RIFF", 4) && !memcmp(file + 8, "WAVE", 4)) {
+        return open_wav(file, size, err, cap);
+    }
+    if (size >= 4 && !memcmp(file, "OggS", 4)) {
+        return open_ogg(file, size, err, cap);
+    }
     snprintf(err, cap, "Neither an OGG Vorbis nor a WAV file.");
     return NULL;
 }
 
 void mod_sound_close(ModSound *s)
 {
-    if (!s) return;
-    if (s->ogg) stb_vorbis_close(s->ogg);
+    if (!s) {
+        return;
+    }
+    if (s->ogg) {
+        stb_vorbis_close(s->ogg);
+    }
     free(s->pcm);
     free(s);
 }
 
-int mod_sound_rate(const ModSound *s) { return s->rate; }
-long mod_sound_loop_start(const ModSound *s) { return s->loop_start; }
+int mod_sound_rate(const ModSound *s)
+{
+    return s->rate;
+}
+
+long mod_sound_loop_start(const ModSound *s)
+{
+    return s->loop_start;
+}
 
 void mod_sound_rewind(ModSound *s)
 {
-    if (s->ogg) stb_vorbis_seek_start(s->ogg);
+    if (s->ogg) {
+        stb_vorbis_seek_start(s->ogg);
+    }
     s->at = 0;
 }
 
@@ -220,10 +268,14 @@ static size_t read_once(ModSound *s, float *out, size_t count)
         size_t frames = sizeof block / sizeof block[0] / (size_t)channels;
         int want = count - done > frames ? (int)frames : (int)(count - done);
         int got = stb_vorbis_get_samples_float_interleaved(s->ogg, channels, block, want * channels);
-        if (got <= 0) break;
+        if (got <= 0) {
+            break;
+        }
         for (int i = 0; i < got; i++) {
             float sum = 0;
-            for (int k = 0; k < channels; k++) sum += block[i * channels + k];
+            for (int k = 0; k < channels; k++) {
+                sum += block[i * channels + k];
+            }
             out[done + (size_t)i] = sum / (float)channels;
         }
         done += (size_t)got;
@@ -236,10 +288,15 @@ size_t mod_sound_read(ModSound *s, float *out, size_t count, bool loop)
     size_t done = read_once(s, out, count);
     while (loop && done < count) {
         long start = s->loop_start > 0 ? s->loop_start : 0;
-        if (s->ogg) stb_vorbis_seek(s->ogg, (unsigned)start);
-        else s->at = (size_t)start;
+        if (s->ogg) {
+            stb_vorbis_seek(s->ogg, (unsigned)start);
+        } else {
+            s->at = (size_t)start;
+        }
         size_t got = read_once(s, out + done, count - done);
-        if (!got) break;
+        if (!got) {
+            break;
+        }
         done += got;
     }
     return done;

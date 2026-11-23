@@ -57,16 +57,16 @@
 
 typedef struct {
     char id[64];
-    char path[1024];   /* the archive or folder */
-    char watch[1024];  /* the file whose change reloads the script */
+    char path[1024];  /* the archive or folder */
+    char watch[1024]; /* the file whose change reloads the script */
     bool folder;
     long long stamp;
     lua_State *L;
-    int handlers;      /* registry ref: a table of handler lists, event + 1 */
-    unsigned wants;    /* bit per event, FRAME_EVENT included */
+    int handlers;   /* registry ref: a table of handler lists, event + 1 */
+    unsigned wants; /* bit per event, FRAME_EVENT included */
     size_t memory;
-    bool over;         /* the last growth was refused */
-    long steps;        /* hook steps left in this callback */
+    bool over;  /* the last growth was refused */
+    long steps; /* hook steps left in this callback */
     bool stopped;
     char why[300];
 } Script;
@@ -245,8 +245,9 @@ static int sb_on(lua_State *L)
     luaL_checktype(L, 2, LUA_TFUNCTION);
     int e = event_of(name);
     if (e < 0) {
-        return luaL_error(L, "dt.on: no event \"%s\" (frame, player-damaged, life-lost, timer-tick, new-game, "
-                             "jump-start, boss-hit)",
+        return luaL_error(L,
+                          "dt.on: no event \"%s\" (frame, player-damaged, life-lost, timer-tick, new-game, "
+                          "jump-start, boss-hit)",
                           name);
     }
     Script *s = script_of(L);
@@ -325,7 +326,10 @@ static int state_index(lua_State *L)
     return 1;
 }
 
-static int state_newindex(lua_State *L) { return luaL_error(L, "dt.state is read only"); }
+static int state_newindex(lua_State *L)
+{
+    return luaL_error(L, "dt.state is read only");
+}
 
 static void set_function(lua_State *L, const char *name, lua_CFunction fn)
 {
@@ -344,8 +348,8 @@ static void wrap_function(lua_State *L, const char *name, lua_CFunction fn)
 static int setup(lua_State *L)
 {
     static const luaL_Reg libs[] = {
-        { LUA_GNAME, luaopen_base },        { LUA_STRLIBNAME, luaopen_string }, { LUA_TABLIBNAME, luaopen_table },
-        { LUA_MATHLIBNAME, luaopen_math },  { LUA_UTF8LIBNAME, luaopen_utf8 },  { LUA_COLIBNAME, luaopen_coroutine },
+        { LUA_GNAME, luaopen_base },       { LUA_STRLIBNAME, luaopen_string }, { LUA_TABLIBNAME, luaopen_table },
+        { LUA_MATHLIBNAME, luaopen_math }, { LUA_UTF8LIBNAME, luaopen_utf8 },  { LUA_COLIBNAME, luaopen_coroutine },
     };
     for (size_t i = 0; i < sizeof libs / sizeof libs[0]; i++) {
         luaL_requiref(L, libs[i].name, libs[i].func, 1);

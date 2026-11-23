@@ -47,9 +47,9 @@ typedef struct {
 } OrderItem;
 
 typedef struct {
-    uint64_t  hash;
-    uint32_t  palette;
-    int       w, h;
+    uint64_t hash;
+    uint32_t palette;
+    int w, h;
     uint32_t *argb;
 } TileArt;
 
@@ -83,27 +83,42 @@ static bool word_on(const char *v, bool *out)
 {
     static const char *ON[] = { "on", "1", "true", "yes" }, *OFF[] = { "off", "0", "false", "no" };
     for (int i = 0; i < 4; i++) {
-        if (!_stricmp(v, ON[i])) { *out = true; return true; }
-        if (!_stricmp(v, OFF[i])) { *out = false; return true; }
+        if (!_stricmp(v, ON[i])) {
+            *out = true;
+            return true;
+        }
+        if (!_stricmp(v, OFF[i])) {
+            *out = false;
+            return true;
+        }
     }
     return false;
 }
 
 static char *trim(char *s)
 {
-    while (*s == ' ' || *s == '\t') s++;
+    while (*s == ' ' || *s == '\t') {
+        s++;
+    }
     char *e = s + strlen(s);
-    while (e > s && (e[-1] == ' ' || e[-1] == '\t' || e[-1] == '\r' || e[-1] == '\n')) *--e = 0;
+    while (e > s && (e[-1] == ' ' || e[-1] == '\t' || e[-1] == '\r' || e[-1] == '\n')) {
+        *--e = 0;
+    }
     return s;
 }
 
 static bool valid_id(const char *id)
 {
     size_t n = strlen(id);
-    if (!n || n > 63 || !isalnum((unsigned char)id[0])) return false;
-    for (size_t i = 0; i < n; i++)
-        if (!(islower((unsigned char)id[i]) || isdigit((unsigned char)id[i]) || id[i] == '-' || id[i] == '_' || id[i] == '.'))
+    if (!n || n > 63 || !isalnum((unsigned char)id[0])) {
+        return false;
+    }
+    for (size_t i = 0; i < n; i++) {
+        if (!(islower((unsigned char)id[i]) || isdigit((unsigned char)id[i]) || id[i] == '-' || id[i] == '_' ||
+              id[i] == '.')) {
             return false;
+        }
+    }
     return true;
 }
 
@@ -115,7 +130,9 @@ static bool ends_with(const char *s, const char *tail)
 
 static int hex_digit(char c)
 {
-    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= '0' && c <= '9') {
+        return c - '0';
+    }
     c = (char)tolower((unsigned char)c);
     return c >= 'a' && c <= 'f' ? c - 'a' + 10 : -1;
 }
@@ -125,7 +142,9 @@ static bool parse_hex(const char *s, int digits, uint64_t *out)
     uint64_t v = 0;
     for (int i = 0; i < digits; i++) {
         int d = hex_digit(s[i]);
-        if (d < 0) return false;
+        if (d < 0) {
+            return false;
+        }
         v = v << 4 | (uint64_t)d;
     }
     *out = v;
@@ -134,7 +153,9 @@ static bool parse_hex(const char *s, int digits, uint64_t *out)
 
 static void lower(char *s)
 {
-    for (; *s; s++) *s = (char)tolower((unsigned char)*s);
+    for (; *s; s++) {
+        *s = (char)tolower((unsigned char)*s);
+    }
 }
 
 /* ---- settings ---- */
@@ -149,13 +170,21 @@ static void order_parse(const char *text)
         bool on = true;
         if (colon) {
             *colon = 0;
-            if (!word_on(trim(colon + 1), &on)) on = true;
+            if (!word_on(trim(colon + 1), &on)) {
+                on = true;
+            }
         }
         t = trim(t);
-        if (!valid_id(t)) continue;
+        if (!valid_id(t)) {
+            continue;
+        }
         bool dup = false;
-        for (int i = 0; i < s_order_count; i++) dup |= !strcmp(s_order[i].id, t);
-        if (dup) continue;
+        for (int i = 0; i < s_order_count; i++) {
+            dup |= !strcmp(s_order[i].id, t);
+        }
+        if (dup) {
+            continue;
+        }
         snprintf(s_order[s_order_count].id, sizeof s_order[0].id, "%s", t);
         s_order[s_order_count++].on = on;
     }
@@ -166,17 +195,27 @@ static void order_from_catalogue(void)
     OrderItem kept[MAX_MODS];
     int n = 0;
     for (int i = 0; i < s_count && n < MAX_MODS; i++) {
-        if (!valid_id(s_mods[i].id)) continue;
+        if (!valid_id(s_mods[i].id)) {
+            continue;
+        }
         bool dup = false;
-        for (int k = 0; k < n; k++) dup |= !strcmp(kept[k].id, s_mods[i].id);
-        if (dup) continue;
+        for (int k = 0; k < n; k++) {
+            dup |= !strcmp(kept[k].id, s_mods[i].id);
+        }
+        if (dup) {
+            continue;
+        }
         snprintf(kept[n].id, sizeof kept[n].id, "%s", s_mods[i].id);
         kept[n++].on = s_mods[i].enabled;
     }
     for (int j = 0; j < s_order_count && n < MAX_MODS; j++) {
         bool present = false;
-        for (int k = 0; k < n; k++) present |= !strcmp(kept[k].id, s_order[j].id);
-        if (!present) kept[n++] = s_order[j];
+        for (int k = 0; k < n; k++) {
+            present |= !strcmp(kept[k].id, s_order[j].id);
+        }
+        if (!present) {
+            kept[n++] = s_order[j];
+        }
     }
     memcpy(s_order, kept, (size_t)n * sizeof kept[0]);
     s_order_count = n;
@@ -186,8 +225,12 @@ bool app_mods_setting(const char *key, const char *value)
 {
     if (!_stricmp(key, "Enabled")) {
         bool on;
-        if (word_on(value, &on)) s_enabled = on;
-        else fprintf(stderr, "[ducktales] config.ini [Mods] Enabled = %s: expected on or off; using %s\n", value, s_enabled ? "on" : "off");
+        if (word_on(value, &on)) {
+            s_enabled = on;
+        } else {
+            fprintf(stderr, "[ducktales] config.ini [Mods] Enabled = %s: expected on or off; using %s\n", value,
+                    s_enabled ? "on" : "off");
+        }
         return true;
     }
     if (!_stricmp(key, "Order")) {
@@ -201,7 +244,9 @@ void app_mods_read_config(const char *path)
 {
     size_t size;
     char *text = (char *)mod_read_file(path, &size);
-    if (!text) return;
+    if (!text) {
+        return;
+    }
     bool in = false;
     for (char *line = strtok(text, "\n"); line; line = strtok(NULL, "\n")) {
         char *t = trim(line);
@@ -210,7 +255,9 @@ void app_mods_read_config(const char *path)
             continue;
         }
         char *eq = strchr(t, '=');
-        if (!in || !eq || *t == '#' || *t == ';') continue;
+        if (!in || !eq || *t == '#' || *t == ';') {
+            continue;
+        }
         *eq = 0;
         app_mods_setting(trim(t), trim(eq + 1));
     }
@@ -220,23 +267,42 @@ void app_mods_read_config(const char *path)
 void app_mods_write_settings(FILE *f)
 {
     fprintf(f, "[Mods]\nEnabled = %s\nOrder = ", s_enabled ? "on" : "off");
-    for (int i = 0; i < s_order_count; i++) fprintf(f, "%s%s:%s", i ? ", " : "", s_order[i].id, s_order[i].on ? "on" : "off");
+    for (int i = 0; i < s_order_count; i++) {
+        fprintf(f, "%s%s:%s", i ? ", " : "", s_order[i].id, s_order[i].on ? "on" : "off");
+    }
     fprintf(f, "\n");
 }
 
-bool app_mods_enabled(void) { return s_enabled; }
-void app_mods_set_enabled(bool on) { s_enabled = on; }
+bool app_mods_enabled(void)
+{
+    return s_enabled;
+}
+
+void app_mods_set_enabled(bool on)
+{
+    s_enabled = on;
+}
 
 void app_mods_add_folder(const char *dir, bool create)
 {
-    if (!dir || !*dir || s_folder_count >= MAX_FOLDERS) return;
-    for (int i = 0; i < s_folder_count; i++)
-        if (!_stricmp(s_folders[i], dir)) return;
-    if (create) mod_make_dir(dir);
+    if (!dir || !*dir || s_folder_count >= MAX_FOLDERS) {
+        return;
+    }
+    for (int i = 0; i < s_folder_count; i++) {
+        if (!_stricmp(s_folders[i], dir)) {
+            return;
+        }
+    }
+    if (create) {
+        mod_make_dir(dir);
+    }
     snprintf(s_folders[s_folder_count++], sizeof s_folders[0], "%s", dir);
 }
 
-const char *app_mods_folder(void) { return s_folder_count ? s_folders[0] : ""; }
+const char *app_mods_folder(void)
+{
+    return s_folder_count ? s_folders[0] : "";
+}
 
 void app_mods_use_player_folders(const char *config_path)
 {
@@ -265,8 +331,15 @@ static const char *const OPTION_HELP[APP_MODS_OPTION_COUNT] = {
     "DIR: write every tile drawn, once, as DIR/<key>.png (templates for tile mods)",
 };
 
-const char *app_mods_option_name(int index) { return OPTION_NAME[index]; }
-const char *app_mods_option_help(int index) { return OPTION_HELP[index]; }
+const char *app_mods_option_name(int index)
+{
+    return OPTION_NAME[index];
+}
+
+const char *app_mods_option_help(int index)
+{
+    return OPTION_HELP[index];
+}
 
 bool app_mods_option(const char *name, const char *value, bool *ok)
 {
@@ -306,14 +379,20 @@ static bool toml_string(char **cursor, char *out, size_t cap, char *err, size_t 
     bool multi = !strncmp(p, "\"\"\"", 3) || !strncmp(p, "'''", 3), literal = *p == '\'';
     char quote = *p;
     p += multi ? 3 : 1;
-    if (multi && *p == '\r') p++;
-    if (multi && *p == '\n') p++;
+    if (multi && *p == '\r') {
+        p++;
+    }
+    if (multi && *p == '\n') {
+        p++;
+    }
     for (;;) {
         if (!*p || (!multi && (*p == '\n' || *p == '\r'))) {
             snprintf(err, errcap, "unterminated string");
             return false;
         }
-        if (multi ? (p[0] == quote && p[1] == quote && p[2] == quote) : *p == quote) break;
+        if (multi ? (p[0] == quote && p[1] == quote && p[2] == quote) : *p == quote) {
+            break;
+        }
         char c = *p++;
         if (c == '\\' && !literal) {
             char e = *p++;
@@ -323,34 +402,62 @@ static bool toml_string(char **cursor, char *out, size_t cap, char *err, size_t 
                 return false;
             }
         }
-        if (c == '\r') continue;
-        if (n + 1 < cap) out[n++] = c;
+        if (c == '\r') {
+            continue;
+        }
+        if (n + 1 < cap) {
+            out[n++] = c;
+        }
     }
     out[n] = 0;
     *cursor = p + (multi ? 3 : 1);
     return true;
 }
 
-static bool parse_toml(char *text, AppMod *m, char *game, size_t game_cap, char *prg, size_t prg_cap, char *err, size_t cap)
+static bool parse_toml(char *text, AppMod *m, char *game, size_t game_cap, char *prg, size_t prg_cap, char *err,
+                       size_t cap)
 {
     char *p = text;
     bool top = true;
     int line = 1;
     while (*p) {
-        while (*p == ' ' || *p == '\t' || *p == '\r') p++;
-        if (*p == '\n') { p++; line++; continue; }
-        if (*p == '#') { while (*p && *p != '\n') p++; continue; }
-        if (*p == '[') { top = false; while (*p && *p != '\n') p++; continue; }
+        while (*p == ' ' || *p == '\t' || *p == '\r') {
+            p++;
+        }
+        if (*p == '\n') {
+            p++;
+            line++;
+            continue;
+        }
+        if (*p == '#') {
+            while (*p && *p != '\n') {
+                p++;
+            }
+            continue;
+        }
+        if (*p == '[') {
+            top = false;
+            while (*p && *p != '\n') {
+                p++;
+            }
+            continue;
+        }
         char *key = p;
-        while (*p && (isalnum((unsigned char)*p) || *p == '_' || *p == '-')) p++;
+        while (*p && (isalnum((unsigned char)*p) || *p == '_' || *p == '-')) {
+            p++;
+        }
         size_t klen = (size_t)(p - key);
-        while (*p == ' ' || *p == '\t') p++;
+        while (*p == ' ' || *p == '\t') {
+            p++;
+        }
         if (!klen || *p != '=') {
             snprintf(err, cap, "mod.toml line %d: expected key = value", line);
             return false;
         }
         p++;
-        while (*p == ' ' || *p == '\t') p++;
+        while (*p == ' ' || *p == '\t') {
+            p++;
+        }
         char value[1024], why[64];
         if (*p == '"' || *p == '\'') {
             char *start = p;
@@ -358,30 +465,49 @@ static bool parse_toml(char *text, AppMod *m, char *game, size_t game_cap, char 
                 snprintf(err, cap, "mod.toml line %d: %s", line, why);
                 return false;
             }
-            for (char *q = start; q < p; q++) line += *q == '\n';
+            for (char *q = start; q < p; q++) {
+                line += *q == '\n';
+            }
         } else {
             char *v = p;
-            while (*p && *p != '\n' && *p != '#') p++;
+            while (*p && *p != '\n' && *p != '#') {
+                p++;
+            }
             snprintf(value, sizeof value, "%.*s", (int)(p - v), v);
             trim(value);
         }
         while (*p && *p != '\n') {
-            if (*p == '#') { while (*p && *p != '\n') p++; break; }
+            if (*p == '#') {
+                while (*p && *p != '\n') {
+                    p++;
+                }
+                break;
+            }
             if (*p != ' ' && *p != '\t' && *p != '\r') {
                 snprintf(err, cap, "mod.toml line %d: unexpected text after the value", line);
                 return false;
             }
             p++;
         }
-        if (!top) continue;
+        if (!top) {
+            continue;
+        }
 #define KEY(name) (klen == sizeof name - 1 && !strncmp(key, name, klen))
-        if (KEY("id")) snprintf(m->id, sizeof m->id, "%s", value);
-        else if (KEY("name")) snprintf(m->name, sizeof m->name, "%s", value);
-        else if (KEY("version")) snprintf(m->version, sizeof m->version, "%s", value);
-        else if (KEY("author")) snprintf(m->author, sizeof m->author, "%s", value);
-        else if (KEY("description")) snprintf(m->description, sizeof m->description, "%s", value);
-        else if (KEY("game")) snprintf(game, game_cap, "%s", value);
-        else if (KEY("prg_sha256")) snprintf(prg, prg_cap, "%s", value);
+        if (KEY("id")) {
+            snprintf(m->id, sizeof m->id, "%s", value);
+        } else if (KEY("name")) {
+            snprintf(m->name, sizeof m->name, "%s", value);
+        } else if (KEY("version")) {
+            snprintf(m->version, sizeof m->version, "%s", value);
+        } else if (KEY("author")) {
+            snprintf(m->author, sizeof m->author, "%s", value);
+        } else if (KEY("description")) {
+            snprintf(m->description, sizeof m->description, "%s", value);
+        } else if (KEY("game")) {
+            snprintf(game, game_cap, "%s", value);
+        } else if (KEY("prg_sha256")) {
+            snprintf(prg, prg_cap, "%s", value);
+        }
 #undef KEY
     }
     return true;
@@ -392,8 +518,11 @@ static bool parse_toml(char *text, AppMod *m, char *game, size_t game_cap, char 
 static void base_name(const char *path, char *out, size_t cap)
 {
     const char *b = path;
-    for (const char *c = path; *c; c++)
-        if (*c == '\\' || *c == '/') b = c + 1;
+    for (const char *c = path; *c; c++) {
+        if (*c == '\\' || *c == '/') {
+            b = c + 1;
+        }
+    }
     snprintf(out, cap, "%s", b);
 }
 
@@ -412,37 +541,47 @@ static void read_mod(AppMod *m)
     size_t size;
     char *text = at < 0 ? NULL : (char *)mod_archive_read(&a, at, &size, err, sizeof err);
     char game[128] = "", prg[80] = "";
-    if (at < 0) snprintf(m->error, sizeof m->error, "Cannot be read: no mod.toml in the archive.");
-    else if (!text) snprintf(m->error, sizeof m->error, "Cannot be read: %s", err);
-    else {
+    if (at < 0) {
+        snprintf(m->error, sizeof m->error, "Cannot be read: no mod.toml in the archive.");
+    } else if (!text) {
+        snprintf(m->error, sizeof m->error, "Cannot be read: %s", err);
+    } else {
         char name_from_file[128];
         snprintf(name_from_file, sizeof name_from_file, "%s", m->name);
         m->id[0] = m->name[0] = 0;
-        if (!parse_toml(text, m, game, sizeof game, prg, sizeof prg, err, sizeof err))
+        if (!parse_toml(text, m, game, sizeof game, prg, sizeof prg, err, sizeof err)) {
             snprintf(m->error, sizeof m->error, "Cannot be read: %s", err);
-        else if (!valid_id(m->id))
-            snprintf(m->error, sizeof m->error, "mod.toml: id \"%s\" must be 1-63 characters of a-z, 0-9, '-', '_' or '.'.", m->id);
-        else if (!m->name[0] || !m->version[0] || !game[0] || !prg[0])
+        } else if (!valid_id(m->id)) {
+            snprintf(m->error, sizeof m->error,
+                     "mod.toml: id \"%s\" must be 1-63 characters of a-z, 0-9, '-', '_' or '.'.", m->id);
+        } else if (!m->name[0] || !m->version[0] || !game[0] || !prg[0]) {
             snprintf(m->error, sizeof m->error, "mod.toml: name, version, game and prg_sha256 are required.");
-        else if (strcmp(game, APP_MODS_GAME))
+        } else if (strcmp(game, APP_MODS_GAME)) {
             snprintf(m->error, sizeof m->error, "Made for \"%s\", not %s.", game, APP_MODS_GAME);
-        else {
+        } else {
             lower(prg);
             const char *running = s_prg_hex[0] ? s_prg_hex : APP_MODS_PRG_SHA256;
-            if (strcmp(prg, running))
-                snprintf(m->error, sizeof m->error, "Made for a different version of the game: it targets PRG SHA-256 %.12s..., this game's is %.12s....",
+            if (strcmp(prg, running)) {
+                snprintf(m->error, sizeof m->error,
+                         "Made for a different version of the game: it targets PRG SHA-256 %.12s..., this game's is "
+                         "%.12s....",
                          prg, running);
+            }
         }
         if (!m->id[0]) {
             snprintf(m->id, sizeof m->id, "%s", name_from_file);
             lower(m->id);
         }
-        if (!m->name[0]) snprintf(m->name, sizeof m->name, "%s", name_from_file);
+        if (!m->name[0]) {
+            snprintf(m->name, sizeof m->name, "%s", name_from_file);
+        }
     }
     free(text);
     for (int i = 0; i < a.count; i++) {
         const char *n = mod_archive_name(&a, i);
-        if (!n) continue;
+        if (!n) {
+            continue;
+        }
         m->tiles += !_strnicmp(n, "tiles/", 6) && ends_with(n, ".png");
         m->palettes += !_strnicmp(n, "palettes/", 9) && ends_with(n, ".pal");
         m->music += !_strnicmp(n, "music/", 6);
@@ -459,7 +598,9 @@ typedef struct {
 static void scan_entry(void *user, const char *name, bool folder)
 {
     const ScanCtx *ctx = user;
-    if (s_count >= MAX_MODS) return;
+    if (s_count >= MAX_MODS) {
+        return;
+    }
     char path[1024];
     snprintf(path, sizeof path, "%s\\%s", ctx->dir, name);
     if (folder) {
@@ -467,7 +608,9 @@ static void scan_entry(void *user, const char *name, bool folder)
         snprintf(toml, sizeof toml, "%s\\mod.toml", path);
         size_t n;
         uint8_t *probe = mod_read_file(toml, &n);
-        if (!probe) return;
+        if (!probe) {
+            return;
+        }
         free(probe);
     } else if (!ends_with(name, APP_MODS_EXTENSION)) {
         return;
@@ -492,26 +635,33 @@ static void scan(void)
         mod_list_dir(s_folders[f], scan_entry, &ctx);
     }
     qsort(s_mods, (size_t)s_count, sizeof s_mods[0], by_name);
-    for (int i = 0; i < s_count; i++)
-        for (int k = 0; k < i; k++)
-            if (!s_mods[i].error[0] && !s_mods[k].error[0] && !strcmp(s_mods[i].id, s_mods[k].id))
-                snprintf(s_mods[i].error, sizeof s_mods[i].error, "Another mod has the same id \"%s\": %s.", s_mods[i].id, s_mods[k].path);
+    for (int i = 0; i < s_count; i++) {
+        for (int k = 0; k < i; k++) {
+            if (!s_mods[i].error[0] && !s_mods[k].error[0] && !strcmp(s_mods[i].id, s_mods[k].id)) {
+                snprintf(s_mods[i].error, sizeof s_mods[i].error, "Another mod has the same id \"%s\": %s.",
+                         s_mods[i].id, s_mods[k].path);
+            }
+        }
+    }
     static AppMod sorted[MAX_MODS];
     bool used[MAX_MODS] = { false };
     int n = 0;
-    for (int j = 0; j < s_order_count; j++)
-        for (int i = 0; i < s_count; i++)
+    for (int j = 0; j < s_order_count; j++) {
+        for (int i = 0; i < s_count; i++) {
             if (!used[i] && !strcmp(s_mods[i].id, s_order[j].id)) {
                 used[i] = true;
                 sorted[n] = s_mods[i];
                 sorted[n++].enabled = s_order[j].on;
                 break;
             }
-    for (int i = 0; i < s_count; i++)
+        }
+    }
+    for (int i = 0; i < s_count; i++) {
         if (!used[i]) {
             sorted[n] = s_mods[i];
             sorted[n++].enabled = true;
         }
+    }
     memcpy(s_mods, sorted, (size_t)n * sizeof sorted[0]);
     order_from_catalogue();
 }
@@ -521,27 +671,46 @@ static void loaded_set(char *out, size_t cap, bool *enabled)
     size_t n = 0;
     out[0] = 0;
     *enabled = s_enabled;
-    if (!s_enabled) return;
-    for (int i = 0; i < s_count; i++)
-        if (s_mods[i].enabled && !s_mods[i].error[0]) n += (size_t)snprintf(out + n, n < cap ? cap - n : 0, "%s,", s_mods[i].id);
+    if (!s_enabled) {
+        return;
+    }
+    for (int i = 0; i < s_count; i++) {
+        if (s_mods[i].enabled && !s_mods[i].error[0]) {
+            n += (size_t)snprintf(out + n, n < cap ? cap - n : 0, "%s,", s_mods[i].id);
+        }
+    }
 }
 
-int app_mods_count(void) { return s_count; }
-const AppMod *app_mods_get(int index) { return index >= 0 && index < s_count ? &s_mods[index] : NULL; }
+int app_mods_count(void)
+{
+    return s_count;
+}
+
+const AppMod *app_mods_get(int index)
+{
+    return index >= 0 && index < s_count ? &s_mods[index] : NULL;
+}
 
 void app_mods_set_mod_enabled(int index, bool on)
 {
-    if (index < 0 || index >= s_count) return;
+    if (index < 0 || index >= s_count) {
+        return;
+    }
     s_mods[index].enabled = on;
     order_from_catalogue();
 }
 
 void app_mods_move(int from, int to)
 {
-    if (from < 0 || from >= s_count || to < 0 || to >= s_count || from == to) return;
+    if (from < 0 || from >= s_count || to < 0 || to >= s_count || from == to) {
+        return;
+    }
     AppMod m = s_mods[from];
-    if (from < to) memmove(&s_mods[from], &s_mods[from + 1], (size_t)(to - from) * sizeof m);
-    else memmove(&s_mods[to + 1], &s_mods[to], (size_t)(from - to) * sizeof m);
+    if (from < to) {
+        memmove(&s_mods[from], &s_mods[from + 1], (size_t)(to - from) * sizeof m);
+    } else {
+        memmove(&s_mods[to + 1], &s_mods[to], (size_t)(from - to) * sizeof m);
+    }
     s_mods[to] = m;
     order_from_catalogue();
 }
@@ -585,7 +754,9 @@ bool app_mods_restart_needed(void)
 static uint64_t tile_hash(const uint8_t *chr)
 {
     uint64_t h = 0xcbf29ce484222325ull;
-    for (int i = 0; i < 16; i++) h = (h ^ chr[i]) * 0x100000001b3ull;
+    for (int i = 0; i < 16; i++) {
+        h = (h ^ chr[i]) * 0x100000001b3ull;
+    }
     return h;
 }
 
@@ -597,21 +768,28 @@ static size_t tile_slot(uint64_t hash, uint32_t palette)
 
 static TileArt *tile_find(uint64_t hash, uint32_t palette)
 {
-    if (!s_tile_cap) return NULL;
+    if (!s_tile_cap) {
+        return NULL;
+    }
     for (size_t i = tile_slot(hash, palette);; i = (i + 1) & (s_tile_cap - 1)) {
         TileArt *t = &s_tiles[i];
-        if (!t->argb) return NULL;
-        if (t->hash == hash && t->palette == palette) return t;
+        if (!t->argb) {
+            return NULL;
+        }
+        if (t->hash == hash && t->palette == palette) {
+            return t;
+        }
     }
 }
 
 static void tile_put(const TileArt *art)
 {
-    for (size_t i = tile_slot(art->hash, art->palette);; i = (i + 1) & (s_tile_cap - 1))
+    for (size_t i = tile_slot(art->hash, art->palette);; i = (i + 1) & (s_tile_cap - 1)) {
         if (!s_tiles[i].argb) {
             s_tiles[i] = *art;
             return;
         }
+    }
 }
 
 /* Takes art->argb; false (and frees it) when the key is taken or memory is short. */
@@ -630,8 +808,11 @@ static bool tile_insert(TileArt *art)
         }
         s_tiles = grown;
         s_tile_cap = cap;
-        for (size_t i = 0; i < old_cap; i++)
-            if (old[i].argb) tile_put(&old[i]);
+        for (size_t i = 0; i < old_cap; i++) {
+            if (old[i].argb) {
+                tile_put(&old[i]);
+            }
+        }
         free(old);
     }
     tile_put(art);
@@ -645,7 +826,9 @@ static bool tile_key(const char *name, uint64_t *hash, uint32_t *palette)
     char base[MOD_NAME_MAX];
     base_name(name, base, sizeof base);
     size_t n = strlen(base);
-    if (n < 4 || _stricmp(base + n - 4, ".png")) return false;
+    if (n < 4 || _stricmp(base + n - 4, ".png")) {
+        return false;
+    }
     n -= 4;
     uint64_t pal;
     if (n == 16 && parse_hex(base, 16, hash)) {
@@ -653,7 +836,9 @@ static bool tile_key(const char *name, uint64_t *hash, uint32_t *palette)
         return true;
     }
     if (n == 25 && base[16] == '_' && parse_hex(base, 16, hash) && parse_hex(base + 17, 8, &pal)) {
-        if ((pal & 0xC0C0C0C0u) != 0) return false;
+        if ((pal & 0xC0C0C0C0u) != 0) {
+            return false;
+        }
         *palette = (uint32_t)pal;
         return true;
     }
@@ -665,20 +850,31 @@ static int land_of_file(const char *name)
     char base[MOD_NAME_MAX];
     base_name(name, base, sizeof base);
     size_t n = strlen(base);
-    if (n < 4) return -2;
+    if (n < 4) {
+        return -2;
+    }
     base[n - 4] = 0;
-    if (!_stricmp(base, "global")) return LANDS;
-    for (int l = 0; l < LANDS; l++)
-        if (!_stricmp(base, LAND_NAMES[l])) return l;
+    if (!_stricmp(base, "global")) {
+        return LANDS;
+    }
+    for (int l = 0; l < LANDS; l++) {
+        if (!_stricmp(base, LAND_NAMES[l])) {
+            return l;
+        }
+    }
     return -2;
 }
 
 static uint32_t *read_pal(const uint8_t *d, size_t size)
 {
-    if (size != 64 * 3 && size != 512 * 3) return NULL;
+    if (size != 64 * 3 && size != 512 * 3) {
+        return NULL;
+    }
     const uint32_t *base = nv_palette_argb();
     uint32_t *pal = malloc(512 * sizeof *pal);
-    if (!pal) return NULL;
+    if (!pal) {
+        return NULL;
+    }
     size_t entries = size / 3;
     for (size_t i = 0; i < 512; i++) {
         if (entries == 64 && i >= 64) {
@@ -694,26 +890,32 @@ static uint32_t *read_pal(const uint8_t *d, size_t size)
 static bool sound_id(const char *name, const char *folder, int *id)
 {
     char base[MOD_NAME_MAX];
-    if (strchr(name + strlen(folder), '/')) return false;
+    if (strchr(name + strlen(folder), '/')) {
+        return false;
+    }
     base_name(name, base, sizeof base);
     uint64_t v;
-    if (strlen(base) < 6 || !parse_hex(base, 2, &v) || (base[2] != '.' && base[2] != '-')) return false;
+    if (strlen(base) < 6 || !parse_hex(base, 2, &v) || (base[2] != '.' && base[2] != '-')) {
+        return false;
+    }
     *id = (int)v;
     return true;
 }
 
 typedef struct {
-    bool     music;
-    int      id;
+    bool music;
+    int id;
     uint8_t *file;
-    size_t   size;
+    size_t size;
 } PendingSound;
 
 /* Reads and checks every asset of a mod, then uses it whole: false with the reason. */
 static bool load_mod(AppMod *m, char *err, size_t cap)
 {
     ModArchive a;
-    if (!mod_archive_open(&a, m->path, m->folder, err, cap)) return false;
+    if (!mod_archive_open(&a, m->path, m->folder, err, cap)) {
+        return false;
+    }
     TileArt *tiles = NULL;
     int tile_n = 0;
     uint32_t *pals[LANDS + 1] = { NULL };
@@ -722,13 +924,23 @@ static bool load_mod(AppMod *m, char *err, size_t cap)
     bool ok = true;
     for (int i = 0; i < a.count && ok; i++) {
         const char *n = mod_archive_name(&a, i);
-        if (!n) continue;
+        if (!n) {
+            continue;
+        }
         bool tile = !_strnicmp(n, "tiles/", 6), pal = !_strnicmp(n, "palettes/", 9);
         bool music = !_strnicmp(n, "music/", 6), sfx = !_strnicmp(n, "sfx/", 4);
-        if (!tile && !pal && !music && !sfx) continue;
-        if (tile && !ends_with(n, ".png")) continue;
-        if (pal && !ends_with(n, ".pal")) continue;
-        if ((music || sfx) && !ends_with(n, ".ogg") && !ends_with(n, ".wav")) continue;
+        if (!tile && !pal && !music && !sfx) {
+            continue;
+        }
+        if (tile && !ends_with(n, ".png")) {
+            continue;
+        }
+        if (pal && !ends_with(n, ".pal")) {
+            continue;
+        }
+        if ((music || sfx) && !ends_with(n, ".ogg") && !ends_with(n, ".wav")) {
+            continue;
+        }
         uint64_t hash = 0;
         uint32_t palette = 0;
         int land = 0, id = 0;
@@ -738,7 +950,8 @@ static bool load_mod(AppMod *m, char *err, size_t cap)
             break;
         }
         if (pal && (land = land_of_file(n)) < 0) {
-            snprintf(err, cap, "%s: palettes are global.pal or amazon, transylvania, african-mines, himalayas, moon .pal.", n);
+            snprintf(err, cap,
+                     "%s: palettes are global.pal or amazon, transylvania, african-mines, himalayas, moon .pal.", n);
             ok = false;
             break;
         }
@@ -804,7 +1017,9 @@ static bool load_mod(AppMod *m, char *err, size_t cap)
                     sounds = grown;
                     sounds[sound_n++] = (PendingSound){ music, id, data, size };
                     if (music ? id >= DT_SOUND_MUSIC_IDS : (id < DT_SOUND_MUSIC_IDS || id >= DT_SOUND_IDS)) {
-                        snprintf(err, cap, "%s: %s", n, music ? "music ids are 00-0F (docs/audio.md)." : "effect ids are 10-37 (docs/audio.md).");
+                        snprintf(err, cap, "%s: %s", n,
+                                 music ? "music ids are 00-0F (docs/audio.md)."
+                                       : "effect ids are 10-37 (docs/audio.md).");
                         ok = false;
                     }
                 }
@@ -813,23 +1028,40 @@ static bool load_mod(AppMod *m, char *err, size_t cap)
     }
     mod_archive_close(&a);
     if (ok) {
-        for (int i = 0; i < tile_n; i++) m->tiles += tile_insert(&tiles[i]) ? 1 : 0;
-        for (int l = 0; l <= LANDS; l++)
-            if (pals[l]) s_palettes[s_palette_count++] = pals[l];
-        for (int l = 0; l < LANDS; l++)
-            if (!s_palette_for[l] && (pals[l] || pals[LANDS])) s_palette_for[l] = pals[l] ? pals[l] : pals[LANDS];
-        if (!s_palette_for[LANDS] && pals[LANDS]) s_palette_for[LANDS] = pals[LANDS];
+        for (int i = 0; i < tile_n; i++) {
+            m->tiles += tile_insert(&tiles[i]) ? 1 : 0;
+        }
+        for (int l = 0; l <= LANDS; l++) {
+            if (pals[l]) {
+                s_palettes[s_palette_count++] = pals[l];
+            }
+        }
+        for (int l = 0; l < LANDS; l++) {
+            if (!s_palette_for[l] && (pals[l] || pals[LANDS])) {
+                s_palette_for[l] = pals[l] ? pals[l] : pals[LANDS];
+            }
+        }
+        if (!s_palette_for[LANDS] && pals[LANDS]) {
+            s_palette_for[LANDS] = pals[LANDS];
+        }
         for (int i = 0; i < sound_n; i++) {
             char why[160];
-            if (!mods_audio_has(sounds[i].music, sounds[i].id))
+            if (!mods_audio_has(sounds[i].music, sounds[i].id)) {
                 mods_audio_add(sounds[i].music, sounds[i].id, sounds[i].file, sounds[i].size, why, sizeof why);
-            else
+            } else {
                 free(sounds[i].file);
+            }
         }
     } else {
-        for (int i = 0; i < tile_n; i++) free(tiles[i].argb);
-        for (int l = 0; l <= LANDS; l++) free(pals[l]);
-        for (int i = 0; i < sound_n; i++) free(sounds[i].file);
+        for (int i = 0; i < tile_n; i++) {
+            free(tiles[i].argb);
+        }
+        for (int l = 0; l <= LANDS; l++) {
+            free(pals[l]);
+        }
+        for (int i = 0; i < sound_n; i++) {
+            free(sounds[i].file);
+        }
     }
     free(tiles);
     free(sounds);
@@ -838,7 +1070,9 @@ static bool load_mod(AppMod *m, char *err, size_t cap)
 
 void app_mods_start(const uint8_t *prg, size_t prg_size)
 {
-    if (s_started) return;
+    if (s_started) {
+        return;
+    }
     s_started = true;
     if (prg && prg_size) {
         uint8_t digest[32];
@@ -850,7 +1084,9 @@ void app_mods_start(const uint8_t *prg, size_t prg_size)
     int used = 0;
     for (int i = 0; i < s_count && s_enabled; i++) {
         AppMod *m = &s_mods[i];
-        if (!m->enabled || m->error[0]) continue;
+        if (!m->enabled || m->error[0]) {
+            continue;
+        }
         char err[300];
         if (load_mod(m, err, sizeof err)) {
             m->loaded = true;
@@ -867,8 +1103,11 @@ void app_mods_start(const uint8_t *prg, size_t prg_size)
     printf("[ducktales] Mods: %s, %d found, %d loaded (%zu tiles, %d palettes, sounds %s, %d scripts)\n",
            s_enabled ? "on" : "off", s_count, used, s_tile_count, s_palette_count,
            app_mods_audio_active() ? "replaced" : "none", scripts);
-    for (int i = 0; i < s_count; i++)
-        if (s_mods[i].error[0]) printf("[ducktales] Mod %s: %s\n", s_mods[i].id, s_mods[i].error);
+    for (int i = 0; i < s_count; i++) {
+        if (s_mods[i].error[0]) {
+            printf("[ducktales] Mod %s: %s\n", s_mods[i].id, s_mods[i].error);
+        }
+    }
     fflush(stdout);
     for (int i = 0; i < s_count; i++) {
         if (s_mods[i].loaded && s_mods[i].script) {
@@ -879,11 +1118,16 @@ void app_mods_start(const uint8_t *prg, size_t prg_size)
 
 /* ---- the picture ---- */
 
-bool app_mods_video_active(void) { return s_tile_count || s_palette_count || s_dump_dir[0]; }
+bool app_mods_video_active(void)
+{
+    return s_tile_count || s_palette_count || s_dump_dir[0];
+}
 
 bool app_mods_dump_dir(const char *dir)
 {
-    if (!mod_make_dir(dir)) return false;
+    if (!mod_make_dir(dir)) {
+        return false;
+    }
     snprintf(s_dump_dir, sizeof s_dump_dir, "%s", dir);
     return true;
 }
@@ -893,18 +1137,28 @@ static bool dumped(uint64_t key)
     if ((s_dumped_count + 1) * 2 > s_dumped_cap) {
         size_t old_cap = s_dumped_cap, cap = old_cap ? old_cap * 2 : 4096;
         uint64_t *old = s_dumped, *grown = calloc(cap, sizeof *grown);
-        if (!grown) return true;
+        if (!grown) {
+            return true;
+        }
         s_dumped = grown;
         s_dumped_cap = cap;
-        for (size_t i = 0; i < old_cap; i++)
-            if (old[i])
-                for (size_t k = old[i] & (cap - 1);; k = (k + 1) & (cap - 1))
-                    if (!grown[k]) { grown[k] = old[i]; break; }
+        for (size_t i = 0; i < old_cap; i++) {
+            if (old[i]) {
+                for (size_t k = old[i] & (cap - 1);; k = (k + 1) & (cap - 1)) {
+                    if (!grown[k]) {
+                        grown[k] = old[i];
+                        break;
+                    }
+                }
+            }
+        }
         free(old);
     }
     key |= 1;
     for (size_t k = key & (s_dumped_cap - 1);; k = (k + 1) & (s_dumped_cap - 1)) {
-        if (s_dumped[k] == key) return true;
+        if (s_dumped[k] == key) {
+            return true;
+        }
         if (!s_dumped[k]) {
             s_dumped[k] = key;
             s_dumped_count++;
@@ -915,15 +1169,18 @@ static bool dumped(uint64_t key)
 
 static void dump_tile(const NvVideo *v, unsigned tile, unsigned group, uint64_t hash, uint32_t palette)
 {
-    if (dumped(hash * 31 + palette * 0x9E3779B1u)) return;
+    if (dumped(hash * 31 + palette * 0x9E3779B1u)) {
+        return;
+    }
     const uint8_t *chr = &v->chr[tile * 16];
     const uint32_t *base = nv_palette_argb();
     uint32_t px[64];
-    for (int y = 0; y < 8; y++)
+    for (int y = 0; y < 8; y++) {
         for (int x = 0; x < 8; x++) {
             int c = ((chr[y] >> (7 - x)) & 1) | ((chr[y + 8] >> (7 - x)) & 1) << 1;
             px[y * 8 + x] = c == 0 && group >= 4 ? 0 : base[(palette >> (8 * (3 - c))) & 0x3F];
         }
+    }
     char path[1200];
     snprintf(path, sizeof path, "%s\\%016llx_%08x.png", s_dump_dir, (unsigned long long)hash, palette);
     mod_png_write(path, px, 8, 8);
@@ -936,25 +1193,32 @@ uint32_t app_mods_color(uint16_t index, uint32_t argb)
 
 void app_mods_video_apply(const NvVideo *video, const NvRenderOptions *options, const uint8_t *ram, uint32_t *argb)
 {
-    if (!app_mods_video_active() || !video || !argb) return;
+    if (!app_mods_video_active() || !video || !argb) {
+        return;
+    }
     static uint16_t index[NV_WIDTH * NV_HEIGHT];
     static NvSource source[NV_WIDTH * NV_HEIGHT];
     static const TileArt *cache[512 * 8];
     static uint8_t cached[512 * 8];
     uint64_t hashes[512];
     nv_render_source(video, options, index, source);
-    for (int t = 0; t < 512; t++) hashes[t] = tile_hash(&video->chr[t * 16]);
+    for (int t = 0; t < 512; t++) {
+        hashes[t] = tile_hash(&video->chr[t * 16]);
+    }
     memset(cached, 0, sizeof cached);
     int land = LANDS;
     if (ram && ram[DT_ADDR_LAND] < LANDS && ram[DT_ADDR_LAST_MUSIC] != DT_MUSIC_LAND_SELECT &&
-        ram[DT_ADDR_LAST_MUSIC] != DT_MUSIC_TITLE)
+        ram[DT_ADDR_LAST_MUSIC] != DT_MUSIC_TITLE) {
         land = ram[DT_ADDR_LAND];
+    }
     const uint32_t *pal = s_palette_for[land] ? s_palette_for[land] : s_palette_for[LANDS];
     s_painted_palette = pal;
     const uint32_t *base = nv_palette_argb();
     for (int p = 0; p < NV_WIDTH * NV_HEIGHT; p++) {
         uint16_t i = index[p] & 0x1FF;
-        if (argb[p] != base[i]) continue;
+        if (argb[p] != base[i]) {
+            continue;
+        }
         uint32_t out = pal ? pal[i] : base[i];
         NvSource s = source[p];
         if (s != NV_SOURCE_NONE && (s_tile_count || s_dump_dir[0])) {
@@ -966,12 +1230,17 @@ void app_mods_video_apply(const NvVideo *video, const NvRenderOptions *options, 
                 const TileArt *art = tile_find(hashes[tile], palette);
                 cache[slot] = art ? art : tile_find(hashes[tile], ANY_PALETTE);
                 cached[slot] = 1;
-                if (s_dump_dir[0]) dump_tile(video, tile, group, hashes[tile], palette);
+                if (s_dump_dir[0]) {
+                    dump_tile(video, tile, group, hashes[tile], palette);
+                }
             }
             const TileArt *art = cache[slot];
             if (art) {
-                uint32_t c = art->argb[(int)NV_SOURCE_ROW(s) * art->h / 8 * art->w + (int)NV_SOURCE_COLUMN(s) * art->w / 8];
-                if ((c >> 24) >= 0x80) out = c | 0xFF000000u;
+                uint32_t c =
+                    art->argb[(int)NV_SOURCE_ROW(s) * art->h / 8 * art->w + (int)NV_SOURCE_COLUMN(s) * art->w / 8];
+                if ((c >> 24) >= 0x80) {
+                    out = c | 0xFF000000u;
+                }
             }
         }
         argb[p] = out;

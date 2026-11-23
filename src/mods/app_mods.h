@@ -40,24 +40,24 @@
 extern "C" {
 #endif
 
-#define APP_MODS_GAME "DuckTales (USA)"
+#define APP_MODS_GAME       "DuckTales (USA)"
 #define APP_MODS_PRG_SHA256 "8ba8baed01a9fbaf1e9ff29e0c9825db1963ac2aff211d6f1f3bcfd3839e2013"
-#define APP_MODS_EXTENSION ".dtmod"
+#define APP_MODS_EXTENSION  ".dtmod"
 
 typedef struct {
-    char id[64];             /* mod.toml id; the file or folder name when it could not be read */
+    char id[64]; /* mod.toml id; the file or folder name when it could not be read */
     char name[128];
     char version[32];
     char author[128];
     char description[512];
-    char path[1024];         /* the archive or folder */
-    bool folder;             /* a loose folder (development) */
-    bool enabled;            /* the player's checkbox */
-    bool loaded;             /* its assets are in use since the start */
-    char error[320];         /* non-empty: refused or unreadable, never loaded */
+    char path[1024]; /* the archive or folder */
+    bool folder;     /* a loose folder (development) */
+    bool enabled;    /* the player's checkbox */
+    bool loaded;     /* its assets are in use since the start */
+    char error[320]; /* non-empty: refused or unreadable, never loaded */
     int tiles, palettes, music, sfx;
-    bool script;             /* ships scripts/main.lua */
-    char script_error[320];  /* non-empty: its script stopped (error or limit) and why */
+    bool script;            /* ships scripts/main.lua */
+    char script_error[320]; /* non-empty: its script stopped (error or limit) and why */
 } AppMod;
 
 /* ---- folders and settings ---- */

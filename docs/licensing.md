@@ -11,9 +11,11 @@ distributed builds.
 | TriCNES-derived reference core | `external/nesrecomp/runner/cyc/tric_core.cpp` | MIT (`runner/cyc/LICENSE.TriCNES`) | Test-only oracle; keep the notice if it is ever distributed. |
 | SDL2 (Windows binary bundled by NESRecomp) | `external/nesrecomp/runner/external/SDL2` | zlib | Ship its licence with any package. |
 | Dear ImGui | `external/imgui` (submodule, pinned) | MIT | Used by the in-game menu; keep its notice in packages. |
-| formae-ui (Formae) | `external/formae-ui` (submodule, v0.1.0) | MIT | Formae's menu library, compiled into the window build; its notice ships in packages. Its `examples/imgui` copy of Dear ImGui is not built by this project. |
+| formae-ui (Formae) | `external/formae-ui` (submodule, v0.2.0) | MIT | Formae's menu library, compiled into the window build; its notice ships in packages. Its `examples/imgui` copy of Dear ImGui is not built by this project. |
 | emu2413 (Mitsutaka Okazaki) | `external/nesrecomp/runner/cyc/vendor/emu2413` | MIT | Compiled into every cycle-host executable (NESRecomp's VRC7 sound), so its notice ships in packages. |
 | stb_image | `external/formae-ui/src/third_party/stb_image.h` | Public domain or MIT, at the user's choice | formae-ui decodes the About page logo with it; taken under the public-domain option, so no notice is required. |
+| stb (`stb_image`, `stb_vorbis`) | `external/stb` (submodule, pinned) | MIT or public domain, at the user's choice | The mod loader decodes PNG and OGG Vorbis with it (`src/mods/app_mods_codec.c`); its notice ships in packages. |
+| Lua 5.4 (Lua.org, PUC-Rio) | `external/lua` (submodule, official repository at `v5.4.9`) | MIT | The script-mod sandbox (`src/mods/app_mods_lua.c`), built as a static library without the io, os, package and debug libraries; its notice ships in packages. |
 | MSVC runtime | static in the window build (`/MT`); NESRecomp still copies the DLLs next to the executable in the build tree | Microsoft Visual C++ terms | The release package ships no runtime DLL and needs no redistributable. |
 | Other submodules of NESRecomp (`lib/recomp-net`, `lib/retcomm-rbengine`) | not checked out | not audited | Not needed by this port; audit before enabling netplay. |
 | denisfox3554/Nesrecomp (MinGW fork) | not used | MIT as stated in the repository | Not a dependency. Its README credits NESRecomp, but its code is an independent, much smaller reimplementation, so the MIT grant does not relicense upstream code. |
@@ -33,6 +35,8 @@ The `PACKAGE` target of `build/windows` (CPack; see CONTRIBUTING.md "Releasing")
 | `licenses/formae-ui-LICENSE.txt` | `external/formae-ui/LICENSE` | MIT notice |
 | `licenses/SDL2-COPYING.txt`, `licenses/SDL2-README-SDL.txt` | `external/nesrecomp/runner/external/SDL2` | zlib licence; SDL asks for its README to accompany the DLL |
 | `licenses/emu2413-LICENSE.txt` | `external/nesrecomp/runner/cyc/vendor/emu2413/LICENSE` | MIT notice |
+| `licenses/stb-LICENSE.txt` | `external/stb/LICENSE` | MIT notice |
+| `licenses/lua-LICENSE.txt` | the notice at the end of `external/lua/lua.h`, extracted by `CMakeLists.txt` | MIT notice (the repository has no separate licence file) |
 
 The player README repeats that the package must be free of charge. The TriCNES notice is not
 included because the oracle is never packaged.

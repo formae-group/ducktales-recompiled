@@ -38,17 +38,17 @@
 
 typedef struct {
     ModSound *sound;
-    uint8_t  *file;
+    uint8_t *file;
 } Replacement;
 
 typedef struct {
     ModSound *sound;
-    bool      on, loop, held;
-    float     buf[1024];
-    size_t    len, pos;
-    double    frac;
-    float     a, b;
-    bool      primed;
+    bool on, loop, held;
+    float buf[1024];
+    size_t len, pos;
+    double frac;
+    float a, b;
+    bool primed;
 } Voice;
 
 static Replacement s_rep[SOUND_IDS];
@@ -59,21 +59,26 @@ static int s_music = -1, s_effect = -1;
 static bool s_music_playing, s_effect_playing;
 static uint8_t s_effect_channels, s_mute;
 static Voice s_voice[2];
+
 static struct {
-    bool    pending;
-    int     music_start, effect_start;
-    bool    music_stop, effect_stop, paused;
+    bool pending;
+    int music_start, effect_start;
+    bool music_stop, effect_stop, paused;
 } s_next = { false, -1, -1, false, false, false };
 
 void mods_audio_read_driver(const uint8_t *prg, size_t size)
 {
     size_t bank = (size_t)DT_SOUND_BANK * 0x4000u;
-    if (size < bank + 0x4000u) return;
+    if (size < bank + 0x4000u) {
+        return;
+    }
     const uint8_t *b = prg + bank;
     for (int id = 0; id < SOUND_IDS; id++) {
         unsigned at = (unsigned)(DT_SOUND_TABLE - 0x8000 + id * 2);
         unsigned header = (unsigned)(b[at] | b[at + 1] << 8);
-        if (header < 0x8000 || header > 0xBFFE) continue;
+        if (header < 0x8000 || header > 0xBFFE) {
+            continue;
+        }
         const uint8_t *h = b + (header - 0x8000);
         s_priority[id] = (h[0] & 0x0F) ? 0 : h[0] >> 4;
         s_mask[id] = (h[0] & 0x0F) ? 0x0F : (h[1] & 0x0F);
@@ -145,26 +150,43 @@ void mods_audio_clear(void)
     s_count = 0;
 }
 
-bool app_mods_audio_active(void) { return s_count > 0; }
+bool app_mods_audio_active(void)
+{
+    return s_count > 0;
+}
 
-uint8_t app_mods_audio_mute(void) { return s_mute; }
+uint8_t app_mods_audio_mute(void)
+{
+    return s_mute;
+}
 
-static bool replaced(int id) { return id >= 0 && id < SOUND_IDS && s_rep[id].sound; }
+static bool replaced(int id)
+{
+    return id >= 0 && id < SOUND_IDS && s_rep[id].sound;
+}
 
 void app_mods_audio_frame_end(const uint8_t *ram)
 {
-    if (!s_count || !ram) return;
+    if (!s_count || !ram) {
+        return;
+    }
     uint8_t effect_priority = ram[DT_ADDR_SOUND_PRIORITY] >> 4;
     bool music_now = (ram[DT_ADDR_SOUND_PRIORITY] & 0x0F) != 0, effect_now = effect_priority != 0;
-    if (s_effect_playing && !effect_now) s_effect_playing = false;
+    if (s_effect_playing && !effect_now) {
+        s_effect_playing = false;
+    }
     if (s_music_playing && !music_now) {
         s_music_playing = false;
-        if (s_voice[0].loop) s_next.music_stop = true;
+        if (s_voice[0].loop) {
+            s_next.music_stop = true;
+        }
     }
     s_effect_channels = effect_now ? (ram[DT_ADDR_SOUND_EFFECT_CH] & 0x0F) : 0;
     for (int k = 0; k < 8; k++) {
         uint8_t id = ram[DT_ADDR_SOUND_RING + ((ram[DT_ADDR_SOUND_RING_READ] + k) & 7)];
-        if (id == DT_SOUND_RING_EMPTY) continue;
+        if (id == DT_SOUND_RING_EMPTY) {
+            continue;
+        }
         if (id < MUSIC_IDS) {
             s_music = id;
             s_music_playing = true;
@@ -194,20 +216,34 @@ void app_mods_audio_frame_end(const uint8_t *ram)
     s_next.paused = (ram[DT_ADDR_PAUSE] & 1) != 0;
     s_next.pending = true;
     uint8_t mute = 0;
-    if (s_music_playing && replaced(s_music)) mute |= (uint8_t)(0x0F & ~(s_effect_playing ? s_effect_channels : 0));
-    if (s_effect_playing && replaced(s_effect)) mute |= s_effect_channels;
+    if (s_music_playing && replaced(s_music)) {
+        mute |= (uint8_t)(0x0F & ~(s_effect_playing ? s_effect_channels : 0));
+    }
+    if (s_effect_playing && replaced(s_effect)) {
+        mute |= s_effect_channels;
+    }
     s_mute = mute;
 }
 
 static void apply_next(void)
 {
-    if (!s_next.pending) return;
+    if (!s_next.pending) {
+        return;
+    }
     s_next.pending = false;
-    if (s_next.music_stop) voice_stop(&s_voice[0]);
-    if (s_next.effect_stop) voice_stop(&s_voice[1]);
-    if (replaced(s_next.music_start))
-        voice_start(&s_voice[0], s_rep[s_next.music_start].sound, s_next.music_start != DT_MUSIC_GAME_OVER && s_next.music_start != DT_MUSIC_DEATH);
-    if (replaced(s_next.effect_start)) voice_start(&s_voice[1], s_rep[s_next.effect_start].sound, false);
+    if (s_next.music_stop) {
+        voice_stop(&s_voice[0]);
+    }
+    if (s_next.effect_stop) {
+        voice_stop(&s_voice[1]);
+    }
+    if (replaced(s_next.music_start)) {
+        voice_start(&s_voice[0], s_rep[s_next.music_start].sound,
+                    s_next.music_start != DT_MUSIC_GAME_OVER && s_next.music_start != DT_MUSIC_DEATH);
+    }
+    if (replaced(s_next.effect_start)) {
+        voice_start(&s_voice[1], s_rep[s_next.effect_start].sound, false);
+    }
     s_voice[0].held = s_next.paused;
     s_next.music_stop = s_next.effect_stop = false;
     s_next.music_start = s_next.effect_start = -1;
@@ -218,7 +254,9 @@ static bool next_sample(Voice *v, float *out)
     if (v->pos >= v->len) {
         v->len = mod_sound_read(v->sound, v->buf, sizeof v->buf / sizeof v->buf[0], v->loop);
         v->pos = 0;
-        if (!v->len) return false;
+        if (!v->len) {
+            return false;
+        }
     }
     *out = v->buf[v->pos++];
     return true;
@@ -227,7 +265,9 @@ static bool next_sample(Voice *v, float *out)
 static float voice_sample(Voice *v, double step)
 {
     if (!v->primed) {
-        if (!next_sample(v, &v->a) || !next_sample(v, &v->b)) v->b = v->a;
+        if (!next_sample(v, &v->a) || !next_sample(v, &v->b)) {
+            v->b = v->a;
+        }
         v->primed = true;
     }
     float out = v->a + (v->b - v->a) * (float)v->frac;
@@ -245,10 +285,14 @@ static float voice_sample(Voice *v, double step)
 
 void app_mods_audio_mix(int16_t *samples, size_t count, int rate)
 {
-    if (!s_count || rate <= 0) return;
+    if (!s_count || rate <= 0) {
+        return;
+    }
     for (int k = 0; k < 2; k++) {
         Voice *v = &s_voice[k];
-        if (!v->on || v->held || !v->sound) continue;
+        if (!v->on || v->held || !v->sound) {
+            continue;
+        }
         double step = (double)mod_sound_rate(v->sound) / rate;
         for (size_t i = 0; i < count && v->on; i++) {
             long mixed = samples[i] + lrintf(voice_sample(v, step) * 32767.0f);

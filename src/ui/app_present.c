@@ -57,11 +57,18 @@ static const struct {
     { "Pixels", PIXELS, APP_PIXELS_COUNT, offsetof(AppPresentation, pixels) },
     { "PixelAspect", ASPECT, APP_ASPECT_COUNT, offsetof(AppPresentation, aspect) },
 };
+
 #define KEY_COUNT (sizeof KEYS / sizeof KEYS[0])
 
-static int *field(AppPresentation *p, size_t k) { return (int *)((char *)p + KEYS[k].offset); }
+static int *field(AppPresentation *p, size_t k)
+{
+    return (int *)((char *)p + KEYS[k].offset);
+}
 
-void app_present_get(AppPresentation *out) { *out = s_p; }
+void app_present_get(AppPresentation *out)
+{
+    *out = s_p;
+}
 
 void app_present_set(const AppPresentation *p)
 {
@@ -74,12 +81,15 @@ void app_present_set(const AppPresentation *p)
 bool app_present_load(const char *key, const char *value)
 {
     for (size_t k = 0; k < KEY_COUNT; k++) {
-        if (strcmp(key, KEYS[k].key)) continue;
-        for (int v = 0; v < KEYS[k].count; v++)
+        if (strcmp(key, KEYS[k].key)) {
+            continue;
+        }
+        for (int v = 0; v < KEYS[k].count; v++) {
             if (!strcmp(value, KEYS[k].names[v])) {
                 *field(&s_p, k) = v;
                 return true;
             }
+        }
         fprintf(stderr, "[ducktales] config.ini [Game] %s = %s: unknown value; using %s\n", key, value,
                 KEYS[k].names[*field(&s_p, k)]);
         return true;
@@ -89,13 +99,19 @@ bool app_present_load(const char *key, const char *value)
 
 void app_present_write(FILE *f)
 {
-    for (size_t k = 0; k < KEY_COUNT; k++) fprintf(f, "%s = %s\n", KEYS[k].key, KEYS[k].names[*field(&s_p, k)]);
+    for (size_t k = 0; k < KEY_COUNT; k++) {
+        fprintf(f, "%s = %s\n", KEYS[k].key, KEYS[k].names[*field(&s_p, k)]);
+    }
 }
 
 bool app_present_vsync_for(int pacing, int refresh_hz)
 {
-    if (pacing == APP_PACING_VSYNC) return true;
-    if (pacing == APP_PACING_STEADY) return false;
+    if (pacing == APP_PACING_VSYNC) {
+        return true;
+    }
+    if (pacing == APP_PACING_STEADY) {
+        return false;
+    }
     return refresh_hz <= 70;
 }
 
@@ -117,9 +133,13 @@ static struct {
 
 static bool grow(uint32_t **buf, size_t *cap, size_t n)
 {
-    if (n <= *cap) return true;
+    if (n <= *cap) {
+        return true;
+    }
     uint32_t *b = (uint32_t *)realloc(*buf, n * sizeof **buf);
-    if (!b) return false;
+    if (!b) {
+        return false;
+    }
     *buf = b;
     *cap = n;
     return true;
@@ -127,12 +147,20 @@ static bool grow(uint32_t **buf, size_t *cap, size_t n)
 
 static bool grow_axis(int **idx, unsigned **wt, int *cap, int n)
 {
-    if (n <= *cap) return true;
+    if (n <= *cap) {
+        return true;
+    }
     int *i = (int *)realloc(*idx, (size_t)n * sizeof *i);
-    if (i) *idx = i;
+    if (i) {
+        *idx = i;
+    }
     unsigned *w = (unsigned *)realloc(*wt, (size_t)n * sizeof *w);
-    if (w) *wt = w;
-    if (!i || !w) return false;
+    if (w) {
+        *wt = w;
+    }
+    if (!i || !w) {
+        return false;
+    }
     *cap = n;
     return true;
 }
@@ -141,8 +169,12 @@ static void crop(int sw, int sh, int *x0, int *y0, int *cw, int *ch)
 {
     int top = s_p.overscan == APP_OVERSCAN_OFF ? 0 : 8;
     int side = s_p.overscan == APP_OVERSCAN_ALL ? 8 : 0;
-    if (sh <= 2 * top) top = 0;
-    if (sw <= 2 * side) side = 0;
+    if (sh <= 2 * top) {
+        top = 0;
+    }
+    if (sw <= 2 * side) {
+        side = 0;
+    }
     *x0 = side;
     *y0 = top;
     *cw = sw - 2 * side;
@@ -154,7 +186,9 @@ void app_present_base_size(int *w, int *h)
     int sw = 256, sh = 240, x0, y0;
     cyc_render_present(&sw, &sh);
     crop(sw, sh, &x0, &y0, w, h);
-    if (s_p.aspect == APP_ASPECT_8_7) *w = (int)lround(*w * 8.0 / 7.0);
+    if (s_p.aspect == APP_ASPECT_8_7) {
+        *w = (int)lround(*w * 8.0 / 7.0);
+    }
 }
 
 /* Palette entry on line y, through a palette mod when one is painting. */
@@ -189,7 +223,9 @@ static void clean_split(uint32_t *pic, int width, int height)
 {
     const uint8_t *oam = cyc_render_oam();
     const CycLine *lines = cyc_frame_lines();
-    if (height != 240 || !(oam[2] & 0x20) || oam[0] >= 239) return;
+    if (height != 240 || !(oam[2] & 0x20) || oam[0] >= 239) {
+        return;
+    }
     const int top = oam[0] + 1, tall = cyc_render_line_sprite16(top) ? 16 : 8;
     int split = -1;
     for (int y = top + 1; y < 240 && y <= top + tall + 4; y++) {
@@ -199,25 +235,38 @@ static void clean_split(uint32_t *pic, int width, int height)
             break;
         }
     }
-    if (split < 0) return;
+    if (split < 0) {
+        return;
+    }
     const uint32_t backdrop = color(0, split);
     const int ox = cyc_render_native_origin(width);
     const uint8_t *opaque = cyc_frame_bg_opaque();
     const uint8_t tile = oam[1], attr = oam[2];
     for (int y = top; y < top + tall && y < 240; y++) {
         int r = y - top;
-        if (attr & 0x80) r = tall - 1 - r;
-        uint16_t pattern = tall == 16 ? (uint16_t)(((tile & 1) << 12) + (tile & 0xFE) * 16 + (r >= 8 ? 16 : 0) + (r & 7))
-                                      : (uint16_t)(cyc_render_line_sprite_table(y) + tile * 16 + r);
+        if (attr & 0x80) {
+            r = tall - 1 - r;
+        }
+        uint16_t pattern = tall == 16
+                               ? (uint16_t)(((tile & 1) << 12) + (tile & 0xFE) * 16 + (r >= 8 ? 16 : 0) + (r & 7))
+                               : (uint16_t)(cyc_render_line_sprite_table(y) + tile * 16 + r);
         uint8_t lo = cyc_render_chr(pattern), hi = cyc_render_chr((uint16_t)(pattern + 8));
         for (int i = 0; i < 8; i++) {
             int bit = attr & 0x40 ? i : 7 - i, x = oam[3] + i;
-            if (x > 255 || !(((lo >> bit) | (hi >> bit)) & 1) || opaque[y * 256 + x]) continue;
-            if (ox + x >= 0 && ox + x < width) pic[y * width + ox + x] = backdrop;
+            if (x > 255 || !(((lo >> bit) | (hi >> bit)) & 1) || opaque[y * 256 + x]) {
+                continue;
+            }
+            if (ox + x >= 0 && ox + x < width) {
+                pic[y * width + ox + x] = backdrop;
+            }
         }
     }
-    if (ox >= 0 && ox + 256 <= width) hud_line(pic + (size_t)(split - 1) * width + ox, split - 1, backdrop);
-    for (int x = 0; x < width; x++) pic[split * width + x] = backdrop;
+    if (ox >= 0 && ox + 256 <= width) {
+        hud_line(pic + (size_t)(split - 1) * width + ox, split - 1, backdrop);
+    }
+    for (int x = 0; x < width; x++) {
+        pic[split * width + x] = backdrop;
+    }
 }
 
 /* Source index and its weight (0-256; the rest goes to the next one) for each
@@ -233,14 +282,21 @@ static void axis(int src, int dst, int mode, int *idx, unsigned *wt)
             long long a = (long long)x * src, edge;
             i = a / dst;
             edge = (i + 1) * dst;
-            if (a + src > edge) w = (unsigned)(((edge - a) * 256 + src / 2) / src);
+            if (a + src > edge) {
+                w = (unsigned)(((edge - a) * 256 + src / 2) / src);
+            }
         } else {
             long long u = (2LL * x + 1) * src - dst, d = 2LL * dst;
             i = u >= 0 ? u / d : -1;
-            if (i < 0) i = 0;
-            else w = 256 - (unsigned)(((u - i * d) * 256 + dst) / d);
+            if (i < 0) {
+                i = 0;
+            } else {
+                w = 256 - (unsigned)(((u - i * d) * 256 + dst) / d);
+            }
         }
-        if (i > src - 1) i = src - 1;
+        if (i > src - 1) {
+            i = src - 1;
+        }
         idx[x] = (int)i;
         wt[x] = i + 1 < src ? w : 256;
     }
@@ -248,7 +304,9 @@ static void axis(int src, int dst, int mode, int *idx, unsigned *wt)
 
 static uint32_t mix(uint32_t a, uint32_t b, unsigned w)
 {
-    if (w >= 256) return a;
+    if (w >= 256) {
+        return a;
+    }
     unsigned v = 256 - w;
     uint32_t rb = (((a & 0xFF00FFu) * w + (b & 0xFF00FFu) * v) >> 8) & 0xFF00FFu;
     uint32_t g = (((a & 0x00FF00u) * w + (b & 0x00FF00u) * v) >> 8) & 0x00FF00u;
@@ -258,14 +316,17 @@ static uint32_t mix(uint32_t a, uint32_t b, unsigned w)
 static const uint32_t *resample(const uint32_t *src, int sw, int sh, int dw, int dh)
 {
     if (!grow(&s.tmp, &s.tmp_cap, (size_t)dw * sh) || !grow(&s.out, &s.out_cap, (size_t)dw * dh) ||
-        !grow_axis(&s.ix, &s.wx, &s.ax_cap, dw) || !grow_axis(&s.iy, &s.wy, &s.ay_cap, dh))
+        !grow_axis(&s.ix, &s.wx, &s.ax_cap, dw) || !grow_axis(&s.iy, &s.wy, &s.ay_cap, dh)) {
         return NULL;
+    }
     axis(sw, dw, s_p.pixels, s.ix, s.wx);
     axis(sh, dh, s_p.pixels, s.iy, s.wy);
     for (int y = 0; y < sh; y++) {
         const uint32_t *row = src + (size_t)y * sw;
         uint32_t *t = s.tmp + (size_t)y * dw;
-        for (int x = 0; x < dw; x++) t[x] = mix(row[s.ix[x]], row[s.ix[x] + (s.wx[x] < 256)], s.wx[x]);
+        for (int x = 0; x < dw; x++) {
+            t[x] = mix(row[s.ix[x]], row[s.ix[x] + (s.wx[x] < 256)], s.wx[x]);
+        }
     }
     for (int y = 0; y < dh; y++) {
         const uint32_t *a = s.tmp + (size_t)s.iy[y] * dw;
@@ -275,7 +336,9 @@ static const uint32_t *resample(const uint32_t *src, int sw, int sh, int dw, int
             continue;
         }
         const uint32_t *b = a + dw;
-        for (int x = 0; x < dw; x++) o[x] = mix(a[x], b[x], s.wy[y]);
+        for (int x = 0; x < dw; x++) {
+            o[x] = mix(a[x], b[x], s.wy[y]);
+        }
     }
     return s.out;
 }
@@ -285,7 +348,9 @@ const uint32_t *app_present_picture(int out_w, int out_h, bool integer_scale, in
     const bool plain = !s_p.clean_split && s_p.overscan == APP_OVERSCAN_OFF && s_p.pixels == APP_PIXELS_NEAREST &&
                        s_p.aspect == APP_ASPECT_SQUARE;
     *exact = false;
-    if (plain) return NULL;
+    if (plain) {
+        return NULL;
+    }
     const uint64_t generation = cyc_render_generation();
     if (s.valid && s.generation == generation && s.out_w == out_w && s.out_h == out_h && s.integer == integer_scale &&
         !memcmp(&s.p, &s_p, sizeof s_p)) {
@@ -296,14 +361,21 @@ const uint32_t *app_present_picture(int out_w, int out_h, bool integer_scale, in
     }
     int sw = 0, sh = 0;
     const uint32_t *src = cyc_render_present(&sw, &sh);
-    if (!src || sw <= 0 || sh <= 0) return NULL;
+    if (!src || sw <= 0 || sh <= 0) {
+        return NULL;
+    }
     int x0, y0, cw, ch;
     crop(sw, sh, &x0, &y0, &cw, &ch);
-    if (!grow(&s.base, &s.base_cap, (size_t)sw * sh)) return NULL;
+    if (!grow(&s.base, &s.base_cap, (size_t)sw * sh)) {
+        return NULL;
+    }
     memcpy(s.base, src, (size_t)sw * sh * sizeof *src);
-    if (s_p.clean_split) clean_split(s.base, sw, sh);
-    for (int y = 0; y < ch; y++)
+    if (s_p.clean_split) {
+        clean_split(s.base, sw, sh);
+    }
+    for (int y = 0; y < ch; y++) {
         memmove(s.base + (size_t)y * cw, s.base + (size_t)(y + y0) * sw + x0, (size_t)cw * sizeof *s.base);
+    }
     const uint32_t *pic = s.base;
     int pw = cw, ph = ch;
     bool at_drawable = false;
@@ -311,16 +383,24 @@ const uint32_t *app_present_picture(int out_w, int out_h, bool integer_scale, in
         const double aw = s_p.aspect == APP_ASPECT_8_7 ? (double)lround(cw * 8.0 / 7.0) : cw;
         if (out_w > 0 && out_h > 0) {
             double f = out_w / aw < (double)out_h / ch ? out_w / aw : (double)out_h / ch;
-            if (integer_scale && f >= 1.0) f = floor(f);
+            if (integer_scale && f >= 1.0) {
+                f = floor(f);
+            }
             pw = (int)lround(aw * f);
             ph = (int)lround(ch * f);
-            if (pw > out_w) pw = out_w;
-            if (ph > out_h) ph = out_h;
+            if (pw > out_w) {
+                pw = out_w;
+            }
+            if (ph > out_h) {
+                ph = out_h;
+            }
             at_drawable = true;
         } else {
             pw = (int)lround(aw);
         }
-        if (pw < 1 || ph < 1 || !(pic = resample(s.base, cw, ch, pw, ph))) return NULL;
+        if (pw < 1 || ph < 1 || !(pic = resample(s.base, cw, ch, pw, ph))) {
+            return NULL;
+        }
     }
     s.valid = true;
     s.generation = generation;

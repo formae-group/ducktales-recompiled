@@ -16,6 +16,7 @@ frames I and I+P and compares the sequencer state of the four music channels (st
 pointer, note time left, loop counter, period: bytes 0-3, 5, 10-11 of each record at
 $0370 + 31 x channel); identical state means the song repeats with period P.
 """
+
 import argparse
 import math
 import struct
@@ -30,8 +31,8 @@ from framelog import frames as log_frames  # noqa: E402
 from world_poke import ram_offset  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-SPF = 800               # 48000 Hz / 60 frames
-QUIET = 150             # per-frame RMS below this counts as silence
+SPF = 800  # 48000 Hz / 60 frames
+QUIET = 150  # per-frame RMS below this counts as silence
 
 
 def parse_ids(text):
@@ -53,7 +54,7 @@ def patch(state, out, requests, pokes=()):
     ring = list(requests) + [0x88] * (8 - len(requests))
     data[ram + 0xC6] = len(requests) & 7
     data[ram + 0xC7] = 0
-    data[ram + 0xC8:ram + 0xD0] = bytes(ring)
+    data[ram + 0xC8 : ram + 0xD0] = bytes(ring)
     out.write_bytes(bytes(data))
 
 
@@ -61,10 +62,10 @@ def loudness(path):
     with wave.open(str(path)) as w:
         raw = w.readframes(w.getnframes())
     n = len(raw) // 2
-    samples = struct.unpack('<%dh' % n, raw[:n * 2])
+    samples = struct.unpack('<%dh' % n, raw[: n * 2])
     rms = []
     for i in range(0, n - SPF + 1, SPF):
-        chunk = samples[i:i + SPF]
+        chunk = samples[i : i + SPF]
         mean = sum(chunk) / SPF
         rms.append(math.sqrt(sum((s - mean) ** 2 for s in chunk) / SPF))
     return rms
@@ -85,7 +86,7 @@ def channel_state(path):
     ram = ram_offset(data)
     out = []
     for c in range(4):
-        rec = data[ram + 0x370 + 0x1F * c:ram + 0x370 + 0x1F * (c + 1)]
+        rec = data[ram + 0x370 + 0x1F * c : ram + 0x370 + 0x1F * (c + 1)]
         out.append(bytes(rec[i] for i in (0, 1, 2, 3, 5, 10, 11)))
     return out
 
@@ -122,10 +123,24 @@ def main():
     for group in parse_ids(a.ids):
         tag = '+'.join('%02X' % s for s in group)
         st, wav, log = a.out / ('req_%s.state' % tag), a.out / ('id_%s.wav' % tag), a.out / ('id_%s.bin' % tag)
-        patch(a.state, st, ([0xFF] if a.stop_music else []) + group,
-              [tuple(int(x, 16) for x in p.split('=')) for p in a.poke.split(',') if p])
-        cmd = [a.exe, a.rom, '--load-state', str(st), '--frames', str(start + a.frames), '--input', str(idle),
-               '--wav-out', str(wav)]
+        patch(
+            a.state,
+            st,
+            ([0xFF] if a.stop_music else []) + group,
+            [tuple(int(x, 16) for x in p.split('=')) for p in a.poke.split(',') if p],
+        )
+        cmd = [
+            a.exe,
+            a.rom,
+            '--load-state',
+            str(st),
+            '--frames',
+            str(start + a.frames),
+            '--input',
+            str(idle),
+            '--wav-out',
+            str(wav),
+        ]
         if a.loop:
             i, p = (int(x) for x in a.loop.split(':'))
             s1, s2 = a.out / ('loop_%s_a.state' % tag), a.out / ('loop_%s_b.state' % tag)
@@ -136,8 +151,11 @@ def main():
         rms = loudness(wav)
         act = [r >= QUIET for r in rms]
         sp = spans(act)
-        line = '%s  peak %5d  active %s' % (tag, int(max(rms) if rms else 0),
-                                           ' '.join('%d-%d' % s for s in sp[:6]) + (' ...' if len(sp) > 6 else ''))
+        line = '%s  peak %5d  active %s' % (
+            tag,
+            int(max(rms) if rms else 0),
+            ' '.join('%d-%d' % s for s in sp[:6]) + (' ...' if len(sp) > 6 else ''),
+        )
         if a.loop:
             same = [x == y for x, y in zip(channel_state(s1), channel_state(s2))]
             line += '  state at %d vs %d: %s' % (i, i + p, ' '.join('same' if s else 'diff' for s in same))
