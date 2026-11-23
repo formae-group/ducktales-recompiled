@@ -267,6 +267,6 @@ static void Run_OamBuild(Regs *r)
 }
 
 const DecompRoutine gSpriteRoutines[] = {
-    { DT_CODE_OAM_BUILD, "ducktales.decomp.5.8000", "Oam_Build", Run_OamBuild, OUT_X | OUT_Y, DT_SPR_BANK },
+    { DT_CODE_OAM_BUILD, "ducktales.decomp.5.8000", "Oam_Build", Run_OamBuild, OUT_X | OUT_Y, .bank = DT_SPR_BANK },
 };
 const int gSpriteRoutineCount = sizeof gSpriteRoutines / sizeof gSpriteRoutines[0];

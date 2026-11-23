@@ -21,11 +21,12 @@
  *            its RTS would
  *
  * Routines that talk to the hardware (the PPU, the APU, the controllers and
- * the mapper's bus-conflict table) do it with Decomp_Read and Decomp_Write.
+ * the mapper's bus-conflict table) do it with Decomp_Load and Decomp_Store.
  * In check mode those accesses go to the isolated machine the C runs on, and
  * the devices' state after the routine (PPU memories and registers, APU,
  * mapper) must equal the original's too. In replace mode they are real CPU
- * accesses, made in program order.
+ * accesses, made in program order. Task code records its stores instead
+ * (below).
  *
  * Code the decompilation has not reached yet stays original in two ways:
  * Decomp_Call runs an original routine from C (in an isolated call whose RAM
@@ -55,7 +56,7 @@ typedef struct Regs {
 #define OUT_X      0x02
 #define OUT_Y      0x04
 #define OUT_P      0x08 /* N, V, Z and C */
-#define OUT_DEVICE 0x10 /* not a register: the routine accesses devices (Decomp_Read/Decomp_Write) */
+#define OUT_DEVICE 0x10 /* not a register: the routine accesses devices (Decomp_Load/Decomp_Store) */
 
 typedef struct DecompRoutine {
     uint16_t addr;
@@ -63,7 +64,10 @@ typedef struct DecompRoutine {
     const char *name;
     void (*run)(Regs *r); /* in: the registers at entry; out: at its RTS */
     uint8_t out;
-    uint8_t bank; /* a routine at $8000-$BFFF: the 16 KiB PRG bank it is in */
+    bool task;      /* task code: may end by handing off to the original (below) */
+    uint8_t locals; /* task code: bytes the routine keeps on the stack at its start */
+    bool resume;    /* task code: started where an RTS returns to its address, with no site */
+    uint8_t bank;   /* a routine at $8000-$BFFF: the 16 KiB PRG bank it is in */
 } DecompRoutine;
 
 typedef enum DecompMode {
@@ -87,12 +91,12 @@ Regs Decomp_Call(uint16_t routine, uint8_t a, uint8_t x, uint8_t y);
  * the original runs from its entry. The C must return without doing anything
  * else. */
 void Decomp_RunOriginal(void);
-/* A CPU read or store of a device register, or of the mapper's bus-conflict
- * table, from decompiled code (the routine's entry needs OUT_DEVICE). A
- * routine that gives its call to the original must do so before its first
- * access. */
-uint8_t Decomp_Read(uint16_t addr);
-void Decomp_Write(uint16_t addr, uint8_t value);
+/* A CPU load or store of a device register, or of the mapper's bus-conflict
+ * table, from decompiled code that is not task code (the routine's entry
+ * needs OUT_DEVICE). A routine that gives its call to the original must do so
+ * before its first access. Task code stores with Decomp_Store too (below) and
+ * never loads. */
+uint8_t Decomp_Load(uint16_t addr);
 /* The host's frame end (replace mode gives a call that would still run at
  * the frame end to the original routine, so the RAM at every frame end is
  * the console's). */
@@ -100,6 +104,47 @@ void Decomp_FrameEnd(void);
 /* Raise an event from decompiled code that replaces the code its site is
  * in (replace mode only: in check mode the original runs without hooks). */
 int Decomp_RaiseEvent(int event);
+
+/* Task code (docs/decompilation.md "Task code"): the game's tasks wait for
+ * frames (task_yield), switch banks and drive the PPU, which no isolated call
+ * can do. A task routine's C therefore ends in one of two ways: it returns
+ * (RTS), or it hands off to the original code, which runs for real. Its C
+ * starts at a site (original code calls it), from another routine's C, or at
+ * a resume point (DecompRoutine.resume): the address an RTS returns to after
+ * the original routine a hand-off reached, which the RTS observer starts
+ * with no site.
+ *
+ *   Decomp_Handoff(routine, resume)  JSR routine with the registers the C
+ *       left in its Regs; it returns to resume (the address after the
+ *       original's JSR), which is usually the resume point of the next C.
+ *       resume 0 is a JMP. The C returns right after it. uses (OUT_A, OUT_X,
+ *       OUT_Y) names the registers the routine, or the code after it, reads:
+ *       check compares those, and replace takes the others from the
+ *       original (they are dead, but task_yield keeps X and Y on the stack).
+ *   Decomp_PushReturn / Decomp_PullReturn  a JSR and RTS between two task
+ *       routines in C, so that a handoff inside the callee leaves the stack
+ *       the original would; Decomp_HandedOff says whether the callee did.
+ *   Decomp_Push / Decomp_Pull / Decomp_SetStack  the task's stack (PHA, PLA,
+ *       TXS): values a routine keeps across a yield live there.
+ *   Decomp_SelectBank  bank_select: maps the bank for the Decomp_Calls that
+ *       follow, and in replace mode writes the mapper for real.
+ *   Decomp_Store  a store to a device register: task code records it and
+ *       makes it for real in replace mode; other code makes it as above.
+ *
+ * Check mode runs the original from the same site until it reaches the same
+ * routine at the same stack depth (a stop hook in the isolated call), and
+ * compares RAM, the stack the C built, A, X, Y and the number of device
+ * writes. Replace mode stores the C's results, spends the original's cycles to
+ * that point and continues in the routine. */
+void Decomp_Handoff(uint16_t routine, uint16_t resume, uint8_t uses);
+void Decomp_PushReturn(uint16_t resume);
+void Decomp_PullReturn(void);
+bool Decomp_HandedOff(void);
+void Decomp_Push(uint8_t value);
+uint8_t Decomp_Pull(void);
+void Decomp_SetStack(uint8_t s);
+void Decomp_SelectBank(uint8_t bank);
+void Decomp_Store(uint16_t addr, uint8_t value);
 
 /* N and Z of a value, the flags of a load. */
 static inline uint8_t Flags_NZ(uint8_t p, uint8_t v)
@@ -144,9 +189,21 @@ extern const DecompRoutine gSoundRoutines[];
 extern const int gSoundRoutineCount;
 extern const DecompRoutine gPlayerRoutines[];
 extern const int gPlayerRoutineCount;
+extern const DecompRoutine gFlowRoutines[];
+extern const int gFlowRoutineCount;
 extern const DecompRoutine gSystemRoutines[];
 extern const int gSystemRoutineCount;
 extern const DecompRoutine gSpriteRoutines[];
 extern const int gSpriteRoutineCount;
 extern const DecompRoutine gAudioRoutines[];
 extern const int gAudioRoutineCount;
+
+/* Addresses a task routine hands off to: sites where an isolated run of the
+ * original stops, with no C of their own. */
+typedef struct DecompStop {
+    uint16_t addr;
+    const char *site_id;
+} DecompStop;
+
+extern const DecompStop gFlowStops[];
+extern const int gFlowStopCount;

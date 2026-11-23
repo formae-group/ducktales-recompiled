@@ -56,6 +56,7 @@ set(_ducktales_extras
     "${CMAKE_SOURCE_DIR}/src/decomp/system.c"
     "${CMAKE_SOURCE_DIR}/src/decomp/sprites.c"
     "${CMAKE_SOURCE_DIR}/src/decomp/audio.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/flow.c"
     "${CMAKE_SOURCE_DIR}/src/host/ducktales_settings.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_render.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_cycle.c")
@@ -183,6 +184,7 @@ set(_native_runtime
     "${CMAKE_SOURCE_DIR}/src/native/native_bus.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_video.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_audio.c"
+    "${CMAKE_SOURCE_DIR}/src/native/native_voices.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_hooks.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_route.c"
     "${_nes_cyc}/cpu6502.c"
@@ -209,8 +211,8 @@ endif()
 
 # The player build on the native runtime (src/native/native_window.c): the
 # window, menu, settings, presentation, enhancements and sprite compositor of
-# the cycle build over native_run_frame(), the native renderer and the synth
-# seam. NESRecomp contributes its settings file, input bindings, PNG writer
+# the cycle build over native_run_frame(), the native renderer and the native
+# synth (native_audio.c). NESRecomp contributes its settings file, input bindings, PNG writer
 # and toast font, no part of its cycle host.
 if(NOT DUCKTALES_HEADLESS)
     add_executable(ducktales_player
@@ -239,7 +241,7 @@ if(NOT DUCKTALES_HEADLESS)
         "${CMAKE_BINARY_DIR}/app_about.c")
     ducktales_native_target(ducktales_player)
     target_compile_features(ducktales_player PRIVATE cxx_std_17)
-    target_compile_definitions(ducktales_player PRIVATE DUCKTALES_WINDOW=1 CYC_GAME_PLAYERS=1 NESRECOMP_GAME_PLAYERS=1
+    target_compile_definitions(ducktales_player PRIVATE DUCKTALES_WINDOW=1 DUCKTALES_NATIVE_PLAYER=1 CYC_GAME_PLAYERS=1 NESRECOMP_GAME_PLAYERS=1
         "DUCKTALES_ROM_SHA256=\"${_ducktales_rom_sha256}\"")
     target_link_libraries(ducktales_player PRIVATE imgui formae::ui SDL2::SDL2)
     formae_ui_embed_file(ducktales_player app_about_logo_png "${CMAKE_SOURCE_DIR}/assets/brand/formae.png")

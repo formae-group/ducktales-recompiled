@@ -26,10 +26,10 @@
 #define gBank          RAM_U8(DT_ADDR_BANK)
 #define gPpuCtrl       RAM_U8(DT_ADDR_PPU_CTRL)
 #define gPpuMask       RAM_U8(DT_ADDR_PPU_MASK)
-#define gBlanked       RAM_U8(DT_ADDR_BLANKED)
-#define gSplitEnabled  RAM_U8(DT_ADDR_SPLIT)
-#define gPalette       (&gRam[DT_ADDR_PALETTE])
-#define gPaletteMaster (&gRam[DT_ADDR_PALETTE_MASTER])
+#define gBlanked       RAM_U8(DT_ADDR_PPU_OFF)
+#define gSplitEnabled  RAM_U8(DT_ADDR_HUD_SPLIT)
+#define gPalette       (&gRam[DT_ADDR_PALETTE_SHOWN])
+#define gPaletteMaster (&gRam[DT_ADDR_PALETTE])
 #define gRandom        (&gRam[DT_ADDR_RANDOM])
 #define gVramQueue     (&gRam[DT_ADDR_VRAM_QUEUE])
 #define gVramPending   RAM_U8(DT_ADDR_VRAM_PENDING)
@@ -63,7 +63,7 @@ static uint16_t rom_pointer(uint16_t lo_table, uint16_t hi_table, uint8_t index)
 static void Bank_SelectTemp(uint8_t bank)
 {
     Decomp_Enter(DT_CODE_BANK_SELECT_TEMP, bank, 0, 0);
-    Decomp_Write((uint16_t)(DT_CODE_BANK_TABLE + bank), bank);
+    Decomp_Store((uint16_t)(DT_CODE_BANK_TABLE + bank), bank);
 }
 
 /* $FFDE */
@@ -92,13 +92,13 @@ static void Input_ReadControllers(void)
         return;
     }
     uint8_t *pads = &gRam[DT_ADDR_PAD_NEW];
-    Decomp_Write(JOYPAD1, 1);
-    Decomp_Write(JOYPAD1, 0);
+    Decomp_Store(JOYPAD1, 1);
+    Decomp_Store(JOYPAD1, 0);
     for (int bit = 0; bit < 8; bit++) {
-        uint8_t a = Decomp_Read(JOYPAD1);
+        uint8_t a = Decomp_Load(JOYPAD1);
         pads[0] = (uint8_t)(pads[0] << 1 | (a & 1));
         RAM_U8(DT_ADDR_SCRATCH0) = (uint8_t)(RAM_U8(DT_ADDR_SCRATCH0) << 1 | (a >> 1 & 1));
-        uint8_t b = Decomp_Read(JOYPAD2);
+        uint8_t b = Decomp_Load(JOYPAD2);
         pads[1] = (uint8_t)(pads[1] << 1 | (b & 1));
         RAM_U8(DT_ADDR_SCRATCH1) = (uint8_t)(RAM_U8(DT_ADDR_SCRATCH1) << 1 | (b >> 1 & 1));
     }
@@ -119,7 +119,7 @@ static void Input_ReadControllers(void)
 /* $C197: turn the picture off; the NMI skips its PPU work while blanked. */
 static void Ppu_Blank(void)
 {
-    Decomp_Enter(DT_CODE_PPU_BLANK, 0, 0, 0);
+    Decomp_Enter(DT_CODE_SCREEN_OFF, 0, 0, 0);
     gBlanked++;
     gPpuMask = 0;
     Ppu_SetMask(0);
@@ -128,7 +128,7 @@ static void Ppu_Blank(void)
 /* $C1A1 */
 static void Ppu_Unblank(void)
 {
-    Decomp_Enter(DT_CODE_PPU_UNBLANK, 0, 0, 0);
+    Decomp_Enter(DT_CODE_SCREEN_ON, 0, 0, 0);
     gBlanked--;
     gPpuMask = MASK_SHOWN;
     Ppu_SetMask(MASK_SHOWN);
@@ -139,7 +139,7 @@ static void Ppu_Unblank(void)
  * attribute byte is the number of pages to fill instead. */
 static void Ppu_FillNametable(uint8_t nt, uint8_t tile, uint8_t attribute)
 {
-    Decomp_Enter(DT_CODE_FILL_NAMETABLE, nt, tile, attribute);
+    Decomp_Enter(DT_CODE_NT_FILL, nt, tile, attribute);
     RAM_U8(DT_ADDR_SCRATCH0) = nt;
     RAM_U8(DT_ADDR_SCRATCH1) = tile;
     RAM_U8(DT_ADDR_SCRATCH2) = attribute;
@@ -172,7 +172,7 @@ static void Oam_Clear(void)
  * of the two low bytes); $00 keeps the first tap. */
 static void Random_Next(void)
 {
-    Decomp_Enter(DT_CODE_RANDOM_NEXT, 0, 0, 0);
+    Decomp_Enter(DT_CODE_RANDOM, 0, 0, 0);
     uint8_t tap = gRandom[0] & 0x02;
     RAM_U8(DT_ADDR_SCRATCH0) = tap;
     uint8_t carry = tap != (gRandom[1] & 0x02);
@@ -189,7 +189,7 @@ static void Random_Next(void)
  * selected. */
 static void Chr_LoadList(uint8_t n)
 {
-    Decomp_Enter(DT_CODE_CHR_LOAD_LIST, 0, n, 0);
+    Decomp_Enter(DT_CODE_CHR_LOAD, 0, n, 0);
     Ppu_SetCtrl(gPpuCtrl & 0xFE);
     uint16_t list = rom_pointer(DT_TABLE_CHR_LIST_LO, DT_TABLE_CHR_LIST_HI, n);
     Ram_SetU16(DT_ADDR_CHR_LIST, DT_ADDR_CHR_LIST + 1, list);
@@ -230,8 +230,8 @@ static void flush_vram_queue(void)
         if (gVramQueue[x] & QUEUE_END) {
             return;
         }
-        Decomp_Write(PPU_ADDR, gVramQueue[x]);
-        Decomp_Write(PPU_ADDR, gVramQueue[x + 1]);
+        Decomp_Store(PPU_ADDR, gVramQueue[x]);
+        Decomp_Store(PPU_ADDR, gVramQueue[x + 1]);
         uint8_t left = gVramQueue[x + 2];
         do {
             Ppu_Write(gVramQueue[x + 3]);
@@ -253,7 +253,7 @@ static uint8_t row_index(void)
  * palette 3 for the row and leaves $50 negative. */
 static void Chr_StreamRow(void)
 {
-    Decomp_Enter(DT_CODE_CHR_STREAM_ROW, 0, 0, 0);
+    Decomp_Enter(DT_CODE_ROW_CHR_STREAM, 0, 0, 0);
     if (gRowChrState & 0x80) {
         return;
     }
@@ -346,9 +346,9 @@ static void Text_DrawStrings(uint8_t set)
         if (!high) {
             break;
         }
-        Decomp_Write(PPU_ADDR, high);
+        Decomp_Store(PPU_ADDR, high);
         y = string_next(y);
-        Decomp_Write(PPU_ADDR, string_byte(y));
+        Decomp_Store(PPU_ADDR, string_byte(y));
         y = string_next(y);
         for (uint8_t tile; (tile = string_byte(y)) != STRING_END; y = string_next(y)) {
             Ppu_Write(tile);
@@ -470,15 +470,15 @@ const DecompRoutine gSystemRoutines[] = {
     { DT_CODE_BANK_SELECT_TEMP, "ducktales.decomp.FFE0", "Bank_SelectTemp", Run_BankSelectTemp,
       OUT_A | OUT_X | OUT_P | OUT_DEVICE },
     { DT_CODE_READ_CONTROLLERS, "ducktales.decomp.C1AB", "Input_ReadControllers", Run_ReadControllers, OUT_DEVICE },
-    { DT_CODE_PPU_BLANK, "ducktales.decomp.C197", "Ppu_Blank", Run_PpuBlank, OUT_DEVICE },
-    { DT_CODE_PPU_UNBLANK, "ducktales.decomp.C1A1", "Ppu_Unblank", Run_PpuUnblank, OUT_DEVICE },
-    { DT_CODE_FILL_NAMETABLE, "ducktales.decomp.C203", "Ppu_FillNametable", Run_FillNametable, OUT_DEVICE },
+    { DT_CODE_SCREEN_OFF, "ducktales.decomp.C197", "Ppu_Blank", Run_PpuBlank, OUT_DEVICE },
+    { DT_CODE_SCREEN_ON, "ducktales.decomp.C1A1", "Ppu_Unblank", Run_PpuUnblank, OUT_DEVICE },
+    { DT_CODE_NT_FILL, "ducktales.decomp.C203", "Ppu_FillNametable", Run_FillNametable, OUT_DEVICE },
     { DT_CODE_OAM_CLEAR, "ducktales.decomp.C267", "Oam_Clear", Run_OamClear, 0 },
-    { DT_CODE_RANDOM_NEXT, "ducktales.decomp.C2E6", "Random_Next", Run_RandomNext, 0 },
-    { DT_CODE_CHR_LOAD_LIST, "ducktales.decomp.C301", "Chr_LoadList", Run_ChrLoadList, OUT_DEVICE },
+    { DT_CODE_RANDOM, "ducktales.decomp.C2E6", "Random_Next", Run_RandomNext, 0 },
+    { DT_CODE_CHR_LOAD, "ducktales.decomp.C301", "Chr_LoadList", Run_ChrLoadList, OUT_DEVICE },
     { DT_CODE_PALETTE_SCENE, "ducktales.decomp.F76D", "Palette_LoadScene", Run_PaletteLoadScene, 0 },
-    { DT_CODE_CHR_STREAM_ROW, "ducktales.decomp.C42C", "Chr_StreamRow", Run_ChrStreamRow, OUT_DEVICE },
+    { DT_CODE_ROW_CHR_STREAM, "ducktales.decomp.C42C", "Chr_StreamRow", Run_ChrStreamRow, OUT_DEVICE },
     { DT_CODE_DRAW_STRINGS, "ducktales.decomp.5.BAB0", "Text_DrawStrings", Run_TextDrawStrings, OUT_DEVICE,
-      STRINGS_BANK },
+      .bank = STRINGS_BANK },
 };
 const int gSystemRoutineCount = sizeof gSystemRoutines / sizeof gSystemRoutines[0];

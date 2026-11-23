@@ -1,7 +1,7 @@
 /*
  * devices.h - the console's device registers as decompiled code uses them
  * (docs/decompilation.md "Device access"). Every access goes through
- * Decomp_Read/Decomp_Write, so a routine using these needs OUT_DEVICE in its
+ * Decomp_Load/Decomp_Store, so a routine using these needs OUT_DEVICE in its
  * table entry.
  */
 #pragma once
@@ -26,26 +26,26 @@
 
 static inline uint8_t Ppu_ReadStatus(void)
 {
-    return Decomp_Read(PPU_STATUS);
+    return Decomp_Load(PPU_STATUS);
 }
 
 static inline void Ppu_SetCtrl(uint8_t v)
 {
-    Decomp_Write(PPU_CTRL, v);
+    Decomp_Store(PPU_CTRL, v);
 }
 
 static inline void Ppu_SetMask(uint8_t v)
 {
-    Decomp_Write(PPU_MASK, v);
+    Decomp_Store(PPU_MASK, v);
 }
 
 static inline void Ppu_SetAddress(uint16_t addr)
 {
-    Decomp_Write(PPU_ADDR, (uint8_t)(addr >> 8));
-    Decomp_Write(PPU_ADDR, (uint8_t)addr);
+    Decomp_Store(PPU_ADDR, (uint8_t)(addr >> 8));
+    Decomp_Store(PPU_ADDR, (uint8_t)addr);
 }
 
 static inline void Ppu_Write(uint8_t v)
 {
-    Decomp_Write(PPU_DATA, v);
+    Decomp_Store(PPU_DATA, v);
 }

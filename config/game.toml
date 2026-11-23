@@ -129,6 +129,118 @@ addr = 0xEBB4
 length = 8
 crc32 = 0xDB4C6AB4
 
+# Game flow (src/decomp/flow.c, docs/decompilation.md "Task code"): the
+# entries of the main task's decompiled code that original code reaches (its
+# resume points have no site: the RTS observer starts them), then the
+# routines it hands off to, where an isolated run of the original stops.
+
+# Hud_Reset
+[[mod_function_hook]]
+id = "ducktales.decomp.D60A"
+addr = 0xD60A
+length = 8
+crc32 = 0xE0BA6A38
+
+# Land_ApplyTables
+[[mod_function_hook]]
+id = "ducktales.decomp.D9CA"
+addr = 0xD9CA
+length = 8
+crc32 = 0x064DF66E
+
+# Land_LoadPalette
+[[mod_function_hook]]
+id = "ducktales.decomp.D9F5"
+addr = 0xD9F5
+length = 8
+crc32 = 0x1FB8AD30
+
+# FrameLoop
+[[mod_function_hook]]
+id = "ducktales.decomp.DB36"
+addr = 0xDB36
+length = 8
+crc32 = 0xD74F1957
+
+# Respawn_PlaceAt
+[[mod_function_hook]]
+id = "ducktales.decomp.DD52"
+addr = 0xDD52
+length = 8
+crc32 = 0x6C7EAD65
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.FFAC"
+addr = 0xFFAC
+length = 8
+crc32 = 0x937EB346
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.FEE0"
+addr = 0xFEE0
+length = 8
+crc32 = 0x446DE306
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.C830"
+addr = 0xC830
+length = 8
+crc32 = 0x30386A7B
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.8000.6"
+addr = 0x8000
+length = 8
+crc32 = 0x6DA2AF28
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.AEA0.6"
+addr = 0xAEA0
+length = 8
+crc32 = 0x2CF3FD6D
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.EFE2"
+addr = 0xEFE2
+length = 8
+crc32 = 0x1944514D
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.CF93"
+addr = 0xCF93
+length = 8
+crc32 = 0x54FB3F07
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.D630"
+addr = 0xD630
+length = 8
+crc32 = 0xDACBE679
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.D79B"
+addr = 0xD79B
+length = 8
+crc32 = 0xDACBE679
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.DF27"
+addr = 0xDF27
+length = 8
+crc32 = 0x7C77B11E
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.E1AF"
+addr = 0xE1AF
+length = 8
+crc32 = 0xD1E4F218
+
+# END game flow
+
+# The system layer and the sound driver (src/decomp/system.c, sprites.c,
+# audio.c). Their sites also stop the isolated runs of task code that hands
+# off to them (Ppu_Blank, Ppu_Unblank, Chr_StreamRow and the fades).
+
 # Bank_Select
 [[mod_function_hook]]
 id = "ducktales.decomp.FFDE"
@@ -177,6 +289,20 @@ id = "ducktales.decomp.C267"
 addr = 0xC267
 length = 8
 crc32 = 0xED4A869E
+
+# Palette_FadeIn
+[[mod_function_hook]]
+id = "ducktales.decomp.C279"
+addr = 0xC279
+length = 8
+crc32 = 0x4BEACFCA
+
+# Palette_FadeOut
+[[mod_function_hook]]
+id = "ducktales.decomp.C282"
+addr = 0xC282
+length = 8
+crc32 = 0xA8DC18AB
 
 # Random_Next
 [[mod_function_hook]]
@@ -245,4 +371,3 @@ id = "ducktales.decomp.nmi-exit"
 addr = 0xC138
 length = 8
 crc32 = 0x45D72BBE
-
