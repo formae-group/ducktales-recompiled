@@ -116,6 +116,7 @@ choose a cell and press the new key or button: Escape cancels and Delete clears.
 |---|---|---|---|
 | Settings, General | Menu background opacity | 0% to 100% (80%) | `[Game] MenuOpacity` |
 | | Controller navigation | On (default), off | `[Game] MenuControllerNav` |
+| | Pause game while menu is open | Off (default), on | `[Game] MenuPausesGame` |
 | Settings, Graphics | Display mode | Windowed, borderless, exclusive fullscreen | `[Display] Fullscreen` |
 | | Window size | 1x to 8x | `[Display] WindowScale` |
 | | Integer scaling | On, off | `[Display] IntegerScale` |

@@ -7,7 +7,8 @@
  *   app_settings.c   config.ini model, live display / volume / bindings, the
  *                  menu shortcut, and the reconciliation with the host's own
  *                  saves (NESRecomp's settings are private to its window)
- *   app_ui.cpp  the in-game menu (a modal pause loop) and the
+ *   app_ui.cpp  the in-game menu (a modal loop that keeps the game
+ *                  running through the host's menu tick) and the
  *                  first-run ROM screen on formae-ui (external/formae-ui)
  *                  and Dear ImGui
  *   app_rom.c   ROM identity, data folder and import
@@ -53,6 +54,11 @@ bool app_ui_load_game_setting(const char *key, const char *value);
 void app_ui_write_game_settings(FILE *f);
 /* CycHostExtras.present: the picture the window shows (ui/app_present.h). */
 const uint32_t *app_ui_present(int *width, int *height);
+/* The host's game frames while the menu is open: the menu calls tick once per
+ * menu frame unless [Game] MenuPausesGame is on or a Reset or Quit question is
+ * open; tick runs the frames that are due, with no buttons pressed, and
+ * returns how many. A host that sets none (the cycle host) pauses. */
+void app_ui_set_menu_tick(int (*tick)(void));
 
 #ifdef __cplusplus
 }

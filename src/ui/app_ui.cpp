@@ -9,19 +9,23 @@
 // texts, the bindings' names and encoding, the logo's SDL textures, the
 // translation of SDL events, and the loops that run the screens.
 //
-// The menu is a modal loop: it runs inside the host's event callback, so no
-// machine frame runs while it is open (the game is paused by construction)
-// and nothing of it reaches the machine's picture, screenshots or hashes. It
-// draws the last presented picture, dimmed by [Game] MenuOpacity, with its
-// own texture, and gives the renderer back exactly as it found it. Events the
-// host still needs (quit, resize, controllers) are pushed back when it
-// closes. A controller moves through it while [Game] MenuControllerNav is on.
+// The menu is a modal loop inside the host's event callback. Each menu frame
+// it calls the host's menu tick (app_ui_set_menu_tick), so the game keeps
+// running underneath with no buttons pressed; [Game] MenuPausesGame stops it,
+// and so does an open Reset or Quit question. A host without a tick (the cycle
+// host) pauses by construction. Nothing of the menu reaches the machine's
+// picture, screenshots or hashes. It draws the latest picture, dimmed by
+// [Game] MenuOpacity, with its own texture, and gives the renderer back
+// exactly as it found it. Events the host still needs (quit, resize,
+// controllers) are pushed back when it closes. A controller moves through it
+// while [Game] MenuControllerNav is on.
 #ifndef SDL_MAIN_HANDLED
 #define SDL_MAIN_HANDLED
 #endif
 #include <SDL.h>
 
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_sdlrenderer2.h"
 
@@ -62,6 +66,8 @@ extern const char app_about_build_date[];
 namespace ui = formae::ui;
 
 namespace {
+
+int (*s_menu_tick)(void) = nullptr;
 
 float ui_base(SDL_Window *win, int out_h)
 {
@@ -143,6 +149,10 @@ void page_general()
     bool nav = prefs.pad_nav != 0;
     if (ui::toggle("Controller navigation", &nav)) {
         prefs.pad_nav = nav;
+    }
+    bool pause = prefs.pause != 0;
+    if (ui::toggle("Pause game while menu is open", &pause)) {
+        prefs.pause = pause;
     }
     if (std::memcmp(&prefs, &was, sizeof prefs)) {
         app_menu_prefs_set(&prefs);
@@ -412,7 +422,18 @@ void draw_picture(SDL_Renderer *ren, SDL_Texture *tex, int pw, int ph, bool exac
     SDL_RenderCopy(ren, tex, nullptr, &dst);
 }
 
+bool confirmation_open()
+{
+    const ImGuiWindow *modal = ImGui::GetTopMostPopupModal();
+    return modal && std::strstr(modal->Name, "-confirm") != nullptr;
+}
+
 } // namespace
+
+extern "C" void app_ui_set_menu_tick(int (*tick)(void))
+{
+    s_menu_tick = tick;
+}
 
 extern "C" bool app_menu_run(SDL_Window *win)
 {
@@ -491,7 +512,8 @@ extern "C" bool app_menu_run(SDL_Window *win)
     };
     std::printf("[ducktales] menu open\n");
     std::fflush(stdout);
-    bool resume = false, quit = false;
+    bool resume = false, quit = false, confirming = false;
+    long game_frames = 0;
     std::vector<SDL_Event> for_host;
     Uint64 last = SDL_GetTicks64();
 
@@ -563,6 +585,9 @@ extern "C" bool app_menu_run(SDL_Window *win)
         AppMenuPrefs prefs;
         app_menu_prefs_get(&prefs);
         imgui.ctx->set_gamepad_navigation(prefs.pad_nav != 0);
+        if (s_menu_tick && !prefs.pause && !confirming) {
+            game_frames += s_menu_tick();
+        }
         ImGuiIO &io = ImGui::GetIO();
         SDL_RenderSetLogicalSize(ren, 0, 0);
         SDL_RenderSetViewport(ren, nullptr);
@@ -611,6 +636,7 @@ extern "C" bool app_menu_run(SDL_Window *win)
             default:
                 break;
         }
+        confirming = confirmation_open();
         ImGui::Render();
         ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(), ren);
         if (selftest && ++step_frames == 6) {
@@ -652,7 +678,7 @@ extern "C" bool app_menu_run(SDL_Window *win)
         q.type = SDL_QUIT;
         SDL_PushEvent(&q);
     }
-    std::printf("[ducktales] menu closed%s\n", quit ? " (quit)" : "");
+    std::printf("[ducktales] menu closed%s, %ld game frames ran\n", quit ? " (quit)" : "", game_frames);
     std::fflush(stdout);
     return true;
 }

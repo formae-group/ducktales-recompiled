@@ -23,8 +23,12 @@ folder (DUCKTALES_DATA_DIR):
      Reset and Quit confirmations without confirming them, and closes; the
      first-run screen shows a refused ROM. Each state is written as a PNG (into
      --shots, default a temporary folder) and the game still reaches its exit
-     frame;
-  8. the menu's own [Game] keys (MenuOpacity, MenuControllerNav) survive a run.
+     frame. That run sets [Game] MenuPausesGame = on, so the PNGs are the same
+     on every run, and no game frame runs while the menu is open; a second
+     self-test with the default (off) checks that the native player keeps
+     running the game behind the menu (the cycle host always pauses);
+  8. the menu's own [Game] keys (MenuOpacity, MenuControllerNav,
+     MenuPausesGame) survive a run.
 
     py -3 -I tests/window_smoke.py --build build/windows [--shots captures/shots] [--exe NAME]
 
@@ -80,6 +84,7 @@ def main():
 
         code, out = run(args.rom, '--hidden', '--exit-after', '300', '--config', str(tmp / 'a.ini'))
         check(code == 0, 'starts with a ROM argument and exits after 300 frames', out)
+        native = 'the native runtime holds VBlank' in out
         check(
             (
                 '[ducktales] No slowdown: 128 extra scanlines per frame' in out
@@ -123,7 +128,7 @@ def main():
         ini = tmp / 'd.ini'
         ini.write_text(
             '[Game]\nNoDamage = on\nStartLives = 5\nJumpScale = 150\nNoSpriteFlicker = off\nNoSlowdown = off\n'
-            'MenuOpacity = 55\nMenuControllerNav = off\n'
+            'MenuOpacity = 55\nMenuControllerNav = off\nMenuPausesGame = on\n'
         )
         code, out = run(args.rom, '--hidden', '--exit-after', '120', '--config', str(ini))
         text = ini.read_text()
@@ -140,14 +145,15 @@ def main():
             text,
         )
         check(
-            'MenuOpacity = 55' in text and 'MenuControllerNav = off' in text,
+            'MenuOpacity = 55' in text and 'MenuControllerNav = off' in text and 'MenuPausesGame = on' in text,
             'the menu settings survive a run in config.ini [Game]',
             text,
         )
         check(
             'MenuOpacity = 80' in (tmp / 'a.ini').read_text()
-            and 'MenuControllerNav = on' in (tmp / 'a.ini').read_text(),
-            'the menu settings default to 80% opacity and controller navigation on',
+            and 'MenuControllerNav = on' in (tmp / 'a.ini').read_text()
+            and 'MenuPausesGame = off' in (tmp / 'a.ini').read_text(),
+            'the menu settings default to 80% opacity, controller navigation on and no pause',
             (tmp / 'a.ini').read_text(),
         )
 
@@ -201,6 +207,7 @@ def main():
         shots.mkdir(parents=True, exist_ok=True)
         for old in shots.glob('*.png'):
             old.unlink()
+        (tmp / 'e.ini').write_text('[Game]\nMenuPausesGame = on\n')
         code, out = run(
             args.rom,
             '--hidden',
@@ -242,6 +249,30 @@ def main():
             and sizes.get('menu_11_settings_graphics_2160p') == (3840, 2160)
             and sizes.get('menu_12_about_2160p') == (3840, 2160),
             f'the off-screen pages have their sizes ({sizes})',
+        )
+        check(
+            'menu closed, 0 game frames ran' in out, 'with MenuPausesGame = on no game frame runs behind the menu', out
+        )
+        running = tmp / 'shots-running'
+        running.mkdir()
+        code, out = run(
+            args.rom,
+            '--hidden',
+            '--exit-after',
+            '400',
+            '--config',
+            str(tmp / 'g.ini'),
+            extra_env={'DUCKTALES_UI_SELFTEST': str(running)},
+        )
+        ran = [
+            int(line.split(', ')[1].split()[0])
+            for line in out.splitlines()
+            if line.startswith('[ducktales] menu closed, ')
+        ]
+        check(
+            code == 0 and len(ran) == 1 and (ran[0] > 0 if native else ran[0] == 0),
+            f'by default the game keeps running behind the menu on the native player ({ran} game frames ran)',
+            out,
         )
         empty = tmp / 'empty-data'
         bad = tmp / 'bad.nes'

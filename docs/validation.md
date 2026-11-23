@@ -143,6 +143,11 @@ The player build (`ducktales.exe` on the native runtime, docs/native-runtime.md 
   in the ZIP (imports AVRT, COMDLG32, IMM32, KERNEL32, SDL2, SHELL32, USER32 and WINMM only).
 - Hidden window pacing: 600 frames with `--hidden --exit-after 600` took 12.0 s including start-up
   (600 frames are 9.98 s at 60.0988 Hz); 3,000 frames `--uncapped` took 7.8 s.
+- Menu over a running game, 2026-11-22: `window_smoke.py` runs the menu self-test twice. With
+  `MenuPausesGame = on` it reports 0 game frames; with the default it reports 74 game frames
+  (73 in a second run) over its 14 steps on the native `ducktales.exe`, and 0 on
+  `ducktales_cycle.exe`, whose host sets no menu tick. The menu settings
+  round-trip and default to `MenuPausesGame = off`.
 - No console window, 2026-11-22: `ducktales.exe` and `ducktales_cycle.exe` are Windows programs
   (PE subsystem 2, was 3). `--import-rom` through a pipe printed its two lines and exited 0;
   window_smoke, package_test and native_player_test (`full_amazon`, 30 of 30 pictures identical)
