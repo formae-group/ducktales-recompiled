@@ -48,6 +48,7 @@
 #define SFX_CHARGE   0x31
 #define SFX_BOUNCE   0x1D
 #define SFX_LEAP     0x34
+#define SFX_HOP      0x24
 
 #define gObjCursor        RAM_U8(DT_ADDR_OBJ_CURSOR)
 #define gScratch0         RAM_U8(DT_ADDR_SCRATCH0)
@@ -1831,6 +1832,133 @@ static void Obj_Dropping(uint8_t x)
     (void)Obj_TouchScrooge(x);
 }
 
+/* $A1D4: the ceiling hopper's walk, in its direction with probes $18 or $1B. */
+static uint8_t Obj_CeilingWalk(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_CEILING_HOPPER_WALK, 0, x, 0);
+    if (gObjects->dir[x] & OBJ_DIR_LEFT) {
+        return Obj_WalkLeft(x, 0x1B, 2);
+    }
+    return Obj_WalkRight(x, 0x18, 2);
+}
+
+static void Obj_CeilingJump(uint8_t x)
+{
+    gObjects->vdir[x] = 8;
+    Obj_SetVelocityY(x, 0x02D4);
+    gObjects->speedFrac[x] = 0;
+}
+
+static void Obj_CeilingClimb(uint8_t x)
+{
+    gObjects->state[x]++;
+    gObjects->vdir[x] = 0;
+    ResetAnim(x);
+    gObjects->action[x] = 0x4C;
+    Obj_SetVelocityY(x, 0x01CC);
+    Obj_SetSpeed(x, 0x01CC);
+}
+
+/* Kind $25 ($A065): an enemy that waits until Scrooge is within 64 px,
+ * climbs down to the floor and hops towards him (action $4D, sound $24),
+ * walking while airborne. When he gets behind it after a landing, or a hop
+ * runs into a wall, it climbs back up to the ceiling (action $4C) and walks
+ * there. Off screen or hit, it is beaten. */
+static void Obj_CeilingHopper(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_CEILING_HOPPER, 0x22, x, gObjects->kind[x]);
+    if (Enemy_Beaten(x, 0)) {
+        return;
+    }
+    if (Step(x) == 0) {
+        gObjects->vdir[x] = 0;
+        Obj_SetSpeed(x, 0x01CC);
+        Obj_FaceScrooge(x);
+        gObjects->state[x]++;
+    }
+    if (Step(x) == 3) {
+        if (gObjects->vdir[x] == 0) {
+            x = Obj_ClimbUp(x, 0x21, 2);
+            if ((gProbeHits & 1) || gObjects->y[x] < 0x88) {
+                gObjects->vdir[x]++;
+            }
+            return;
+        }
+        x = Obj_CeilingWalk(x);
+        if (gProbeHits & 1) {
+            (void)Obj_ClimbUp(x, 0x21, 2);
+        }
+        return;
+    }
+    if (!(Step(x) & 2)) {
+        if (Obj_DistanceX(x) >= 0x40) {
+            (void)Obj_CeilingWalk(x);
+            return;
+        }
+        gObjects->state[x]++;
+        Obj_SetVelocityY(x, 0x01CC);
+    }
+    if (gObjects->vdir[x] == 0) {
+        x = Obj_ClimbDown(x, 0x1E, 2);
+        if (!(gProbeHits & 1)) {
+            return;
+        }
+        gObjects->animTimer[x] = 0;
+        gObjects->animFrame[x] = 0;
+        gObjects->action[x] = 0x4D;
+        Sound_Request(SFX_HOP, x);
+        Obj_CeilingJump(x);
+        return;
+    }
+    if (gObjects->vdir[x] & 8) {
+        if (gObjects->action[x] == 0x4D) {
+            if (gObjects->animFrame[x] != 2) {
+                return;
+            }
+            gObjects->animTimer[x] = 0x80;
+        }
+        x = Obj_CeilingWalk(x);
+        uint8_t hits = gProbeHits;
+        x = Obj_Rise(x, 0x21, 2);
+        if (!(gObjects->vy[x] & 0x80)) {
+            return;
+        }
+        if (hits & 1) {
+            Obj_CeilingClimb(x);
+            return;
+        }
+        gObjects->vdir[x] = 4;
+        Obj_SetVelocityY(x, 0);
+        return;
+    }
+    x = Obj_Fall(x, 0x1E, 2);
+    if (!(gProbeHits & 1)) {
+        (void)Obj_CeilingWalk(x);
+        return;
+    }
+    if (gObjects->action[x] != 0x4E) {
+        Sound_Request(SFX_HOP, x);
+        gObjects->action[x] = 0x4E;
+        gObjects->animFrame[x] = 0;
+        gObjects->animTimer[x] = 1;
+    }
+    if ((gObjects->animFrame[x] | gObjects->animTimer[x]) != 0) {
+        return;
+    }
+    uint8_t dir = gObjects->dir[x];
+    Obj_FaceScrooge(x);
+    bool turned = gObjects->dir[x] != dir;
+    gObjects->dir[x] = dir;
+    if (turned) {
+        Obj_CeilingClimb(x);
+        return;
+    }
+    gObjects->action[x] = 0x4D;
+    gObjects->animFrame[x] = 2;
+    gObjects->animTimer[x] = 0;
+    Obj_CeilingJump(x);
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -1917,6 +2045,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_BOBBER:
             Obj_Bobber(slot);
+            break;
+        case OBJ_KIND_CEILING_HOPPER:
+            Obj_CeilingHopper(slot);
             break;
         case OBJ_KIND_RISING_SHOT:
             Obj_RisingShot(slot);
@@ -2073,6 +2204,16 @@ static void Run_RisingShot(Regs *r)
 static void Run_Dropping(Regs *r)
 {
     Obj_Dropping(r->x);
+}
+
+static void Run_CeilingHopper(Regs *r)
+{
+    Obj_CeilingHopper(r->x);
+}
+
+static void Run_CeilingWalk(Regs *r)
+{
+    Obj_CeilingWalk(r->x);
 }
 
 static void Run_Swooper(Regs *r)
@@ -2244,6 +2385,8 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_CEILING_HOPPER, NULL, "Obj_CeilingHopper", Run_CeilingHopper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_CEILING_HOPPER_WALK, NULL, "Obj_CeilingWalk", Run_CeilingWalk, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_DROPPING, NULL, "Obj_Dropping", Run_Dropping, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_RISING_SHOT, NULL, "Obj_RisingShot", Run_RisingShot, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LEAPER, NULL, "Obj_Leaper", Run_Leaper, 0, .bank = DT_BANK_OBJECTS },

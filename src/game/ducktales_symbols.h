@@ -489,6 +489,8 @@
 #define DT_CODE_KIND_FLYER           0x916C /* kind $0D */
 #define DT_CODE_KIND_SWING           0x9225 /* kind $0E */
 #define DT_CODE_KIND_SWOOPER         0x9430 /* kind $11 */
+#define DT_CODE_KIND_CEILING_HOPPER  0xA065 /* kind $25 */
+#define DT_CODE_CEILING_HOPPER_WALK  0xA1D4 /* kind $25: walk in the slot's direction */
 #define DT_CODE_KIND_DROPPING        0xAAC8 /* kind $2B */
 #define DT_CODE_KIND_RISING_SHOT     0xA5BE /* kind $27 */
 #define DT_CODE_KIND_LEAPER          0x9B10 /* kind $1C */

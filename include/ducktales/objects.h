@@ -27,34 +27,35 @@ extern "C" {
 #define OBJ_STATUS_HIDDEN 0x10 /* not drawn (verified) */
 
 /* Object kinds ($0710), the index of the handler table. */
-#define OBJ_KIND_NONE        0x00 /* the handler is a bare RTS (code) */
-#define OBJ_KIND_HOPPER      0x01 /* enemy: walks and hops (code) */
-#define OBJ_KIND_WALKER      0x02 /* enemy: walks, turns at walls (code) */
-#define OBJ_KIND_THROWER     0x03 /* enemy: walks, hops, throws a shot (code) */
-#define OBJ_KIND_SHOT        0x04 /* kind 3's shot (code) */
-#define OBJ_KIND_WATCHER     0x05 /* enemy: stays, faces Scrooge (code) */
-#define OBJ_KIND_DANGLER     0x06 /* enemy: climbs to the ceiling, drops on Scrooge (code) */
-#define OBJ_KIND_SNAPPER     0x07 /* plant that catches Scrooge (code) */
-#define OBJ_KIND_BLOCK       0x08 /* block: solid to other objects, launched or opened by the cane (code) */
-#define OBJ_KIND_THROWN      0x09 /* a launched block (code) */
-#define OBJ_KIND_DROPPER     0x0A /* block that falls when Scrooge comes near (code) */
-#define OBJ_KIND_DEFEATED    0x0B /* a beaten enemy flying off (code) */
-#define OBJ_KIND_CRAWLER     0x0C /* enemy: waits for Scrooge to pass, walks (code) */
-#define OBJ_KIND_FLYER       0x0D /* enemy: weaving flyer (code) */
-#define OBJ_KIND_SWING       0x0E /* swinging hold Scrooge grabs with Up (code) */
-#define OBJ_KIND_LIFT        0x0F /* platform that rises and sinks (code) */
-#define OBJ_KIND_CHARGER     0x10 /* enemy: charges at Scrooge, bounces off walls and blocks (code) */
-#define OBJ_KIND_SWOOPER     0x11 /* enemy: drops to Scrooge's height and weaves (code) */
-#define OBJ_KIND_PICKUP      0x13 /* an item Scrooge takes by touching it (code) */
-#define OBJ_KIND_HIDDEN_ITEM 0x14 /* an item that appears when touched (code) */
-#define OBJ_KIND_CHEST       0x15 /* a chest the cane opens (code) */
-#define OBJ_KIND_PATROLLER   0x18 /* enemy: walks a ledge, turns at its edges and at walls (code) */
-#define OBJ_KIND_LEAPER      0x1C /* enemy: walks a ledge, turns and leaps with a puff of dust (code) */
-#define OBJ_KIND_BOBBER      0x20 /* enemy: bobs up and down in place (code) */
-#define OBJ_KIND_RISING_SHOT 0x27 /* a shot that flies up and sideways (code) */
-#define OBJ_KIND_DROPPING    0x2B /* something that drops and breaks on the floor (code) */
-#define OBJ_KIND_DOOR        0x2F /* a door: warp request (code) */
-#define OBJ_KIND_TALKER      0x35 /* a character that shows a message (code) */
+#define OBJ_KIND_NONE           0x00 /* the handler is a bare RTS (code) */
+#define OBJ_KIND_HOPPER         0x01 /* enemy: walks and hops (code) */
+#define OBJ_KIND_WALKER         0x02 /* enemy: walks, turns at walls (code) */
+#define OBJ_KIND_THROWER        0x03 /* enemy: walks, hops, throws a shot (code) */
+#define OBJ_KIND_SHOT           0x04 /* kind 3's shot (code) */
+#define OBJ_KIND_WATCHER        0x05 /* enemy: stays, faces Scrooge (code) */
+#define OBJ_KIND_DANGLER        0x06 /* enemy: climbs to the ceiling, drops on Scrooge (code) */
+#define OBJ_KIND_SNAPPER        0x07 /* plant that catches Scrooge (code) */
+#define OBJ_KIND_BLOCK          0x08 /* block: solid to other objects, launched or opened by the cane (code) */
+#define OBJ_KIND_THROWN         0x09 /* a launched block (code) */
+#define OBJ_KIND_DROPPER        0x0A /* block that falls when Scrooge comes near (code) */
+#define OBJ_KIND_DEFEATED       0x0B /* a beaten enemy flying off (code) */
+#define OBJ_KIND_CRAWLER        0x0C /* enemy: waits for Scrooge to pass, walks (code) */
+#define OBJ_KIND_FLYER          0x0D /* enemy: weaving flyer (code) */
+#define OBJ_KIND_SWING          0x0E /* swinging hold Scrooge grabs with Up (code) */
+#define OBJ_KIND_LIFT           0x0F /* platform that rises and sinks (code) */
+#define OBJ_KIND_CHARGER        0x10 /* enemy: charges at Scrooge, bounces off walls and blocks (code) */
+#define OBJ_KIND_SWOOPER        0x11 /* enemy: drops to Scrooge's height and weaves (code) */
+#define OBJ_KIND_PICKUP         0x13 /* an item Scrooge takes by touching it (code) */
+#define OBJ_KIND_HIDDEN_ITEM    0x14 /* an item that appears when touched (code) */
+#define OBJ_KIND_CHEST          0x15 /* a chest the cane opens (code) */
+#define OBJ_KIND_PATROLLER      0x18 /* enemy: walks a ledge, turns at its edges and at walls (code) */
+#define OBJ_KIND_LEAPER         0x1C /* enemy: walks a ledge, turns and leaps with a puff of dust (code) */
+#define OBJ_KIND_BOBBER         0x20 /* enemy: bobs up and down in place (code) */
+#define OBJ_KIND_CEILING_HOPPER 0x25 /* an enemy that drops from the ceiling and hops at Scrooge (code) */
+#define OBJ_KIND_RISING_SHOT    0x27 /* a shot that flies up and sideways (code) */
+#define OBJ_KIND_DROPPING       0x2B /* something that drops and breaks on the floor (code) */
+#define OBJ_KIND_DOOR           0x2F /* a door: warp request (code) */
+#define OBJ_KIND_TALKER         0x35 /* a character that shows a message (code) */
 
 /* $0700 bits 0-3: the handler's step (code). */
 #define OBJ_STATE_STEP 0x0F
