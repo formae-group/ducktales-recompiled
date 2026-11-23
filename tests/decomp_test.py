@@ -121,6 +121,12 @@ POKES = [
     ),
     # slot 9 made a lift (kind $0F) under Scrooge
     ('lift', {0x709: 0xA0, 0x719: 0x0F, 0x649: 0xB0, 0x729: 0x62, 0x739: 0x00, 0x609: 0x80}, ['Obj_Lift']),
+    # slot 9 made a ledge patroller (kind $18) that a blow has hit ($0690): it is beaten
+    (
+        'patroller-hit',
+        {0x709: 0xA1, 0x719: 0x18, 0x699: 0x01, 0x649: 0x90, 0x729: 0x90, 0x739: 0x00, 0x609: 0x80},
+        ['Obj_Patroller', 'Obj_Defeat'],
+    ),
 ]
 
 # name, route, options, routines that must be compared
