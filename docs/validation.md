@@ -129,6 +129,13 @@ the shared 16-thread PC:
 | `quick_verify.py --runtime cycle`, `--jobs 4` | 192.7 s |
 | `verify_routes.py`, 4 alignments x 3 runs, `--jobs 3`, oracle uncached | 11,855 s |
 
+`tests/decomp_test.py --changed DF1E --from-state --span 600 --modes check replace` (`LandExit_Next`,
+`--jobs 2`, main 9c2f14e) picks the 5 full routes, starts them at frames 5000-10000 and passes in 32 s;
+the full `--modes check replace` on all 12 routes from power-on passes in 689 s (check 12/12,
+895,620 calls; replace 12/12, 82,626 frames). `--changed D79B-D8A5` (the land load, run by every
+route) with `--span 600` passed check and replace on all 12 routes in 420 s, so the land load in
+replace mode is RAM-identical on every route.
+
 Selection: `--routes-for 6:8B21 --from-state auto --span 600` (the pickup dispatcher) picks 10 routes
 and checks 6,000 frames in 1.1 s; `--changed 4:8000-BFFF --from-state auto --span 600` picks only
 `full_moon`, the one route that runs bank 4, from frame 7500 in 0.3 s. Coverage comes from

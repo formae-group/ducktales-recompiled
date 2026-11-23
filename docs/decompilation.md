@@ -276,6 +276,16 @@ $env:DUCKTALES_DECOMP = 'check'; py -3 -I tests/verify_routes.py --build build/h
 py -3 -I tests/enhancements_test.py --build build/headless --dev-build build/headless-dev
 ```
 
+While writing a routine, check only the routes that run it, from the golden save state just before
+it (`tests/quick_verify.py` golden files, `--golden` when they live in another worktree):
+
+```powershell
+py -3 -I tests/decomp_test.py --build build/headless --dev-build build/headless-dev --changed DF08-DF40 --from-state --span 600 --modes check replace
+```
+
+A routine every route runs at power-on selects frame 0 and saves nothing; run the full
+`decomp_test` before a merge in every case.
+
 | Check | What it shows |
 |---|---|
 | `decomp_test --modes check` | every call of every decompiled routine on every route agrees with the original |
