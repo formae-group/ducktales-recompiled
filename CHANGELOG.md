@@ -18,6 +18,8 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - Decompiled: Scrooge's object contact tests (`$D202`/`$D291`), the Select refill (`$E2FE`) and
   the vertical velocity moves (`$F270`/`$F284`). `tests/decomp_test.py` poke cases can add pad
   states to their route; three of them press Select.
+- Decompiled: the row change (`$E8C0`), as task code with its own site. A task routine may now pop
+  its own return address before it hands off.
 
 ### Fixed
 

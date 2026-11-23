@@ -219,6 +219,10 @@
 #define DT_CODE_PLAYER_MODE12    0xEC2D /* mode 12 */
 #define DT_CODE_PLAYER_DEATH     0xEC9B /* mode 13 */
 #define DT_CODE_PLAYER_MODE14    0xECFF /* mode 14 */
+#define DT_CODE_ROW_CHANGE       0xE8C0 /* the row change: new row, camera screen, then the row scroll (code) */
+#define DT_CODE_ROW_ENTRY_Y      0xE8E7 /* Y the row change gives slot X (X = 0, or 2 with Up held) (code) */
+#define DT_CODE_ROW_CHANGE_END   0xE8DF /* after the row scroll: JMP into the frame loop at $DBE4 (code) */
+#define DT_CODE_ROW_SCROLL       0xC976 /* scroll the screen to the next row over several frames (code) */
 #define DT_CODE_MOVE_WITH_WALLS  0xF0F8 /* move horizontally with wall probes (code) */
 #define DT_CODE_CLIMB_DOWN       0xF192 /* climbing step down with probes (code) */
 #define DT_CODE_CLIMB_UP         0xF1A8 /* climbing step up with probes (code) */

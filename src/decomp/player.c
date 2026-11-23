@@ -21,10 +21,11 @@
  * $D120 and its snaps $D49A/$D4B2/$D4C8/$D4D6, one probe point $D350 (where
  * the vertical contact test can fall through to), and the climbing steps
  * $F192/$F1A8 and the walls move $F0F8, which every object kind shares.
- * Given to the original routine (Decomp_RunOriginal):
- * Player_Update in modes 15 and 16 (message and treasure: they wait for
- * frames) and every call that reaches the row change at $E8C0 (it scrolls
- * the screen and re-enters the frame loop).
+ * Given to the original routine (Decomp_RunOriginal): Player_Update in modes
+ * 15 and 16 (message and treasure: they wait for frames) and every call that
+ * reaches the row change at $E8C0. The row change is task code (decomp.h)
+ * with its own site: it drops Player_Update's return address and hands off
+ * to the row scroll, which goes back into the frame loop.
  */
 #include "decomp/decomp.h"
 #include "decomp/motion.h"
@@ -630,8 +631,9 @@ static void Player_StartJump(void)
 
 /* $E878: Scrooge left the screen row: in the final arena that ends the
  * fight's drop; otherwise move to the row above or below if the map has one
- * there. The move itself ($E8C0) scrolls the screen and goes back into the
- * frame loop, so a call that gets there runs as the original. */
+ * there. The move (Player_RowChange) leaves Player_Update without returning,
+ * so a call that gets there runs as the original, which reaches the row
+ * change's own site. */
 static void Player_LeaveRow(void)
 {
     if (gFinalArena && gObjects->y[P_] >= FINAL_ARENA_DROP_Y) {
@@ -659,6 +661,26 @@ static void Player_LeaveRow(void)
         return;
     }
     Decomp_RunOriginal();
+}
+
+/* $E8C0: the row change, reached from $E878 with A = the new row, X = 0 (or 2
+ * with Up held), Y = the new camera screen and $00 the new stream screen. It
+ * gives slot X its entry Y, drops Player_Update's return address and hands
+ * off to the row scroll ($C976), which returns to a JMP into the frame loop
+ * at $DBE4. */
+static void Player_RowChange(Regs *r)
+{
+    Decomp_Enter(DT_CODE_ROW_CHANGE, r->a, r->x, r->y);
+    gMapRow = r->a;
+    gObjects->y[r->x] = Game_ReadRom((uint16_t)(DT_CODE_ROW_ENTRY_Y + r->x));
+    gCameraScreen = r->y;
+    gStreamScreen = gScratch(0);
+    Decomp_Pull();
+    Decomp_Pull();
+    RAM_U8(DT_ADDR_UNK_4F) = 0;
+    gObjects->flags[P_] &= 0xFC;
+    r->a = gObjects->flags[P_];
+    Decomp_Handoff(DT_CODE_ROW_SCROLL, DT_CODE_ROW_CHANGE_END, 0);
 }
 
 /* $E719: falling off the bottom of the screen drops into the row below. */
@@ -1344,7 +1366,8 @@ static void Run_SelectRefill(Regs *r)
 }
 
 /* Sites only where original code calls a routine: the frame loop calls
- * Player_Update, the original modes 15 and 16 jump to Player_PitDeath. The
+ * Player_Update, the original modes 15 and 16 jump to Player_PitDeath, and
+ * the original $E878 falls into Player_RowChange. The
  * damage routine keeps its site for replace mode's measuring call (decomp.c);
  * the damage event runs at its own [[mod_function_hook]] there (declared
  * first, so it fires first), and the adapter is the routine without it. */
@@ -1377,5 +1400,6 @@ const DecompRoutine gPlayerRoutines[] = {
     { DT_CODE_CONTACT_H, NULL, "Player_ContactH", Run_ContactH, OUT_X | OUT_C },
     { DT_CODE_CONTACT_V, NULL, "Player_ContactV", Run_ContactV, OUT_C },
     { DT_CODE_SELECT_REFILL, NULL, "Player_SelectRefill", Run_SelectRefill, OUT_X },
+    { DT_CODE_ROW_CHANGE, "ducktales.decomp.E8C0", "Player_RowChange", Player_RowChange, 0, true, 0, false },
 };
 const int gPlayerRoutineCount = sizeof gPlayerRoutines / sizeof gPlayerRoutines[0];
