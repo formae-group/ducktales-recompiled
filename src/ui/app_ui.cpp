@@ -208,6 +208,19 @@ void page_audio(SDL_Window *win)
                            app_volume_pending() ? ui::restart_to_apply : nullptr)) {
         app_display_set(win, &d);
     }
+#if DUCKTALES_NATIVE_PLAYER
+    ui::section("Sound effects");
+    bool music = ducktales_host_music_under_effects();
+    if (ui::toggle("Keep music under sound effects", &music)) {
+        ducktales_host_set_music_under_effects(music);
+        app_settings_changed();
+    }
+    bool overlap = ducktales_host_overlap_effects();
+    if (ui::toggle("Overlapping sound effects", &overlap)) {
+        ducktales_host_set_overlap_effects(overlap);
+        app_settings_changed();
+    }
+#endif
 }
 
 const char *bind_assign(int row, int column, const ui::InputEvent *e)

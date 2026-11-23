@@ -9,7 +9,7 @@
            compared, or given to the original routine.
   replace  (needs --dev-build) every route runs stock and with
            --decomp replace, both with --dt-ram-log, and CPU RAM outside
-           the stack ($0160-$01FF) must be equal after every frame. The stack
+           the stack ($0161-$01FF) must be equal after every frame. The stack
            is compared where
            both runs sit in the game's scheduler with every task yielded
            (S = $FF): there the main task's live stack (above its saved S up
@@ -45,7 +45,7 @@ RAM = 0x800
 IDLE_S = 0xFF
 TASKS = 0x80
 MAIN_TASK_BASE = 0xBF
-STACK = 0x160  # page 1 below this is data: palette, consumed-record bits, HUD time
+STACK = 0x161  # page 1 below this is data: palette, consumed-record bits, HUD time (game-over box to $0160)
 LINE = re.compile(
     r'^decomp: mode=\S+ routine=(\S+) addr=\$([0-9A-F]{4}) calls=(\d+) compared=(\d+) original=(\d+)$', re.M
 )
