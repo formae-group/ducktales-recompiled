@@ -15,6 +15,9 @@ cmake -S . -B build/headless-dev -G "Visual Studio 17 2022" -A x64 -DDUCKTALES_H
 cmake --build build/<tree> --config Release --parallel
 ```
 
+A clone made before formae-ui became a submodule gets it with
+`git submodule update --init external/formae-ui`.
+
 `build/windows` is the game as players run it, `build/headless` adds the TriCNES reference machine for
 differential tests, and `build/headless-dev` adds the typed state log and scheduled state changes the
 enhancement and sprite tests use.
@@ -29,6 +32,10 @@ enhancement and sprite tests use.
 - **Original behaviour by default.** Every gameplay change is an enhancement that is off by default.
   When it is off, the original code runs unchanged. Presentation options may change what the window
   shows, but never the machine state, the machine picture or any verified hash.
+- **The menu library is shared.** `external/formae-ui` is a pinned submodule, used by Formae's other
+  ports too. `app_ui.cpp` keeps only DuckTales' pages, settings and texts; a change to the look,
+  a widget or the navigation goes to [formae-ui](https://gitlab.com/formae/formae-ui) first, then the
+  submodule is moved to its new tag.
 - **Windows only.** The supported target is Windows x64 with Visual Studio 2022.
 
 ## Where code goes
@@ -38,6 +45,7 @@ enhancement and sprite tests use.
 | `src/game/` | Revision-specific symbols, typed game state, enhancement sites and hooks (C) |
 | `src/host/` | Host integration: options, sprite compositor, diagnostics, entry point (C) |
 | `src/ui/` | Menu, ROM import, settings and presentation; `app_ui.cpp` is the only C++ file |
+| `external/formae-ui` | The menu library (look, shell, widgets, About and first-run layouts); its own repository |
 | `src/native/` | Native runtime prototype (`DUCKTALES_NATIVE`) |
 | `config/` | Recompiler configuration (`game.toml`) and the recorded entry points (`ducktales.seeds`) |
 | `tests/` | Differential, presentation, enhancement and window tests; `tests/routes/` holds input schedules |
@@ -100,6 +108,33 @@ not verify in its *Not verified* section.
   page and [CHANGELOG.md](CHANGELOG.md) in the same merge request.
 - A merge request is accepted when its checks pass and the change keeps the original behaviour at
   default settings.
+
+## Releasing
+
+A release is a ZIP for players built from a clean checkout of a tagged commit on `main`. Its version
+is `git describe --tags --always --dirty` when CMake configures (the same string the About page
+shows), so a package built from an untagged or modified tree says so in its name.
+
+1. Run the checks in [Verification](#verification) on the release commit, then tag it:
+   `git tag -a v1.0.0 -m "DuckTales Recompiled 1.0.0"`.
+2. Configure the window build again so it reads the new version, then build and test the package:
+
+   ```powershell
+   cmake -S . -B build/windows -G "Visual Studio 17 2022" -A x64
+   cmake --build build/windows --config Release --parallel
+   py -3 -I tests/window_smoke.py --build build/windows
+   py -3 -I tests/package_test.py --build build/windows
+   ```
+
+3. Write the package: `cmake --build build/windows --config Release --target PACKAGE`. It is
+   `build\windows\DuckTalesRecompiled-v1.0.0-win64.zip`.
+4. Publish the ZIP free of charge (NESRecomp's licence, see below) and push the tag.
+
+The package holds `ducktales.exe` (static MSVC runtime, so players need no Visual C++
+redistributable), `SDL2.dll`, the player `README.txt` (from `packaging/README.txt.in`),
+`LICENSE.txt` and the third-party licences under `licenses/`; the install rules at the end of
+`CMakeLists.txt` list them and [docs/licensing.md](docs/licensing.md) says why each is there. It
+never contains the ROM, generated sources or test tools; `tests/package_test.py` checks the file list.
 
 ## Licensing
 

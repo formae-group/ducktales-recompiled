@@ -46,6 +46,7 @@ static uint8_t HitboxWidth(uint8_t box) { return Game_ReadRom((uint16_t)(DT_CODE
  * resets it to $3C. */
 void Obj_Despawn(uint8_t slot)
 {
+    Decomp_Enter(DT_CODE_OBJ_DESPAWN, 0, slot, 0);
     gObjects->flags[slot] = 0;
     gObjects->state[slot] = 0;
     gObjects->record[slot] = 0xFF;
@@ -59,6 +60,7 @@ void Obj_Despawn(uint8_t slot)
  * no contact. Returns true for a contact (the original's carry clear). */
 bool Obj_TouchScrooge(uint8_t slot)
 {
+    Decomp_Enter(DT_CODE_OBJ_TOUCH_SCROOGE, 0, slot, 0);
     if (!(gObjects->flags[slot] & 0x80)) return false;
     uint8_t box = gObjects->hitbox[slot] & HITBOX_INDEX;
     uint8_t dy = AbsDiff(gObjects->y[P_], gObjects->y[slot]);
@@ -116,12 +118,17 @@ static bool Obj_FindBlock(uint8_t slot, bool horizontal)
  * the block's slot in $12 (0 when none). */
 bool Obj_TouchBlockH(uint8_t slot)
 {
+    Decomp_Enter(DT_CODE_OBJ_TOUCH_BLOCK_H, 0, slot, 0);
     gContactSlot = 0;
     return Obj_FindBlock(slot, true);
 }
 
 /* $F3B7: the same after a vertical move (depth in $11; $12 is left). */
-bool Obj_TouchBlockV(uint8_t slot) { return Obj_FindBlock(slot, false); }
+bool Obj_TouchBlockV(uint8_t slot)
+{
+    Decomp_Enter(DT_CODE_OBJ_TOUCH_BLOCK_V, 0, slot, 0);
+    return Obj_FindBlock(slot, false);
+}
 
 static bool PushedByBlocks(uint8_t x)
 {
@@ -133,6 +140,7 @@ static bool PushedByBlocks(uint8_t x)
  * right. Returns the X the probes left. */
 uint8_t Obj_WalkRight(uint8_t slot, uint8_t first, uint8_t count)
 {
+    Decomp_Enter(DT_CODE_MOVE_WITH_WALLS, first, slot, count);
     gProbeFirst = first;
     gProbeCount = count;
     uint8_t page = gObjects->worldPage[slot];
@@ -153,6 +161,7 @@ uint8_t Obj_WalkRight(uint8_t slot, uint8_t first, uint8_t count)
 /* $F13B: the same moving left, facing left. */
 uint8_t Obj_WalkLeft(uint8_t slot, uint8_t first, uint8_t count)
 {
+    Decomp_Enter(DT_CODE_OBJ_WALK_LEFT, first, slot, count);
     gProbeFirst = first;
     gProbeCount = count;
     uint8_t page = gObjects->worldPage[slot];
@@ -190,6 +199,7 @@ static bool LandsOnBlocks(uint8_t x)
  * background or on a block stops the vertical velocity. */
 uint8_t Obj_Fall(uint8_t slot, uint8_t first, uint8_t count)
 {
+    Decomp_Enter(DT_CODE_OBJ_FALL, first, slot, count);
     gProbeFirst = first;
     gProbeCount = count;
     Obj_ApplyGravity(slot);
@@ -214,6 +224,7 @@ uint8_t Obj_Fall(uint8_t slot, uint8_t first, uint8_t count)
  * background or on a block sets the velocity to -1 px. */
 uint8_t Obj_Rise(uint8_t slot, uint8_t first, uint8_t count)
 {
+    Decomp_Enter(DT_CODE_OBJ_RISE, first, slot, count);
     gProbeFirst = first;
     gProbeCount = count;
     Regs r;
@@ -234,18 +245,29 @@ uint8_t Obj_Rise(uint8_t slot, uint8_t first, uint8_t count)
  * he is at it or left of it. */
 void Obj_FaceScrooge(uint8_t slot)
 {
+    Decomp_Enter(DT_CODE_OBJ_FACE_SCROOGE, 0, slot, 0);
     gObjects->dir[slot] = Obj_GetWorldX(slot) >= Obj_GetWorldX(P_) ? OBJ_DIR_LEFT : OBJ_DIR_RIGHT;
 }
 
 /* $F7DA / $F7CC: horizontal (world X, low byte) and vertical distance
  * between Scrooge and the slot. */
-uint8_t Obj_DistanceX(uint8_t slot) { return AbsDiff16(Obj_GetWorldX(P_), Obj_GetWorldX(slot)); }
-uint8_t Obj_DistanceY(uint8_t slot) { return AbsDiff(gObjects->y[P_], gObjects->y[slot]); }
+uint8_t Obj_DistanceX(uint8_t slot)
+{
+    Decomp_Enter(DT_CODE_OBJ_DISTANCE_X, 0, slot, 0);
+    return AbsDiff16(Obj_GetWorldX(P_), Obj_GetWorldX(slot));
+}
+
+uint8_t Obj_DistanceY(uint8_t slot)
+{
+    Decomp_Enter(DT_CODE_OBJ_DISTANCE_Y, 0, slot, 0);
+    return AbsDiff(gObjects->y[P_], gObjects->y[slot]);
+}
 
 /* $F7F0: set the slot's land record as consumed in $0120-$013F, so the
  * spawner does not bring it back; the bit is left in $10. */
 void Obj_MarkConsumed(uint8_t slot)
 {
+    Decomp_Enter(DT_CODE_OBJ_MARK_CONSUMED, 0, slot, 0);
     uint8_t record = gObjects->record[slot];
     gProbeHits = (uint8_t)(1u << (record & 7));
     RAM_U8(DT_ADDR_CONSUMED + (record >> 3)) |= gProbeHits;
@@ -254,6 +276,7 @@ void Obj_MarkConsumed(uint8_t slot)
 /* $F822: on Difficult, actions $25 and $26 become $28 and $24. */
 void Obj_DifficultAction(uint8_t slot)
 {
+    Decomp_Enter(DT_CODE_OBJ_DIFFICULT_ACTION, 0, slot, 0);
     if (gDifficulty != DIFFICULTY_DIFFICULT) return;
     if (gObjects->action[slot] == 0x25) gObjects->action[slot] = 0x28;
     else if (gObjects->action[slot] == 0x26) gObjects->action[slot] = 0x24;
@@ -262,6 +285,7 @@ void Obj_DifficultAction(uint8_t slot)
 /* $F312: horizontal speed from the speed table by index. */
 void Obj_SetSpeedIndex(uint8_t slot, uint8_t index)
 {
+    Decomp_Enter(DT_CODE_OBJ_SET_SPEED, index, slot, 0);
     uint8_t i = (uint8_t)(index << 1);
     gObjects->speedFrac[slot] = Game_ReadRom((uint16_t)(DT_CODE_SPEED_TABLE + i));
     gObjects->speed[slot] = Game_ReadRom((uint16_t)(DT_CODE_SPEED_TABLE + i + 1));
@@ -271,6 +295,7 @@ void Obj_SetSpeedIndex(uint8_t slot, uint8_t index)
  * every one is taken (*slot is then 0). */
 bool Obj_FindFreeSlot(uint8_t *slot)
 {
+    Decomp_Enter(DT_CODE_OBJ_FIND_FREE, 0, 0, 0);
     for (uint8_t x = 0x0F; x != 0; x--) {
         if (!(gObjects->state[x] & OBJ_STATUS_LIVE)) {
             *slot = x;
@@ -292,10 +317,77 @@ static void Run_TouchScrooge(Regs *r)
     SetCarry(r, !Obj_TouchScrooge(slot));
     if (on) r->y = gObjects->hitbox[slot] & HITBOX_INDEX;
 }
-static void Run_WalkRight(Regs *r) { r->x = Obj_WalkRight(r->x, r->a, r->y); }
-static void Run_WalkLeft(Regs *r) { r->x = Obj_WalkLeft(r->x, r->a, r->y); }
-static void Run_Fall(Regs *r) { r->x = Obj_Fall(r->x, r->a, r->y); }
-static void Run_Rise(Regs *r) { r->x = Obj_Rise(r->x, r->a, r->y); }
+static void Run_WalkRight(Regs *r)
+{
+    r->x = Obj_WalkRight(r->x, r->a, r->y);
+}
+
+static void Run_WalkLeft(Regs *r)
+{
+    r->x = Obj_WalkLeft(r->x, r->a, r->y);
+}
+
+static void Run_Fall(Regs *r)
+{
+    r->x = Obj_Fall(r->x, r->a, r->y);
+}
+
+static void Run_Rise(Regs *r)
+{
+    r->x = Obj_Rise(r->x, r->a, r->y);
+}
+
+static void Run_Despawn(Regs *r)
+{
+    Obj_Despawn(r->x);
+}
+
+static void Run_TouchBlockH(Regs *r)
+{
+    SetCarry(r, !Obj_TouchBlockH(r->x));
+}
+
+static void Run_TouchBlockV(Regs *r)
+{
+    SetCarry(r, !Obj_TouchBlockV(r->x));
+}
+
+static void Run_FaceScrooge(Regs *r)
+{
+    Obj_FaceScrooge(r->x);
+}
+
+static void Run_DistanceX(Regs *r)
+{
+    r->a = Obj_DistanceX(r->x);
+}
+
+static void Run_DistanceY(Regs *r)
+{
+    r->a = Obj_DistanceY(r->x);
+}
+
+static void Run_MarkConsumed(Regs *r)
+{
+    Obj_MarkConsumed(r->x);
+}
+
+static void Run_DifficultAction(Regs *r)
+{
+    Obj_DifficultAction(r->x);
+}
+
+static void Run_SetSpeedIndex(Regs *r)
+{
+    Obj_SetSpeedIndex(r->x, r->a);
+}
+
+static void Run_FindFreeSlot(Regs *r)
+{
+    uint8_t slot;
+    SetCarry(r, !Obj_FindFreeSlot(&slot));
+    r->x = slot;
+}
 
 const DecompRoutine gObjCommonRoutines[] = {
     { DT_CODE_OBJ_TOUCH_SCROOGE, "ducktales.decomp.F436", "Obj_TouchScrooge", Run_TouchScrooge, OUT_X | OUT_C },
@@ -303,5 +395,15 @@ const DecompRoutine gObjCommonRoutines[] = {
     { DT_CODE_OBJ_WALK_LEFT, "ducktales.decomp.F13B", "Obj_WalkLeft", Run_WalkLeft, OUT_X },
     { DT_CODE_OBJ_FALL, "ducktales.decomp.F1BE", "Obj_Fall", Run_Fall, OUT_X },
     { DT_CODE_OBJ_RISE, "ducktales.decomp.F1F9", "Obj_Rise", Run_Rise, OUT_X },
+    { DT_CODE_OBJ_DESPAWN, NULL, "Obj_Despawn", Run_Despawn, 0 },
+    { DT_CODE_OBJ_TOUCH_BLOCK_H, NULL, "Obj_TouchBlockH", Run_TouchBlockH, OUT_C },
+    { DT_CODE_OBJ_TOUCH_BLOCK_V, NULL, "Obj_TouchBlockV", Run_TouchBlockV, OUT_C },
+    { DT_CODE_OBJ_FACE_SCROOGE, NULL, "Obj_FaceScrooge", Run_FaceScrooge, 0 },
+    { DT_CODE_OBJ_DISTANCE_X, NULL, "Obj_DistanceX", Run_DistanceX, OUT_A },
+    { DT_CODE_OBJ_DISTANCE_Y, NULL, "Obj_DistanceY", Run_DistanceY, OUT_A },
+    { DT_CODE_OBJ_MARK_CONSUMED, NULL, "Obj_MarkConsumed", Run_MarkConsumed, 0 },
+    { DT_CODE_OBJ_DIFFICULT_ACTION, NULL, "Obj_DifficultAction", Run_DifficultAction, 0 },
+    { DT_CODE_OBJ_SET_SPEED, NULL, "Obj_SetSpeedIndex", Run_SetSpeedIndex, 0 },
+    { DT_CODE_OBJ_FIND_FREE, NULL, "Obj_FindFreeSlot", Run_FindFreeSlot, OUT_X | OUT_C },
 };
 const int gObjCommonRoutineCount = sizeof gObjCommonRoutines / sizeof gObjCommonRoutines[0];

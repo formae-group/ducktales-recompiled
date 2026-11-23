@@ -7,8 +7,9 @@
  *   app_settings.c   config.ini model, live display / volume / bindings, the
  *                  menu shortcut, and the reconciliation with the host's own
  *                  saves (NESRecomp's settings are private to its window)
- *   app_ui.cpp  Dear ImGui: the look, the in-game menu (a modal
- *                  pause loop) and the first-run ROM screen
+ *   app_ui.cpp  the in-game menu (a modal pause loop) and the
+ *                  first-run ROM screen on formae-ui (external/formae-ui)
+ *                  and Dear ImGui
  *   app_rom.c   ROM identity, data folder and import
  *
  * The host reaches this through ducktales_host.c's extras callbacks; the
@@ -18,6 +19,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,6 +47,10 @@ void app_ui_input(uint8_t buttons[2]);
 void app_ui_audio(int16_t *samples, size_t count);
 void app_ui_frame_begin(void);
 void app_ui_host_saved(void);
+/* config.ini [Game] keys of the menu itself (app_settings.c); load returns
+ * true if the key is one of them. */
+bool app_ui_load_game_setting(const char *key, const char *value);
+void app_ui_write_game_settings(FILE *f);
 /* CycHostExtras.present: the picture the window shows (ui/app_present.h). */
 const uint32_t *app_ui_present(int *width, int *height);
 

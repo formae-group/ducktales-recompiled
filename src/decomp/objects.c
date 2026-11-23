@@ -134,6 +134,7 @@ static bool Obj_CaneReaches(uint8_t x)
  * hit is left in $11. */
 static bool Obj_HitOthers(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_OBJ_HIT_OTHERS, 0, x, 0);
     if (!OnScreen(x)) return false;
     gScratch(0) = x;
     gScratch(1) = gObjects->y[x];
@@ -165,6 +166,7 @@ static bool Obj_HitOthers(uint8_t x)
  * slot is freed when it ends ($0600 bit 3). */
 static void Obj_Shatter(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_OBJ_SHATTER, 0, x, 0);
     gObjects->kind[x] = OBJ_KIND_NONE;
     gObjects->hitbox[x] = 0;
     gObjects->flags[x] = (uint8_t)((gObjects->flags[x] & 0xF0) | OBJ_FLAG_DELETE_AT_END);
@@ -172,6 +174,7 @@ static void Obj_Shatter(uint8_t x)
 }
 static void Obj_Break(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_OBJ_BREAK, 0, x, 0);
     gObjects->action[x] = OBJ_ACTION_BREAK;
     Obj_Shatter(x);
 }
@@ -182,6 +185,7 @@ static void Obj_Pickup(uint8_t x);
  * the pickup's handler now; the item is in $06B0. */
 static void Obj_BecomePickupNow(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_OBJ_BECOME_PICKUP, 0, x, 0);
     gObjects->state[x] &= OBJ_STATUS_LIVE | OBJ_STATUS_WORLD;
     gObjects->hitbox[x] = 0;
     ResetAnim(x);
@@ -196,6 +200,7 @@ static void Obj_BecomePickupNow(uint8_t x)
  * the item table by $06B0. */
 static void Obj_OpenBlock(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_OBJ_OPEN_BLOCK, 0, x, 0);
     Obj_MarkConsumed(x);
     uint8_t item = 0;
     if (gObjects->action[x] == OBJ_ACTION_LAND_CHEST)
@@ -209,6 +214,7 @@ static void Obj_OpenBlock(uint8_t x)
  * ($3F), with the velocities of its pose ($1A-based) and becomes kind 9. */
 static void Obj_LaunchBlock(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_OBJ_LAUNCH_BLOCK, 0, x, 0);
     gObjects->dir[x] = gPlayerPushDir;
     uint8_t n = (uint8_t)(gObjects->action[x] - 0x1A);
     gScratch(0) = n;
@@ -226,6 +232,7 @@ static void Obj_LaunchBlock(uint8_t x)
  * it (pose $22) or shatter it. */
 static void Obj_ResolveBlock(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_OBJ_RESOLVE_BLOCK, 0, x, 0);
     uint8_t a = gObjects->action[x];
     if (a == OBJ_ACTION_CHEST || a == OBJ_ACTION_LAND_CHEST) Obj_OpenBlock(x);
     else if (a != OBJ_ACTION_STAY) Obj_Break(x);
@@ -235,6 +242,7 @@ static void Obj_ResolveBlock(uint8_t x)
  * (once per frame, $5B), then resolve the hit. y is the caller's Y. */
 static void Obj_HitBlock(uint8_t x, uint8_t y)
 {
+    Decomp_Enter(DT_CODE_OBJ_HIT_BLOCK, 0, x, y);
     if (gObjects->state[x] & OBJ_STATUS_HIDDEN) {
         if (gBlockOpened) return;
         x = Obj_EditTile(x, gBlockOpened, y);
@@ -249,6 +257,7 @@ static void Obj_HitBlock(uint8_t x, uint8_t y)
  * dispatch leaves in Y. */
 static void Obj_Block(uint8_t x, uint8_t y)
 {
+    Decomp_Enter(DT_CODE_KIND_BLOCK, 0x22, x, y);
     if (!OnScreen(x) && gObjects->action[x] != 0x1D && gObjects->action[x] != 0x1E) {
         gObjects->state[x] = 0;
         return;
@@ -274,6 +283,7 @@ static void Obj_Block(uint8_t x, uint8_t y)
 /* $88BC: fall with probe $2D; the hit is also kept in $11. */
 static uint8_t Obj_ThrownFall(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_THROWN_FALL, 0, x, 0);
     x = Obj_Fall(x, 0x2D, 1);
     gContactDepth = gProbeHits;
     return x;
@@ -281,6 +291,7 @@ static uint8_t Obj_ThrownFall(uint8_t x)
 /* $88C8: walk in the slot's direction with probes $29 or $2B. */
 static uint8_t Obj_ThrownWalk(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_THROWN_WALK, 0, x, 0);
     if (gObjects->dir[x] & OBJ_DIR_RIGHT) return Obj_WalkRight(x, 0x29, 1);
     return Obj_WalkLeft(x, 0x2B, 1);
 }
@@ -291,6 +302,7 @@ static uint8_t Obj_ThrownWalk(uint8_t x)
  * become a pickup or a block again. */
 static void Obj_Thrown(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_KIND_THROWN, 0x22, x, gObjects->kind[x]);
     uint8_t step = Step(x);
     gScratch(0) = Rom((uint16_t)(DT_CODE_THROWN_STEP_LO + step));
     gScratch(1) = Rom((uint16_t)(DT_CODE_THROWN_STEP_HI + step));
@@ -390,6 +402,7 @@ static void Obj_Thrown(uint8_t x)
 /* $F83F: money is capped at 9,999,990 (the four high digits set to 9). */
 static void Money_Max(void)
 {
+    Decomp_Enter(DT_CODE_MONEY_MAX, 0, 0, 0);
     for (int i = 3; i >= 0; i--) gMoneyDigit(i) = 9;
 }
 
@@ -397,6 +410,7 @@ static void Money_Max(void)
  * carries; a blank digit ($24) counts as 0 once something is added. */
 static void Money_Add(uint8_t amount, uint8_t y)
 {
+    Decomp_Enter(DT_CODE_MONEY_ADD, amount, 0, y);
     uint8_t a = amount, c = 0;
     for (;;) {
         a = (uint8_t)(a + gMoneyDigit(y) + c);
@@ -418,6 +432,7 @@ static void Money_Add(uint8_t amount, uint8_t y)
 /* $F812: every HP dot full again. */
 static void Hud_RefillHp(void)
 {
+    Decomp_Enter(DT_CODE_HUD_REFILL_HP, 0, 0, 0);
     gPlayerEasyHits = 0;
     for (int y = 0x10; y >= 0; y -= 4) HUD_RECORD(y / 4)[2] = 0;
 }
@@ -425,6 +440,7 @@ static void Hud_RefillHp(void)
 /* $8B82: the first lost HP dot becomes full. */
 static void Hud_RestoreDot(void)
 {
+    Decomp_Enter(DT_CODE_HUD_RESTORE_DOT, 0, 0, 0);
     gPlayerEasyHits = 0;
     for (uint8_t y = 0; !(HUD_RECORD(y / 4)[0] & 0x80); y = (uint8_t)(y + 4)) {
         if (HUD_RECORD(y / 4)[2] != 0) {
@@ -439,6 +455,7 @@ static void Hud_RestoreDot(void)
  * remembered in $AE. */
 static void Pickup_ExtraDot(void)
 {
+    Decomp_Enter(DT_CODE_PICKUP_EXTRA_DOT, 0, 0, 0);
     if (gLand == 1) gExtraDotTaken = 1;
     uint8_t y = 0x0C;
     if (!(HUD_RECORD(3)[0] & 0x80)) {
@@ -455,6 +472,7 @@ static void Pickup_ExtraDot(void)
  * items $74 and up shows message $0D (mode $0F). */
 static void Pickup_Treasure(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_PICKUP_TREASURE, 0, x, 0);
     Sound_Request(SFX_TREASURE, x);
     gPogoCeiling = 0;
     Money_Add(1, 0);
@@ -471,6 +489,7 @@ static void Pickup_Treasure(uint8_t x)
 /* $8B21: Scrooge takes the pickup; the item is its pose. */
 static void Pickup_Take(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_PICKUP_TAKE, 0, x, 0);
     gObjects->state[x] = 0;
     uint8_t item = gObjects->action[x];
     if (item == OBJ_ITEM_EXTRA_DOT) {
@@ -521,6 +540,7 @@ static void Pickup_Take(uint8_t x)
  * to the spawner. */
 static void Obj_Pickup(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_KIND_PICKUP, 0x22, x, gObjects->kind[x]);
     if (!OnScreen(x)) {
         if (gObjects->action[x] == OBJ_ITEM_RESPAWNS) {
             uint8_t record = gObjects->record[x];
@@ -573,6 +593,7 @@ static void Obj_Pickup(uint8_t x)
  * colours. */
 static void Obj_BecomeBlock(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_OBJ_BECOME_BLOCK, 0, x, 0);
     gObjects->kind[x] = OBJ_KIND_BLOCK;
     gObjects->hitbox[x] = 0x80;
     gObjects->timer[x] = 0;
@@ -590,6 +611,7 @@ static void Obj_BecomeBlock(uint8_t x)
  * poses $1B and $22 a block again. */
 static void Obj_ShowItem(uint8_t x, uint8_t item)
 {
+    Decomp_Enter(DT_CODE_OBJ_SHOW_ITEM, item, x, 0);
     gObjects->action[x] = item;
     Obj_DifficultAction(x);
     ResetAnim(x);
@@ -611,6 +633,7 @@ static void Obj_ShowItem(uint8_t x, uint8_t item)
  * the jump-out pose; at its frame 1, timer 5 it shows its item. */
 static void Obj_HiddenItem(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_KIND_HIDDEN_ITEM, 0x22, x, gObjects->kind[x]);
     if (!OnScreen(x)) {
         gObjects->state[x] = 0;
         return;
@@ -645,6 +668,7 @@ static void Obj_HiddenItem(uint8_t x)
  * while Scrooge does not swing at it. */
 static void Obj_Chest(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_KIND_CHEST, 0x22, x, gObjects->kind[x]);
     if (!OnScreen(x)) {
         gObjects->state[x] = 0;
         return;
@@ -708,6 +732,7 @@ static void Obj_Drop(uint8_t x, bool carry)
  * screen or the world. */
 static void Obj_Defeated(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_KIND_DEFEATED, 0x22, x, gObjects->kind[x]);
     if (Step(x) == 0) {
         gObjects->vdir[x] = 0;
         gObjects->state[x]++;
@@ -735,6 +760,7 @@ static void Obj_Defeated(uint8_t x)
  * away from Scrooge as kind $0B. Off screen it is just freed. */
 static void Obj_Defeat(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_OBJ_DEFEAT, 0, x, 0);
     if (!OnScreen(x)) {
         gObjects->state[x] = 0;
         gObjects->flags[x] = 0;
@@ -755,6 +781,7 @@ static void Obj_Defeat(uint8_t x)
  * it. */
 static void Obj_Lift(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_KIND_LIFT, 0x22, x, gObjects->kind[x]);
     Obj_SetVelocityY(x, 0x0180);
     if (Step(x) == 0) {
         Obj_MoveUp(x);
@@ -772,6 +799,7 @@ static void Obj_Lift(uint8_t x)
  * treasure, else it sends Scrooge to Land Select ($A4). */
 static void Obj_Door(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_KIND_DOOR, 0x22, x, gObjects->kind[x]);
     if (!Obj_TouchScrooge(x)) return;
     uint8_t warp = gObjects->timer[x];
     if (warp == 0) {
@@ -791,6 +819,7 @@ static void Obj_Door(uint8_t x)
  * stays quiet in a land where his ride was taken ($A6). */
 static void Obj_Talker(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_KIND_TALKER, 0x22, x, gObjects->kind[x]);
     if (gPlayerMode == PLAYER_MODE_DEATH || gPlayerMode == PLAYER_MODE_KNOCKBACK) return;
     if (Step(x) != 0 || !Obj_TouchScrooge(x)) return;
     if (gObjects->action[x] == 0x33 && (gLaunchpadRides & Rom((uint16_t)(DT_CODE_LAND_BIT + gLand)))) return;
@@ -813,6 +842,7 @@ static void Obj_Talker(uint8_t x)
 /* $818A: vertical velocity and speed from the table by index (8.8 each). */
 static void Obj_SetMotionIndex(uint8_t x, uint8_t index)
 {
+    Decomp_Enter(DT_CODE_OBJ_SET_MOTION, index, x, 0);
     uint8_t i = (uint8_t)(index << 1);
     gObjects->vyFrac[x] = Rom((uint16_t)(DT_CODE_MOTION_VY + i));
     gObjects->vy[x] = Rom((uint16_t)(DT_CODE_MOTION_VY + i + 1));
@@ -836,6 +866,7 @@ static bool Enemy_Beaten(uint8_t x, uint8_t hit_pose)
 /* $82F9: walk in the slot's direction with probes $18 or $1B. */
 static uint8_t Enemy_Walk(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_ENEMY_WALK, 0, x, 0);
     if (gObjects->dir[x] & OBJ_DIR_RIGHT) return Obj_WalkRight(x, 0x18, 2);
     return Obj_WalkLeft(x, 0x1B, 2);
 }
@@ -844,6 +875,7 @@ static uint8_t Enemy_Walk(uint8_t x)
  * frame and jumps ($0400) whenever it lands. Hit: pose $0C, beaten. */
 static void Obj_Hopper(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_KIND_HOPPER, 0x22, x, gObjects->kind[x]);
     if (Enemy_Beaten(x, 0x0C)) return;
     if (Step(x) == 0) {
         Obj_SetVelocityY(x, 0);
@@ -874,6 +906,7 @@ static void Obj_Hopper(uint8_t x)
  * walls. Hit: pose $0C, beaten. */
 static void Obj_Walker(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_KIND_WALKER, 0x22, x, gObjects->kind[x]);
     if (gObjects->unk_0690[x] != 0) {
         gObjects->action[x] = 0x0C;
         Obj_Defeat(x);
@@ -894,6 +927,7 @@ static void Obj_Walker(uint8_t x)
 /* $80B3: the highest free slot 15..1 (the bank 6 copy, which answers in Y). */
 static bool Obj_FindFreeSlotY(uint8_t *slot)
 {
+    Decomp_Enter(DT_CODE_OBJ_FIND_FREE_Y, 0, 0, 0);
     for (uint8_t y = 0x0F; y != 0; y--) {
         if (!(gObjects->state[y] & OBJ_STATUS_LIVE)) {
             *slot = y;
@@ -909,6 +943,7 @@ static bool Obj_FindFreeSlotY(uint8_t *slot)
  * gets there; after $3C frames it walks on. Hit: beaten. */
 static void Obj_Thrower(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_KIND_THROWER, 0x22, x, gObjects->kind[x]);
     if (Enemy_Beaten(x, 0)) return;
     if (Step(x) == 0) {
         Obj_SetVelocityY(x, 0);
@@ -980,6 +1015,7 @@ static void Obj_Thrower(uint8_t x)
  * against a wall. */
 static void Obj_Shot(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_KIND_SHOT, 0x22, x, gObjects->kind[x]);
     if (gObjects->flags[x] & OBJ_FLAG_FACING_RIGHT) x = Obj_WalkRight(x, 0x24, 0);
     else x = Obj_WalkLeft(x, 0x25, 0);
     (void)Obj_TouchScrooge(x);
@@ -994,6 +1030,7 @@ static void Obj_Shot(uint8_t x)
  * ($0E with sound $2A). Hit: pose $0F, beaten. */
 static void Obj_Watcher(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_KIND_WATCHER, 0x22, x, gObjects->kind[x]);
     if (gObjects->unk_0690[x] != 0) {
         gObjects->action[x] = 0x0F;
         Obj_Defeat(x);
@@ -1015,6 +1052,7 @@ static void Obj_Watcher(uint8_t x)
  * Touched from further away, it knocks him back. Hit: beaten. */
 static void Obj_Snapper(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_KIND_SNAPPER, 0x22, x, gObjects->kind[x]);
     if (gPlayerMode == PLAYER_MODE_DEATH) return;
     if (!OnScreen(x)) {
         gObjects->state[x] = 0;
@@ -1082,6 +1120,7 @@ static void Obj_Snapper(uint8_t x)
  * floor. Below Scrooge's Y it is harmful. */
 static void Obj_Dropper(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_KIND_DROPPER, 0x22, x, gObjects->kind[x]);
     if (!OnScreen(x)) {
         gObjects->state[x] = 0;
         return;
@@ -1112,6 +1151,7 @@ static void Obj_Dropper(uint8_t x)
  * the right, then walks at $0180 and turns at walls. */
 static void Obj_Crawler(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_KIND_CRAWLER, 0x22, x, gObjects->kind[x]);
     if (Step(x) == 0) {
         uint16_t d = (uint16_t)(Obj_GetWorldX(P_) - Obj_GetWorldX(x));
         gScratch(0) = (uint8_t)d;
@@ -1135,6 +1175,7 @@ static void Obj_Crawler(uint8_t x)
  * touching the background. Hit or off screen: beaten. */
 static void Obj_Flyer(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_KIND_FLYER, 0x22, x, gObjects->kind[x]);
     if (Enemy_Beaten(x, 0)) return;
     if (Step(x) == 0) {
         gObjects->state[x]++;
@@ -1165,6 +1206,7 @@ static void Obj_Flyer(uint8_t x)
  * moves with it. */
 static void Obj_Swing(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_KIND_SWING, 0x22, x, gObjects->kind[x]);
     if (Step(x) == 0) {
         gObjects->timer[x] = 0;
         gObjects->unk_06C0[x] = 0;
@@ -1205,6 +1247,7 @@ static void Obj_Swing(uint8_t x)
  * pose $11, beaten. */
 static void Obj_Dangler(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_KIND_DANGLER, 0x22, x, gObjects->kind[x]);
     if (!OnScreen(x)) {
         gObjects->state[x] = 0;
         return;
@@ -1241,6 +1284,7 @@ static void Obj_Dangler(uint8_t x)
  * pose $85 a hit beats it. */
 static void Obj_Swooper(uint8_t x)
 {
+    Decomp_Enter(DT_CODE_KIND_SWOOPER, 0x22, x, gObjects->kind[x]);
     if (gObjects->action[x] == 0x85 && gObjects->unk_0690[x] != 0) {
         Obj_Defeat(x);
         return;
@@ -1336,6 +1380,7 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
  * which the code after it passes on (a sound request keeps it in $00). */
 static void Obj_UpdateAll(Regs *r)
 {
+    Decomp_Enter(DT_CODE_OBJ_UPDATE, r->a, r->x, r->y);
     gGravity = OBJ_GRAVITY;
     r->a = OBJ_GRAVITY;
     for (gObjCursor = 1; gObjCursor != OBJ_SLOTS; gObjCursor++) {
@@ -1346,29 +1391,285 @@ static void Obj_UpdateAll(Regs *r)
     }
 }
 
-/* ---- site adapters ---- */
+/* ---- adapters ---- */
 
-static void Run_UpdateAll(Regs *r) { Obj_UpdateAll(r); }
-static void Run_Block(Regs *r) { Obj_Block(r->x, r->y); }
-static void Run_Thrown(Regs *r) { Obj_Thrown(r->x); }
-static void Run_Defeated(Regs *r) { Obj_Defeated(r->x); }
-static void Run_Lift(Regs *r) { Obj_Lift(r->x); }
-static void Run_Pickup(Regs *r) { Obj_Pickup(r->x); }
-static void Run_HiddenItem(Regs *r) { Obj_HiddenItem(r->x); }
-static void Run_Chest(Regs *r) { Obj_Chest(r->x); }
-static void Run_Door(Regs *r) { Obj_Door(r->x); }
-static void Run_Talker(Regs *r) { Obj_Talker(r->x); }
+static void SetCarry(Regs *r, bool carry)
+{
+    r->p = (uint8_t)(carry ? r->p | P_C : r->p & ~P_C);
+}
+
+static void Run_UpdateAll(Regs *r)
+{
+    Obj_UpdateAll(r);
+}
+
+static void Run_Block(Regs *r)
+{
+    Obj_Block(r->x, r->y);
+}
+
+static void Run_Hopper(Regs *r)
+{
+    Obj_Hopper(r->x);
+}
+
+static void Run_Walker(Regs *r)
+{
+    Obj_Walker(r->x);
+}
+
+static void Run_Thrower(Regs *r)
+{
+    Obj_Thrower(r->x);
+}
+
+static void Run_Shot(Regs *r)
+{
+    Obj_Shot(r->x);
+}
+
+static void Run_Watcher(Regs *r)
+{
+    Obj_Watcher(r->x);
+}
+
+static void Run_Dangler(Regs *r)
+{
+    Obj_Dangler(r->x);
+}
+
+static void Run_Snapper(Regs *r)
+{
+    Obj_Snapper(r->x);
+}
+
+static void Run_Thrown(Regs *r)
+{
+    Obj_Thrown(r->x);
+}
+
+static void Run_Defeated(Regs *r)
+{
+    Obj_Defeated(r->x);
+}
+
+static void Run_Dropper(Regs *r)
+{
+    Obj_Dropper(r->x);
+}
+
+static void Run_Crawler(Regs *r)
+{
+    Obj_Crawler(r->x);
+}
+
+static void Run_Flyer(Regs *r)
+{
+    Obj_Flyer(r->x);
+}
+
+static void Run_Swing(Regs *r)
+{
+    Obj_Swing(r->x);
+}
+
+static void Run_Lift(Regs *r)
+{
+    Obj_Lift(r->x);
+}
+
+static void Run_Swooper(Regs *r)
+{
+    Obj_Swooper(r->x);
+}
+
+static void Run_Pickup(Regs *r)
+{
+    Obj_Pickup(r->x);
+}
+
+static void Run_HiddenItem(Regs *r)
+{
+    Obj_HiddenItem(r->x);
+}
+
+static void Run_Chest(Regs *r)
+{
+    Obj_Chest(r->x);
+}
+
+static void Run_Door(Regs *r)
+{
+    Obj_Door(r->x);
+}
+
+static void Run_Talker(Regs *r)
+{
+    Obj_Talker(r->x);
+}
+
+static void Run_FindFreeSlotY(Regs *r)
+{
+    uint8_t slot;
+    SetCarry(r, !Obj_FindFreeSlotY(&slot));
+    r->y = slot;
+}
+
+static void Run_HitOthers(Regs *r)
+{
+    SetCarry(r, !Obj_HitOthers(r->x));
+}
+
+static void Run_SetMotionIndex(Regs *r)
+{
+    Obj_SetMotionIndex(r->x, r->a);
+}
+
+static void Run_EnemyWalk(Regs *r)
+{
+    r->x = Enemy_Walk(r->x);
+}
+
+static void Run_LaunchBlock(Regs *r)
+{
+    Obj_LaunchBlock(r->x);
+}
+
+static void Run_ResolveBlock(Regs *r)
+{
+    Obj_ResolveBlock(r->x);
+}
+
+static void Run_Break(Regs *r)
+{
+    Obj_Break(r->x);
+}
+
+static void Run_Shatter(Regs *r)
+{
+    Obj_Shatter(r->x);
+}
+
+static void Run_Defeat(Regs *r)
+{
+    Obj_Defeat(r->x);
+}
+
+static void Run_OpenBlock(Regs *r)
+{
+    Obj_OpenBlock(r->x);
+}
+
+static void Run_BecomePickupNow(Regs *r)
+{
+    Obj_BecomePickupNow(r->x);
+}
+
+static void Run_BecomeBlock(Regs *r)
+{
+    Obj_BecomeBlock(r->x);
+}
+
+static void Run_HitBlock(Regs *r)
+{
+    Obj_HitBlock(r->x, r->y);
+}
+
+static void Run_ThrownFall(Regs *r)
+{
+    r->x = Obj_ThrownFall(r->x);
+}
+
+static void Run_ThrownWalk(Regs *r)
+{
+    r->x = Obj_ThrownWalk(r->x);
+}
+
+static void Run_ShowItem(Regs *r)
+{
+    Obj_ShowItem(r->x, r->a);
+}
+
+static void Run_PickupTake(Regs *r)
+{
+    Pickup_Take(r->x);
+}
+
+static void Run_PickupTreasure(Regs *r)
+{
+    Pickup_Treasure(r->x);
+}
+
+static void Run_PickupExtraDot(Regs *r)
+{
+    Pickup_ExtraDot();
+}
+
+static void Run_RestoreDot(Regs *r)
+{
+    Hud_RestoreDot();
+}
+
+static void Run_MoneyAdd(Regs *r)
+{
+    Money_Add(r->a, r->y);
+}
+
+static void Run_RefillHp(Regs *r)
+{
+    Hud_RefillHp();
+}
+
+static void Run_MoneyMax(Regs *r)
+{
+    Money_Max();
+}
 
 const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_OBJ_UPDATE, "ducktales.decomp.6.8000", "Obj_UpdateAll", Run_UpdateAll, OUT_X, DT_OBJ_BANK },
-    { DT_CODE_KIND_BLOCK, "ducktales.decomp.6.8668", "Obj_Block", Run_Block, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_THROWN, "ducktales.decomp.6.8722", "Obj_Thrown", Run_Thrown, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_DEFEATED, "ducktales.decomp.6.897B", "Obj_Defeated", Run_Defeated, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_PICKUP, "ducktales.decomp.6.8A59", "Obj_Pickup", Run_Pickup, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_HIDDEN_ITEM, "ducktales.decomp.6.8C45", "Obj_HiddenItem", Run_HiddenItem, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_CHEST, "ducktales.decomp.6.8D19", "Obj_Chest", Run_Chest, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_DOOR, "ducktales.decomp.6.9065", "Obj_Door", Run_Door, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_LIFT, "ducktales.decomp.6.9093", "Obj_Lift", Run_Lift, 0, DT_OBJ_BANK },
-    { DT_CODE_KIND_TALKER, "ducktales.decomp.FDF5", "Obj_Talker", Run_Talker, 0 },
+    { DT_CODE_KIND_HOPPER, NULL, "Obj_Hopper", Run_Hopper, 0, DT_OBJ_BANK },
+    { DT_CODE_KIND_WALKER, NULL, "Obj_Walker", Run_Walker, 0, DT_OBJ_BANK },
+    { DT_CODE_KIND_THROWER, NULL, "Obj_Thrower", Run_Thrower, 0, DT_OBJ_BANK },
+    { DT_CODE_KIND_SHOT, NULL, "Obj_Shot", Run_Shot, 0, DT_OBJ_BANK },
+    { DT_CODE_KIND_WATCHER, NULL, "Obj_Watcher", Run_Watcher, 0, DT_OBJ_BANK },
+    { DT_CODE_KIND_DANGLER, NULL, "Obj_Dangler", Run_Dangler, 0, DT_OBJ_BANK },
+    { DT_CODE_KIND_SNAPPER, NULL, "Obj_Snapper", Run_Snapper, 0, DT_OBJ_BANK },
+    { DT_CODE_KIND_BLOCK, NULL, "Obj_Block", Run_Block, 0, DT_OBJ_BANK },
+    { DT_CODE_KIND_THROWN, NULL, "Obj_Thrown", Run_Thrown, 0, DT_OBJ_BANK },
+    { DT_CODE_KIND_DEFEATED, NULL, "Obj_Defeated", Run_Defeated, 0, DT_OBJ_BANK },
+    { DT_CODE_KIND_DROPPER, NULL, "Obj_Dropper", Run_Dropper, 0, DT_OBJ_BANK },
+    { DT_CODE_KIND_CRAWLER, NULL, "Obj_Crawler", Run_Crawler, 0, DT_OBJ_BANK },
+    { DT_CODE_KIND_FLYER, NULL, "Obj_Flyer", Run_Flyer, 0, DT_OBJ_BANK },
+    { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, DT_OBJ_BANK },
+    { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, DT_OBJ_BANK },
+    { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, DT_OBJ_BANK },
+    { DT_CODE_KIND_PICKUP, NULL, "Obj_Pickup", Run_Pickup, 0, DT_OBJ_BANK },
+    { DT_CODE_KIND_HIDDEN_ITEM, NULL, "Obj_HiddenItem", Run_HiddenItem, 0, DT_OBJ_BANK },
+    { DT_CODE_KIND_CHEST, NULL, "Obj_Chest", Run_Chest, 0, DT_OBJ_BANK },
+    { DT_CODE_KIND_DOOR, NULL, "Obj_Door", Run_Door, 0, DT_OBJ_BANK },
+    { DT_CODE_KIND_TALKER, NULL, "Obj_Talker", Run_Talker, 0 },
+    { DT_CODE_OBJ_FIND_FREE_Y, NULL, "Obj_FindFreeSlotY", Run_FindFreeSlotY, OUT_Y | OUT_C, DT_OBJ_BANK },
+    { DT_CODE_OBJ_HIT_OTHERS, NULL, "Obj_HitOthers", Run_HitOthers, OUT_C, DT_OBJ_BANK },
+    { DT_CODE_OBJ_SET_MOTION, NULL, "Obj_SetMotionIndex", Run_SetMotionIndex, 0, DT_OBJ_BANK },
+    { DT_CODE_ENEMY_WALK, NULL, "Enemy_Walk", Run_EnemyWalk, OUT_X, DT_OBJ_BANK },
+    { DT_CODE_OBJ_LAUNCH_BLOCK, NULL, "Obj_LaunchBlock", Run_LaunchBlock, 0, DT_OBJ_BANK },
+    { DT_CODE_OBJ_RESOLVE_BLOCK, NULL, "Obj_ResolveBlock", Run_ResolveBlock, 0, DT_OBJ_BANK },
+    { DT_CODE_OBJ_BREAK, NULL, "Obj_Break", Run_Break, 0, DT_OBJ_BANK },
+    { DT_CODE_OBJ_SHATTER, NULL, "Obj_Shatter", Run_Shatter, 0, DT_OBJ_BANK },
+    { DT_CODE_OBJ_DEFEAT, NULL, "Obj_Defeat", Run_Defeat, 0, DT_OBJ_BANK },
+    { DT_CODE_OBJ_OPEN_BLOCK, NULL, "Obj_OpenBlock", Run_OpenBlock, 0, DT_OBJ_BANK },
+    { DT_CODE_OBJ_BECOME_PICKUP, NULL, "Obj_BecomePickupNow", Run_BecomePickupNow, 0, DT_OBJ_BANK },
+    { DT_CODE_OBJ_BECOME_BLOCK, NULL, "Obj_BecomeBlock", Run_BecomeBlock, 0, DT_OBJ_BANK },
+    { DT_CODE_OBJ_HIT_BLOCK, NULL, "Obj_HitBlock", Run_HitBlock, 0, DT_OBJ_BANK },
+    { DT_CODE_THROWN_FALL, NULL, "Obj_ThrownFall", Run_ThrownFall, OUT_X, DT_OBJ_BANK },
+    { DT_CODE_THROWN_WALK, NULL, "Obj_ThrownWalk", Run_ThrownWalk, OUT_X, DT_OBJ_BANK },
+    { DT_CODE_OBJ_SHOW_ITEM, NULL, "Obj_ShowItem", Run_ShowItem, 0, DT_OBJ_BANK },
+    { DT_CODE_PICKUP_TAKE, NULL, "Pickup_Take", Run_PickupTake, 0, DT_OBJ_BANK },
+    { DT_CODE_PICKUP_TREASURE, NULL, "Pickup_Treasure", Run_PickupTreasure, 0, DT_OBJ_BANK },
+    { DT_CODE_PICKUP_EXTRA_DOT, NULL, "Pickup_ExtraDot", Run_PickupExtraDot, 0, DT_OBJ_BANK },
+    { DT_CODE_HUD_RESTORE_DOT, NULL, "Hud_RestoreDot", Run_RestoreDot, 0, DT_OBJ_BANK },
+    { DT_CODE_MONEY_ADD, NULL, "Money_Add", Run_MoneyAdd, 0, DT_OBJ_BANK },
+    { DT_CODE_HUD_REFILL_HP, NULL, "Hud_RefillHp", Run_RefillHp, 0 },
+    { DT_CODE_MONEY_MAX, NULL, "Money_Max", Run_MoneyMax, 0 },
 };
 const int gObjectRoutineCount = sizeof gObjectRoutines / sizeof gObjectRoutines[0];

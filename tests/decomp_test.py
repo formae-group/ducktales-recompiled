@@ -1,7 +1,8 @@
 """Decompilation checks (src/decomp/, docs/decompilation.md).
 
   check    every route runs with --decomp check: at every call of every
-           decompiled routine the original runs in an isolated call and the C
+           decompiled routine (from a site or from another routine's C,
+           decomp.c) the original runs in an isolated call and the C
            on the same state, and RAM (the dead stack excepted) and the
            routine's contract registers must agree; the first difference stops
            the run (exit 3). Prints how often each routine was called,

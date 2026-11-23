@@ -77,6 +77,11 @@
 #define DT_PAD_LEFT    0x02
 #define DT_PAD_RIGHT   0x01
 
+/* Page 1 below this is data, not stack: the master palette $0100-$011F, the
+ * consumed-record bits $0120-$013F and the HUD time group $0140-$015F
+ * (verified, memory-map.md, game-state.md). */
+#define DT_ADDR_STACK_FLOOR      0x0160
+
 /* ---- object tables: one 16-byte row per attribute, column = slot ----
  * Slot 0 is Scrooge (docs/memory-map.md "Object tables", docs/player.md). */
 #define DT_OBJ_SLOTS             16
@@ -268,6 +273,47 @@
 #define DT_CODE_SWOOPER_PATH     0x9544  /* kind $11: motion index by step, 14 entries */
 #define DT_CODE_KIND_LIFT        0x9093  /* kind $0F */
 #define DT_CODE_KIND_TALKER      0xFDF5  /* kind $35 (fixed bank) */
+#define DT_CODE_KIND_HOPPER      0x8225  /* kind 1 */
+#define DT_CODE_KIND_WALKER      0x82AF  /* kind 2 */
+#define DT_CODE_KIND_THROWER     0x830E  /* kind 3 */
+#define DT_CODE_KIND_SHOT        0x8462  /* kind 4 */
+#define DT_CODE_KIND_WATCHER     0x8491  /* kind 5 */
+#define DT_CODE_KIND_DANGLER     0x84E5  /* kind 6 */
+#define DT_CODE_KIND_SNAPPER     0x8567  /* kind 7 */
+#define DT_CODE_KIND_DROPPER     0x8845  /* kind $0A */
+#define DT_CODE_KIND_CRAWLER     0x90EA  /* kind $0C */
+#define DT_CODE_KIND_FLYER       0x916C  /* kind $0D */
+#define DT_CODE_KIND_SWING       0x9225  /* kind $0E */
+#define DT_CODE_KIND_SWOOPER     0x9430  /* kind $11 */
+#define DT_CODE_OBJ_FIND_FREE_Y  0x80B3  /* highest free slot 15..1 in Y */
+#define DT_CODE_OBJ_HIT_OTHERS   0x80C1  /* the slot a thrown slot hits */
+#define DT_CODE_OBJ_SET_MOTION   0x818A  /* vertical velocity and speed by index */
+#define DT_CODE_ENEMY_WALK       0x82F9  /* walk with probes $18 or $1B */
+#define DT_CODE_OBJ_LAUNCH_BLOCK 0x86B5  /* a block starts flying (kind 9) */
+#define DT_CODE_OBJ_HIT_BLOCK    0x86F7  /* a counted blow on a block */
+#define DT_CODE_OBJ_RESOLVE_BLOCK 0x870D  /* open, leave or shatter a block */
+#define DT_CODE_THROWN_FALL      0x88BC  /* kind 9: fall with probe $2D */
+#define DT_CODE_THROWN_WALK      0x88C8  /* kind 9: walk with probes $29 or $2B */
+#define DT_CODE_OBJ_BREAK        0x88DF  /* pose $1C, then $88E4 */
+#define DT_CODE_OBJ_SHATTER      0x88E4  /* the debris animation */
+#define DT_CODE_OBJ_DEFEAT       0x8932  /* an enemy is beaten */
+#define DT_CODE_OBJ_OPEN_BLOCK   0x8A11  /* an opened block or chest picks its item */
+#define DT_CODE_OBJ_BECOME_PICKUP 0x8A32  /* become a pickup now */
+#define DT_CODE_PICKUP_TAKE      0x8B21  /* Scrooge takes a pickup */
+#define DT_CODE_PICKUP_EXTRA_DOT 0x8B38  /* item $2B: one more HP dot */
+#define DT_CODE_HUD_RESTORE_DOT  0x8B82  /* the first lost HP dot becomes full */
+#define DT_CODE_MONEY_ADD        0x8BBF  /* add A to money digit Y */
+#define DT_CODE_PICKUP_TREASURE  0x8C13  /* a land treasure */
+#define DT_CODE_OBJ_SHOW_ITEM    0x8CAC  /* the slot shows item A */
+#define DT_CODE_OBJ_BECOME_BLOCK 0x8CE1  /* the slot becomes a block */
+#define DT_CODE_OBJ_DESPAWN      0xF179  /* free the slot (fixed bank) */
+#define DT_CODE_OBJ_SET_SPEED    0xF312  /* speed by index (fixed bank) */
+#define DT_CODE_OBJ_TOUCH_BLOCK_H 0xF332  /* the block a slot overlaps, horizontal (fixed bank) */
+#define DT_CODE_OBJ_TOUCH_BLOCK_V 0xF3B7  /* the same, vertical (fixed bank) */
+#define DT_CODE_OBJ_DISTANCE_Y   0xF7CC  /* |Scrooge's Y - the slot's| (fixed bank) */
+#define DT_CODE_HUD_REFILL_HP    0xF812  /* every HP dot full (fixed bank) */
+#define DT_CODE_OBJ_DIFFICULT_ACTION 0xF822  /* actions on Difficult (fixed bank) */
+#define DT_CODE_MONEY_MAX        0xF83F  /* money capped at 9,999,990 (fixed bank) */
 
 /* ---- hook sites of the event system (src/game/events.c) ----
  * config/game.toml declares each with a length/crc32 content key, so another

@@ -9,6 +9,7 @@
  *                        [--ram-dump FILE] [--nmi-audit FILE]
  *                        [--step-dump FILE] [--latch-log FILE | --latch-input FILE]
  *                        [--split-log FILE] [--trace-frame N --trace-out FILE]
+ *                        [--wav-out FILE]
  *
  * --input takes the cycle host's route format (tests/routes): one
  * "<frame> BUTTONS" line per change, buttons joined by +, "-" releases, "2:"
@@ -29,9 +30,13 @@
  * RAM each time a frame's logic completes instead. --latch-log records the
  * buttons latched at every controller strobe; --latch-input replays such a
  * log strobe by strobe in place of --input, so two lag modes can be given
- * the same input per logic step (tools/lag_report.py --steps).
+ * the same input per logic step (tools/lag_report.py --steps). --wav-out
+ * plays every frame's APU writes through the native synth (native_audio.h)
+ * and writes the result as 48 kHz mono 16-bit PCM (tests/audio_compare.py).
  */
+#include "native/native_audio.h"
 #include "native/native_hash.h"
+#include "native/native_route.h"
 #include "native/native_runtime.h"
 #include "native/native_state.h"
 
@@ -43,17 +48,21 @@
 #include <string.h>
 #include <time.h>
 
-typedef struct {
-    long frame;
-    uint8_t port, buttons;
-} InputStep;
-
-static InputStep *steps;
-static size_t step_count;
+static NativeRoute route;
 
 static FILE *step_f, *latch_log_f;
 static uint8_t (*latches)[2];
 static size_t latch_count, latch_next;
+
+static void wav_header(FILE *f, uint32_t samples)
+{
+    uint32_t rate = 48000, bytes = samples * 2, riff = 36 + bytes, fmt = 16, byte_rate = rate * 2;
+    uint16_t pcm = 1, channels = 1, align = 2, bits = 16;
+    fseek(f, 0, SEEK_SET);
+    fwrite("RIFF", 1, 4, f), fwrite(&riff, 4, 1, f), fwrite("WAVEfmt ", 1, 8, f), fwrite(&fmt, 4, 1, f);
+    fwrite(&pcm, 2, 1, f), fwrite(&channels, 2, 1, f), fwrite(&rate, 4, 1, f), fwrite(&byte_rate, 4, 1, f);
+    fwrite(&align, 2, 1, f), fwrite(&bits, 2, 1, f), fwrite("data", 1, 4, f), fwrite(&bytes, 4, 1, f);
+}
 
 static void dump_step(void) { fwrite(native_cpu_ram(), 1, 0x800, step_f); }
 
@@ -90,53 +99,6 @@ static bool load_latches(const char *path)
     return true;
 }
 
-static uint8_t parse_buttons(const char *s)
-{
-    static const struct { const char *name; uint8_t bit; } NAMES[] = {
-        { "A", 0x80 }, { "B", 0x40 }, { "SELECT", 0x20 }, { "START", 0x10 },
-        { "UP", 0x08 }, { "DOWN", 0x04 }, { "LEFT", 0x02 }, { "RIGHT", 0x01 },
-    };
-    uint8_t b = 0;
-    while (*s) {
-        while (*s == '+' || *s == ' ' || *s == '\t') s++;
-        size_t n = strcspn(s, "+ \t\r\n");
-        if (!n) break;
-        for (size_t i = 0; i < sizeof NAMES / sizeof NAMES[0]; i++)
-            if (strlen(NAMES[i].name) == n && !strncmp(s, NAMES[i].name, n)) b |= NAMES[i].bit;
-        s += n;
-    }
-    return b;
-}
-
-static bool load_input(const char *path)
-{
-    FILE *f = fopen(path, "r");
-    if (!f) {
-        fprintf(stderr, "cannot read %s\n", path);
-        return false;
-    }
-    size_t cap = 0;
-    char line[256];
-    while (fgets(line, sizeof line, f)) {
-        char *p = line, *end;
-        while (*p == ' ' || *p == '\t') p++;
-        if (*p == '#') continue;
-        long frame = strtol(p, &end, 10);
-        if (end == p) continue;
-        p = end;
-        while (*p == ' ' || *p == '\t') p++;
-        uint8_t port = 0;
-        if (p[0] >= '1' && p[0] <= '2' && p[1] == ':') port = (uint8_t)(p[0] - '1'), p += 2;
-        if (step_count == cap) {
-            cap = cap ? cap * 2 : 256;
-            steps = (InputStep *)realloc(steps, cap * sizeof *steps);
-        }
-        steps[step_count++] = (InputStep){ frame, port, *p == '-' ? 0 : parse_buttons(p) };
-    }
-    fclose(f);
-    return true;
-}
-
 static uint8_t *read_file(const char *path, size_t *size)
 {
     FILE *f = fopen(path, "rb");
@@ -157,7 +119,7 @@ static uint8_t *read_file(const char *path, size_t *size)
 int main(int argc, char **argv)
 {
     const char *rom = NULL, *input = NULL, *hash_out = NULL, *split_out = NULL, *trace_out = NULL, *lag_out = NULL,
-               *dump_out = NULL, *audit_out = NULL, *step_out = NULL, *latch_out = NULL, *latch_in = NULL;
+               *dump_out = NULL, *audit_out = NULL, *step_out = NULL, *latch_out = NULL, *latch_in = NULL, *wav_out = NULL;
     NativeLagMode lag_mode = NATIVE_LAG_NONE;
     long frames = 600, trace_frame = -1;
     for (int i = 1; i < argc; i++) {
@@ -173,16 +135,17 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--step-dump") && i + 1 < argc) step_out = argv[++i];
         else if (!strcmp(argv[i], "--latch-log") && i + 1 < argc) latch_out = argv[++i];
         else if (!strcmp(argv[i], "--latch-input") && i + 1 < argc) latch_in = argv[++i];
+        else if (!strcmp(argv[i], "--wav-out") && i + 1 < argc) wav_out = argv[++i];
         else if (!strcmp(argv[i], "--lag") && i + 1 < argc && !strcmp(argv[i + 1], "none")) lag_mode = NATIVE_LAG_NONE, i++;
         else if (!strcmp(argv[i], "--lag") && i + 1 < argc && !strcmp(argv[i + 1], "faithful")) lag_mode = NATIVE_LAG_FAITHFUL, i++;
         else if (argv[i][0] != '-' && !rom) rom = argv[i];
         else {
-            fprintf(stderr, "usage: %s ROM [--input FILE] [--frames N] [--ram-hash-out FILE] [--lag none|faithful] [--lag-log FILE] [--split-log FILE]\n", argv[0]);
+            fprintf(stderr, "usage: %s ROM [--input FILE] [--frames N] [--ram-hash-out FILE] [--lag none|faithful] [--lag-log FILE] [--split-log FILE] [--wav-out FILE]\n", argv[0]);
             return 2;
         }
     }
     if (!rom) {
-        fprintf(stderr, "usage: %s ROM [--input FILE] [--frames N] [--ram-hash-out FILE] [--lag none|faithful] [--lag-log FILE] [--split-log FILE]\n", argv[0]);
+        fprintf(stderr, "usage: %s ROM [--input FILE] [--frames N] [--ram-hash-out FILE] [--lag none|faithful] [--lag-log FILE] [--split-log FILE] [--wav-out FILE]\n", argv[0]);
         return 2;
     }
     size_t size;
@@ -197,7 +160,7 @@ int main(int argc, char **argv)
         return 2;
     }
     free(image);
-    if (input && !load_input(input)) return 2;
+    if (input && !native_route_load(&route, input)) return 2;
     if (latch_in && !load_latches(latch_in)) return 2;
     FILE *hash_f = hash_out ? fopen(hash_out, "w") : NULL;
     FILE *split_f = split_out ? fopen(split_out, "w") : NULL;
@@ -207,8 +170,10 @@ int main(int argc, char **argv)
     FILE *audit_f = audit_out ? fopen(audit_out, "w") : NULL;
     step_f = step_out ? fopen(step_out, "wb") : NULL;
     latch_log_f = latch_out ? fopen(latch_out, "w") : NULL;
+    FILE *wav_f = wav_out ? fopen(wav_out, "wb") : NULL;
     if ((hash_out && !hash_f) || (split_out && !split_f) || (trace_out && !trace_f) || (lag_out && !lag_f) ||
-        (dump_out && !dump_f) || (audit_out && !audit_f) || (step_out && !step_f) || (latch_out && !latch_log_f)) {
+        (dump_out && !dump_f) || (audit_out && !audit_f) || (step_out && !step_f) || (latch_out && !latch_log_f) ||
+        (wav_out && !wav_f)) {
         fprintf(stderr, "cannot write the output files\n");
         return 2;
     }
@@ -218,14 +183,15 @@ int main(int argc, char **argv)
     if (step_f) native_set_step_hook(dump_step);
     if (latch_log_f) native_set_latch_hook(record_latch);
     if (latches) native_set_latch_hook(replay_latch);
+    uint32_t wav_samples = 0;
+    if (wav_f) {
+        native_audio_reset(48000);
+        wav_header(wav_f, 0);
+    }
     uint8_t held[2] = { 0, 0 };
-    size_t next = 0;
     clock_t start = clock();
     for (long frame = 0; frame < frames; frame++) {
-        while (next < step_count && steps[next].frame <= frame) {
-            held[steps[next].port] = steps[next].buttons;
-            next++;
-        }
+        native_route_frame(&route, frame, held);
         native_set_controller(0, held[0]);
         native_set_controller(1, held[1]);
         cyc_trace_enabled = trace_f && frame == trace_frame;
@@ -241,6 +207,13 @@ int main(int argc, char **argv)
             native_hash_line(hash_f, frame, &in);
         }
         if (dump_f) fwrite(native_cpu_ram(), 1, 0x800, dump_f);
+        if (wav_f) {
+            static int16_t pcm[NATIVE_AUDIO_MAX_FRAME_SAMPLES];
+            const NativeFrame *f = native_last_frame();
+            size_t n = native_audio_frame(f, pcm, NATIVE_AUDIO_MAX_FRAME_SAMPLES);
+            fwrite(pcm, sizeof pcm[0], n, wav_f);
+            wav_samples += (uint32_t)n;
+        }
         if (lag_f) {
             static const char *const END[] = { "-", "idle", "poll", "cap" };
             const NativeLagFrame *l = native_last_lag();
@@ -259,6 +232,10 @@ int main(int argc, char **argv)
     }
     double seconds = (double)(clock() - start) / CLOCKS_PER_SEC;
     if (lag_f) fclose(lag_f);
+    if (wav_f) {
+        wav_header(wav_f, wav_samples);
+        fclose(wav_f);
+    }
     if (dump_f) fclose(dump_f);
     if (step_f) fclose(step_f);
     if (latch_log_f) fclose(latch_log_f);

@@ -143,6 +143,43 @@ void app_ui_finish(void)
 
 void app_ui_host_saved(void) { s_host_saved = true; }
 
+/* ---- the menu's own settings ---- */
+
+static AppMenuPrefs s_menu = { 80, 1 };
+
+void app_menu_prefs_get(AppMenuPrefs *out) { *out = s_menu; }
+
+void app_menu_prefs_set(const AppMenuPrefs *p)
+{
+    s_menu.opacity = p->opacity < 0 ? 0 : p->opacity > 100 ? 100 : p->opacity;
+    s_menu.pad_nav = p->pad_nav != 0;
+}
+
+bool app_ui_load_game_setting(const char *key, const char *value)
+{
+    if (!strcmp(key, "MenuOpacity")) {
+        char *end;
+        long v = strtol(value, &end, 10);
+        if (end != value && !*end && v >= 0 && v <= 100) s_menu.opacity = (int)v;
+        else fprintf(stderr, "[ducktales] config.ini [Game] %s = %s: expected 0-100; using %d\n", key, value, s_menu.opacity);
+        return true;
+    }
+    if (!strcmp(key, "MenuControllerNav")) {
+        static const char *ON[] = { "on", "1", "true", "yes" }, *OFF[] = { "off", "0", "false", "no" };
+        for (int i = 0; i < 4; i++) {
+            if (!strcmp(value, ON[i])) s_menu.pad_nav = 1;
+            if (!strcmp(value, OFF[i])) s_menu.pad_nav = 0;
+        }
+        return true;
+    }
+    return false;
+}
+
+void app_ui_write_game_settings(FILE *f)
+{
+    fprintf(f, "MenuOpacity = %d\nMenuControllerNav = %s\n", s_menu.opacity, s_menu.pad_nav ? "on" : "off");
+}
+
 void app_settings_changed(void)
 {
     s_unsaved = true;

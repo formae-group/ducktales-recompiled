@@ -86,9 +86,10 @@ two events itself (`Decomp_RaiseEvent`, replace mode only) at the same point in 
 
 ### How a routine replaces the recompiled one
 
-Every decompiled routine owns a `[[mod_function_hook]]` site at its entry, with id
-`ducktales.decomp.XXXX` and a content key over the routine's first 8 bytes. `src/decomp/decomp.c`
-registers them all and runs them in one of three modes. The mode comes from `--decomp
+A decompiled routine that original code calls owns a `[[mod_function_hook]]` site at its entry,
+with id `ducktales.decomp.XXXX` and a content key over the routine's first 8 bytes. A routine that
+only decompiled code calls has no site: its callers' C calls its C directly (below).
+`src/decomp/decomp.c` registers the sites and runs the routines in one of three modes. The mode comes from `--decomp
 off|check|replace` in both hosts, or from the environment variable `DUCKTALES_DECOMP` when the
 option is not given.
 
@@ -100,9 +101,11 @@ option is not given.
 
 The C of a routine always runs on a private image of CPU RAM taken at the routine's entry. In check
 mode "agree" means: all of CPU RAM except the stack below the routine's return address (dead after
-its RTS), plus the registers of the routine's contract. The stack ends at `$0160` (`STACK_FLOOR`):
-page 1 below it is game data (the master palette `$0100-$011F`, the consumed-record bits
-`$0120-$013F`, the HUD time group `$0140-$015F`), which is compared and stored like any other RAM.
+its RTS), plus the registers of the routine's contract. The stack ends at `$0160`
+(`DT_ADDR_STACK_FLOOR`): below it page 1 holds the master palette, the consumed-record bits
+`$0120-$013F` and the HUD time group, which are always compared and stored. (Treating them as dead
+stack dropped an object routine's writes to `$0120` in replace mode, and `amazon_intro` diverged at
+frame 1630; found on the objects branch.)
 
 **Timing in replace mode.** A hook that handles a routine returns in zero guest time, and the
 NESRecomp API has no call that charges cycles. A replaced routine that takes no time makes the game
@@ -116,6 +119,39 @@ work as on the console. The one difference: an NMI that the original would take 
 routine is taken right after it, so the bytes it pushes on the stack differ. With this, replace
 mode is RAM-identical to the console on every frame of every route (see Verification).
 
+**Calls that would run past the frame end** go to the original in replace mode. The host's
+`frame_end` calls `Decomp_FrameEnd()`, which keeps the frame length in cycles; when the original's
+measured cycles from the call would reach the next frame end (with a margin of 32), the call is
+counted as "original" and the original runs. Otherwise the RAM at that frame end would hold the
+C's finished results where the console is still inside the routine, as with the level's blanked
+whole-screen draws (found on the level branch).
+
+The measuring call runs with hook sites on, so it takes the C's path through a cancelled event:
+an event site raises nothing there, and at `$EB5E` the original returns as its RTS would whenever
+the C's `EVENT_PLAYER_DAMAGED` was cancelled. Without this, NoDamage in replace mode was charged
+the HP-dot work it skips, and `moon_intro` drifted from the console at frame 1088.
+
+**Sites only where original code calls.** NESRecomp registers at most 128 hook plugins, one address
+each (`NES_MOD_MAX_FUNCTION_HOOKS` in `runner/src/mod_function_hooks.c`), so one site per routine
+would not last the whole game. A routine has a site (`site_id` in its table entry) only if
+original code reaches it; `tools/decomp_callers.py` lists, from a build's generated code, the
+instructions outside the decompiled ranges that jump to an entry. Of the 31 routines here, 9 have
+one: `Player_Update` (the frame loop's `JSR` at `$DB6C`), `Player_PitDeath` (the original
+mode 15 and 16 code jumps to it at `$EDCC`), the four motion primitives and the two sound requests
+(object and game code everywhere), and `Player_TakeDamage`, kept for replace mode's measuring call
+above. As more of the game is decompiled the boundary moves out and sites go away.
+
+Check mode still compares every call of every routine. The C of each routine starts with
+`Decomp_Enter(addr, a, x, y)`, giving the registers the original gets (0 for those the C does not
+model). When another routine's C calls a routine that has no site, check mode first runs the routine's C on a copy
+of the caller's image, with checks of its own calls off (its real run makes them), then the original
+in an isolated call on the caller's image, entered as a `JSR` at the caller's entry S would, and
+compares the two exactly as a site does. A mismatch names the calling routine. A routine with a
+site is checked at its site instead, when the caller's original runs for real after its check. Replace mode and the
+site's own call skip it. A routine whose C does not start with `Decomp_Enter` stops the program. When a
+call is given to the original (`Decomp_RunOriginal`), the routines it reaches run as the original
+too and are not counted.
+
 **Code that is not decompiled yet** stays original in two ways:
 
 - `Decomp_Call(addr, a, x, y)` runs an original routine from the C, in an isolated call on the
@@ -127,11 +163,13 @@ mode is RAM-identical to the console on every frame of every route (see Verifica
 
 ### Calling contract
 
-The adapter at each site (`Run_*` in the C files) maps registers to C arguments and back. "Out"
+The adapter of each routine (`Run_*` in the C files, used at its site and by the inner check) maps
+registers to C arguments and back. "Out"
 lists the registers that callers read after the routine returns. Check mode compares exactly those,
 and replace mode sets them. P means N, V, Z and C; I and D are left as they were at entry. Every
 routine also leaves its RAM effects, scratch bytes `$00-$0F` included, exactly as the original
-does.
+does. That includes values later code uses as pointers: the background probe, for one, must
+leave the jump vector in `$00/$01` as the original's loop does.
 
 | Routine | In | Out | Notes |
 |---|---|---|---|
