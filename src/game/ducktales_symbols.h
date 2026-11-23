@@ -269,6 +269,10 @@
 #define DT_B4_MESSAGE_LO        0xB888 /* bank 4: text of each message id, low bytes (code) */
 #define DT_B4_MESSAGE_HI        0xB89A /* their high bytes (code) */
 #define DT_B5_PROGRESS_BITS     0xB76A /* bank 5: consumed-record bits from the progress flags (code) */
+#define DT_B5_PROGRESS_FIRST    0xB79F /* bank 5: per land, the first index of its list in the three below (code) */
+#define DT_B5_PROGRESS_FLAG     0xB7A4 /* bank 5: the list's count - 1, then each record's flag address (code) */
+#define DT_B5_PROGRESS_MASK     0xB7BC /* bank 5: the mask of each record's flag (code) */
+#define DT_B5_PROGRESS_RECORD   0xB7D4 /* bank 5: each record's bit number in $0120 (code) */
 #define DT_CODE_PLAYER_TREASURE 0xEF62 /* mode 16: the treasure's time bonus (code) */
 #define DT_TREASURE_WAITED      0xEF6B /* after 256 frames of the treasure music (code) */
 #define DT_TREASURE_DONE        0xEFDF /* after the last 60 frames, the land is left (code) */

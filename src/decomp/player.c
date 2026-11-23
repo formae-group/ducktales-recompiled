@@ -1284,11 +1284,6 @@ static void Task_SelectBank(Regs *r, uint8_t bank)
     r->a = r->x = bank;
 }
 
-static void Task_Call(Regs *r, uint16_t routine)
-{
-    *r = Decomp_Call(routine, r->a, r->x, r->y);
-}
-
 static void Task_Wait(uint16_t resume)
 {
     Decomp_Handoff(DT_CODE_TASK_WAIT, resume, OUT_X | OUT_Y);
@@ -1602,11 +1597,36 @@ static void Message_Shown(Regs *r)
     Decomp_Handoff(DT_B5_PAUSE_TEXT, DT_MESSAGE_DRAWN, OUT_X | OUT_Y);
 }
 
+/* bank 5 $B76A (bank 5 mapped): the land's records whose progress flag is
+ * set get their consumed bit. Per land a list (its first index at
+ * DT_B5_PROGRESS_FIRST): the count - 1, then per record the flag's address in
+ * page 0, its mask and the record's bit number in $0120. $B760 clears the bits
+ * first and runs into it. */
+static void Records_MarkTaken(Regs *r)
+{
+    Decomp_Enter(DT_B5_PROGRESS_BITS, r->a, r->x, r->y);
+    r->x = Game_ReadRom((uint16_t)(DT_B5_PROGRESS_FIRST + gLand));
+    gScratch(0) = Game_ReadRom((uint16_t)(DT_B5_PROGRESS_FLAG + r->x));
+    r->x++;
+    do {
+        r->y = Game_ReadRom((uint16_t)(DT_B5_PROGRESS_FLAG + r->x));
+        r->a = RAM_U8(r->y) & Game_ReadRom((uint16_t)(DT_B5_PROGRESS_MASK + r->x));
+        if (r->a) {
+            uint8_t bit = Game_ReadRom((uint16_t)(DT_B5_PROGRESS_RECORD + r->x));
+            gScratch(1) = (uint8_t)(1 << (bit & 7));
+            r->y = bit >> 3;
+            r->a = RAM_U8(DT_ADDR_CONSUMED + r->y) |= gScratch(1);
+        }
+        r->x++;
+        gScratch(0)--;
+    } while (!(gScratch(0) & 0x80));
+}
+
 /* $ED49: the text of the box's frame is queued; the text begins. */
 static void Message_Drawn(Regs *r)
 {
     Decomp_Enter(DT_MESSAGE_DRAWN, r->a, r->x, r->y);
-    Task_Call(r, DT_B5_PROGRESS_BITS);
+    Records_MarkTaken(r);
     Task_SelectBank(r, BANK_MESSAGES);
     r->x = gMessageId;
     RAM_U8(gMessageText) = Game_ReadRom((uint16_t)(DT_B4_MESSAGE_LO + r->x));
@@ -1931,5 +1951,7 @@ const DecompRoutine gPlayerRoutines[] = {
     { DT_CODE_PLAYER_TREASURE, "ducktales.decomp.EF62", "Player_Treasure", Player_Treasure, 0, true, 0, false },
     { DT_TREASURE_WAITED, NULL, "Treasure_Waited", Treasure_Waited, 0, true, 0, true },
     { DT_TREASURE_DONE, NULL, "Treasure_Done", Treasure_Done, 0, true, 0, true },
+    { DT_B5_PROGRESS_BITS, NULL, "Records_MarkTaken", Records_MarkTaken, OUT_A | OUT_X | OUT_Y,
+      .bank = DT_BANK_SPRITES },
 };
 const int gPlayerRoutineCount = sizeof gPlayerRoutines / sizeof gPlayerRoutines[0];
