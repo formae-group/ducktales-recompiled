@@ -73,6 +73,15 @@ void app_mods_write_settings(FILE *f);
 bool app_mods_enabled(void);
 void app_mods_set_enabled(bool on);
 
+/* ---- command-line options (both hosts) ---- */
+
+/* --mods on|off, --mods-dir DIR, --mods-order ID:on|off,..., --mods-dump DIR. */
+#define APP_MODS_OPTION_COUNT 4
+const char *app_mods_option_name(int index);
+const char *app_mods_option_help(int index);
+/* True when name is one of them; *ok says whether its value was accepted. */
+bool app_mods_option(const char *name, const char *value, bool *ok);
+
 /* ---- start ---- */
 
 /* Scans the folders and loads the enabled mods' assets, once: the running

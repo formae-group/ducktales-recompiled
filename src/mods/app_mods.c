@@ -237,6 +237,46 @@ void app_mods_add_folder(const char *dir, bool create)
 
 const char *app_mods_folder(void) { return s_folder_count ? s_folders[0] : ""; }
 
+static const char *const OPTION_NAME[APP_MODS_OPTION_COUNT] = { "--mods", "--mods-dir", "--mods-order", "--mods-dump" };
+static const char *const OPTION_HELP[APP_MODS_OPTION_COUNT] = {
+    "on|off: load the mods (default: config.ini [Mods] Enabled in the window, on headless)",
+    "DIR: also read mods from DIR (docs/mods.md)",
+    "ID:on|off,...: the mods' order and switches for this run, top first",
+    "DIR: write every tile drawn, once, as DIR/<key>.png (templates for tile mods)",
+};
+
+const char *app_mods_option_name(int index) { return OPTION_NAME[index]; }
+const char *app_mods_option_help(int index) { return OPTION_HELP[index]; }
+
+bool app_mods_option(const char *name, const char *value, bool *ok)
+{
+    if (!strcmp(name, "--mods")) {
+        bool on = false;
+        *ok = value && word_on(value, &on);
+        if (*ok) {
+            s_enabled = on;
+        }
+        return true;
+    }
+    if (!strcmp(name, "--mods-dir")) {
+        *ok = value && *value;
+        app_mods_add_folder(value, false);
+        return true;
+    }
+    if (!strcmp(name, "--mods-order")) {
+        *ok = value != NULL;
+        if (*ok) {
+            order_parse(value);
+        }
+        return true;
+    }
+    if (!strcmp(name, "--mods-dump")) {
+        *ok = value && app_mods_dump_dir(value);
+        return true;
+    }
+    return false;
+}
+
 /* ---- mod.toml: top-level keys with string values (basic, literal and multi-line) ---- */
 
 static bool toml_string(char **cursor, char *out, size_t cap, char *err, size_t errcap)

@@ -2,7 +2,9 @@
  * ducktales_host.c - the port's systems layer on the NESRecomp cycle host
  * (cyc_host_extras.h). Both the window and the headless host use it; NESRecomp
  * links exactly one cyc_host_extras(), so everything the port adds to the
- * host goes through this file.
+ * host goes through this file. The settings themselves (config.ini [Game],
+ * the enhancement and sprite options) are in ducktales_settings.c, which the
+ * native player shares.
  *
  *   enhancements      game/enhancements.h: config.ini [Game] keys (window)
  *                     and one command-line option each (both); every one is
@@ -15,17 +17,19 @@
  *   Application UI    window builds (DUCKTALES_WINDOW): the in-game menu,
  *                     live settings and bindings (ui/app_ui.h) through the
  *                     event, input, audio_mix and frame_begin callbacks
+ *   decompilation     --decomp off|check|replace (or DUCKTALES_DECOMP when the
+ *                     option is not given): runs the decompiled routines
+ *                     (src/decomp/decomp.h); off by default
  *   presentation      window builds: the picture the window shows (present,
  *                     ui/app_present.h) and its [Game] keys; present_rate with
  *                     present_from_snapshot and no present_phase turns on the
  *                     window's steady hold while VSync is off, with no
  *                     in-between pictures (docs/presentation.md)
- *   mods              mods/app_mods.h: config.ini [Mods] (window), the mods
- *                     folders (--mods-dir; the window adds the data folder's),
- *                     loaded at the first frame; their sounds follow the
- *                     driver at each frame's end (the APU's audio-only mute)
- *                     and are mixed in audio_mix; their tiles and palettes
- *                     are painted by the sprite compositor
+ *   mods              mods/app_mods.h: the folders (--mods-dir; the window
+ *                     adds the data folder's), loaded before the first frame;
+ *                     their sounds follow the driver at each frame's end (the
+ *                     APU's audio-only mute) and are mixed in audio_mix; their
+ *                     tiles and palettes are painted by the sprite compositor
  *   diagnostics       DUCKTALES_DEV_DIAGNOSTICS builds only
  *                     (host/ducktales_diagnostics.h)
  *   native check      headless builds only: the native renderer against
@@ -38,6 +42,7 @@
 #include "cyc_host_extras.h"
 #include "cyc_mod.h"
 
+#include "decomp/decomp.h"
 #include "game/enhancements.h"
 #include "host/ducktales_diagnostics.h"
 #include "host/ducktales_host.h"
@@ -53,102 +58,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-static int s_saved[DT_ENH_COUNT];
-static bool s_saved_ready;
-static bool s_saved_sprites = DT_SPRITES_DEFAULT;
-#if DUCKTALES_WINDOW
-static bool s_no_slowdown = true;
-#else
-static bool s_no_slowdown = false;
-#endif
-
-bool ducktales_host_no_slowdown(void) { return s_no_slowdown; }
-
-void ducktales_host_set_no_slowdown(bool on)
+/* No slowdown on this runtime: NESRecomp's extra scanlines (ducktales_host.h). */
+void ducktales_host_apply_no_slowdown(bool on)
 {
-    s_no_slowdown = on;
     if (!cyc_set_extra_scanlines(on ? DT_NO_SLOWDOWN_LINES : 0))
         fprintf(stderr, "[ducktales] No slowdown: the cycle host refused %u extra scanlines\n", DT_NO_SLOWDOWN_LINES);
-}
-
-static void saved_init(void)
-{
-    if (s_saved_ready) return;
-    for (int e = 0; e < DT_ENH_COUNT; e++) s_saved[e] = dt_enh_info((DtEnh)e)->stock;
-    s_saved_ready = true;
-}
-
-int ducktales_host_saved_value(DtEnh e)
-{
-    saved_init();
-    return s_saved[e];
-}
-
-void ducktales_host_set_saved_value(DtEnh e, int value)
-{
-    saved_init();
-    s_saved[e] = value;
-}
-
-bool ducktales_host_saved_sprites(void) { return s_saved_sprites; }
-
-void ducktales_host_set_saved_sprites(bool on) { s_saved_sprites = on; }
-
-void ducktales_host_load_game_setting(const char *key, const char *value)
-{
-    saved_init();
-    if (!strcmp(key, DT_SPRITES_KEY)) {
-        bool on;
-        if (!dt_sprites_parse(value, &on)) {
-            fprintf(stderr, "[ducktales] config.ini [Game] %s = %s: expected on or off; using %s\n", key, value,
-                    DT_SPRITES_DEFAULT ? "on" : "off");
-            on = DT_SPRITES_DEFAULT;
-        }
-        s_saved_sprites = on;
-        dt_sprites_set(on);
-        return;
-    }
-    if (!strcmp(key, "NoSlowdown")) {
-        static const char *ON[] = { "on", "1", "true", "yes" }, *OFF[] = { "off", "0", "false", "no" };
-        for (int i = 0; i < 4; i++) {
-            if (!strcmp(value, ON[i])) s_no_slowdown = true;
-            if (!strcmp(value, OFF[i])) s_no_slowdown = false;
-        }
-        return;
-    }
-    for (int e = 0; e < DT_ENH_COUNT; e++) {
-        const DtEnhInfo *in = dt_enh_info((DtEnh)e);
-        if (strcmp(key, in->key)) continue;
-        int v;
-        if (!dt_enh_parse((DtEnh)e, value, &v)) {
-            char stock[16];
-            fprintf(stderr, "[ducktales] config.ini [Game] %s = %s: expected %d-%d; using %s\n", key, value, in->min,
-                    in->max, dt_enh_format((DtEnh)e, in->stock, stock, sizeof stock));
-            v = in->stock;
-        }
-        s_saved[e] = v;
-        dt_enh_set((DtEnh)e, v);
-        return;
-    }
-#if DUCKTALES_WINDOW
-    if (!app_present_load(key, value)) app_ui_load_game_setting(key, value);
-#endif
-}
-
-void ducktales_host_write_game_settings(FILE *f)
-{
-    saved_init();
-    for (int e = 0; e < DT_ENH_COUNT; e++) {
-        char v[16];
-        fprintf(f, "%s = %s\n", dt_enh_info((DtEnh)e)->key, dt_enh_format((DtEnh)e, s_saved[e], v, sizeof v));
-    }
-    fprintf(f, "%s = %s\n", DT_SPRITES_KEY, s_saved_sprites ? "on" : "off");
-    fprintf(f, "NoSlowdown = %s\n", s_no_slowdown ? "on" : "off");
-#if DUCKTALES_WINDOW
-    app_present_write(f);
-    app_ui_write_game_settings(f);
-#endif
-    app_mods_write_settings(f);
 }
 
 static void load_setting(void *ctx, const char *key, const char *value)
@@ -166,16 +80,11 @@ static void save_settings(void *ctx, FILE *f)
 #endif
 }
 
-/* One option per enhancement, the sprites one, then the developer ones. */
+/* One option per enhancement, the sprites one, the decompilation's, then the
+ * developer ones. */
 static const CycHostOption DIAG_OPTIONS[] = { DT_RAMHASH_OPTIONS DT_DIAG_OPTIONS NV_CHECK_OPTIONS { NULL, false, NULL } };
-static const CycHostOption MOD_OPTIONS[] = {
-    { "--mods", true, "on|off: load the mods (default: config.ini [Mods] Enabled in the window, on headless)" },
-    { "--mods-dir", true, "DIR: also read mods from DIR (docs/mods.md)" },
-    { "--mods-order", true, "ID:on|off,...: the mods' order and switches for this run, top first" },
-    { "--mods-dump", true, "DIR: write every tile drawn, once, as DIR/<key>.png (templates for tile mods)" },
-};
-static CycHostOption s_options[DT_ENH_COUNT + 1 + sizeof MOD_OPTIONS / sizeof MOD_OPTIONS[0] +
-                                sizeof DIAG_OPTIONS / sizeof DIAG_OPTIONS[0]];
+static CycHostOption s_options[DT_ENH_COUNT + 2 + APP_MODS_OPTION_COUNT + sizeof DIAG_OPTIONS / sizeof DIAG_OPTIONS[0]];
+static bool s_decomp_option;
 static char s_option_help[DT_ENH_COUNT][160];
 
 static size_t options_init(void)
@@ -190,7 +99,11 @@ static size_t options_init(void)
     }
     s_options[n++] = (CycHostOption){ DT_SPRITES_OPTION, true,
                                       "on|off: present every sprite, without flicker or dropout (default on)" };
-    for (size_t i = 0; i < sizeof MOD_OPTIONS / sizeof MOD_OPTIONS[0]; i++) s_options[n++] = MOD_OPTIONS[i];
+    s_options[n++] = (CycHostOption){ "--decomp", true,
+        "off|check|replace: run the decompiled routines (check: compare with the original on every call; default off)" };
+    for (int i = 0; i < APP_MODS_OPTION_COUNT; i++) {
+        s_options[n++] = (CycHostOption){ app_mods_option_name(i), true, app_mods_option_help(i) };
+    }
     for (size_t i = 0; DIAG_OPTIONS[i].name; i++) s_options[n++] = DIAG_OPTIONS[i];
     return n;
 }
@@ -198,29 +111,16 @@ static size_t options_init(void)
 static bool option(void *ctx, const char *name, const char *value)
 {
     (void)ctx;
-    for (int e = 0; e < DT_ENH_COUNT; e++) {
-        if (strcmp(name, dt_enh_info((DtEnh)e)->option)) continue;
-        int v;
-        return dt_enh_parse((DtEnh)e, value, &v) && dt_enh_set((DtEnh)e, v);
+    if (!strcmp(name, "--decomp")) {
+        DecompMode mode;
+        s_decomp_option = true;
+        return Decomp_ParseMode(value, &mode) && Decomp_SetMode(mode);
     }
-    if (!strcmp(name, DT_SPRITES_OPTION)) {
-        bool on;
-        if (!dt_sprites_parse(value, &on)) return false;
-        dt_sprites_set(on);
-        return true;
+    bool ok;
+    if (ducktales_host_game_option(name, value, &ok)) return ok;
+    if (app_mods_option(name, value, &ok)) {
+        return ok;
     }
-    if (!strcmp(name, "--mods")) {
-        bool on;
-        if (!dt_sprites_parse(value, &on)) return false;
-        app_mods_set_enabled(on);
-        return true;
-    }
-    if (!strcmp(name, "--mods-dir")) {
-        app_mods_add_folder(value, false);
-        return true;
-    }
-    if (!strcmp(name, "--mods-order")) return app_mods_setting("Order", value);
-    if (!strcmp(name, "--mods-dump")) return app_mods_dump_dir(value);
     if (!strcmp(name, "--ram-hash-out")) return dt_ramhash_open(value);
     if (!strcmp(name, "--lag-log")) return dt_laglog_open(value);
     return dt_diag_option(name, value) || nv_check_option(name, value);
@@ -232,7 +132,16 @@ static void power_on(void *ctx)
     dt_sprites_forget();
     app_mods_reset();
     cyc_mod_set_apu_audio_mute(0);
-    if (s_no_slowdown) {
+    DecompMode mode;
+    const char *env = getenv("DUCKTALES_DECOMP");
+    if (!s_decomp_option && env && *env) {
+        if (!Decomp_ParseMode(env, &mode)) {
+            fprintf(stderr, "[ducktales] DUCKTALES_DECOMP=%s: expected off, check or replace\n", env);
+            exit(2);
+        }
+        Decomp_SetMode(mode);
+    }
+    if (ducktales_host_no_slowdown()) {
         ducktales_host_set_no_slowdown(true);
         printf("[ducktales] No slowdown: %u extra scanlines per frame\n", cyc_extra_scanlines());
         fflush(stdout);
@@ -246,11 +155,15 @@ static void power_on(void *ctx)
 static void start_mods(void)
 {
     static bool started;
-    if (started) return;
+    if (started) {
+        return;
+    }
     started = true;
     size_t size = cyc_mod_copy_cart_payload(NULL, 0);
     uint8_t *prg = size ? malloc(size) : NULL;
-    if (prg && cyc_mod_copy_cart_payload(prg, size) != size) size = 0;
+    if (prg && cyc_mod_copy_cart_payload(prg, size) != size) {
+        size = 0;
+    }
     app_mods_start(prg, prg ? size : 0);
     free(prg);
     dt_sprites_mods_changed();
@@ -316,7 +229,6 @@ static void event(void *ctx, const void *ev, int player)
     (void)player;
     app_ui_event(ev);
 }
-
 
 static const uint32_t *present(void *ctx, int *width, int *height)
 {
