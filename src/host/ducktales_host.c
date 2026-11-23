@@ -20,6 +20,12 @@
  *                     present_from_snapshot and no present_phase turns on the
  *                     window's steady hold while VSync is off, with no
  *                     in-between pictures (docs/presentation.md)
+ *   mods              mods/app_mods.h: config.ini [Mods] (window), the mods
+ *                     folders (--mods-dir; the window adds the data folder's),
+ *                     loaded at the first frame; their sounds follow the
+ *                     driver at each frame's end (the APU's audio-only mute)
+ *                     and are mixed in audio_mix; their tiles and palettes
+ *                     are painted by the sprite compositor
  *   diagnostics       DUCKTALES_DEV_DIAGNOSTICS builds only
  *                     (host/ducktales_diagnostics.h)
  *   native check      headless builds only: the native renderer against
@@ -30,12 +36,14 @@
  */
 #include "cyc_core.h"
 #include "cyc_host_extras.h"
+#include "cyc_mod.h"
 
 #include "game/enhancements.h"
 #include "host/ducktales_diagnostics.h"
 #include "host/ducktales_host.h"
 #include "host/ducktales_sprites.h"
 #include "host/ducktales_ramhash.h"
+#include "mods/app_mods.h"
 #include "native/native_check.h"
 #if DUCKTALES_WINDOW
 #include "ui/app_present.h"
@@ -140,6 +148,7 @@ void ducktales_host_write_game_settings(FILE *f)
     app_present_write(f);
     app_ui_write_game_settings(f);
 #endif
+    app_mods_write_settings(f);
 }
 
 static void load_setting(void *ctx, const char *key, const char *value)
@@ -159,7 +168,14 @@ static void save_settings(void *ctx, FILE *f)
 
 /* One option per enhancement, the sprites one, then the developer ones. */
 static const CycHostOption DIAG_OPTIONS[] = { DT_RAMHASH_OPTIONS DT_DIAG_OPTIONS NV_CHECK_OPTIONS { NULL, false, NULL } };
-static CycHostOption s_options[DT_ENH_COUNT + 1 + sizeof DIAG_OPTIONS / sizeof DIAG_OPTIONS[0]];
+static const CycHostOption MOD_OPTIONS[] = {
+    { "--mods", true, "on|off: load the mods (default: config.ini [Mods] Enabled in the window, on headless)" },
+    { "--mods-dir", true, "DIR: also read mods from DIR (docs/mods.md)" },
+    { "--mods-order", true, "ID:on|off,...: the mods' order and switches for this run, top first" },
+    { "--mods-dump", true, "DIR: write every tile drawn, once, as DIR/<key>.png (templates for tile mods)" },
+};
+static CycHostOption s_options[DT_ENH_COUNT + 1 + sizeof MOD_OPTIONS / sizeof MOD_OPTIONS[0] +
+                                sizeof DIAG_OPTIONS / sizeof DIAG_OPTIONS[0]];
 static char s_option_help[DT_ENH_COUNT][160];
 
 static size_t options_init(void)
@@ -174,6 +190,7 @@ static size_t options_init(void)
     }
     s_options[n++] = (CycHostOption){ DT_SPRITES_OPTION, true,
                                       "on|off: present every sprite, without flicker or dropout (default on)" };
+    for (size_t i = 0; i < sizeof MOD_OPTIONS / sizeof MOD_OPTIONS[0]; i++) s_options[n++] = MOD_OPTIONS[i];
     for (size_t i = 0; DIAG_OPTIONS[i].name; i++) s_options[n++] = DIAG_OPTIONS[i];
     return n;
 }
@@ -192,6 +209,18 @@ static bool option(void *ctx, const char *name, const char *value)
         dt_sprites_set(on);
         return true;
     }
+    if (!strcmp(name, "--mods")) {
+        bool on;
+        if (!dt_sprites_parse(value, &on)) return false;
+        app_mods_set_enabled(on);
+        return true;
+    }
+    if (!strcmp(name, "--mods-dir")) {
+        app_mods_add_folder(value, false);
+        return true;
+    }
+    if (!strcmp(name, "--mods-order")) return app_mods_setting("Order", value);
+    if (!strcmp(name, "--mods-dump")) return app_mods_dump_dir(value);
     if (!strcmp(name, "--ram-hash-out")) return dt_ramhash_open(value);
     if (!strcmp(name, "--lag-log")) return dt_laglog_open(value);
     return dt_diag_option(name, value) || nv_check_option(name, value);
@@ -201,6 +230,8 @@ static void power_on(void *ctx)
 {
     (void)ctx;
     dt_sprites_forget();
+    app_mods_reset();
+    cyc_mod_set_apu_audio_mute(0);
     if (s_no_slowdown) {
         ducktales_host_set_no_slowdown(true);
         printf("[ducktales] No slowdown: %u extra scanlines per frame\n", cyc_extra_scanlines());
@@ -210,9 +241,25 @@ static void power_on(void *ctx)
     dt_diag_power_on();
 }
 
+/* The mods load once, before the first frame (after the options and the
+ * window's settings): the running PRG decides which are refused. */
+static void start_mods(void)
+{
+    static bool started;
+    if (started) return;
+    started = true;
+    size_t size = cyc_mod_copy_cart_payload(NULL, 0);
+    uint8_t *prg = size ? malloc(size) : NULL;
+    if (prg && cyc_mod_copy_cart_payload(prg, size) != size) size = 0;
+    app_mods_start(prg, prg ? size : 0);
+    free(prg);
+    dt_sprites_mods_changed();
+}
+
 static void frame_begin(void *ctx)
 {
     (void)ctx;
+    start_mods();
 #if DUCKTALES_WINDOW
     app_ui_frame_begin();
 #endif
@@ -223,6 +270,10 @@ static void frame_end(void *ctx)
 {
     (void)ctx;
     dt_sprites_frame_end();
+    if (app_mods_audio_active()) {
+        app_mods_audio_frame_end(cyc_cpu_ram());
+        cyc_mod_set_apu_audio_mute(app_mods_audio_mute());
+    }
     dt_ramhash_frame_end();
     dt_diag_frame_end();
     nv_check_frame_end();
@@ -232,12 +283,24 @@ static void state_loaded(void *ctx)
 {
     (void)ctx;
     dt_sprites_forget();
+    app_mods_reset();
+    cyc_mod_set_apu_audio_mute(0);
 }
 
 static void tcp_setup(void *ctx)
 {
     (void)ctx;
     dt_diag_tcp_setup();
+}
+
+/* The host mixes at 48 kHz (its default rate, CycHostExtras.audio_rate 0). */
+static void audio_mix(void *ctx, int16_t *samples, size_t count)
+{
+    (void)ctx;
+    app_mods_audio_mix(samples, count, 48000);
+#if DUCKTALES_WINDOW
+    app_ui_audio(samples, count);
+#endif
 }
 
 #if DUCKTALES_WINDOW
@@ -254,11 +317,6 @@ static void event(void *ctx, const void *ev, int player)
     app_ui_event(ev);
 }
 
-static void audio_mix(void *ctx, int16_t *samples, size_t count)
-{
-    (void)ctx;
-    app_ui_audio(samples, count);
-}
 
 static const uint32_t *present(void *ctx, int *width, int *height)
 {
@@ -276,10 +334,10 @@ static CycHostExtras s_extras = {
     .state_loaded = state_loaded,
     .option = option,
     .tcp_setup = tcp_setup,
+    .audio_mix = audio_mix,
 #if DUCKTALES_WINDOW
     .input = input,
     .event = event,
-    .audio_mix = audio_mix,
     .present = present,
     .present_rate = 60,
     .present_from_snapshot = true,

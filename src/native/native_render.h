@@ -90,6 +90,20 @@ typedef struct {
     int sprite_count;
 } NvRenderOptions;
 
+/* Where a pixel of the picture comes from (nv_render_source): the 8x8 tile
+ * (pattern address / 16, 0-511), the pixel's column and row in the tile as
+ * the pattern stores it (flips undone) and the palette (0-3 background, 4-7
+ * sprites). A background pixel of color 0 still names its tile; a pixel no
+ * tile covers (blank line, layer or left columns hidden) is NV_SOURCE_NONE. */
+typedef uint32_t NvSource;
+#define NV_SOURCE_NONE 0u
+#define NV_SOURCE_MAKE(tile, column, row, palette) \
+    (0x80000000u | (uint32_t)(tile) | (uint32_t)(column) << 9 | (uint32_t)(row) << 12 | (uint32_t)(palette) << 15)
+#define NV_SOURCE_TILE(s)    ((s) & 0x1FFu)
+#define NV_SOURCE_COLUMN(s)  (((s) >> 9) & 7u)
+#define NV_SOURCE_ROW(s)     (((s) >> 12) & 7u)
+#define NV_SOURCE_PALETTE(s) (((s) >> 15) & 7u)
+
 /* The console's rules: OAM, 8 sprites per line. */
 void nv_render_options_console(NvRenderOptions *o);
 
@@ -99,6 +113,8 @@ void nv_render_options_console(NvRenderOptions *o);
 void nv_render(const NvVideo *video, const NvRenderOptions *options, uint16_t *index, uint8_t *bg_opaque);
 void nv_render_lines(const NvVideo *video, const NvRenderOptions *options, int first, int last, uint16_t *index,
                      uint8_t *bg_opaque);
+/* nv_render, and source (256x240) for each pixel. */
+void nv_render_source(const NvVideo *video, const NvRenderOptions *options, uint16_t *index, NvSource *source);
 
 /* Where the frame sets the sprite-0 hit ($2002 bit 6): the first pixel, in
  * drawing order, where OAM entry 0 and the background are both opaque (the

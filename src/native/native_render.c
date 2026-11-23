@@ -17,6 +17,9 @@
  *   blank lines  with background and sprites off a line is the backdrop
  *   output       palette RAM's entry, greyscale and emphasis as $2001 sets
  *                them, the same 9-bit index the PPU outputs
+ *   source       optionally, for each pixel, the tile, the pixel in it and
+ *                the palette it was drawn from (presentation that replaces
+ *                tiles, src/mods)
  */
 #include "native/native_render.h"
 
@@ -26,8 +29,9 @@
 #define NV_LINE_SPRITES_MAX 2048
 
 typedef struct {
-    uint8_t lo, hi, attr;
-    int     x;
+    uint8_t  lo, hi, attr;
+    int      x;
+    uint16_t pattern;
 } LineSprite;
 
 typedef struct {
@@ -90,11 +94,13 @@ static void line_of(const NvVideo *v, int y, Line *l)
 
 static bool rendering(const Line *l) { return (l->s->mask & (NV_MASK_BG | NV_MASK_SPRITES)) != 0; }
 
-/* The background's 2-bit color at column x (0: transparent or not shown) and its palette. */
-static unsigned bg_pixel(const NvVideo *v, const Line *l, int x, unsigned *pal)
+/* The background's 2-bit color at column x (0: transparent or not shown), its
+ * palette and (source, may be NULL) the tile pixel it comes from. */
+static unsigned bg_pixel(const NvVideo *v, const Line *l, int x, unsigned *pal, NvSource *source)
 {
     const NvSegment *s = l->s;
     *pal = 0;
+    if (source) *source = NV_SOURCE_NONE;
     if (!(s->mask & NV_MASK_BG) || (x < 8 && !(s->mask & NV_MASK_BG_LEFT))) return 0;
     int k = x >= l->split;
     unsigned bx = (unsigned)((k ? s->split_x : s->x) + x) & 511;
@@ -103,9 +109,11 @@ static unsigned bg_pixel(const NvVideo *v, const Line *l, int x, unsigned *pal)
     uint16_t pattern = (uint16_t)(l->bg_table + tile * 16 + l->fine_y[k]);
     unsigned bit = 7 - (bx & 7);
     unsigned color = ((v->chr[pattern] >> bit) & 1) | (((v->chr[pattern + 8] >> bit) & 1) << 1);
-    if (!color) return 0;
     uint8_t attr = nametable(v, nt, 0x3C0 + (coarse_y >> 2) * 8 + (coarse_x >> 2));
-    *pal = (attr >> (((coarse_y & 2) << 1) | (coarse_x & 2))) & 3;
+    unsigned palette = (attr >> (((coarse_y & 2) << 1) | (coarse_x & 2))) & 3;
+    if (source) *source = NV_SOURCE_MAKE(pattern >> 4, bx & 7, l->fine_y[k], palette);
+    if (!color) return 0;
+    *pal = palette;
     return color;
 }
 
@@ -123,7 +131,7 @@ static bool sprite_row(const NvVideo *v, const Line *l, const NvSprite *sp, int 
         uint16_t table = sp->table != NV_TABLE_LINE ? sp->table : (l->s->ctrl & NV_CTRL_SPRITE_1000) ? 0x1000 : 0;
         pattern = (uint16_t)(table + sp->tile * 16 + row);
     }
-    *out = (LineSprite){ v->chr[pattern & 0x1FFF], v->chr[(pattern + 8) & 0x1FFF], sp->attr, sp->x };
+    *out = (LineSprite){ v->chr[pattern & 0x1FFF], v->chr[(pattern + 8) & 0x1FFF], sp->attr, sp->x, (uint16_t)(pattern & 0x1FFF) };
     return true;
 }
 
@@ -152,7 +160,8 @@ static unsigned sprite_pixel(const LineSprite *sp, int x)
     return ((sp->lo >> bit) & 1) | (((sp->hi >> bit) & 1) << 1);
 }
 
-void nv_render_lines(const NvVideo *v, const NvRenderOptions *o, int first, int last, uint16_t *index, uint8_t *bg_opaque)
+static void draw_lines(const NvVideo *v, const NvRenderOptions *o, int first, int last, uint16_t *index, uint8_t *bg_opaque,
+                       NvSource *source)
 {
     static LineSprite sprites[NV_LINE_SPRITES_MAX];
     NvRenderOptions console;
@@ -165,6 +174,7 @@ void nv_render_lines(const NvVideo *v, const NvRenderOptions *o, int first, int 
         line_of(v, y, &l);
         uint16_t *out = &index[y * NV_WIDTH];
         uint8_t *opaque = bg_opaque ? &bg_opaque[y * NV_WIDTH] : NULL;
+        NvSource *src = source ? &source[y * NV_WIDTH] : NULL;
         uint8_t mask = l.s->mask;
         uint16_t emphasis = (uint16_t)((mask >> 5) << 6);
         uint8_t grey = (mask & NV_MASK_GREYSCALE) ? 0x30 : 0x3F;
@@ -172,29 +182,49 @@ void nv_render_lines(const NvVideo *v, const NvRenderOptions *o, int first, int 
         if (!rendering(&l)) {
             uint16_t backdrop = (uint16_t)((v->palette[0] & grey) | emphasis);
             for (int x = 0; x < NV_WIDTH; x++) out[x] = backdrop;
+            if (src) memset(src, 0, NV_WIDTH * sizeof *src);
             continue;
         }
         int n = y > 0 && (mask & NV_MASK_SPRITES) ? line_sprites(v, o, &l, y, sprites) : 0;
         for (int x = 0; x < NV_WIDTH; x++) {
-            unsigned pal, color = bg_pixel(v, &l, x, &pal);
+            NvSource from;
+            unsigned pal, color = bg_pixel(v, &l, x, &pal, src ? &from : NULL);
             if (opaque) opaque[x] = color != 0;
             unsigned addr = pal << 2 | color;
             if (n && (x >= 8 || (mask & NV_MASK_SPRITE_LEFT))) {
                 for (int i = 0; i < n; i++) {
                     unsigned sc = sprite_pixel(&sprites[i], x);
                     if (!sc) continue;
-                    if (!color || !(sprites[i].attr & 0x20)) addr = 0x10 | (sprites[i].attr & 3) << 2 | sc;
+                    if (!color || !(sprites[i].attr & 0x20)) {
+                        addr = 0x10 | (sprites[i].attr & 3) << 2 | sc;
+                        if (src) {
+                            int c = x - sprites[i].x;
+                            from = NV_SOURCE_MAKE(sprites[i].pattern >> 4, (sprites[i].attr & 0x40) ? 7 - c : c,
+                                                  sprites[i].pattern & 7, 4 + (sprites[i].attr & 3));
+                        }
+                    }
                     break;
                 }
             }
+            if (src) src[x] = from;
             out[x] = (uint16_t)((v->palette[addr] & grey) | emphasis);
         }
     }
 }
 
+void nv_render_lines(const NvVideo *v, const NvRenderOptions *o, int first, int last, uint16_t *index, uint8_t *bg_opaque)
+{
+    draw_lines(v, o, first, last, index, bg_opaque, NULL);
+}
+
 void nv_render(const NvVideo *v, const NvRenderOptions *o, uint16_t *index, uint8_t *bg_opaque)
 {
-    nv_render_lines(v, o, 0, NV_HEIGHT - 1, index, bg_opaque);
+    draw_lines(v, o, 0, NV_HEIGHT - 1, index, bg_opaque, NULL);
+}
+
+void nv_render_source(const NvVideo *v, const NvRenderOptions *o, uint16_t *index, NvSource *source)
+{
+    draw_lines(v, o, 0, NV_HEIGHT - 1, index, NULL, source);
 }
 
 bool nv_sprite0_hit(const NvVideo *v, int *hit_x, int *hit_y)
@@ -210,7 +240,7 @@ bool nv_sprite0_hit(const NvVideo *v, int *hit_x, int *hit_y)
         for (int x = 0; x < NV_WIDTH - 1; x++) {
             if (x < 8 && !(mask & NV_MASK_SPRITE_LEFT)) continue;
             unsigned pal;
-            if (sprite_pixel(&s0, x) && bg_pixel(v, &l, x, &pal)) {
+            if (sprite_pixel(&s0, x) && bg_pixel(v, &l, x, &pal, NULL)) {
                 *hit_x = x;
                 *hit_y = y;
                 return true;

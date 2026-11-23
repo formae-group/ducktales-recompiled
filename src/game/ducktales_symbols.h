@@ -85,6 +85,25 @@
 #define DT_ADDR_HUD_GROUP_LIVES  0x0358
 #define DT_ADDR_HUD_GROUP_TIME   0x0140
 
+/* ---- sound driver (bank 3, docs/audio.md) ----
+ * Read by the mods' music and effect replacements (src/mods/app_mods_audio.c). */
+#define DT_SOUND_BANK            3       /* PRG bank of the driver and its sound table */
+#define DT_SOUND_TABLE           0x8A40  /* 2-byte header pointers by request id $00-$37 (verified) */
+#define DT_SOUND_IDS             0x38
+#define DT_SOUND_MUSIC_IDS       0x10    /* $00-$0F music, $10-$37 effects (verified) */
+#define DT_ADDR_LAST_MUSIC       0x00C5  /* last music id requested through $F752 (verified) */
+#define DT_ADDR_SOUND_RING_READ  0x00C7  /* the NMI's read index into the ring (verified) */
+#define DT_ADDR_SOUND_RING       0x00C8  /* 8 request slots (verified) */
+#define DT_SOUND_RING_EMPTY      0x88
+#define DT_ADDR_SOUND_PRIORITY   0x00D0  /* high nibble: playing effect, low: playing music (verified) */
+#define DT_ADDR_SOUND_EFFECT_CH  0x00DF  /* channels the effect owns: bit 0 pulse 1 .. bit 3 noise (verified) */
+#define DT_SOUND_STOP_MUSIC      0xFF
+#define DT_SOUND_STOP_EFFECT     0xFE
+#define DT_MUSIC_GAME_OVER       0x09    /* the two songs that end by themselves (verified) */
+#define DT_MUSIC_DEATH           0x0A
+#define DT_MUSIC_LAND_SELECT     0x05
+#define DT_MUSIC_TITLE           0x07
+
 /* ---- code sites (fixed bank 7 at $C000-$FFFF) ---- */
 
 /* The instruction right after the jump start copied DT_ADDR_JUMP_VY{,_FRAC}

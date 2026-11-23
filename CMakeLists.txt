@@ -37,7 +37,19 @@ set(_ducktales_extras
     "${CMAKE_SOURCE_DIR}/src/host/ducktales_sprites.c"
     "${CMAKE_SOURCE_DIR}/src/host/ducktales_host.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_render.c"
-    "${CMAKE_SOURCE_DIR}/src/native/native_cycle.c")
+    "${CMAKE_SOURCE_DIR}/src/native/native_cycle.c"
+    "${CMAKE_SOURCE_DIR}/src/ui/app_rom.c"
+    "${CMAKE_SOURCE_DIR}/src/mods/app_mods.c"
+    "${CMAKE_SOURCE_DIR}/src/mods/app_mods_archive.c"
+    "${CMAKE_SOURCE_DIR}/src/mods/app_mods_audio.c"
+    "${CMAKE_SOURCE_DIR}/src/mods/app_mods_codec.c")
+# Mods (docs/mods.md) decode PNG, OGG Vorbis and zip deflate with stb
+# (external/stb, MIT or public domain), compiled into app_mods_codec.c only.
+set(STB_ROOT "${CMAKE_SOURCE_DIR}/external/stb")
+if(NOT EXISTS "${STB_ROOT}/stb_vorbis.c")
+    message(FATAL_ERROR "external/stb is missing; run: git submodule update --init external/stb")
+endif()
+set_property(SOURCE "${CMAKE_SOURCE_DIR}/src/mods/app_mods_codec.c" APPEND PROPERTY INCLUDE_DIRECTORIES "${STB_ROOT}")
 # The native renderer checked against the PPU every frame (docs/native-render.md).
 if(DUCKTALES_HEADLESS)
     list(APPEND _ducktales_extras "${CMAKE_SOURCE_DIR}/src/native/native_check.c")
@@ -60,7 +72,6 @@ if(NOT DUCKTALES_HEADLESS)
         "${CMAKE_SOURCE_DIR}/src/host/ducktales_main.c"
         "${CMAKE_SOURCE_DIR}/src/ui/app_settings.c"
         "${CMAKE_SOURCE_DIR}/src/ui/app_present.c"
-        "${CMAKE_SOURCE_DIR}/src/ui/app_rom.c"
         "${CMAKE_SOURCE_DIR}/src/ui/app_ui.cpp"
         "${IMGUI_ROOT}/backends/imgui_impl_sdl2.cpp"
         "${IMGUI_ROOT}/backends/imgui_impl_sdlrenderer2.cpp")
@@ -192,6 +203,7 @@ if(NOT DUCKTALES_HEADLESS)
     install(FILES "${NESRECOMP_ROOT}/runner/external/SDL2/README-SDL.txt" DESTINATION licenses RENAME SDL2-README-SDL.txt)
     install(FILES "${IMGUI_ROOT}/LICENSE.txt" DESTINATION licenses RENAME imgui-LICENSE.txt)
     install(FILES "${FORMAE_UI_ROOT}/LICENSE" DESTINATION licenses RENAME formae-ui-LICENSE.txt)
+    install(FILES "${STB_ROOT}/LICENSE" DESTINATION licenses RENAME stb-LICENSE.txt)
     set(CPACK_GENERATOR ZIP)
     set(CPACK_PACKAGE_NAME DuckTalesRecompiled)
     set(CPACK_PACKAGE_VERSION "${_ducktales_version}")
