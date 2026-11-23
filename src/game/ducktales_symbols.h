@@ -330,7 +330,9 @@
     0x004F /* slot | $80 of a marked object, $3C when it despawns; cleared at land load, respawn and scenes (code; meaning unknown) */
 #define DT_ADDR_MINES_BOSS_05E7     0x05E7 /* set to $55 when the African Mines boss starts (code; meaning unknown) */
 #define DT_ADDR_HIMALAYAS_BOSS_05A0 0x05A0 /* set to $11 when the Himalayas boss starts (code; meaning unknown) */
-#define DT_ADDR_BOSS_05AF        0x05AF /* set to $44 when the Moon and Amazon bosses start (code; meaning unknown) */
+#define DT_ADDR_BOSS_05AF 0x05AF /* set to $44 when the Moon and Amazon bosses start (code; meaning unknown) */
+#define DT_ADDR_SPAWN_TABLES \
+    0x0060 /* $60-$69: pointers to the land's record tables: page, world X, row start, Y, type (code) */
 #define DT_ADDR_ROW_CHR_STATE    0x0050 /* row sprite-CHR stream state, negative = done (verified) */
 #define DT_ADDR_BLOCK_OPENED     0x005B /* a block was launched or uncovered this frame; cleared every frame (code) */
 #define DT_ADDR_TILE_EDIT_OFFSET 0x005C /* write offset of the $0440 queue (verified) */
@@ -660,6 +662,9 @@
 #define DT_CODE_OBJ_SHATTER          0x88E4 /* the debris animation */
 #define DT_CODE_OBJ_DEFEAT           0x8932 /* an enemy is beaten */
 #define DT_CODE_BOSS_HIT             0xF6D7 /* a counted hit on a boss; carry set when it beat it (code) */
+#define DT_CODE_OBJ_DRAW_BLOCK       0xF4D8 /* a spawned block's tiles into the background (code) */
+#define DT_CODE_SPAWN_RECORD         0xAF2B /* spawn one land record (code) */
+#define DT_CODE_SPAWN_TEMPLATES      0xBE16 /* 4-byte object templates by record type (code) */
 #define DT_CODE_OBJ_OPEN_BLOCK       0x8A11 /* an opened block or chest picks its item */
 #define DT_CODE_OBJ_BECOME_PICKUP    0x8A32 /* become a pickup now */
 #define DT_CODE_PICKUP_TAKE          0x8B21 /* Scrooge takes a pickup */

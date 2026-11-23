@@ -80,8 +80,11 @@
 #define gRandom(i)        RAM_U8(DT_ADDR_RANDOM + (i))
 #define gPaletteUpload    RAM_U8(DT_ADDR_PALETTE_REQUEST)
 #define gHeldSlot         RAM_U8(DT_ADDR_HELD_SLOT)
-#define gProbeCount       RAM_U8(DT_ADDR_PROBE_COUNT)
-#define gPaletteShown(i)  RAM_U8(DT_ADDR_PALETTE_SHOWN + (i))
+#define gRowScroll        RAM_U8(DT_ADDR_ROW_SCROLL)
+#define SpawnTable(i) \
+    ((uint16_t)(RAM_U8(DT_ADDR_SPAWN_TABLES + 2 * (i)) | RAM_U8(DT_ADDR_SPAWN_TABLES + 2 * (i) + 1) << 8))
+#define gProbeCount      RAM_U8(DT_ADDR_PROBE_COUNT)
+#define gPaletteShown(i) RAM_U8(DT_ADDR_PALETTE_SHOWN + (i))
 
 /* ---- shared pieces of the handlers ---- */
 
@@ -3177,6 +3180,97 @@ static void Obj_Launcher(uint8_t x)
     }
 }
 
+/* $F4D8, not decompiled yet: draws a spawned block's tiles into the
+ * background (through the tile queue). It keeps X and Y, leaving them in
+ * $12/$13. */
+static void Obj_DrawBlock(uint8_t x, uint8_t a, uint8_t y)
+{
+    (void)Decomp_Call(DT_CODE_OBJ_DRAW_BLOCK, a, x, y);
+}
+
+/* $AF2B: spawn land record y (the spawner $AEA0 calls it for the records
+ * entering the window $00-$03) unless its consumed bit is set, it lies left
+ * of $01:$00, or a live slot already holds it. The object goes to the
+ * highest free slot with the record's world X and Y and the 4-byte template
+ * of its type ($BE16: timer and status, pose, kind, hitbox). A hidden object
+ * (status bit 4) shown outside a row scroll gets pose bit 7 moved to
+ * $06C0 = $FF, and a hidden block or dropper draws its tiles ($F4D8). In a
+ * boss fight the boss hits are reset to 5, and in the final arena, or with
+ * every treasure, the object becomes the final boss's stand-in (kind $3A,
+ * pose $84, hidden). With the Amazon's treasure, the land's hidden items,
+ * chests and pose-$1B blocks are not spawned again. $10 holds the record's
+ * bit and $04/$05 the template's address. */
+static void Obj_SpawnRecord(uint8_t y)
+{
+    Decomp_Enter(DT_CODE_SPAWN_RECORD, 0, 0, y);
+    gProbeHits = (uint8_t)(1 << (y & 7));
+    if (RAM_U8(DT_ADDR_CONSUMED + (y >> 3)) & gProbeHits) {
+        return;
+    }
+    uint8_t page = Rom((uint16_t)(SpawnTable(0) + y));
+    uint8_t wx = Rom((uint16_t)(SpawnTable(1) + y));
+    if ((uint16_t)(page << 8 | wx) < (uint16_t)(gScratch(1) << 8 | gScratch(0))) {
+        return;
+    }
+    uint8_t x = 0x0F;
+    while (x != 0 && gObjects->record[x] != y) {
+        x--;
+    }
+    if (x != 0 && (gObjects->state[x] & OBJ_STATUS_LIVE)) {
+        return;
+    }
+    if (!Obj_FindFreeSlot(&x)) {
+        return;
+    }
+    gObjects->record[x] = y;
+    gObjects->worldPage[x] = page;
+    gObjects->worldX[x] = wx;
+    gObjects->unk_0740[x] = gObjects->y[x] = Rom((uint16_t)(SpawnTable(3) + y));
+    uint8_t type = Rom((uint16_t)(SpawnTable(4) + y));
+    uint8_t t = (uint8_t)(type << 2);
+    gScratch(4) = (uint8_t)DT_CODE_SPAWN_TEMPLATES;
+    gScratch(5) = (uint8_t)((DT_CODE_SPAWN_TEMPLATES >> 8) + ((type >> 6) & 1));
+    uint16_t at = (uint16_t)((gScratch(5) << 8 | gScratch(4)) + t);
+    gObjects->unk_0690[x] = 0;
+    gObjects->unk_06C0[x] = 0;
+    gObjects->bossCooldown[x] = 0;
+    uint8_t b = Rom(at);
+    gObjects->timer[x] = b & 0x0F;
+    gObjects->state[x] = gObjects->flags[x] = b & 0xF0;
+    gObjects->action[x] = Rom((uint16_t)(at + 1));
+    gObjects->kind[x] = Rom((uint16_t)(at + 2));
+    gObjects->hitbox[x] = Rom((uint16_t)(at + 3));
+    ResetAnim(x);
+    if (gRowScroll == 0 && (gObjects->state[x] & OBJ_STATUS_HIDDEN)) {
+        if (gObjects->action[x] & 0x80) {
+            gObjects->action[x] &= 0x7F;
+            gObjects->unk_06C0[x] = 0xFF;
+        }
+        uint8_t kind = gObjects->kind[x];
+        if (kind == OBJ_KIND_BLOCK || kind == OBJ_KIND_DROPPER) {
+            Obj_DrawBlock(x, kind, (uint8_t)(t + 3));
+            return;
+        }
+    }
+    if (gBossFight & 0x80) {
+        gBossHits = 5;
+        if (gFinalArena != 0 || (gTreasures & 0x1F) == 0x1F) {
+            gObjects->kind[x] = OBJ_KIND_FINAL_STAND_IN;
+            gObjects->hitbox[x] = 0;
+            gObjects->state[x] |= OBJ_STATUS_HIDDEN;
+            gObjects->action[x] = 0x84;
+        }
+    }
+    if (gLand != 1 || !(gTreasures & 2)) {
+        return;
+    }
+    uint8_t kind = gObjects->kind[x];
+    if (kind == OBJ_KIND_HIDDEN_ITEM || kind == OBJ_KIND_CHEST ||
+        (kind == OBJ_KIND_BLOCK && gObjects->action[x] == 0x1B)) {
+        gObjects->state[x] = 0;
+    }
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -3612,6 +3706,11 @@ static void Run_Launcher(Regs *r)
     Obj_Launcher(r->x);
 }
 
+static void Run_SpawnRecord(Regs *r)
+{
+    Obj_SpawnRecord(r->y);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -3781,6 +3880,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_SPAWN_RECORD, "ducktales.decomp.6.AF2B", "Obj_SpawnRecord", Run_SpawnRecord, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LAUNCHER, NULL, "Obj_Launcher", Run_Launcher, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_TARGET, NULL, "Obj_Target", Run_Target, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_MOON_BOSS, NULL, "Obj_MoonBoss", Run_MoonBoss, 0, .bank = DT_BANK_OBJECTS },
