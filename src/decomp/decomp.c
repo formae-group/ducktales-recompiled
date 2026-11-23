@@ -446,14 +446,16 @@ void Decomp_Enter(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
         s_top_entered = true;
         return;
     }
-    if (s_mode != DECOMP_CHECK || s_inner) {
-        return;
-    }
     for (int i = 0; i < s_count; i++) {
         if (s_routine[i]->addr != routine) {
             continue;
         }
-        if (!s_routine[i]->site_id && !s_routine[i]->task) {
+        if (s_inner) {
+            return;
+        }
+        if (s_routine[i]->task) {
+            s_stats[i].calls++;
+        } else if (s_mode == DECOMP_CHECK && !s_routine[i]->site_id) {
             check_inner(i, (Regs){ a, x, y, s_entry_p }, false);
         }
         return;

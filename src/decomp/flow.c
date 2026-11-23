@@ -42,29 +42,32 @@
 #define MUSIC_GAME_OVER 0x09
 #define MUSIC_DEATH     0x0A
 
-#define RESPAWN_PENDING     0x80
-#define RESPAWN_LIFE        0x87 /* entries from here cost a life */
-#define RESPAWN_ARENA       0x85 /* the warp into a boss arena */
-#define LAND_ARENA          5
-#define HAZARD_SPIKES       6 /* hazard mode that invulnerability ignores */
-#define CHECKPOINT_SET      5
-#define TIME_LOW_TENS       3
-#define DEATH_PAUSE_FALL    0xB4 /* frames after a death */
-#define DEATH_PAUSE_WARP    0x3C /* frames after a warp */
-#define GAME_OVER_FRAMES    0xF0
-#define LAND_EXIT_FRAMES    0xB4
-#define SPLIT_ON            0x40
-#define ROW_SCROLL_ADDR     0xC0
-#define SCROOGE_RESPAWN     0xA0 /* $0700 of Scrooge after a respawn */
-#define RESPAWN_ENTRY_LEN   9
-#define NT_FILL_ADDR        0x20 /* $C203: nametables from $2000 */
-#define NT_FILL_TILE        0x24
-#define PPU_STRINGS_LAND    0 /* $BAB0 set drawn at every land load */
-#define ROW_SCROLL_HI       0x24
-#define SCROOGE_START_Y     0x40
-#define SCROOGE_JUMP_VY     0x04BB /* take-off velocity, whole and fraction */
-#define SCROOGE_START_SPEED 0x0180
-#define SPRITE0_Y           0x2C
+#define RESPAWN_PENDING       0x80
+#define RESPAWN_LIFE          0x87 /* entries from here cost a life */
+#define RESPAWN_ARENA         0x85 /* the warp into a boss arena */
+#define LAND_ARENA            5
+#define HAZARD_SPIKES         6 /* hazard mode that invulnerability ignores */
+#define CHECKPOINT_SET        5
+#define TIME_LOW_TENS         3
+#define DEATH_PAUSE_FALL      0xB4 /* frames after a death */
+#define DEATH_PAUSE_WARP      0x3C /* frames after a warp */
+#define GAME_OVER_FRAMES      0xF0
+#define LAND_EXIT_FRAMES      0xB4
+#define SPLIT_ON              0x40
+#define ROW_SCROLL_ADDR       0xC0
+#define SCROOGE_RESPAWN       0xA0 /* $0700 of Scrooge after a respawn */
+#define RESPAWN_ENTRY_LEN     9
+#define NT_FILL_ADDR          0x20 /* $C203: nametables from $2000 */
+#define NT_FILL_TILE          0x24
+#define PPU_STRINGS_LAND      0 /* $BAB0 set drawn at every land load */
+#define ROW_SCROLL_HI         0x24
+#define SCROOGE_START_Y       0x40
+#define SCROOGE_JUMP_VY       0x04BB /* take-off velocity, whole and fraction */
+#define SCROOGE_START_SPEED   0x0180
+#define SPRITE0_Y             0x2C
+#define ALL_TREASURES         0x1F
+#define TREASURE_TRANSYLVANIA 0x02
+#define REDIRECT_LAND_SELECT  0x80
 
 #define gScratch0        RAM_U8(DT_ADDR_SCRATCH0)
 #define gStreamSteps     RAM_U8(DT_ADDR_SCRATCH4)
@@ -643,6 +646,8 @@ static void Death_Done(Regs *r)
 /* ---- the frame loop ---- */
 
 static void FrameLoop_End(Regs *r);
+static void BossTrigger(Regs *r);
+static void FrameLoop_AfterBossTrigger(Regs *r);
 static void LandLoad(Regs *r);
 static void FrameLoop_Yield(Regs *r);
 static void FrameLoop_Requests(Regs *r);
@@ -711,7 +716,9 @@ static void FrameLoop_AfterObjects(Regs *r)
 static void FrameLoop_AfterCamera(Regs *r)
 {
     Decomp_Enter(DT_FLOW_AFTER_CAMERA, r->a, r->x, r->y);
-    Jsr(DT_CODE_BOSS_TRIGGER, DT_FLOW_AFTER_BOSS_TRIGGER, 0);
+    if (Gosub(BossTrigger, r, DT_FLOW_AFTER_BOSS_TRIGGER)) {
+        FrameLoop_AfterBossTrigger(r);
+    }
 }
 
 /* $DB8F: a land redirect loads Transylvania (positive) or returns to Land
@@ -817,6 +824,106 @@ static void FrameLoop_Yield(Regs *r)
 {
     Call(r, DT_CODE_RANDOM);
     Yield(DT_FLOW_NEXT_FRAME);
+}
+
+/* ---- boss trigger ---- */
+
+static uint16_t Rom16(uint16_t addr)
+{
+    return (uint16_t)(Rom(addr) | Rom((uint16_t)(addr + 1)) << 8);
+}
+
+static void BossTrigger_Scroll(Regs *r);
+
+/* $CF93: Scrooge reached the land's boss trigger (row, and his X page taken
+ * 8 pixels ahead or behind). In Transylvania with its treasure taken and not
+ * all five held, back to Land Select; otherwise the camera scrolls into the
+ * arena (map 5 at row = land, or row 5 for the final arena), with the land and
+ * row kept on the stack. */
+static void BossTrigger(Regs *r)
+{
+    Decomp_Enter(DT_CODE_BOSS_TRIGGER, r->a, r->x, r->y);
+    uint8_t land = gLand;
+    r->y = land;
+    r->a = gMapRow;
+    if (gMapRow != Rom((uint16_t)(DT_DATA_BOSS_ROW + land))) {
+        return;
+    }
+    uint8_t dir = Rom((uint16_t)(DT_DATA_BOSS_DIR + land));
+    r->x = dir & DT_PAD_LEFT;
+    uint16_t ahead = Rom16((uint16_t)(DT_DATA_BOSS_AHEAD + r->x));
+    uint8_t carry = gObjects->worldX[P_] + (ahead & 0xFF) > 0xFF;
+    r->a = (uint8_t)(gObjects->worldPage[P_] + (ahead >> 8) + carry);
+    if (r->a != Rom((uint16_t)(DT_DATA_BOSS_PAGE + land))) {
+        return;
+    }
+    uint8_t treasures = gTreasures & ALL_TREASURES;
+    if (land == LAND_TRANSYLVANIA && treasures != ALL_TREASURES && (treasures & TREASURE_TRANSYLVANIA)) {
+        gLandRedirect = REDIRECT_LAND_SELECT;
+        r->a = REDIRECT_LAND_SELECT;
+        return;
+    }
+    gStreamRequest = dir;
+    r->a = dir;
+    Call(r, DT_CODE_CLEAR_OBJECTS);
+    Decomp_Push(gLand);
+    Decomp_Push(gMapRow);
+    if (treasures == ALL_TREASURES) {
+        gMapRow = LAND_ARENA;
+        gFinalArena = LAND_ARENA;
+    } else {
+        gMapRow = r->y;
+    }
+    gLand = LAND_ARENA;
+    gRowChrState = 0;
+    BossTrigger_Scroll(r);
+}
+
+/* $CFF4: one pixel of the scroll, Scrooge carried along; the new columns'
+ * CHR streams in. */
+static void BossTrigger_Scroll(Regs *r)
+{
+    r->y = gStreamRequest & DT_PAD_LEFT;
+    uint16_t camera = (uint16_t)((gCameraX | gCameraPage << 8) + Rom16((uint16_t)(DT_DATA_BOSS_CAMERA_STEP + r->y)));
+    gCameraX = (uint8_t)camera;
+    gCameraPage = (uint8_t)(camera >> 8);
+    uint16_t step = Rom16((uint16_t)(DT_DATA_BOSS_X_STEP + r->y));
+    uint16_t frac = (uint16_t)(gObjects->xFrac[P_] + (step & 0xFF));
+    gObjects->xFrac[P_] = (uint8_t)frac;
+    gObjects->worldX[P_] = (uint8_t)(gObjects->worldX[P_] + (step >> 8) + (frac >> 8));
+    r->a = gObjects->worldX[P_];
+    Jsr(DT_CODE_ROW_CHR_STREAM, DT_FLOW_BOSS_STREAMED, 0);
+}
+
+/* $D01E (the land and row on the stack): until the camera is page-aligned,
+ * the sprites and the next frame; then the land and row back, the boss music,
+ * and the fight starts. */
+static void BossTrigger_Streamed(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_BOSS_STREAMED, r->a, r->x, r->y);
+    if (gCameraX != 0) {
+        gPrevCameraX = gCameraX;
+        gUnk2E = 0;
+        r->a = 0;
+        Call(r, DT_CODE_OAM_CLEAR);
+        SelectBank(r, DT_BANK_SPRITES);
+        Call(r, DT_B5_BUILD_OAM);
+        Yield(DT_FLOW_BOSS_NEXT);
+        return;
+    }
+    gMapRow = Decomp_Pull();
+    gLand = Decomp_Pull();
+    MusicRequest(r, MUSIC_BOSS);
+    gBossFight = 0xFF;
+    RAM_U8(DT_ADDR_PALETTE_REQUEST) = 0xFF;
+    r->a = 0xFF;
+}
+
+/* $D038 (the land and row on the stack) */
+static void BossTrigger_Next(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_BOSS_NEXT, r->a, r->x, r->y);
+    BossTrigger_Scroll(r);
 }
 
 /* ---- land load ---- */
@@ -1046,6 +1153,9 @@ const DecompRoutine gFlowRoutines[] = {
     RESUME(DT_FLOW_GAME_OVER_NEXT, "GameOver_Next", GameOver_Next, 1),
     TASK(DT_CODE_LAND_EXIT, NULL, "LandExit", LandExit, 0),
     RESUME(DT_FLOW_LAND_EXIT_NEXT, "LandExit_Next", LandExit_Next, 1),
+    TASK(DT_CODE_BOSS_TRIGGER, NULL, "BossTrigger", BossTrigger, 0),
+    RESUME(DT_FLOW_BOSS_STREAMED, "BossTrigger_Streamed", BossTrigger_Streamed, 2),
+    RESUME(DT_FLOW_BOSS_NEXT, "BossTrigger_Next", BossTrigger_Next, 2),
     TASK(DT_CODE_LAND_LOAD, SITE("D79B"), "LandLoad", LandLoad, 0),
     RESUME(DT_FLOW_LOAD_FADED, "LandLoad_Faded", LandLoad_Faded, 0),
     RESUME(DT_FLOW_LOAD_BLACK, "LandLoad_Black", LandLoad_Black, 0),
@@ -1068,9 +1178,8 @@ const DecompStop gFlowStops[] = {
     STOP(DT_CODE_TASK_YIELD, "FFAC"),     STOP(DT_CODE_RESET, "FEE0"),         STOP(DT_CODE_FADE_IN, "C279"),
     STOP(DT_CODE_FADE_OUT, "C282"),       STOP(DT_CODE_SCREEN_OFF, "C197"),    STOP(DT_CODE_SCREEN_ON, "C1A1"),
     STOP(DT_CODE_ROW_CHR_STREAM, "C42C"), STOP(DT_CODE_STREAM_BLOCK, "C830"),  STOP(DT_B6_OBJECTS, "8000.6"),
-    STOP(DT_B6_SPAWN, "AEA0.6"),          STOP(DT_CODE_CAMERA_UPDATE, "EFE2"), STOP(DT_CODE_BOSS_TRIGGER, "CF93"),
-    STOP(DT_CODE_LAND_SELECT, "D630"),    STOP(DT_CODE_NT_FILL, "C203"),       STOP(DT_CODE_DRAW_START, "C71D"),
-    STOP(DT_CODE_CHR_LOAD, "C301"),       STOP(DT_B5_PPU_STRINGS, "BAB0.5"),   STOP(DT_CODE_SCENE, "DF27"),
-    STOP(DT_CODE_ENDING, "E1AF"),
+    STOP(DT_B6_SPAWN, "AEA0.6"),          STOP(DT_CODE_CAMERA_UPDATE, "EFE2"), STOP(DT_CODE_LAND_SELECT, "D630"),
+    STOP(DT_CODE_NT_FILL, "C203"),        STOP(DT_CODE_DRAW_START, "C71D"),    STOP(DT_CODE_CHR_LOAD, "C301"),
+    STOP(DT_B5_PPU_STRINGS, "BAB0.5"),    STOP(DT_CODE_SCENE, "DF27"),         STOP(DT_CODE_ENDING, "E1AF"),
 };
 const int gFlowStopCount = sizeof gFlowStops / sizeof gFlowStops[0];

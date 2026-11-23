@@ -342,6 +342,8 @@
 #define DT_FLOW_RESPAWN_DRAWN      0xDDAB
 #define DT_FLOW_GAME_OVER_NEXT     0xDEDE
 #define DT_FLOW_LAND_EXIT_NEXT     0xDF1E
+#define DT_FLOW_BOSS_STREAMED      0xD01E
+#define DT_FLOW_BOSS_NEXT          0xD038
 #define DT_FLOW_LOAD_FADED         0xD79E
 #define DT_FLOW_LOAD_BLACK         0xD7A5
 #define DT_FLOW_LOAD_SCREEN_OFF    0xD7A8
@@ -366,6 +368,12 @@
 #define DT_DATA_HUD_TOTAL         0xDAE0 /* the TOTAL packet's start value */
 #define DT_DATA_HUD_HP            0xDAED /* the HP dot records */
 #define DT_HUD_HP_TEMPLATE_LEN    21
+#define DT_DATA_BOSS_ROW          0xD04D /* per land: map row of the boss trigger (levels.md) */
+#define DT_DATA_BOSS_PAGE         0xD052 /* per land: Scrooge's X page that fires it */
+#define DT_DATA_BOSS_DIR          0xD057 /* per land: scroll direction into the arena, pad bits */
+#define DT_DATA_BOSS_CAMERA_STEP  0xD05C /* 16-bit camera step per frame: right, left */
+#define DT_DATA_BOSS_X_STEP       0xD060 /* 16-bit X step of Scrooge (fraction first): right, left */
+#define DT_DATA_BOSS_AHEAD        0xD064 /* 16-bit offset added to his X before the page test: right, left */
 #define DT_DATA_HUD_TIME_GROUP    0xDB0F /* the HUD time group as a land starts it */
 #define DT_HUD_TIME_GROUP_LEN     29
 #define DT_DATA_LAND_TIME         0xDB2C /* per land: start time hundreds and tens */
