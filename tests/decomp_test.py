@@ -127,6 +127,26 @@ POKES = [
     ),
     # slot 9 made a lift (kind $0F) under Scrooge
     ('lift', {0x709: 0xA0, 0x719: 0x0F, 0x649: 0xB0, 0x729: 0x62, 0x739: 0x00, 0x609: 0x80}, ['Obj_Lift']),
+    # slot 9 a harmful solid pickup on Scrooge under the power-up, its contact count about to wrap:
+    # the vertical contact test falls into the probe point $D350
+    (
+        'power-contact',
+        {
+            0x709: 0xA2,
+            0x719: 0x13,
+            0x629: 0x2B,
+            0x649: 0xA6,
+            0x729: 0x62,
+            0x739: 0x00,
+            0x7D9: 0x91,
+            0x609: 0x80,
+            0x699: 0xFF,
+            0x75: 0x01,
+            0x76: 0x10,
+            0x77: 0x00,
+        },
+        ['Player_ContactV', 'Bg_ProbePoint'],
+    ),
     # mode 15 with a message id: the box closes with A (pressed every 30 frames once the text is out), and
     # what the message does runs; slot 9 is the speaker
     (

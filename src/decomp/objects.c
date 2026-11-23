@@ -476,7 +476,7 @@ static void Money_Add(uint8_t amount, uint8_t y)
 }
 
 /* $F812: every HP dot full again. */
-static void Hud_RefillHp(void)
+void Hud_RefillHp(void)
 {
     Decomp_Enter(DT_CODE_HP_REFILL, 0, 0, 0);
     gPlayerEasyHits = 0;

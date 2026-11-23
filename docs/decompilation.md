@@ -147,15 +147,15 @@ the HP-dot work it skips, and `moon_intro` drifted from the console at frame 108
 each (`NES_MOD_MAX_FUNCTION_HOOKS` in `runner/src/mod_function_hooks.c`), so one site per routine
 would not last the whole game. A routine has a site (`site_id` in its table entry) only if
 original code reaches it; `tools/decomp_callers.py` lists, from a build's generated code, the
-instructions outside the decompiled ranges that jump to an entry. Of the 66 routines in the player,
+instructions outside the decompiled ranges that jump to an entry. Of the 67 routines in the player,
 motion, sound, level and collision tables, 27 have
 one: `Player_Update` (the frame loop's `JSR` at `$DB6C`), `Player_PitDeath` (the original
 `Player_Update` jumps to it in mode 8), `Player_RowChange` (the original `$E878` falls into
 it), `Player_Message` and `Player_Treasure` (the original `Player_Update`'s mode table jumps to
 them), the four motion primitives and the two sound requests
 (object and game code everywhere), `Player_TakeDamage`, kept for replace mode's measuring call
-above, and 15 of the 18 camera, scrolling, level and background routines (all but
-`Level_ScreenPointer`, `Level_DecodeBlock` and `Level_MetatileAt`, which only decompiled code
+above, and 15 of the 19 camera, scrolling, level and background routines (all but
+`Level_ScreenPointer`, `Level_DecodeBlock`, `Level_MetatileAt` and `Bg_ProbePoint`, which only decompiled code
 calls). As more of the game is decompiled the boundary moves out and sites go away.
 
 Check mode still compares every call of every routine. The C of each routine starts with
@@ -240,6 +240,7 @@ leave the jump vector in `$00/$01` as the original's loop does.
 | `Level_MetatileAt` | X = probe slot | A, X | |
 | `Map_LoadHeader` | X = map | X | X is kept |
 | `Bg_Probe` | X = slot | X, hardware | X is kept |
+| `Bg_ProbePoint` | X = slot, Y = probe point | A, C | `Player_ContactV` falls into it with its hitbox in Y and reads the carry: the page or row sum's, or the last bit the class shifts dropped |
 | `Bg_SnapRight`, `Bg_SnapLeft`, `Bg_SnapHead`, `Bg_SnapFeet` | X = slot | X | X is kept |
 | `Level_TileEdit` | X = slot | hardware | |
 | `Level_DrawStartColumns`, `Level_DrawScreen`, `Vram_FlushTileEdits` | none | hardware | |
@@ -293,7 +294,7 @@ RAM-identical in replace mode.
 | `Player_Death` | `$EC9B` | checked | 8 | hurt-last-dot | none |
 | `Player_Mode14` | `$ECFF` | checked | 1 | - | none |
 | `Player_ContactH` | `$D202` | checked | 12 | - | not measured |
-| `Player_ContactV` | `$D291` | checked | 12 | - | not measured (the fall into `$D350` needs `$0690` to wrap under the power-up) |
+| `Player_ContactV` | `$D291` | checked | 12 | power-contact | not measured |
 | `Player_SelectRefill` | `$E2FE` | checked (pokes only) | 0 | select-refill, select-poor, select-full | not measured |
 | `Player_RowChange` | `$E8C0` | checked | 6 | - | not measured |
 | `Player_Message` | `$ED05` | checked | 5 | message-pay, message-pay-poor, message-life, message-block, message-launchpad, message-scene | not measured |
@@ -322,6 +323,7 @@ RAM-identical in replace mode.
 | `Vram_FlushQueue` | `$C139` | checked | 12 | 11 of 11 | not measured |
 | `Vram_FlushTileEdits` | `$C15E` | checked | 9 | - | not measured |
 | `Bg_Probe` | `$D120` | checked | 12 | 11 of 11 | not measured |
+| `Bg_ProbePoint` | `$D350` | checked (pokes only) | 0 | power-contact | not measured; one call, so one of its four carry exits |
 | `Bg_SnapRight` | `$D49A` | checked | 10 | 2 of 11 | not measured |
 | `Bg_SnapLeft` | `$D4B2` | checked | 11 | - | not measured |
 | `Bg_SnapHead` | `$D4C8` | checked | 9 | - | not measured |
@@ -356,11 +358,11 @@ hands off to them. The flow has 25 sites: 7 entries that original code reaches a
 
 Not decompiled yet, and still run as the original from the C:
 
-- Through `Decomp_Call`: one probe point `$D350` (where `Player_ContactV` falls through to, with
-  its own entry registers and carry result), the walls move `$F0F8` and the HP refill `$F812`. The
-  last two are decompiled with the object code (`objcommon.c`, `objects.c`). The background probe
-  `$D120` and its snaps `$D49A`/`$D4B2`/`$D4C8`/`$D4D6` are the C of `collision.c` and the
-  climbing steps `$F192`/`$F1A8` the C of `objcommon.c`, and `player.c` calls that C directly.
+- Through `Decomp_Call`: the walls move `$F0F8`, decompiled with the object code (`objcommon.c`).
+  The background probe `$D120`, its snaps `$D49A`/`$D4B2`/`$D4C8`/`$D4D6` and the probe point
+  `$D350` (where `Player_ContactV` falls through to) are the C of `collision.c`, the climbing steps
+  `$F192`/`$F1A8` the C of `objcommon.c` and the HP refill `$F812` the C of `objects.c`, and
+  `player.c` calls that C directly.
 - Through `Decomp_RunOriginal`: `Player_Update` in modes 15 (`$ED05`, message box) and 16
   (`$EF62`, treasure), and every call that reaches the row change. That call runs as the original,
   which reaches `Player_Message`, `Player_Treasure` or `Player_RowChange` at its own site: those
@@ -371,9 +373,9 @@ The decompiled routines cover all of it, modes 15 and 16 included. With the coll
 helpers he shares with other objects (`$D120-$D4E5` and `$F0F8-$F233`, 1,281 bytes, of which the
 probe, its snaps and the contact tests `$D120-$D4E5` and the climbing steps `$F192-$F1BD` are
 decompiled) it is 4,310 of 4,581 bytes, 94%. By routine, counting each of modes 15 and 16 as one,
-46 of the 49 routines his code runs are C (94%): the 37 `Player_*`, motion and sound rows above,
-the two modes, the probe with its four snaps and the two climbing steps, against the 3 listed as
-not decompiled.
+48 of the 49 routines his code runs are C (98%): the 37 `Player_*`, motion and sound rows above,
+the two modes, the probe with its four snaps, the probe point, the two climbing steps and the HP
+refill, against the walls move `$F0F8`.
 The motion (`$F234-$F2C6` but `$F298`) and sound (`$F752`) primitives are decompiled too, and they
 also serve every other object.
 
@@ -385,7 +387,7 @@ the tile edit `$F574` and the background probe with its snaps
 scroll (`$E9`), the tile-edit metatile helper `$F697` and the room transitions, which the flow's
 task code runs.
 
-**Next routines:** `$D350` and `$F812` called as C.
+**Next routines:** `player.c` calling the walls move `$F0F8` as C once `objcommon.c` exports it.
 
 ### Objects
 

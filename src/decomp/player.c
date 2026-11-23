@@ -17,11 +17,11 @@
  * and the routines not decompiled yet, which get the registers the original
  * gives them.
  *
- * The background probe and its snaps are the C of collision.c, the climbing
- * steps $F192/$F1A8 the C of objcommon.c. Not decompiled yet and called
- * through Decomp_Call: one probe point $D350 (where the vertical contact
- * test can fall through to), the walls move $F0F8 and the HP refill $F812,
- * which every object kind shares.
+ * The background probe, its snaps and the probe point $D350 (where the
+ * vertical contact test can fall through to) are the C of collision.c, the
+ * climbing steps $F192/$F1A8 the C of objcommon.c and the HP refill $F812
+ * the C of objects.c. Called through Decomp_Call: the walls move $F0F8,
+ * which every object kind shares (decompiled with the object code).
  * Given to the original routine (Decomp_RunOriginal): Player_Update in modes
  * 15 and 16 (message box and treasure) and every call that reaches the row
  * change at $E8C0. The original then reaches their C at its own sites: it is
@@ -230,7 +230,9 @@ static bool Player_ContactV(void)
         if (++gObjects->unk_0690[x] != 0) {
             continue;
         }
-        return !(Decomp_Call(DT_CODE_PROBE_POINT, gPlayerPower, x, box).p & P_C);
+        bool carry;
+        Bg_ProbePoint(x, box, &carry);
+        return !carry;
     }
     return gScratch(0) != 0;
 }
@@ -275,7 +277,7 @@ static uint8_t Player_SelectRefill(void)
     for (x = 0; x < DT_TOTAL_DIGIT_COUNT && gTotalDigit(x) == 0; x++) {
         gTotalDigit(x) = DT_MONEY_TILE_BLANK;
     }
-    Decomp_Call(DT_CODE_HUD_REFILL_HP, 0, x, 0);
+    Hud_RefillHp();
     gHudTotalDirty++;
     return x;
 }

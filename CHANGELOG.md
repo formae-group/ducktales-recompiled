@@ -39,6 +39,9 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   `tests/decomp_test.py` has 8 poke cases for what no route reaches (paying, the lost life, the
   block, the Launchpad ride, the scene draw of message `$0B`, the money's blanks and cap) and a
   `--pokes NAME...` option.
+- `src/decomp/player.c` calls the C of the probe point `$D350` (with the carry it returns, new in
+  `collision.c`) and of the HP refill `$F812` (`objects.c`). A poke case reaches the fall into
+  `$D350` under the power-up.
 
 ### Fixed
 
