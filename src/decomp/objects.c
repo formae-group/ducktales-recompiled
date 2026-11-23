@@ -17,7 +17,7 @@
  * routine starts with Decomp_Enter and the C calls it as plain C; only
  * those original code also calls have a hook site (the dispatch, the
  * movers and the helpers original handlers call). Not decompiled yet and
- * run through Decomp_Call: the tile edit $F506 and the climbing step $F1A8.
+ * run through Decomp_Call: the tile edit $F506.
  */
 #include "decomp/decomp.h"
 #include "decomp/motion.h"
@@ -86,21 +86,6 @@ static void ResetAnim(uint8_t x)
 {
     gObjects->animTimer[x] = 0;
     gObjects->animFrame[x] = 0;
-}
-
-/* $F270 / $F284: Y += or -= the vertical velocity, without gravity. */
-static void Obj_MoveDown(uint8_t x)
-{
-    uint8_t p = 0;
-    gObjects->yFrac[x] = Alu_Adc(gObjects->yFrac[x], gObjects->vyFrac[x], &p);
-    gObjects->y[x] = Alu_Adc(gObjects->y[x], gObjects->vy[x], &p);
-}
-
-static void Obj_MoveUp(uint8_t x)
-{
-    uint8_t p = P_C;
-    gObjects->yFrac[x] = Alu_Sbc(gObjects->yFrac[x], gObjects->vyFrac[x], &p);
-    gObjects->y[x] = Alu_Sbc(gObjects->y[x], gObjects->vy[x], &p);
 }
 
 /* $F2A1 with the carry it leaves: true when Y did not borrow. */
@@ -384,7 +369,7 @@ static void Obj_Thrown(uint8_t x)
             (void)Obj_HitOthers(x);
             return;
         case 0x8792:
-            x = Decomp_Call(DT_CODE_CLIMB_UP, 0x2F, x, 1).x;
+            x = Obj_ClimbUp(x, 0x2F, 1);
             if (gProbeHits & 1) {
                 Obj_Break(x);
                 return;
@@ -897,13 +882,13 @@ static void Obj_Lift(uint8_t x)
     Decomp_Enter(DT_CODE_KIND_LIFT, 0x22, x, gObjects->kind[x]);
     Obj_SetVelocityY(x, 0x0180);
     if (Step(x) == 0) {
-        Obj_MoveUp(x);
+        Obj_SubVelocityY(x);
         if (gObjects->y[x] >= 0x68) {
             return;
         }
         gObjects->state[x]++;
     } else {
-        Obj_MoveDown(x);
+        Obj_AddVelocityY(x);
     }
     if (Obj_DistanceX(x) < 0x1D && Obj_DistanceY(x) < 0x18) {
         gObjects->y[P_] += 2;
@@ -1390,7 +1375,7 @@ static void Obj_Flyer(uint8_t x)
         gObjects->timer[x] = 5;
     }
     gObjects->timer[x]--;
-    Obj_MoveDown(x);
+    Obj_AddVelocityY(x);
     if (!(gObjects->dir[x] & OBJ_DIR_LEFT) ? Obj_MoveRightOff(x) : Obj_MoveLeftOff(x)) {
         Obj_Despawn(x);
         return;
@@ -1427,7 +1412,7 @@ static void Obj_Swing(uint8_t x)
         }
     }
     gObjects->timer[x]--;
-    Obj_MoveDown(x);
+    Obj_AddVelocityY(x);
     gScratch(0) = (gObjects->speed[x] & 0x80) ? 0xFF : 0x00;
     uint8_t p = 0;
     gObjects->xFrac[x] = Alu_Adc(gObjects->xFrac[x], gObjects->speedFrac[x], &p);
@@ -1472,7 +1457,7 @@ static void Obj_Dangler(uint8_t x)
     }
     if (!(gObjects->state[x] & 2)) {
         Obj_SetVelocityY(x, 0x0200);
-        x = Decomp_Call(DT_CODE_CLIMB_UP, 0x27, x, 0).x;
+        x = Obj_ClimbUp(x, 0x27, 0);
         if (!(gProbeHits & 1)) {
             return;
         }
@@ -1486,7 +1471,7 @@ static void Obj_Dangler(uint8_t x)
         return;
     }
     Obj_SetVelocityY(x, 0x0300);
-    Obj_MoveDown(x);
+    Obj_AddVelocityY(x);
     if (gObjects->y[x] < 0xB0 && Obj_DistanceY(x) >= 0x18) {
         return;
     }
@@ -1534,7 +1519,7 @@ static void Obj_Swooper(uint8_t x)
         if (gObjects->y[x] >= gObjects->y[P_] && (uint8_t)(gObjects->y[x] - gObjects->y[P_]) >= 0x10) {
             gObjects->state[x]++;
         }
-        Obj_MoveDown(x);
+        Obj_AddVelocityY(x);
         return;
     }
     if (gObjects->timer[x] == 0) {
@@ -1559,7 +1544,7 @@ static void Obj_Swooper(uint8_t x)
     if (tick) {
         gObjects->timer[x]--;
     }
-    Obj_MoveDown(x);
+    Obj_AddVelocityY(x);
     if (gObjects->dir[x] & OBJ_DIR_LEFT) {
         Obj_MoveLeft(x);
     } else {
