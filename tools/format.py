@@ -8,6 +8,7 @@ The pinned tools: py -3 -m pip install --user clang-format==23.1.5 black==26.10.
 (this script runs without -I so it can import them from the user site).
 Submodules under external/ are never touched.
 """
+
 import argparse
 import os
 import shutil
@@ -56,8 +57,12 @@ def main():
 
     black = [sys.executable, '-m', 'black', '--quiet']
     if args.check:
-        result = subprocess.run(black + ['--check', '--list-different'] + [str(p) for p in py_files],
-                                cwd=ROOT, capture_output=True, text=True)
+        result = subprocess.run(
+            black + ['--check', '--list-different'] + [str(p) for p in py_files],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
         changed += [Path(line) for line in result.stdout.splitlines() if line.strip()]
     elif py_files:
         subprocess.run(black + [str(p) for p in py_files], cwd=ROOT, check=True)
