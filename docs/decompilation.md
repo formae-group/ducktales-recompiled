@@ -199,7 +199,7 @@ call can do. `flow.c` decompiles that code as **task code** (`DecompRoutine.task
   enters through an RTS (`$FFAB`) whose return the observer moves to the start, at the routine's
   true S, with the isolated call's return address in place of the routine's own (at S + locals
   + 1). When the C hands off, the original stops where it reaches the same routine at the same
-  depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`, 18 of
+  depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`, 11 of
   them). Check compares RAM, the stack down to that depth, the registers the hand-off uses and the
   number of device writes.
 - Replace mode stores the C's results, makes its device writes, spends the original's cycles up to
@@ -245,6 +245,10 @@ leave the jump vector in `$00/$01` as the original's loop does.
 | `Level_TileEdit` | X = slot | hardware | |
 | `Level_DrawStartColumns`, `Level_DrawScreen`, `Vram_FlushTileEdits` | none | hardware | |
 | `Chr_StreamRow` | X | X, hardware | X is the entry X when the stream is done, 4 after the palette, else the queue index; the scene draw `$DFED` of message `$0B` pushes it in `task_yield` |
+| `Boss_CheckTrigger` | none | none | the arena start runs as the original (`Decomp_RunOriginal`): it scrolls the row |
+| `Bank_Select`, `Bank_SelectTemp` | A = bank | A, X, P, hardware | the bank is written to the bus-conflict table at `$FFE5` |
+| `Oam_Build`, `Random_Next` | none | X, Y | the frame loop yields right after them, and `task_yield` keeps X and Y on the stack |
+| `Ppu_Blank`, `Ppu_Unblank`, `Ppu_FillNametable`, `Chr_LoadList`, `Text_DrawStrings`, `Input_ReadControllers`, `Sound_Update`, `Sound_Play` | as the original | hardware | the controller reads use `Decomp_BusLoad`, made at once; check also compares OAM and the APU, PPU and mapper registers |
 | `Hud_Reset` | none | none | |
 | `Land_ApplyTables`, `Land_LoadPalette` | X = palette set (palette) | X, Y | Land Select and the title read X and Y after them |
 | `Timer_Tick`, `Hud_RefreshMoney`, `Hud_RefreshTotal` | none | none | called from the frame loop's C |
@@ -330,6 +334,27 @@ RAM-identical in replace mode.
 | `Bg_SnapFeet` | `$D4D6` | checked | 12 | 11 of 11 | not measured |
 | `Level_TileEdit` | `$F574` | checked | 9 | - | not measured |
 | `Chr_StreamRow` | `$C42C` | checked | 12 | 11 of 11 | not measured |
+| `Nmi_Handler` | `$C000` | claimed (decomp/system): the NMI has no site form yet | - | - | - |
+| `Ppu_NmiOff` | `$C183` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
+| `Ppu_NmiOn` | `$C18D` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
+| `Ppu_Blank` | `$C197` | checked | 12 | - | not measured |
+| `Ppu_Unblank` | `$C1A1` | checked | 12 | - | not measured |
+| `Input_ReadControllers` | `$C1AB` | checked | 12 | - | not measured |
+| `Ppu_FillNametable` | `$C203` | checked | 12 | - | not measured |
+| `Mem_FillPages` | `$C24F` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
+| `Oam_Clear` | `$C267` | checked | 12 | - | not measured |
+| `Palette_FadeIn` (task code) | `$C279` | checked | 12 | - | not measured |
+| `Palette_FadeOut` (task code) | `$C282` | checked | 12 | - | not measured |
+| `Palette_FadeWait` (resume point after `task_yield`) | `$C2B2` | checked | 12 | - | not measured |
+| `Random_Next` | `$C2E6` | checked | 12 | - | not measured |
+| `Chr_LoadList` | `$C301` | checked | 12 | - | not measured |
+| `Palette_LoadScene` | `$F76D` | checked (pokes only) | 0 | ending | not measured |
+| `Bank_Select` | `$FFDE` | checked | 12 | - | not measured |
+| `Bank_SelectTemp` | `$FFE0` | checked | 12 | - | not measured |
+| `Oam_Build` | bank 5 `$8000` | checked | 12 | - | not measured |
+| `Text_DrawStrings` | bank 5 `$BAB0` | checked | 12 | - | not measured |
+| `Sound_Update` | bank 3 `$8000` | checked | 12 | - | not measured |
+| `Sound_Play` | bank 3 `$8003` | checked | 12 | - | not measured |
 | `Hud_Reset` | `$D60A` | checked | 12 | - | not measured |
 | `Land_ApplyTables` | `$D9CA` | checked | 12 | - | not measured |
 | `Land_LoadPalette` | `$D9F5` | checked | 12 | - | not measured |
@@ -353,7 +378,7 @@ the frame loop with pause, the boss checkpoint, death, warps, respawn, game over
 (`$CF93-$D04C`): 1,961 of the 3,880 bytes, or 51% (tables inside the ranges included). Not yet: Land
 Select and the banking of money (`$D630-$D79A`, `$D8A6-$D9C9`), the scenes and the ending
 (`$DF27-$E28B`) and the Select refill `$E2FE` (Scrooge's), which still run as the original: the flow
-hands off to them. The flow has 25 sites: 7 entries that original code reaches and 18 stop sites
+hands off to them. The flow has 18 sites: 7 entries that original code reaches and 11 stop sites
 (four of them, `$FFA5`, `$DFED`, `$D068` and bank 5 `$B580`, for Scrooge's message box).
 
 Not decompiled yet, and still run as the original from the C:

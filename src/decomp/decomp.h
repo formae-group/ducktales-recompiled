@@ -50,8 +50,8 @@ typedef struct Regs {
 #define OUT_P 0x08 /* N, V, Z and C */
 #define OUT_C 0x20 /* C only */
 #define OUT_HW \
-    0x10           /* writes the PPU or the mapper (Decomp_BusWrite): check also compares
-                        CIRAM, palette, CHR RAM and the PRG bank, replace replays the writes */
+    0x10           /* accesses a device (Decomp_BusWrite, Decomp_BusRead, Decomp_BusLoad): check also compares the
+                        PPU's memories, OAM, the device registers and the PRG bank, replace replays the writes */
 #define OUT_C 0x20 /* C only */
 
 typedef struct DecompRoutine {
@@ -97,6 +97,11 @@ void Decomp_RunOriginal(void);
  * switches the bank Game_ReadRom sees for the rest of the routine. */
 void Decomp_BusWrite(uint16_t addr, uint8_t value);
 void Decomp_BusRead(uint16_t addr);
+/* A device read whose value the C needs (the controllers): made at once with
+ * the recorded operations before it, in the C's isolated copy in check mode
+ * and on the bus in replace mode. A routine that gives its call to the
+ * original must do so before its first load; task code never loads. */
+uint8_t Decomp_BusLoad(uint16_t addr);
 /* The host's frame end (replace mode gives a call that would still run at
  * the frame end to the original routine, so the RAM at every frame end is
  * the console's). */
@@ -199,6 +204,12 @@ extern const DecompRoutine gCollisionRoutines[];
 extern const int gCollisionRoutineCount;
 extern const DecompRoutine gFlowRoutines[];
 extern const int gFlowRoutineCount;
+extern const DecompRoutine gSystemRoutines[];
+extern const int gSystemRoutineCount;
+extern const DecompRoutine gSpriteRoutines[];
+extern const int gSpriteRoutineCount;
+extern const DecompRoutine gAudioRoutines[];
+extern const int gAudioRoutineCount;
 
 /* Addresses a task routine hands off to: sites where an isolated run of the
  * original stops, with no C of their own. */
