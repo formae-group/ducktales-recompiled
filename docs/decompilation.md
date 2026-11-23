@@ -332,6 +332,7 @@ RAM-identical in replace mode.
 | `Bank_Select` | `$FFDE` | checked | 12 | - | not measured |
 | `Bank_SelectTemp` | `$FFE0` | checked | 12 | - | not measured |
 | `Oam_Build` | bank 5 `$8000` | checked | 12 | - | not measured |
+| `Oam_DrawSlot` | bank 5 `$80BE` | checked | 12 | - | not measured |
 | `Text_DrawStrings` | bank 5 `$BAB0` | checked | 12 | - | not measured |
 | `Sound_Update` | bank 3 `$8000` | checked | 12 | - | not measured |
 | `Sound_Play` | bank 3 `$8003` | checked | 12 | - | not measured |

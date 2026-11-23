@@ -147,6 +147,7 @@ static bool offset_fits(uint8_t base, uint8_t offset)
  * and does not use it. */
 static void draw_slot(int slot)
 {
+    Decomp_Enter(DT_CODE_OAM_SLOT, 0, (uint8_t)slot, 0);
     if (!place_on_screen(slot)) {
         return;
     }
@@ -266,7 +267,13 @@ static void Run_OamBuild(Regs *r)
     r->x = gSprSlot;
 }
 
+static void Run_DrawSlot(Regs *r)
+{
+    draw_slot(r->x);
+}
+
 const DecompRoutine gSpriteRoutines[] = {
     { DT_CODE_OAM_BUILD, "ducktales.decomp.5.8000", "Oam_Build", Run_OamBuild, OUT_X | OUT_Y, .bank = DT_SPR_BANK },
+    { DT_CODE_OAM_SLOT, NULL, "Oam_DrawSlot", Run_DrawSlot, 0, .bank = DT_SPR_BANK },
 };
 const int gSpriteRoutineCount = sizeof gSpriteRoutines / sizeof gSpriteRoutines[0];

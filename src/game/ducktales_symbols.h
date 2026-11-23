@@ -263,6 +263,7 @@
 #define DT_CODE_SOUND_REQUEST      0xF754 /* queue a sound id in the request ring */
 #define DT_CODE_HUD_REFILL_HP      0xF812 /* every HP dot full (fixed bank) */
 #define DT_CODE_OAM_BUILD          0x8000 /* bank 5: the sprite builder */
+#define DT_CODE_OAM_SLOT           0x80BE /* bank 5: one object slot of the builder, X = slot */
 #define DT_CODE_READ_CONTROLLERS   0xC1AB /* read both pads into $14-$17 */
 #define DT_CODE_PALETTE_SCENE      0xF76D /* load a scene's palettes */
 #define DT_CODE_BANK_SELECT_TEMP   0xFFE0 /* map bank A without recording it */
