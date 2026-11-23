@@ -44,50 +44,50 @@ extern "C" {
 #define NATIVE_FRAME_MAX_APU_WRITES 1024
 
 typedef struct {
-    uint8_t chr[0x2000];      /* pattern tables, CHR RAM ($0000-$1FFF) */
-    uint8_t ciram[0x800];     /* nametables $2000 (0-$3FF) and $2400 ($400-$7FF) */
-    uint8_t palette[32];      /* 6-bit entries; $3F10/14/18/1C alias 0/4/8/C */
-    uint8_t oam[256];         /* attribute bytes keep only bits 7-5 and 1-0 */
+    uint8_t chr[0x2000];  /* pattern tables, CHR RAM ($0000-$1FFF) */
+    uint8_t ciram[0x800]; /* nametables $2000 (0-$3FF) and $2400 ($400-$7FF) */
+    uint8_t palette[32];  /* 6-bit entries; $3F10/14/18/1C alias 0/4/8/C */
+    uint8_t oam[256];     /* attribute bytes keep only bits 7-5 and 1-0 */
 } NativeVideoMemory;
 
 typedef struct {
-    uint8_t  ctrl;            /* $2000 */
-    uint8_t  mask;            /* $2001 */
-    uint8_t  oam_addr;        /* $2003 */
-    uint8_t  fine_x;          /* x */
-    uint16_t t;               /* temporary VRAM address (scroll latch) */
-    uint16_t v;               /* VRAM address */
-    uint8_t  w;               /* first/second write toggle */
+    uint8_t ctrl;     /* $2000 */
+    uint8_t mask;     /* $2001 */
+    uint8_t oam_addr; /* $2003 */
+    uint8_t fine_x;   /* x */
+    uint16_t t;       /* temporary VRAM address (scroll latch) */
+    uint16_t v;       /* VRAM address */
+    uint8_t w;        /* first/second write toggle */
 } NativeVideoRegs;
 
 typedef struct {
-    uint32_t cycle;           /* CPU cycle within the frame */
-    uint16_t scanline;        /* where the PPU was when the write landed */
+    uint32_t cycle;    /* CPU cycle within the frame */
+    uint16_t scanline; /* where the PPU was when the write landed */
     uint16_t dot;
-    uint16_t addr;            /* $2000-$2007, or $4014 for a sprite DMA; $2002 is a read
+    uint16_t addr; /* $2000-$2007, or $4014 for a sprite DMA; $2002 is a read
                                  that reset the $2005/$2006 write latch (value: what it read) */
-    uint8_t  value;
+    uint8_t value;
 } NativeRegWrite;
 
 typedef struct {
-    uint32_t frame;           /* machine frame number, 0 = power-on */
-    uint32_t cycles;          /* CPU cycles this frame took, DMA included */
-    uint32_t held_cycles;     /* of those, cycles VBlank was held back */
-    NativeVideoMemory start;  /* memories as scanline 0 began */
-    NativeVideoRegs   start_regs;
-    bool     rendered;        /* background or sprites were on at scanline 0 */
-    int16_t  split_line;      /* scanline of the sprite-0 hit, -1 = none */
-    int16_t  split_x;
+    uint32_t frame;          /* machine frame number, 0 = power-on */
+    uint32_t cycles;         /* CPU cycles this frame took, DMA included */
+    uint32_t held_cycles;    /* of those, cycles VBlank was held back */
+    NativeVideoMemory start; /* memories as scanline 0 began */
+    NativeVideoRegs start_regs;
+    bool rendered;      /* background or sprites were on at scanline 0 */
+    int16_t split_line; /* scanline of the sprite-0 hit, -1 = none */
+    int16_t split_x;
     uint32_t ppu_write_count; /* writes while scanlines 0-239 were drawn */
     NativeRegWrite ppu_writes[NATIVE_FRAME_MAX_PPU_WRITES];
     uint32_t apu_write_count; /* $4000-$4013, $4015, $4017 */
     NativeRegWrite apu_writes[NATIVE_FRAME_MAX_APU_WRITES];
-    bool     overflowed;      /* a log was full; the rest was dropped */
+    bool overflowed; /* a log was full; the rest was dropped */
 } NativeFrame;
 
 /* The memories and registers right now (between frames: as VBlank began). */
 const NativeVideoMemory *native_video_memory(void);
-const NativeVideoRegs   *native_video_regs(void);
+const NativeVideoRegs *native_video_regs(void);
 /* The frame that just ended. Valid until the next frame ends. */
 const NativeFrame *native_last_frame(void);
 

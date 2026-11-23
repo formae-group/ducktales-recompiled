@@ -9,6 +9,7 @@ after (the state and the log must come from the same run). The input state is no
     py -3 -I tools/player_poke_state.py s.state s.bin out.state 07A0=06 0790=00
     ducktales.exe ROM --load-state out.state --input R --frames N ...
 """
+
 import argparse
 import struct
 import sys
@@ -27,8 +28,8 @@ def ram_offset(state, ram):
         tag, n = struct.unpack_from('<II', state, at)
         at += 8
         if tag == TAG_HW:
-            body = state[at:at + n]
-            hits = [i for i in range(len(body) - len(ram) + 1) if body[i:i + len(ram)] == ram]
+            body = state[at : at + n]
+            hits = [i for i in range(len(body) - len(ram) + 1) if body[i : i + len(ram)] == ram]
             if len(hits) != 1:
                 raise SystemExit('RAM found %d times in the HW chunk; is the log from the same run?' % len(hits))
             return at + hits[0]

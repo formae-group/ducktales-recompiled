@@ -64,9 +64,15 @@ static FILE *step_f, *latch_log_f;
 static uint8_t (*latches)[2];
 static size_t latch_count, latch_next;
 
-static void dump_step(void) { fwrite(native_cpu_ram(), 1, 0x800, step_f); }
+static void dump_step(void)
+{
+    fwrite(native_cpu_ram(), 1, 0x800, step_f);
+}
 
-static void record_latch(uint8_t buttons[2]) { fprintf(latch_log_f, "%02X %02X\n", buttons[0], buttons[1]); }
+static void record_latch(uint8_t buttons[2])
+{
+    fprintf(latch_log_f, "%02X %02X\n", buttons[0], buttons[1]);
+}
 
 static void replay_latch(uint8_t buttons[2])
 {
@@ -102,7 +108,9 @@ static bool load_latches(const char *path)
 static uint8_t *read_file(const char *path, size_t *size)
 {
     FILE *f = fopen(path, "rb");
-    if (!f) return NULL;
+    if (!f) {
+        return NULL;
+    }
     fseek(f, 0, SEEK_END);
     long n = ftell(f);
     fseek(f, 0, SEEK_SET);
@@ -119,7 +127,8 @@ static uint8_t *read_file(const char *path, size_t *size)
 int main(int argc, char **argv)
 {
     const char *rom = NULL, *input = NULL, *hash_out = NULL, *split_out = NULL, *trace_out = NULL, *lag_out = NULL,
-               *dump_out = NULL, *audit_out = NULL, *step_out = NULL, *latch_out = NULL, *latch_in = NULL, *wav_out = NULL;
+               *dump_out = NULL, *audit_out = NULL, *step_out = NULL, *latch_out = NULL, *latch_in = NULL,
+               *wav_out = NULL;
     NativeLagMode lag_mode = NATIVE_LAG_NONE;
     long frames = 600, trace_frame = -1, request_frame = -1;
     uint8_t requests[8];
@@ -127,40 +136,66 @@ int main(int argc, char **argv)
     bool music_under = false, overlap = false;
     unsigned channels = 0x0F;
     for (int i = 1; i < argc; i++) {
-        if (!strcmp(argv[i], "--input") && i + 1 < argc) input = argv[++i];
-        else if (!strcmp(argv[i], "--frames") && i + 1 < argc) frames = atol(argv[++i]);
-        else if (!strcmp(argv[i], "--ram-hash-out") && i + 1 < argc) hash_out = argv[++i];
-        else if (!strcmp(argv[i], "--split-log") && i + 1 < argc) split_out = argv[++i];
-        else if (!strcmp(argv[i], "--trace-frame") && i + 1 < argc) trace_frame = atol(argv[++i]);
-        else if (!strcmp(argv[i], "--trace-out") && i + 1 < argc) trace_out = argv[++i];
-        else if (!strcmp(argv[i], "--lag-log") && i + 1 < argc) lag_out = argv[++i];
-        else if (!strcmp(argv[i], "--ram-dump") && i + 1 < argc) dump_out = argv[++i];
-        else if (!strcmp(argv[i], "--nmi-audit") && i + 1 < argc) audit_out = argv[++i];
-        else if (!strcmp(argv[i], "--step-dump") && i + 1 < argc) step_out = argv[++i];
-        else if (!strcmp(argv[i], "--latch-log") && i + 1 < argc) latch_out = argv[++i];
-        else if (!strcmp(argv[i], "--latch-input") && i + 1 < argc) latch_in = argv[++i];
-        else if (!strcmp(argv[i], "--wav-out") && i + 1 < argc) wav_out = argv[++i];
-        else if (!strcmp(argv[i], "--music-under-effects") && i + 1 < argc) music_under = !strcmp(argv[++i], "on");
-        else if (!strcmp(argv[i], "--overlap-effects") && i + 1 < argc) overlap = !strcmp(argv[++i], "on");
-        else if (!strcmp(argv[i], "--audio-channels") && i + 1 < argc) channels = (unsigned)strtoul(argv[++i], NULL, 16);
-        else if (!strcmp(argv[i], "--sound-request") && i + 1 < argc) {
+        if (!strcmp(argv[i], "--input") && i + 1 < argc) {
+            input = argv[++i];
+        } else if (!strcmp(argv[i], "--frames") && i + 1 < argc) {
+            frames = atol(argv[++i]);
+        } else if (!strcmp(argv[i], "--ram-hash-out") && i + 1 < argc) {
+            hash_out = argv[++i];
+        } else if (!strcmp(argv[i], "--split-log") && i + 1 < argc) {
+            split_out = argv[++i];
+        } else if (!strcmp(argv[i], "--trace-frame") && i + 1 < argc) {
+            trace_frame = atol(argv[++i]);
+        } else if (!strcmp(argv[i], "--trace-out") && i + 1 < argc) {
+            trace_out = argv[++i];
+        } else if (!strcmp(argv[i], "--lag-log") && i + 1 < argc) {
+            lag_out = argv[++i];
+        } else if (!strcmp(argv[i], "--ram-dump") && i + 1 < argc) {
+            dump_out = argv[++i];
+        } else if (!strcmp(argv[i], "--nmi-audit") && i + 1 < argc) {
+            audit_out = argv[++i];
+        } else if (!strcmp(argv[i], "--step-dump") && i + 1 < argc) {
+            step_out = argv[++i];
+        } else if (!strcmp(argv[i], "--latch-log") && i + 1 < argc) {
+            latch_out = argv[++i];
+        } else if (!strcmp(argv[i], "--latch-input") && i + 1 < argc) {
+            latch_in = argv[++i];
+        } else if (!strcmp(argv[i], "--wav-out") && i + 1 < argc) {
+            wav_out = argv[++i];
+        } else if (!strcmp(argv[i], "--music-under-effects") && i + 1 < argc) {
+            music_under = !strcmp(argv[++i], "on");
+        } else if (!strcmp(argv[i], "--overlap-effects") && i + 1 < argc) {
+            overlap = !strcmp(argv[++i], "on");
+        } else if (!strcmp(argv[i], "--audio-channels") && i + 1 < argc) {
+            channels = (unsigned)strtoul(argv[++i], NULL, 16);
+        } else if (!strcmp(argv[i], "--sound-request") && i + 1 < argc) {
             char *s = argv[++i];
             request_frame = strtol(s, &s, 10);
             while (*s == ':' || (*s == '+' && request_count > 0)) {
-                if (request_count == 8) break;
+                if (request_count == 8) {
+                    break;
+                }
                 requests[request_count++] = (uint8_t)strtoul(s + 1, &s, 16);
             }
-        }
-        else if (!strcmp(argv[i], "--lag") && i + 1 < argc && !strcmp(argv[i + 1], "none")) lag_mode = NATIVE_LAG_NONE, i++;
-        else if (!strcmp(argv[i], "--lag") && i + 1 < argc && !strcmp(argv[i + 1], "faithful")) lag_mode = NATIVE_LAG_FAITHFUL, i++;
-        else if (argv[i][0] != '-' && !rom) rom = argv[i];
-        else {
-            fprintf(stderr, "usage: %s ROM [--input FILE] [--frames N] [--ram-hash-out FILE] [--lag none|faithful] [--lag-log FILE] [--split-log FILE] [--wav-out FILE]\n", argv[0]);
+        } else if (!strcmp(argv[i], "--lag") && i + 1 < argc && !strcmp(argv[i + 1], "none")) {
+            lag_mode = NATIVE_LAG_NONE, i++;
+        } else if (!strcmp(argv[i], "--lag") && i + 1 < argc && !strcmp(argv[i + 1], "faithful")) {
+            lag_mode = NATIVE_LAG_FAITHFUL, i++;
+        } else if (argv[i][0] != '-' && !rom) {
+            rom = argv[i];
+        } else {
+            fprintf(stderr,
+                    "usage: %s ROM [--input FILE] [--frames N] [--ram-hash-out FILE] [--lag none|faithful] [--lag-log "
+                    "FILE] [--split-log FILE] [--wav-out FILE]\n",
+                    argv[0]);
             return 2;
         }
     }
     if (!rom) {
-        fprintf(stderr, "usage: %s ROM [--input FILE] [--frames N] [--ram-hash-out FILE] [--lag none|faithful] [--lag-log FILE] [--split-log FILE] [--wav-out FILE]\n", argv[0]);
+        fprintf(stderr,
+                "usage: %s ROM [--input FILE] [--frames N] [--ram-hash-out FILE] [--lag none|faithful] [--lag-log "
+                "FILE] [--split-log FILE] [--wav-out FILE]\n",
+                argv[0]);
         return 2;
     }
     size_t size;
@@ -175,8 +210,12 @@ int main(int argc, char **argv)
         return 2;
     }
     free(image);
-    if (input && !native_route_load(&route, input)) return 2;
-    if (latch_in && !load_latches(latch_in)) return 2;
+    if (input && !native_route_load(&route, input)) {
+        return 2;
+    }
+    if (latch_in && !load_latches(latch_in)) {
+        return 2;
+    }
     FILE *hash_f = hash_out ? fopen(hash_out, "w") : NULL;
     FILE *split_f = split_out ? fopen(split_out, "w") : NULL;
     FILE *trace_f = trace_out ? fopen(trace_out, "w") : NULL;
@@ -195,9 +234,15 @@ int main(int argc, char **argv)
 
     native_power_on();
     native_set_lag_mode(lag_mode);
-    if (step_f) native_set_step_hook(dump_step);
-    if (latch_log_f) native_set_latch_hook(record_latch);
-    if (latches) native_set_latch_hook(replay_latch);
+    if (step_f) {
+        native_set_step_hook(dump_step);
+    }
+    if (latch_log_f) {
+        native_set_latch_hook(record_latch);
+    }
+    if (latches) {
+        native_set_latch_hook(replay_latch);
+    }
     uint32_t wav_samples = 0;
     if (wav_f) {
         native_audio_reset(48000);
@@ -215,20 +260,34 @@ int main(int argc, char **argv)
         cyc_trace_file = cyc_trace_enabled ? trace_f : NULL;
         native_run_frame();
         if (frame == request_frame) {
-            for (int k = 0; k < 8; k++) native_poke((uint16_t)(0xC8 + k), k < request_count ? requests[k] : 0x88);
+            for (int k = 0; k < 8; k++) {
+                native_poke((uint16_t)(0xC8 + k), k < request_count ? requests[k] : 0x88);
+            }
             native_poke(0xC6, (uint8_t)(request_count & 7));
             native_poke(0xC7, 0);
         }
         if (hash_f) {
             const NativeVideoMemory *m = native_video_memory();
             NativeHashInput in = {
-                .ram = native_cpu_ram(), .ciram = m->ciram, .palette = m->palette, .oam = m->oam,
-                .chr = m->chr, .chr_len = sizeof m->chr, .cycles = native_cycle_count(), .pc = cpu.pc,
-                .a = cpu.a, .x = cpu.x, .y = cpu.y, .s = cpu.s, .p = (uint8_t)(cpu_get_p(0) & 0xCF),
+                .ram = native_cpu_ram(),
+                .ciram = m->ciram,
+                .palette = m->palette,
+                .oam = m->oam,
+                .chr = m->chr,
+                .chr_len = sizeof m->chr,
+                .cycles = native_cycle_count(),
+                .pc = cpu.pc,
+                .a = cpu.a,
+                .x = cpu.x,
+                .y = cpu.y,
+                .s = cpu.s,
+                .p = (uint8_t)(cpu_get_p(0) & 0xCF),
             };
             native_hash_line(hash_f, frame, &in);
         }
-        if (dump_f) fwrite(native_cpu_ram(), 1, 0x800, dump_f);
+        if (dump_f) {
+            fwrite(native_cpu_ram(), 1, 0x800, dump_f);
+        }
         if (wav_f) {
             static int16_t pcm[NATIVE_AUDIO_MAX_FRAME_SAMPLES];
             const NativeFrame *f = native_last_frame();
@@ -240,9 +299,11 @@ int main(int argc, char **argv)
             static const char *const END[] = { "-", "idle", "poll", "cap" };
             const NativeLagFrame *l = native_last_lag();
             const uint8_t *ram = native_cpu_ram();
-            fprintf(lag_f, "%ld nmi=%d pic=%d lag=%d held=%u end=%s land=%02X row=%02X screen=%02X", frame, l->nmi, l->picture, l->lag,
-                    l->deferred_cycles, END[l->defer_end], ram[0xF6], ram[0xF1], ram[0x2D]);
-            if (l->overrun_frame >= 0) fprintf(lag_f, " overrun=%d:%u", (int)l->overrun_frame, l->overrun_cycles);
+            fprintf(lag_f, "%ld nmi=%d pic=%d lag=%d held=%u end=%s land=%02X row=%02X screen=%02X", frame, l->nmi,
+                    l->picture, l->lag, l->deferred_cycles, END[l->defer_end], ram[0xF6], ram[0xF1], ram[0x2D]);
+            if (l->overrun_frame >= 0) {
+                fprintf(lag_f, " overrun=%d:%u", (int)l->overrun_frame, l->overrun_cycles);
+            }
             fputc('\n', lag_f);
         }
         if (split_f) {
@@ -253,23 +314,40 @@ int main(int argc, char **argv)
         }
     }
     double seconds = (double)(clock() - start) / CLOCKS_PER_SEC;
-    if (lag_f) fclose(lag_f);
+    if (lag_f) {
+        fclose(lag_f);
+    }
     if (wav_f) {
         native_audio_wav_header(wav_f, 48000, wav_samples);
         fclose(wav_f);
     }
-    if (dump_f) fclose(dump_f);
-    if (step_f) fclose(step_f);
-    if (latch_log_f) fclose(latch_log_f);
+    if (dump_f) {
+        fclose(dump_f);
+    }
+    if (step_f) {
+        fclose(step_f);
+    }
+    if (latch_log_f) {
+        fclose(latch_log_f);
+    }
     if (audit_f) {
         const uint32_t *w = native_nmi_writes(), *r = native_task_reads();
-        for (unsigned a = 0; a < 0x800; a++)
-            if (w[a]) fprintf(audit_f, "%04X nmi_writes=%u task_reads=%u\n", a, w[a], r[a]);
+        for (unsigned a = 0; a < 0x800; a++) {
+            if (w[a]) {
+                fprintf(audit_f, "%04X nmi_writes=%u task_reads=%u\n", a, w[a], r[a]);
+            }
+        }
         fclose(audit_f);
     }
-    if (hash_f) fclose(hash_f);
-    if (split_f) fclose(split_f);
-    if (trace_f) fclose(trace_f);
+    if (hash_f) {
+        fclose(hash_f);
+    }
+    if (split_f) {
+        fclose(split_f);
+    }
+    if (trace_f) {
+        fclose(trace_f);
+    }
     printf("native: frames=%ld cycles=%llu fallback_instructions=%llu unmodeled_reads=%llu seconds=%.2f (%.0f fps)\n",
            frames, (unsigned long long)native_cycle_count(), (unsigned long long)native_fallback_instructions(),
            (unsigned long long)native_unmodeled_reads(), seconds, seconds > 0 ? frames / seconds : 0.0);

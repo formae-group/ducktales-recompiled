@@ -16,10 +16,10 @@
 extern "C" {
 #endif
 
-#define DT_SPRITES_KEY      "NoSpriteFlicker"
-#define DT_SPRITES_OPTION   "--no-sprite-flicker"
-#define DT_SPRITES_LABEL    "No sprite flicker"
-#define DT_SPRITES_DEFAULT  true
+#define DT_SPRITES_KEY     "NoSpriteFlicker"
+#define DT_SPRITES_OPTION  "--no-sprite-flicker"
+#define DT_SPRITES_LABEL   "No sprite flicker"
+#define DT_SPRITES_DEFAULT true
 
 void dt_sprites_set(bool on);
 bool dt_sprites_get(void);
@@ -32,15 +32,16 @@ void dt_sprites_frame_end(void);
 void dt_sprites_forget(void);
 
 typedef struct {
-    uint64_t composed;      /* pictures drawn from the rebuilt sprite list */
-    uint64_t reused;        /* pictures whose OAM equals the last rebuilt one (list kept) */
-    uint64_t fallback;      /* pictures drawn from the frame's OAM in its own order */
-    uint64_t declined;      /* pictures left to the machine (no background yet) */
-    uint64_t hud_restored;  /* pictures with the HUD the builder left out for Scrooge's Y */
-    uint64_t leftover;      /* rebuilt pictures that kept unparked entries no slot made */
-    uint64_t lines_over_8;  /* lines with more than 8 sprites drawn */
-    uint64_t beyond_63;     /* sprites drawn past the 63 OAM entries */
+    uint64_t composed;     /* pictures drawn from the rebuilt sprite list */
+    uint64_t reused;       /* pictures whose OAM equals the last rebuilt one (list kept) */
+    uint64_t fallback;     /* pictures drawn from the frame's OAM in its own order */
+    uint64_t declined;     /* pictures left to the machine (no background yet) */
+    uint64_t hud_restored; /* pictures with the HUD the builder left out for Scrooge's Y */
+    uint64_t leftover;     /* rebuilt pictures that kept unparked entries no slot made */
+    uint64_t lines_over_8; /* lines with more than 8 sprites drawn */
+    uint64_t beyond_63;    /* sprites drawn past the 63 OAM entries */
 } DtSpritesStats;
+
 void dt_sprites_stats(DtSpritesStats *out);
 /* Developer log: one line per composed picture (DUCKTALES_DEV_DIAGNOSTICS). */
 void dt_sprites_set_log(FILE *f);

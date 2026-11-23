@@ -140,6 +140,13 @@ const char app_about_build_date[] = "@_ducktales_build_date@";
         set(DUCKTALES_ICON "${CMAKE_SOURCE_DIR}/assets/icon/ducktales.ico")
         configure_file("${CMAKE_SOURCE_DIR}/assets/icon/ducktales.rc.in" "${CMAKE_BINARY_DIR}/ducktales.rc" @ONLY)
         target_sources(ducktales PRIVATE "${CMAKE_BINARY_DIR}/ducktales.rc")
+        # A Windows program, not a console one: no terminal opens beside the
+        # window. main() stays the entry; src/host/ducktales_main.c attaches
+        # to the parent's console when started from one.
+        set_target_properties(ducktales PROPERTIES WIN32_EXECUTABLE ON)
+        if(MSVC)
+            target_link_options(ducktales PRIVATE /ENTRY:mainCRTStartup)
+        endif()
     endif()
 endif()
 if(DUCKTALES_DEV_DIAGNOSTICS)
@@ -237,6 +244,10 @@ if(NOT DUCKTALES_HEADLESS)
     if(WIN32)
         target_link_libraries(ducktales_player PRIVATE comdlg32 shell32 avrt winmm)
         target_sources(ducktales_player PRIVATE "${CMAKE_BINARY_DIR}/ducktales.rc")
+        set_target_properties(ducktales_player PROPERTIES WIN32_EXECUTABLE ON)
+        if(MSVC)
+            target_link_options(ducktales_player PRIVATE /ENTRY:mainCRTStartup)
+        endif()
         add_custom_command(TARGET ducktales_player POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:SDL2::SDL2> $<TARGET_FILE_DIR:ducktales_player>)
     endif()

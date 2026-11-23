@@ -8,6 +8,7 @@ Mesen.exe: Mesen2 then runs in portable mode from that folder (its native DLLs,
 Saves/ and Debugger/ land there, not in Documents), and the test runner does
 not stop at the first-run setup dialog.
 """
+
 import argparse
 import hashlib
 import sys

@@ -26,11 +26,11 @@
 
 typedef struct {
     uint16_t addr; /* $4000-$400F */
-    uint8_t  value;
+    uint8_t value;
 } NativeVoiceWrite;
 
 typedef struct {
-    uint8_t live[2];   /* channels each voice plays (bit 0 pulse 1 .. bit 3 noise) */
+    uint8_t live[2]; /* channels each voice plays (bit 0 pulse 1 .. bit 3 noise) */
     uint32_t count[2];
     NativeVoiceWrite writes[2][NATIVE_VOICE_MAX_WRITES]; /* [0] music, [1] effect */
 } NativeVoiceFrame;

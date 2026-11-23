@@ -11,12 +11,23 @@ docs/levels.md). Screen index = row * stride + column, the value kept in $2D.
 Without --ids each cell prints as # (screen) or . (none); --ids prints the
 screen numbers instead. Output derives from the ROM and is not committed.
 """
+
 import argparse
 from pathlib import Path
 
 ROWS, STRIDE, PTR_LO, PTR_HI = 0xCE57, 0xCE61, 0xCF7F, 0xCF89
-NAMES = ['The Amazon', 'Transylvania', 'African Mines', 'The Himalayas', 'The Moon',
-         'map 5', 'map 6', 'map 7', 'map 8', 'map 9']
+NAMES = [
+    'The Amazon',
+    'Transylvania',
+    'African Mines',
+    'The Himalayas',
+    'The Moon',
+    'map 5',
+    'map 6',
+    'map 7',
+    'map 8',
+    'map 9',
+]
 
 
 def main():
@@ -25,7 +36,7 @@ def main():
     ap.add_argument('--ids', action='store_true')
     a = ap.parse_args()
     data = a.rom.read_bytes()
-    prg = data[16:16 + data[4] * 0x4000]
+    prg = data[16 : 16 + data[4] * 0x4000]
     fixed = prg[-0x4000:]
 
     def rd(addr):

@@ -44,34 +44,62 @@ static const EventInfo INFO[EVENT_COUNT] = {
     [EVENT_BOSS_HIT] = { "boss-hit", DT_SITE_BOSS_HIT_ID, DT_SITE_BOSS_HIT, true },
 };
 
-static struct { EventHandler fn; void *user; } s_handlers[EVENT_COUNT][MAX_HANDLERS];
+static struct {
+    EventHandler fn;
+    void *user;
+} s_handlers[EVENT_COUNT][MAX_HANDLERS];
+
 static int s_count[EVENT_COUNT];
 static uint64_t s_raised[EVENT_COUNT];
 
-const char *Events_Name(EventId id) { return id < EVENT_COUNT ? INFO[id].name : "?"; }
+const char *Events_Name(EventId id)
+{
+    return id < EVENT_COUNT ? INFO[id].name : "?";
+}
 
-bool Events_Cancelable(EventId id) { return id < EVENT_COUNT && INFO[id].cancelable; }
+bool Events_Cancelable(EventId id)
+{
+    return id < EVENT_COUNT && INFO[id].cancelable;
+}
 
-uint64_t Events_Raised(EventId id) { return id < EVENT_COUNT ? s_raised[id] : 0; }
+uint64_t Events_Raised(EventId id)
+{
+    return id < EVENT_COUNT ? s_raised[id] : 0;
+}
 
 bool Events_On(EventId id, EventHandler fn, void *user)
 {
-    if (id >= EVENT_COUNT || !fn || s_count[id] == MAX_HANDLERS) return false;
-    for (int i = 0; i < s_count[id]; i++)
-        if (s_handlers[id][i].fn == fn && s_handlers[id][i].user == user) return false;
+    if (id >= EVENT_COUNT || !fn || s_count[id] == MAX_HANDLERS) {
+        return false;
+    }
+    for (int i = 0; i < s_count[id]; i++) {
+        if (s_handlers[id][i].fn == fn && s_handlers[id][i].user == user) {
+            return false;
+        }
+    }
     s_handlers[id][s_count[id]].fn = fn;
     s_handlers[id][s_count[id]].user = user;
-    if (s_count[id]++ == 0) nes_mod_set_function_hook_enabled(INFO[id].site_id, 1);
+    if (s_count[id]++ == 0) {
+        nes_mod_set_function_hook_enabled(INFO[id].site_id, 1);
+    }
     return true;
 }
 
 bool Events_Off(EventId id, EventHandler fn, void *user)
 {
-    if (id >= EVENT_COUNT) return false;
+    if (id >= EVENT_COUNT) {
+        return false;
+    }
     for (int i = 0; i < s_count[id]; i++) {
-        if (s_handlers[id][i].fn != fn || s_handlers[id][i].user != user) continue;
-        for (int j = i + 1; j < s_count[id]; j++) s_handlers[id][j - 1] = s_handlers[id][j];
-        if (--s_count[id] == 0) nes_mod_set_function_hook_enabled(INFO[id].site_id, 0);
+        if (s_handlers[id][i].fn != fn || s_handlers[id][i].user != user) {
+            continue;
+        }
+        for (int j = i + 1; j < s_count[id]; j++) {
+            s_handlers[id][j - 1] = s_handlers[id][j];
+        }
+        if (--s_count[id] == 0) {
+            nes_mod_set_function_hook_enabled(INFO[id].site_id, 0);
+        }
         return true;
     }
     return false;
@@ -79,17 +107,31 @@ bool Events_Off(EventId id, EventHandler fn, void *user)
 
 EventResult Events_Raise(EventId id)
 {
-    if (id >= EVENT_COUNT) return EVENT_CONTINUE;
+    if (id >= EVENT_COUNT) {
+        return EVENT_CONTINUE;
+    }
     s_raised[id]++;
     EventResult result = EVENT_CONTINUE;
-    for (int i = 0; i < s_count[id]; i++)
-        if (s_handlers[id][i].fn(id, s_handlers[id][i].user) == EVENT_CANCEL) result = EVENT_CANCEL;
-    if (!INFO[id].cancelable || result != EVENT_CANCEL) return EVENT_CONTINUE;
+    for (int i = 0; i < s_count[id]; i++) {
+        if (s_handlers[id][i].fn(id, s_handlers[id][i].user) == EVENT_CANCEL) {
+            result = EVENT_CANCEL;
+        }
+    }
+    if (!INFO[id].cancelable || result != EVENT_CANCEL) {
+        return EVENT_CONTINUE;
+    }
     switch (id) {
-    case EVENT_LIFE_LOST: gLives++; break;
-    case EVENT_TIMER_TICK: gTickFrames = DT_TICK_FRAMES_RELOAD; break;
-    case EVENT_BOSS_HIT: gBossHits++; break;
-    default: break;
+        case EVENT_LIFE_LOST:
+            gLives++;
+            break;
+        case EVENT_TIMER_TICK:
+            gTickFrames = DT_TICK_FRAMES_RELOAD;
+            break;
+        case EVENT_BOSS_HIT:
+            gBossHits++;
+            break;
+        default:
+            break;
     }
     return EVENT_CANCEL;
 }
@@ -98,19 +140,50 @@ EventResult Events_Raise(EventId id)
 
 static int at_site(EventId id)
 {
-    if (cyc_mod_isolated()) return 0;
+    if (cyc_mod_isolated()) {
+        return 0;
+    }
     GameRam_Begin();
     EventResult result = Events_Raise(id);
     GameRam_End();
     return id == EVENT_PLAYER_DAMAGED && result == EVENT_CANCEL;
 }
 
-static int on_damage(uint16_t addr) { (void)addr; return at_site(EVENT_PLAYER_DAMAGED); }
-static int on_life_lost(uint16_t addr) { (void)addr; return at_site(EVENT_LIFE_LOST); }
-static int on_timer_tick(uint16_t addr) { (void)addr; return at_site(EVENT_TIMER_TICK); }
-static int on_new_game(uint16_t addr) { (void)addr; return at_site(EVENT_NEW_GAME); }
-static int on_jump_start(uint16_t addr) { (void)addr; return at_site(EVENT_JUMP_START); }
-static int on_boss_hit(uint16_t addr) { (void)addr; return at_site(EVENT_BOSS_HIT); }
+static int on_damage(uint16_t addr)
+{
+    (void)addr;
+    return at_site(EVENT_PLAYER_DAMAGED);
+}
+
+static int on_life_lost(uint16_t addr)
+{
+    (void)addr;
+    return at_site(EVENT_LIFE_LOST);
+}
+
+static int on_timer_tick(uint16_t addr)
+{
+    (void)addr;
+    return at_site(EVENT_TIMER_TICK);
+}
+
+static int on_new_game(uint16_t addr)
+{
+    (void)addr;
+    return at_site(EVENT_NEW_GAME);
+}
+
+static int on_jump_start(uint16_t addr)
+{
+    (void)addr;
+    return at_site(EVENT_JUMP_START);
+}
+
+static int on_boss_hit(uint16_t addr)
+{
+    (void)addr;
+    return at_site(EVENT_BOSS_HIT);
+}
 
 NES_MOD_CONSTRUCTOR(dt_register_event_sites)
 {

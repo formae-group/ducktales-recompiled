@@ -14,6 +14,7 @@ the native run through the synth (--wav-out, deleted afterwards) with both
 extra voices on or off (docs/audio.md, "Extra voices"), which only read the
 machine, so the comparison must still pass.
 """
+
 import argparse
 import subprocess
 import sys
@@ -44,21 +45,45 @@ def run_route(route, args, exe, native):
     frames = str(route_frames(route))
     cyc, nat = out / f'{route.stem}.cycle.txt', out / f'{route.stem}.native.txt'
     if not (args.reuse and cyc.exists()):
-        subprocess.run([str(exe), args.rom, '--input', str(route), '--frames', frames, '--ram-hash-out', str(cyc)],
-                       capture_output=True, check=True)
+        subprocess.run(
+            [str(exe), args.rom, '--input', str(route), '--frames', frames, '--ram-hash-out', str(cyc)],
+            capture_output=True,
+            check=True,
+        )
     voices = []
     wav = out / f'{route.stem}.native.wav'
     if args.voices:
         voices = ['--wav-out', str(wav), '--music-under-effects', args.voices, '--overlap-effects', args.voices]
-    p = subprocess.run([str(native), args.rom, '--input', str(route), '--frames', frames, '--lag', 'faithful',
-                        '--ram-hash-out', str(nat)] + voices,
-                       capture_output=True, text=True, check=True)
+    p = subprocess.run(
+        [
+            str(native),
+            args.rom,
+            '--input',
+            str(route),
+            '--frames',
+            frames,
+            '--lag',
+            'faithful',
+            '--ram-hash-out',
+            str(nat),
+        ]
+        + voices,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
     wav.unlink(missing_ok=True)
     summary = p.stdout.strip().splitlines()[-1] if p.stdout.strip() else ''
-    strict = subprocess.run([sys.executable, '-I', str(COMPARE), str(cyc), str(nat), '--fields', STRICT, '--list', '3'],
-                            capture_output=True, text=True)
-    memory = subprocess.run([sys.executable, '-I', str(COMPARE), str(cyc), str(nat), '--fields', 'nt,pal,oam,chr',
-                             '--list', '0'], capture_output=True, text=True)
+    strict = subprocess.run(
+        [sys.executable, '-I', str(COMPARE), str(cyc), str(nat), '--fields', STRICT, '--list', '3'],
+        capture_output=True,
+        text=True,
+    )
+    memory = subprocess.run(
+        [sys.executable, '-I', str(COMPARE), str(cyc), str(nat), '--fields', 'nt,pal,oam,chr', '--list', '0'],
+        capture_output=True,
+        text=True,
+    )
     return route, frames, strict, memory, summary
 
 
@@ -84,8 +109,10 @@ def main():
         for route, frames, strict, memory, summary in pool.map(lambda r: run_route(r, args, exe, native), routes):
             ok = strict.returncode == 0
             mem_line = [l for l in memory.stdout.splitlines() if l.startswith(('IDENTICAL', 'DIFFERENT'))]
-            print(f'{route.stem:24s} {"PASS" if ok else "FAIL"}  frames={frames}  ram/cycles/registers: '
-                  f'{"identical" if ok else "differ"}  ppu memories: {mem_line[0] if mem_line else "?"}  [{summary}]')
+            print(
+                f'{route.stem:24s} {"PASS" if ok else "FAIL"}  frames={frames}  ram/cycles/registers: '
+                f'{"identical" if ok else "differ"}  ppu memories: {mem_line[0] if mem_line else "?"}  [{summary}]'
+            )
             if not ok:
                 failed.append(route.stem)
                 print(strict.stdout)

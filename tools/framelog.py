@@ -1,9 +1,10 @@
 """Read NESRecomp --frame-log files (format: runner/cyc/cyc_host.c write_frame_log).
 
-    py -3 -I tools/framelog.py LOG ram ADDR[,ADDR...] [--first N --last N]
-    py -3 -I tools/framelog.py LOG changes A:B C:D   bytes that change in frames A..B but not C..D
-    py -3 -I tools/framelog.py LOG events --max N      every change of bytes that change at most N times
+py -3 -I tools/framelog.py LOG ram ADDR[,ADDR...] [--first N --last N]
+py -3 -I tools/framelog.py LOG changes A:B C:D   bytes that change in frames A..B but not C..D
+py -3 -I tools/framelog.py LOG events --max N      every change of bytes that change at most N times
 """
+
 import argparse
 import struct
 
@@ -12,7 +13,7 @@ def frames(path):
     with open(path, 'rb') as f:
         if f.read(8) != b'CYCFRAME':
             raise SystemExit('not a frame log')
-        version, = struct.unpack('<I', f.read(4))
+        (version,) = struct.unpack('<I', f.read(4))
         nlen = 6 if version >= 2 else 5
         while True:
             head = f.read(12 + 4 * nlen)

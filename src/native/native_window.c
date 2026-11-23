@@ -89,19 +89,24 @@
 #endif
 #endif
 
-#define FRAME_HZ    60.0988
-#define AUDIO_RATE  48000
-#define STATE_MAGIC "DTNSTATE"
+#define FRAME_HZ      60.0988
+#define AUDIO_RATE    48000
+#define STATE_MAGIC   "DTNSTATE"
 #define STATE_VERSION 1u
 
 int ducktales_host_main(int argc, char **argv);
 
-void ducktales_host_apply_no_slowdown(bool on) { native_set_lag_mode(on ? NATIVE_LAG_NONE : NATIVE_LAG_FAITHFUL); }
+void ducktales_host_apply_no_slowdown(bool on)
+{
+    native_set_lag_mode(on ? NATIVE_LAG_NONE : NATIVE_LAG_FAITHFUL);
+}
 
 static uint8_t *read_file(const char *path, size_t *size)
 {
     FILE *f = fopen(path, "rb");
-    if (!f) return NULL;
+    if (!f) {
+        return NULL;
+    }
     fseek(f, 0, SEEK_END);
     long n = ftell(f);
     fseek(f, 0, SEEK_SET);
@@ -120,8 +125,9 @@ static void power_on(void)
     native_power_on();
     dt_sprites_forget();
     ducktales_host_apply_no_slowdown(ducktales_host_no_slowdown());
-    if (ducktales_host_no_slowdown())
+    if (ducktales_host_no_slowdown()) {
         printf("[ducktales] No slowdown: the native runtime holds VBlank until each frame's logic is done\n");
+    }
     fflush(stdout);
 }
 
@@ -146,7 +152,9 @@ static void numbered_path(char *out, size_t cap, const char *base, long frame)
 {
     const char *dot = strrchr(base, '.');
     const char *slash = strrchr(base, '/'), *bslash = strrchr(base, '\\');
-    if (dot && ((slash && dot < slash) || (bslash && dot < bslash))) dot = NULL;
+    if (dot && ((slash && dot < slash) || (bslash && dot < bslash))) {
+        dot = NULL;
+    }
     int stem = (int)(dot ? (size_t)(dot - base) : strlen(base));
     snprintf(out, cap, "%.*s_%05ld%s", stem, base, frame, dot ? dot : ".png");
 }
@@ -169,23 +177,32 @@ static uint64_t machine_hash(void)
     const NativeVideoMemory *m = native_video_memory();
     const uint8_t *parts[2] = { native_cpu_ram(), (const uint8_t *)m };
     const size_t sizes[2] = { 0x800, sizeof *m };
-    for (int p = 0; p < 2; p++)
-        for (size_t i = 0; i < sizes[p]; i++) h = (h ^ parts[p][i]) * 1099511628211ull;
+    for (int p = 0; p < 2; p++) {
+        for (size_t i = 0; i < sizes[p]; i++) {
+            h = (h ^ parts[p][i]) * 1099511628211ull;
+        }
+    }
     return h ^ native_cycle_count();
 }
 
 static int run_off_screen(long frames, const char *input, int lag, const char *present_out, long present_every,
                           long state_check, const char *wav_out)
 {
-    enum { CHECK_FRAMES = 300 };
+    enum {
+        CHECK_FRAMES = 300
+    };
+
     static uint64_t first[CHECK_FRAMES];
     uint8_t *state = NULL;
     size_t state_size = 0;
     long check_mismatch = -1;
-    NativeRoute replay;
+    NativeRoute replay;
+
     NativeRoute route;
     memset(&route, 0, sizeof route);
-    if (input && !native_route_load(&route, input)) return 2;
+    if (input && !native_route_load(&route, input)) {
+        return 2;
+    }
     FILE *wav = wav_out ? fopen(wav_out, "wb") : NULL;
     if (wav_out && !wav) {
         fprintf(stderr, "cannot write %s\n", wav_out);
@@ -197,7 +214,9 @@ static int run_off_screen(long frames, const char *input, int lag, const char *p
         native_audio_wav_header(wav, AUDIO_RATE, 0);
     }
     power_on();
-    if (lag >= 0) native_set_lag_mode((NativeLagMode)lag);
+    if (lag >= 0) {
+        native_set_lag_mode((NativeLagMode)lag);
+    }
     for (long frame = 0; frame < frames; frame++) {
         uint8_t held[2];
         native_route_frame(&route, frame, held);
@@ -212,7 +231,9 @@ static int run_off_screen(long frames, const char *input, int lag, const char *p
         if (state_check >= 0 && frame == state_check) {
             state_size = native_state_save(NULL, 0);
             state = (uint8_t *)malloc(state_size);
-            if (state) native_state_save(state, state_size);
+            if (state) {
+                native_state_save(state, state_size);
+            }
             replay = route;
         }
         if (state && frame > state_check && frame <= state_check + CHECK_FRAMES) {
@@ -226,12 +247,19 @@ static int run_off_screen(long frames, const char *input, int lag, const char *p
                     uint8_t h2[2];
                     native_route_frame(&route, f, h2);
                     run_frame(h2[0], h2[1]);
-                    if (machine_hash() != first[f - state_check - 1] && !check_mismatch) check_mismatch = f;
+                    if (machine_hash() != first[f - state_check - 1] && !check_mismatch) {
+                        check_mismatch = f;
+                    }
                 }
                 route = saved;
                 printf("native player: state check after frame %ld: %s over %d frames\n", state_check,
-                       !loaded ? "the state did not load" : check_mismatch ? "differs" : "identical", CHECK_FRAMES);
-                if (check_mismatch) printf("  first difference at frame %ld\n", check_mismatch);
+                       !loaded          ? "the state did not load"
+                       : check_mismatch ? "differs"
+                                        : "identical",
+                       CHECK_FRAMES);
+                if (check_mismatch) {
+                    printf("  first difference at frame %ld\n", check_mismatch);
+                }
                 free(state);
                 state = NULL;
             }
@@ -241,7 +269,9 @@ static int run_off_screen(long frames, const char *input, int lag, const char *p
             const uint32_t *pic = picture(&w, &h);
             char path[1100];
             numbered_path(path, sizeof path, present_out, frame);
-            if (!cyc_write_png(path, pic, w, h)) fprintf(stderr, "cannot write %s\n", path);
+            if (!cyc_write_png(path, pic, w, h)) {
+                fprintf(stderr, "cannot write %s\n", path);
+            }
         }
     }
     if (wav) {
@@ -252,8 +282,9 @@ static int run_off_screen(long frames, const char *input, int lag, const char *p
            (unsigned long long)native_cycle_count(), (unsigned long long)native_fallback_instructions(),
            (unsigned long long)native_unmodeled_reads());
     printf("native player: hooks acted:");
-    for (int e = 0; e < DT_ENH_COUNT; e++)
+    for (int e = 0; e < DT_ENH_COUNT; e++) {
         printf(" %s=%llu", dt_enh_info((DtEnh)e)->key, (unsigned long long)dt_enh_applied((DtEnh)e));
+    }
     printf("\n");
     return check_mismatch > 0 ? 1 : 0;
 }
@@ -289,7 +320,9 @@ static void game_load(void *ctx, const char *key, const char *value)
 static void save_settings(void)
 {
     static const CycSettingsGame GAME = { NULL, NULL, game_save };
-    if (!cyc_settings_save(&s_set, s_set_path, &GAME)) fprintf(stderr, "cannot write %s\n", s_set_path);
+    if (!cyc_settings_save(&s_set, s_set_path, &GAME)) {
+        fprintf(stderr, "cannot write %s\n", s_set_path);
+    }
     app_ui_host_saved();
 }
 
@@ -307,7 +340,9 @@ static void state_path(char *out, size_t cap)
     char dir[1100];
     char *base = SDL_GetBasePath();
     snprintf(dir, sizeof dir, "%ssaves", base ? base : "");
-    if (base) SDL_free(base);
+    if (base) {
+        SDL_free(base);
+    }
 #ifdef _WIN32
     _mkdir(dir);
 #endif
@@ -325,7 +360,8 @@ static void save_state(void)
     if (f) {
         uint32_t head[3] = { STATE_VERSION, cyc_native_prg_hash, (uint32_t)size };
         native_state_save(blob, size);
-        ok = fwrite(STATE_MAGIC, 1, 8, f) == 8 && fwrite(head, sizeof head, 1, f) == 1 && fwrite(blob, 1, size, f) == size;
+        ok = fwrite(STATE_MAGIC, 1, 8, f) == 8 && fwrite(head, sizeof head, 1, f) == 1 &&
+             fwrite(blob, 1, size, f) == size;
         ok = fclose(f) == 0 && ok;
     }
     free(blob);
@@ -339,28 +375,39 @@ static void load_state(void)
     size_t size = 0;
     uint8_t *data = read_file(path, &size);
     uint32_t head[3];
-    if (!data) snprintf(why, sizeof why, "no saved state");
-    else if (size < 8 + sizeof head || memcmp(data, STATE_MAGIC, 8)) snprintf(why, sizeof why, "not a state file");
-    else {
+    if (!data) {
+        snprintf(why, sizeof why, "no saved state");
+    } else if (size < 8 + sizeof head || memcmp(data, STATE_MAGIC, 8)) {
+        snprintf(why, sizeof why, "not a state file");
+    } else {
         memcpy(head, data + 8, sizeof head);
-        if (head[0] != STATE_VERSION || head[1] != cyc_native_prg_hash || head[2] != size - 8 - sizeof head)
+        if (head[0] != STATE_VERSION || head[1] != cyc_native_prg_hash || head[2] != size - 8 - sizeof head) {
             snprintf(why, sizeof why, "saved by another version");
-        else if (!native_state_load(data + 8 + sizeof head, size - 8 - sizeof head))
+        } else if (!native_state_load(data + 8 + sizeof head, size - 8 - sizeof head)) {
             snprintf(why, sizeof why, "the state does not fit this build");
+        }
     }
     free(data);
-    if (!why[0]) dt_sprites_forget();
+    if (!why[0]) {
+        dt_sprites_forget();
+    }
     note(why[0] ? "STATE NOT LOADED" : "STATE LOADED", why[0] ? why : NULL);
 }
 
 static void open_pads(void)
 {
-    for (int i = 0; i < s_pad_count; i++) SDL_GameControllerClose(s_pads[i]);
+    for (int i = 0; i < s_pad_count; i++) {
+        SDL_GameControllerClose(s_pads[i]);
+    }
     s_pad_count = 0;
     for (int i = 0; i < SDL_NumJoysticks() && s_pad_count < CYC_INPUT_MAX_PADS; i++) {
-        if (!SDL_IsGameController(i)) continue;
+        if (!SDL_IsGameController(i)) {
+            continue;
+        }
         SDL_GameController *c = SDL_GameControllerOpen(i);
-        if (!c) continue;
+        if (!c) {
+            continue;
+        }
         SDL_JoystickGetGUIDString(SDL_JoystickGetGUID(SDL_GameControllerGetJoystick(c)), s_pad_guid[s_pad_count],
                                   sizeof s_pad_guid[0]);
         s_pads[s_pad_count++] = c;
@@ -375,28 +422,43 @@ static void read_frame(CycInputFrame *f)
     memset(f, 0, sizeof *f);
     int n = 0;
     const Uint8 *real = SDL_GetKeyboardState(&n);
-    for (int i = 0; i < SDL_NUM_SCANCODES; i++) keys[i] = (uint8_t)(i < n && real[i]);
+    for (int i = 0; i < SDL_NUM_SCANCODES; i++) {
+        keys[i] = (uint8_t)(i < n && real[i]);
+    }
     bool alt = keys[SDL_SCANCODE_LALT] || keys[SDL_SCANCODE_RALT];
     bool enter = keys[SDL_SCANCODE_RETURN] || keys[SDL_SCANCODE_KP_ENTER];
-    if (!enter) s_fullscreen_chord = false;
-    else if (alt) s_fullscreen_chord = true;
-    if (s_fullscreen_chord && !alt) keys[SDL_SCANCODE_RETURN] = keys[SDL_SCANCODE_KP_ENTER] = 0;
+    if (!enter) {
+        s_fullscreen_chord = false;
+    } else if (alt) {
+        s_fullscreen_chord = true;
+    }
+    if (s_fullscreen_chord && !alt) {
+        keys[SDL_SCANCODE_RETURN] = keys[SDL_SCANCODE_KP_ENTER] = 0;
+    }
     f->keys = keys;
     f->key_count = SDL_NUM_SCANCODES;
     f->pad_count = s_pad_count;
     for (int i = 0; i < s_pad_count; i++) {
-        for (int b = 0; b < SDL_CONTROLLER_BUTTON_MAX; b++)
-            if (SDL_GameControllerGetButton(s_pads[i], (SDL_GameControllerButton)b)) f->pad_buttons[i] |= 1u << b;
-        for (int a = 0; a < SDL_CONTROLLER_AXIS_MAX && a < CYC_INPUT_PAD_AXES; a++)
+        for (int b = 0; b < SDL_CONTROLLER_BUTTON_MAX; b++) {
+            if (SDL_GameControllerGetButton(s_pads[i], (SDL_GameControllerButton)b)) {
+                f->pad_buttons[i] |= 1u << b;
+            }
+        }
+        for (int a = 0; a < SDL_CONTROLLER_AXIS_MAX && a < CYC_INPUT_PAD_AXES; a++) {
             f->pad_axes[i][a] = SDL_GameControllerGetAxis(s_pads[i], (SDL_GameControllerAxis)a);
+        }
         f->pad_guid[i] = s_pad_guid[i];
     }
 }
 
 static void set_vsync(bool on)
 {
-    if (on == s_vsync_active) return;
-    if (SDL_RenderSetVSync(s_ren, on ? 1 : 0) == 0) s_vsync_active = on;
+    if (on == s_vsync_active) {
+        return;
+    }
+    if (SDL_RenderSetVSync(s_ren, on ? 1 : 0) == 0) {
+        s_vsync_active = on;
+    }
 }
 
 static void apply_integer_scale(void)
@@ -404,17 +466,25 @@ static void apply_integer_scale(void)
     int ow = 0, oh = 0;
     SDL_GetRendererOutputSize(s_ren, &ow, &oh);
     SDL_bool want = s_set.integer_scale && ow >= s_tex_w && oh >= s_tex_h ? SDL_TRUE : SDL_FALSE;
-    if (SDL_RenderGetIntegerScale(s_ren) != want) SDL_RenderSetIntegerScale(s_ren, want);
+    if (SDL_RenderGetIntegerScale(s_ren) != want) {
+        SDL_RenderSetIntegerScale(s_ren, want);
+    }
 }
 
 static bool ensure_texture(int w, int h)
 {
-    if (s_tex && w == s_tex_w && h == s_tex_h) return true;
-    if (s_tex) SDL_DestroyTexture(s_tex);
+    if (s_tex && w == s_tex_w && h == s_tex_h) {
+        return true;
+    }
+    if (s_tex) {
+        SDL_DestroyTexture(s_tex);
+    }
     s_tex = SDL_CreateTexture(s_ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, w, h);
     s_tex_w = w;
     s_tex_h = h;
-    if (!s_tex) return false;
+    if (!s_tex) {
+        return false;
+    }
     SDL_SetTextureScaleMode(s_tex, s_set.linear_filter ? SDL_ScaleModeLinear : SDL_ScaleModeNearest);
     SDL_RenderSetLogicalSize(s_ren, w, h);
     apply_integer_scale();
@@ -428,16 +498,23 @@ static void window_size(int display, int *w, int *h)
     int pw, ph, scale = s_set.window_scale < 1 ? 1 : s_set.window_scale;
     picture(&pw, &ph);
     SDL_Rect area;
-    if (display >= 0 && SDL_GetDisplayUsableBounds(display, &area) == 0)
-        while (scale > 1 && (pw * scale > area.w || ph * scale > area.h - 48)) --scale;
+    if (display >= 0 && SDL_GetDisplayUsableBounds(display, &area) == 0) {
+        while (scale > 1 && (pw * scale > area.w || ph * scale > area.h - 48)) {
+            --scale;
+        }
+    }
     *w = pw * scale;
     *h = ph * scale;
 }
 
 static void apply_fullscreen(void)
 {
-    Uint32 fs = s_set.fullscreen == 1 ? SDL_WINDOW_FULLSCREEN_DESKTOP : s_set.fullscreen == 2 ? SDL_WINDOW_FULLSCREEN : 0;
-    if ((SDL_GetWindowFlags(s_win) & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP)) == fs) return;
+    Uint32 fs = s_set.fullscreen == 1   ? SDL_WINDOW_FULLSCREEN_DESKTOP
+                : s_set.fullscreen == 2 ? SDL_WINDOW_FULLSCREEN
+                                        : 0;
+    if ((SDL_GetWindowFlags(s_win) & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP)) == fs) {
+        return;
+    }
     SDL_SetWindowFullscreen(s_win, fs);
     if (!fs) {
         int w, h;
@@ -451,8 +528,12 @@ static void show(void)
     int ow = 0, oh = 0, w, h;
     SDL_GetRendererOutputSize(s_ren, &ow, &oh);
     const uint32_t *pic = app_ui_present(&w, &h);
-    if (!pic || w <= 0 || h <= 0) pic = cyc_render_present(&w, &h);
-    if (!ensure_texture(w, h)) return;
+    if (!pic || w <= 0 || h <= 0) {
+        pic = cyc_render_present(&w, &h);
+    }
+    if (!ensure_texture(w, h)) {
+        return;
+    }
     if (s_note_until > SDL_GetTicks64()) {
         static uint32_t *copy;
         static size_t copy_cap;
@@ -481,11 +562,15 @@ static void present_shot(const char *base, long frame)
     int w = 0, h = 0;
     SDL_GetRendererOutputSize(s_ren, &w, &h);
     uint32_t *px = (uint32_t *)malloc((size_t)w * (size_t)h * 4);
-    if (!px) return;
+    if (!px) {
+        return;
+    }
     if (SDL_RenderReadPixels(s_ren, NULL, SDL_PIXELFORMAT_ARGB8888, px, w * 4) == 0) {
         char path[1100];
         numbered_path(path, sizeof path, base, frame);
-        if (!cyc_write_png(path, px, w, h)) fprintf(stderr, "cannot write %s\n", path);
+        if (!cyc_write_png(path, px, w, h)) {
+            fprintf(stderr, "cannot write %s\n", path);
+        }
     }
     free(px);
 }
@@ -510,19 +595,28 @@ static void scheduling_begin(void)
 
 static void scheduling_end(void)
 {
-    if (s_mmcss) AvRevertMmThreadCharacteristics(s_mmcss);
+    if (s_mmcss) {
+        AvRevertMmThreadCharacteristics(s_mmcss);
+    }
     s_mmcss = NULL;
     timeEndPeriod(1);
 }
 #else
-static void scheduling_begin(void) {}
-static void scheduling_end(void) {}
+static void scheduling_begin(void)
+{
+}
+
+static void scheduling_end(void)
+{
+}
 #endif
 
 /* Stretches pcm[0..n) over m >= n samples by linear interpolation. */
 static void stretch(int16_t *pcm, size_t n, size_t m)
 {
-    if (n < 2 || m <= n) return;
+    if (n < 2 || m <= n) {
+        return;
+    }
     for (size_t i = m; i-- > 0;) {
         double x = (double)i * (double)(n - 1) / (double)(m - 1);
         size_t j = (size_t)x;
@@ -534,7 +628,9 @@ static void stretch(int16_t *pcm, size_t n, size_t m)
 
 static int run_window(bool hidden, bool uncapped, long exit_after, const char *present_out, long present_every)
 {
-    if (hidden) SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+    if (hidden) {
+        SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+    }
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_JOYSTICK | SDL_INIT_AUDIO) != 0) {
         fprintf(stderr, "SDL initialization failed: %s\n", SDL_GetError());
         return 1;
@@ -545,12 +641,16 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
     s_win = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, w, h,
                              SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI | (hidden ? SDL_WINDOW_HIDDEN : 0));
     s_ren = s_win ? SDL_CreateRenderer(s_win, -1, SDL_RENDERER_ACCELERATED) : NULL;
-    if (s_win && !s_ren) s_ren = SDL_CreateRenderer(s_win, -1, SDL_RENDERER_SOFTWARE);
+    if (s_win && !s_ren) {
+        s_ren = SDL_CreateRenderer(s_win, -1, SDL_RENDERER_SOFTWARE);
+    }
     if (!s_ren) {
         char message[600];
         snprintf(message, sizeof message, "Could not create the game window or renderer: %s", SDL_GetError());
         fprintf(stderr, "%s\n", message);
-        if (!hidden) SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Cannot start game", message, NULL);
+        if (!hidden) {
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Cannot start game", message, NULL);
+        }
         SDL_Quit();
         return 1;
     }
@@ -564,8 +664,11 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
     want.samples = 1024;
     SDL_AudioDeviceID dev = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
     native_audio_reset(dev ? have.freq : AUDIO_RATE);
-    if (dev) SDL_PauseAudioDevice(dev, 0);
-    else fprintf(stderr, "SDL audio: %s (continuing without sound)\n", SDL_GetError());
+    if (dev) {
+        SDL_PauseAudioDevice(dev, 0);
+    } else {
+        fprintf(stderr, "SDL audio: %s (continuing without sound)\n", SDL_GetError());
+    }
     open_pads();
     scheduling_begin();
 
@@ -577,19 +680,28 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
     while (running) {
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
-            if ((ev.type == SDL_KEYDOWN || ev.type == SDL_KEYUP) && ((ev.key.keysym.mod & KMOD_ALT) || s_fullscreen_chord) &&
-                (ev.key.keysym.scancode == SDL_SCANCODE_RETURN || ev.key.keysym.scancode == SDL_SCANCODE_KP_ENTER))
+            if ((ev.type == SDL_KEYDOWN || ev.type == SDL_KEYUP) &&
+                ((ev.key.keysym.mod & KMOD_ALT) || s_fullscreen_chord) &&
+                (ev.key.keysym.scancode == SDL_SCANCODE_RETURN || ev.key.keysym.scancode == SDL_SCANCODE_KP_ENTER)) {
                 continue;
+            }
             app_ui_event(&ev);
-            if (ev.type == SDL_QUIT) running = false;
-            else if (ev.type == SDL_CONTROLLERDEVICEADDED || ev.type == SDL_CONTROLLERDEVICEREMOVED) open_pads();
-            else if (ev.type == SDL_KEYDOWN && !ev.key.repeat && ev.key.keysym.scancode == SDL_SCANCODE_F8) save_state();
-            else if (ev.type == SDL_KEYDOWN && !ev.key.repeat && ev.key.keysym.scancode == SDL_SCANCODE_F9) {
+            if (ev.type == SDL_QUIT) {
+                running = false;
+            } else if (ev.type == SDL_CONTROLLERDEVICEADDED || ev.type == SDL_CONTROLLERDEVICEREMOVED) {
+                open_pads();
+            } else if (ev.type == SDL_KEYDOWN && !ev.key.repeat && ev.key.keysym.scancode == SDL_SCANCODE_F8) {
+                save_state();
+            } else if (ev.type == SDL_KEYDOWN && !ev.key.repeat && ev.key.keysym.scancode == SDL_SCANCODE_F9) {
                 load_state();
-                if (dev) SDL_ClearQueuedAudio(dev);
+                if (dev) {
+                    SDL_ClearQueuedAudio(dev);
+                }
             }
         }
-        if (!running) break;
+        if (!running) {
+            break;
+        }
 
         CycInputFrame in;
         CycInputState st;
@@ -610,7 +722,9 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
             const uint32_t *pic = picture(&pw, &ph);
             char name[64];
             snprintf(name, sizeof name, "cyc_shot_%04d.png", shot++);
-            if (cyc_write_png(name, pic, pw, ph)) printf("saved %s\n", name);
+            if (cyc_write_png(name, pic, pw, ph)) {
+                printf("saved %s\n", name);
+            }
         }
         uint8_t buttons[2] = { st.buttons[0], st.buttons[1] };
         app_ui_input(buttons);
@@ -628,12 +742,17 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
             size_t low = (size_t)have.samples + n;
             if (queued < low) {
                 size_t m = n + (low - queued);
-                if (m > 2 * n) m = 2 * n;
+                if (m > 2 * n) {
+                    m = 2 * n;
+                }
                 stretch(pcm, n, m);
                 n = m;
             }
-            if (s_set.volume < 100)
-                for (size_t i = 0; i < n; i++) pcm[i] = (int16_t)(pcm[i] * s_set.volume / 100);
+            if (s_set.volume < 100) {
+                for (size_t i = 0; i < n; i++) {
+                    pcm[i] = (int16_t)(pcm[i] * s_set.volume / 100);
+                }
+            }
             app_ui_audio(pcm, n);
             SDL_QueueAudio(dev, pcm, (Uint32)(n * sizeof pcm[0]));
         }
@@ -644,24 +763,37 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
         if (!unpaced || now - shown >= frame_ticks) {
             if (!unpaced && now < next) {
                 Uint32 wait_ms = (Uint32)((next - now) * 1000 / freq);
-                if (wait_ms > 1) SDL_Delay(wait_ms - 1);
-                while (SDL_GetPerformanceCounter() < next) {}
+                if (wait_ms > 1) {
+                    SDL_Delay(wait_ms - 1);
+                }
+                while (SDL_GetPerformanceCounter() < next) {
+                }
             }
             show();
-            if (present_out && present_every > 0 && loops % present_every == 0) present_shot(present_out, frames_done);
+            if (present_out && present_every > 0 && loops % present_every == 0) {
+                present_shot(present_out, frames_done);
+            }
             SDL_RenderPresent(s_ren);
             shown = SDL_GetPerformanceCounter();
         }
         loops++;
         next += frame_ticks;
         now = SDL_GetPerformanceCounter();
-        if (unpaced || now > next + 4 * frame_ticks) next = now;
-        if (exit_after > 0 && frames_done >= exit_after) running = false;
+        if (unpaced || now > next + 4 * frame_ticks) {
+            next = now;
+        }
+        if (exit_after > 0 && frames_done >= exit_after) {
+            running = false;
+        }
     }
     scheduling_end();
     save_settings();
-    if (dev) SDL_CloseAudioDevice(dev);
-    if (s_tex) SDL_DestroyTexture(s_tex);
+    if (dev) {
+        SDL_CloseAudioDevice(dev);
+    }
+    if (s_tex) {
+        SDL_DestroyTexture(s_tex);
+    }
     SDL_DestroyRenderer(s_ren);
     SDL_DestroyWindow(s_win);
     SDL_Quit();
@@ -670,8 +802,11 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
 
 static bool game_option_name(const char *name)
 {
-    for (int e = 0; e < DT_ENH_COUNT; e++)
-        if (!strcmp(name, dt_enh_info((DtEnh)e)->option)) return true;
+    for (int e = 0; e < DT_ENH_COUNT; e++) {
+        if (!strcmp(name, dt_enh_info((DtEnh)e)->option)) {
+            return true;
+        }
+    }
     return !strcmp(name, DT_SPRITES_OPTION);
 }
 
@@ -694,32 +829,54 @@ int ducktales_host_main(int argc, char **argv)
     long exit_after = -1, present_every = 1, frames = -1, state_check = -1;
     int lag = -1;
     bool hidden = false, uncapped = false;
-    struct { const char *name, *value; } game[16];
+
+    struct {
+        const char *name, *value;
+    } game[16];
+
     int game_n = 0;
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i], *v = i + 1 < argc ? argv[i + 1] : NULL;
-        if (!strcmp(a, "--hidden")) hidden = true;
-        else if (!strcmp(a, "--uncapped")) uncapped = true;
-        else if (!strcmp(a, "--window-input") || !strcmp(a, "--virtual-pad")) continue;
-        else if (!strcmp(a, "--exit-after") && v) exit_after = atol(argv[++i]);
-        else if (!strcmp(a, "--config") && v) config = argv[++i];
-        else if (!strcmp(a, "--present-out") && v) present_out = argv[++i];
-        else if (!strcmp(a, "--present-every") && v) present_every = atol(argv[++i]);
-        else if (!strcmp(a, "--frames") && v) frames = atol(argv[++i]);
-        else if (!strcmp(a, "--input") && v) input = argv[++i];
-        else if (!strcmp(a, "--state-check") && v) state_check = atol(argv[++i]);
-        else if (!strcmp(a, "--wav-out") && v) wav_out = argv[++i];
-        else if ((!strcmp(a, "--music-under-effects") || !strcmp(a, "--overlap-effects")) && v &&
-                 (!strcmp(v, "on") || !strcmp(v, "off")))
+        if (!strcmp(a, "--hidden")) {
+            hidden = true;
+        } else if (!strcmp(a, "--uncapped")) {
+            uncapped = true;
+        } else if (!strcmp(a, "--window-input") || !strcmp(a, "--virtual-pad")) {
+            continue;
+        } else if (!strcmp(a, "--exit-after") && v) {
+            exit_after = atol(argv[++i]);
+        } else if (!strcmp(a, "--config") && v) {
+            config = argv[++i];
+        } else if (!strcmp(a, "--present-out") && v) {
+            present_out = argv[++i];
+        } else if (!strcmp(a, "--present-every") && v) {
+            present_every = atol(argv[++i]);
+        } else if (!strcmp(a, "--frames") && v) {
+            frames = atol(argv[++i]);
+        } else if (!strcmp(a, "--input") && v) {
+            input = argv[++i];
+        } else if (!strcmp(a, "--state-check") && v) {
+            state_check = atol(argv[++i]);
+        } else if (!strcmp(a, "--wav-out") && v) {
+            wav_out = argv[++i];
+        } else if ((!strcmp(a, "--music-under-effects") || !strcmp(a, "--overlap-effects")) && v &&
+                   (!strcmp(v, "on") || !strcmp(v, "off"))) {
             s_voice_override[a[2] == 'o'] = !strcmp(argv[++i], "on");
-        else if (!strcmp(a, "--lag") && v && !strcmp(v, "none")) lag = NATIVE_LAG_NONE, i++;
-        else if (!strcmp(a, "--lag") && v && !strcmp(v, "faithful")) lag = NATIVE_LAG_FAITHFUL, i++;
-        else if (a[0] == '-' && v && game_n < 16 && game_option_name(a))
+        } else if (!strcmp(a, "--lag") && v && !strcmp(v, "none")) {
+            lag = NATIVE_LAG_NONE, i++;
+        } else if (!strcmp(a, "--lag") && v && !strcmp(v, "faithful")) {
+            lag = NATIVE_LAG_FAITHFUL, i++;
+        } else if (a[0] == '-' && v && game_n < 16 && game_option_name(a)) {
             game[game_n].name = a, game[game_n++].value = argv[++i];
-        else if (a[0] != '-' && !rom) rom = a;
-        else return usage(argv[0]);
+        } else if (a[0] != '-' && !rom) {
+            rom = a;
+        } else {
+            return usage(argv[0]);
+        }
     }
-    if (!rom) return usage(argv[0]);
+    if (!rom) {
+        return usage(argv[0]);
+    }
     size_t size;
     uint8_t *image = read_file(rom, &size);
     char err[160];
@@ -733,7 +890,9 @@ int ducktales_host_main(int argc, char **argv)
         return 2;
     }
     free(image);
-    if (!native_hooks_init()) return 2;
+    if (!native_hooks_init()) {
+        return 2;
+    }
     bool off_screen = frames >= 0;
     if (!off_screen) {
         snprintf(s_set_path, sizeof s_set_path, "%s", config ? config : cyc_settings_default_path());
@@ -751,7 +910,9 @@ int ducktales_host_main(int argc, char **argv)
             return 2;
         }
     }
-    if (off_screen) return run_off_screen(frames, input, lag, present_out, present_every, state_check, wav_out);
+    if (off_screen) {
+        return run_off_screen(frames, input, lag, present_out, present_every, state_check, wav_out);
+    }
     power_on();
     return run_window(hidden, uncapped, exit_after, present_out, present_every);
 }

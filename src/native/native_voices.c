@@ -7,15 +7,15 @@
 
 #include <string.h>
 
-#define RECORD(c)  (0x370 + 31 * (c))
+#define RECORD(c)   (0x370 + 31 * (c))
 #define SOUND_TABLE 0x8A40
 
 typedef struct {
-    uint16_t ptr;          /* $E0/$E1 */
-    uint8_t  wait, loop;   /* $E2, $E3 */
-    uint8_t  priority;     /* $D0 high nibble, as the header's first byte */
-    uint8_t  mask;         /* $DF */
-    uint8_t  rec[4][32];   /* record offsets $10-$1E */
+    uint16_t ptr;       /* $E0/$E1 */
+    uint8_t wait, loop; /* $E2, $E3 */
+    uint8_t priority;   /* $D0 high nibble, as the header's first byte */
+    uint8_t mask;       /* $DF */
+    uint8_t rec[4][32]; /* record offsets $10-$1E */
 } Effect;
 
 static struct {
@@ -23,7 +23,7 @@ static struct {
     uint32_t next_frame;
     uint8_t prev[0x800];
     uint8_t music_live;
-    uint8_t music[4][32];  /* the music's offsets $14-$1E while an effect holds the record's */
+    uint8_t music[4][32]; /* the music's offsets $14-$1E while an effect holds the record's */
     Effect effect;
     const uint8_t *prg;
     size_t prg_size;
@@ -32,7 +32,10 @@ static struct {
     int voice;
 } v;
 
-void native_voices_reset(void) { memset(&v, 0, sizeof v); }
+void native_voices_reset(void)
+{
+    memset(&v, 0, sizeof v);
+}
 
 static uint8_t rom(uint16_t addr)
 {
@@ -53,7 +56,9 @@ static uint8_t driver_byte(int c, unsigned offset)
 static void put(int c, int reg, uint8_t value)
 {
     uint32_t *n = &v.out->count[v.voice];
-    if (*n < NATIVE_VOICE_MAX_WRITES) v.out->writes[v.voice][(*n)++] = (NativeVoiceWrite){ (uint16_t)(0x4000 + 4 * c + reg), value };
+    if (*n < NATIVE_VOICE_MAX_WRITES) {
+        v.out->writes[v.voice][(*n)++] = (NativeVoiceWrite){ (uint16_t)(0x4000 + 4 * c + reg), value };
+    }
 }
 
 /* $8228: silence the channel. */
@@ -74,7 +79,9 @@ static void restart(uint8_t *r, int c, uint8_t level, bool keep_high)
 {
     uint8_t high = r[0x1C];
     r[0x14] &= 0x7F;
-    if (r[0x16] & 0x80) r[0x1E] = c == 2 ? level : (uint8_t)(level & 0x0F);
+    if (r[0x16] & 0x80) {
+        r[0x1E] = c == 2 ? level : (uint8_t)(level & 0x0F);
+    }
     memset(&r[0x18], 0, 6);
     r[0x1C] = keep_high ? high : 0xFF;
 }
@@ -97,7 +104,9 @@ static void output(uint8_t *r, int c, uint8_t volume, bool effect)
                 r[0x1E] = level;
             }
         }
-        if (r[0x1E] < volume) volume = r[0x1E];
+        if (r[0x1E] < volume) {
+            volume = r[0x1E];
+        }
     }
     uint8_t control = effect ? r[0x13] : r[0x0C];
     put(c, 0, c == 2 ? volume : (uint8_t)((control & 0xF0) | volume));
@@ -132,7 +141,9 @@ static void output(uint8_t *r, int c, uint8_t volume, bool effect)
         high = 0;
     }
     put(c, 2, (uint8_t)low);
-    if (high == r[0x1C]) return;
+    if (high == r[0x1C]) {
+        return;
+    }
     r[0x1C] = high;
     put(c, 3, (uint8_t)(high | 8));
 }
@@ -145,21 +156,34 @@ static uint8_t music_volume(const uint8_t *r, int c, const uint8_t *ram)
     uint8_t volume = c == 2 ? r[0x0C] : (uint8_t)(r[0x0C] & 0x0F);
     if (ram[0xD8] & 0x7F) {
         unsigned y = c == 2 ? (uint8_t)(ram[0xD9] * 13) : ram[0xD9];
-        if (y == 0) y = 256;
+        if (y == 0) {
+            y = 256;
+        }
         if (!(ram[0xD8] & 0x80)) {
-            if (volume > y - 1) volume = (uint8_t)(y - 1);
+            if (volume > y - 1) {
+                volume = (uint8_t)(y - 1);
+            }
         } else {
-            do volume--;
-            while (volume && --y);
+            do {
+                volume--;
+            } while (volume && --y);
         }
     }
-    if (c != 2 && (r[0x0D] & 0x7F) && (r[0x0F] & 0x0F) < volume) volume = r[0x0F] & 0x0F;
+    if (c != 2 && (r[0x0D] & 0x7F) && (r[0x0F] & 0x0F) < volume) {
+        volume = r[0x0F] & 0x0F;
+    }
     return volume;
 }
 
-static unsigned note_time(const uint8_t *r) { return r[0x02] | r[0x03] << 8; }
+static unsigned note_time(const uint8_t *r)
+{
+    return r[0x02] | r[0x03] << 8;
+}
 
-static uint16_t rom_word(uint16_t addr) { return (uint16_t)(rom(addr) | rom((uint16_t)(addr + 1)) << 8); }
+static uint16_t rom_word(uint16_t addr)
+{
+    return (uint16_t)(rom(addr) | rom((uint16_t)(addr + 1)) << 8);
+}
 
 /* The header of the song the NMI started this frame ($8044: a song is taken
  * when its priority is at least the music's), or 0. */
@@ -173,10 +197,14 @@ static uint16_t song_start(const uint8_t *ram, const uint8_t *prev)
             priority = 0;
             song = 0;
         }
-        if (id >= 0x38) continue;
+        if (id >= 0x38) {
+            continue;
+        }
         uint16_t header = rom_word((uint16_t)(SOUND_TABLE + 2 * id));
         uint8_t p = rom(header) & 0x0F;
-        if (!p || p < priority) continue;
+        if (!p || p < priority) {
+            continue;
+        }
         priority = p;
         song = header;
     }
@@ -192,9 +220,15 @@ static int instrument_command(uint16_t p, uint8_t loop)
     int instrument = -1;
     for (int guard = 0; guard < 64; guard++) {
         uint8_t b = rom(p++);
-        if ((b & 0xF0) == 0x20 || (b & 0xF0) == 0x30) continue;
-        if (b & 0xF0 || b >= 10 || b == 9) return instrument;
-        if (b == 8) instrument = rom(p) & 0x1F;
+        if ((b & 0xF0) == 0x20 || (b & 0xF0) == 0x30) {
+            continue;
+        }
+        if (b & 0xF0 || b >= 10 || b == 9) {
+            return instrument;
+        }
+        if (b == 8) {
+            instrument = rom(p) & 0x1F;
+        }
         if (b != 4) {
             p = (uint16_t)(p + operands[b]);
             continue;
@@ -204,7 +238,9 @@ static int instrument_command(uint16_t p, uint8_t loop)
             loop = 0;
             p += 2;
         } else {
-            if (count) loop++;
+            if (count) {
+                loop++;
+            }
             p = rom_word(p);
         }
     }
@@ -218,7 +254,9 @@ static int instrument_command(uint16_t p, uint8_t loop)
 static void music_step(uint8_t *r, int c, const uint8_t *ram, const uint8_t *prev, uint16_t song)
 {
     const uint8_t *now = ram + RECORD(c), *was = prev + RECORD(c);
-    if (song) memset(&r[0x14], 0, 11);
+    if (song) {
+        memset(&r[0x14], 0, 11);
+    }
     r[0x18]++;
     r[0x1D]++;
     if ((ram[0xE6] & 1) || !(now[0x00] | now[0x01])) {
@@ -228,7 +266,9 @@ static void music_step(uint8_t *r, int c, const uint8_t *ram, const uint8_t *pre
     bool read = song || now[0x00] != was[0x00] || now[0x01] != was[0x01] || note_time(now) >= note_time(was);
     bool playing = (now[0x0A] | now[0x0B]) != 0;
     if (!read) {
-        if (playing) output(r, c, music_volume(r, c, ram), false);
+        if (playing) {
+            output(r, c, music_volume(r, c, ram), false);
+        }
         return;
     }
     bool twice = (was[0x05] & 0x80) && (ram[0xDA] & 1);
@@ -246,7 +286,9 @@ static void music_step(uint8_t *r, int c, const uint8_t *ram, const uint8_t *pre
                           : instrument_command((uint16_t)(was[0x00] | was[0x01] << 8), was[0x05] & 0x7F);
     if (instrument >= 0) {
         uint16_t at = (uint16_t)((ram[0x3EC] | ram[0x3ED] << 8) + (uint8_t)(4 * instrument));
-        for (int k = 0; k < 4; k++) r[0x14 + k] = rom((uint16_t)(at + k));
+        for (int k = 0; k < 4; k++) {
+            r[0x14 + k] = rom((uint16_t)(at + k));
+        }
     }
     if (!song && was[0x06] >> 5) {
         uint8_t at = now[0x06] & 0xE0;
@@ -254,7 +296,9 @@ static void music_step(uint8_t *r, int c, const uint8_t *ram, const uint8_t *pre
     } else {
         restart(r, c, r[0x0C], false);
         mute(c);
-        if (twice && note_time(was) <= 4 && playing) output(r, c, music_volume(r, c, ram), false);
+        if (twice && note_time(was) <= 4 && playing) {
+            output(r, c, music_volume(r, c, ram), false);
+        }
     }
 }
 
@@ -266,7 +310,9 @@ static void music_frame(const uint8_t *ram, const uint8_t *prev)
     for (int c = 0; c < 4; c++) {
         uint8_t bit = (uint8_t)(1 << c);
         if (!(ram[0xDF] & bit)) {
-            if (v.music_live & bit) mute(c);
+            if (v.music_live & bit) {
+                mute(c);
+            }
             v.music_live &= (uint8_t)~bit;
             continue;
         }
@@ -288,10 +334,15 @@ static void music_frame(const uint8_t *ram, const uint8_t *prev)
 static bool effect_load(Effect *e, uint8_t id)
 {
     memset(e, 0, sizeof *e);
-    if (id >= 0x38) return false;
-    uint16_t header = (uint16_t)(rom((uint16_t)(SOUND_TABLE + 2 * id)) | rom((uint16_t)(SOUND_TABLE + 2 * id + 1)) << 8);
+    if (id >= 0x38) {
+        return false;
+    }
+    uint16_t header = (uint16_t)(rom((uint16_t)(SOUND_TABLE + 2 * id)) | rom((uint16_t)(SOUND_TABLE + 2 * id + 1))
+                                                                             << 8);
     e->priority = rom(header);
-    if (e->priority & 0x0F) return false;
+    if (e->priority & 0x0F) {
+        return false;
+    }
     e->mask = rom((uint16_t)(header + 1)) & 0x0F;
     e->ptr = (uint16_t)(header + 2);
     return true;
@@ -306,19 +357,28 @@ static void effect_from_ram(Effect *e, const uint8_t *ram)
     e->loop = ram[0xE3];
     e->priority = ram[0xD0] & 0xF0;
     e->mask = ram[0xDF] & 0x0F;
-    for (int c = 0; c < 4; c++) memcpy(&e->rec[c][0x10], &ram[RECORD(c) + 0x10], 15);
+    for (int c = 0; c < 4; c++) {
+        memcpy(&e->rec[c][0x10], &ram[RECORD(c) + 0x10], 15);
+    }
 }
 
 /* The extra voice takes an effect the way the driver would: when it is free
  * or the new one's priority is at least its own. */
 static void offer(const Effect *e)
 {
-    if (!e->mask || (v.effect.mask && e->priority < v.effect.priority)) return;
-    for (int c = 0; c < 4; c++)
-        if (v.effect.mask >> c & 1 && !(e->mask >> c & 1)) mute(c);
+    if (!e->mask || (v.effect.mask && e->priority < v.effect.priority)) {
+        return;
+    }
+    for (int c = 0; c < 4; c++) {
+        if (v.effect.mask >> c & 1 && !(e->mask >> c & 1)) {
+            mute(c);
+        }
+    }
     v.effect = *e;
     for (int c = 0; c < 4; c++) {
-        if (!(e->mask >> c & 1)) continue;
+        if (!(e->mask >> c & 1)) {
+            continue;
+        }
         v.effect.rec[c][0x1C] = 0xFF;
         mute(c);
     }
@@ -339,7 +399,9 @@ static void requests(const uint8_t *ram, const uint8_t *prev)
             current.mask = 0;
             continue;
         }
-        if (!effect_load(&next, id)) continue;
+        if (!effect_load(&next, id)) {
+            continue;
+        }
         if (next.priority < priority) {
             offer(&next);
             continue;
@@ -359,7 +421,9 @@ static void effect_channel(Effect *e, int c)
     static const uint8_t handler[7] = { 0xD1, 0xD9, 0xE3, 0xF3, 0x0D, 0x3E, 0x54 };
     uint8_t *r = e->rec[c];
     if (e->wait) {
-        if (r[0x11] | r[0x12]) output(r, c, c == 2 ? r[0x13] : (uint8_t)(r[0x13] & 0x0F), true);
+        if (r[0x11] | r[0x12]) {
+            output(r, c, c == 2 ? r[0x13] : (uint8_t)(r[0x13] & 0x0F), true);
+        }
         return;
     }
     uint8_t e4 = 0x13;
@@ -377,42 +441,54 @@ static void effect_channel(Effect *e, int c)
             mute(c);
             return;
         }
-        if (b < 7) e4 = handler[b];
+        if (b < 7) {
+            e4 = handler[b];
+        }
         switch (b) {
-        case 0: e->wait = rom(e->ptr++); break;
-        case 1: r[0x10] = rom(e->ptr++); break;
-        case 2:
-            e4 = rom(e->ptr++);
-            r[0x13] = (uint8_t)((r[0x13] & 0x3F) | e4);
-            break;
-        case 3: {
-            uint8_t x = rom(e->ptr++);
-            if (c != 2) e4 = x;
-            r[0x13] = c == 2 ? x : (uint8_t)((r[0x13] & 0xC0) | x);
-            break;
-        }
-        case 4: {
-            uint8_t count = rom(e->ptr++);
-            if (count && count == e->loop) {
-                e->loop = 0;
-                e->ptr += 2;
-            } else {
-                if (count) e->loop++;
-                e4 = rom(e->ptr);
-                e->ptr = rom_word(e->ptr);
+            case 0:
+                e->wait = rom(e->ptr++);
+                break;
+            case 1:
+                r[0x10] = rom(e->ptr++);
+                break;
+            case 2:
+                e4 = rom(e->ptr++);
+                r[0x13] = (uint8_t)((r[0x13] & 0x3F) | e4);
+                break;
+            case 3: {
+                uint8_t x = rom(e->ptr++);
+                if (c != 2) {
+                    e4 = x;
+                }
+                r[0x13] = c == 2 ? x : (uint8_t)((r[0x13] & 0xC0) | x);
+                break;
             }
-            break;
-        }
-        case 5:
-            for (int k = 0; k < 4; k++) r[0x14 + k] = rom(e->ptr++);
-            e4 = 0x18;
-            break;
-        default:
-            e->ptr--;
-            e->priority = 0;
-            e->mask &= (uint8_t)~(1 << c);
-            mute(c);
-            return;
+            case 4: {
+                uint8_t count = rom(e->ptr++);
+                if (count && count == e->loop) {
+                    e->loop = 0;
+                    e->ptr += 2;
+                } else {
+                    if (count) {
+                        e->loop++;
+                    }
+                    e4 = rom(e->ptr);
+                    e->ptr = rom_word(e->ptr);
+                }
+                break;
+            }
+            case 5:
+                for (int k = 0; k < 4; k++) {
+                    r[0x14 + k] = rom(e->ptr++);
+                }
+                e4 = 0x18;
+                break;
+            default:
+                e->ptr--;
+                e->priority = 0;
+                e->mask &= (uint8_t)~(1 << c);
+                mute(c);
+                return;
         }
     }
 }
@@ -424,9 +500,13 @@ static void effect_frame(Effect *e)
     for (int c = 0; c < 4; c++) {
         e->rec[c][0x18]++;
         e->rec[c][0x1D]++;
-        if (e->mask >> c & 1) effect_channel(e, c);
+        if (e->mask >> c & 1) {
+            effect_channel(e, c);
+        }
     }
-    if (e->wait) e->wait--;
+    if (e->wait) {
+        e->wait--;
+    }
 }
 
 void native_voices_frame(uint32_t frame, const uint8_t *ram, const uint8_t *prg, size_t prg_size, bool music,
@@ -440,14 +520,22 @@ void native_voices_frame(uint32_t frame, const uint8_t *ram, const uint8_t *prg,
     v.ram_before = v.prev;
     bool follows = v.synced && frame == v.next_frame;
     bool updated = follows && ram[0xDA] != v.prev[0xDA];
-    if (!follows || !music) v.music_live = 0;
-    if (!follows || !effects) v.effect.mask = 0;
+    if (!follows || !music) {
+        v.music_live = 0;
+    }
+    if (!follows || !effects) {
+        v.effect.mask = 0;
+    }
     v.voice = 0;
-    if (music && updated) music_frame(ram, v.prev);
+    if (music && updated) {
+        music_frame(ram, v.prev);
+    }
     v.voice = 1;
     if (effects && updated) {
         requests(ram, v.prev);
-        if (v.effect.mask) effect_frame(&v.effect);
+        if (v.effect.mask) {
+            effect_frame(&v.effect);
+        }
     }
     out->live[0] = v.music_live;
     out->live[1] = v.effect.mask;

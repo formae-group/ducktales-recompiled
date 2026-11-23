@@ -24,13 +24,18 @@ static int failures;
 static void expect(int ok, const char *what)
 {
     printf("%s  %s\n", ok ? "PASS" : "FAIL", what);
-    if (!ok) failures++;
+    if (!ok) {
+        failures++;
+    }
 }
 
 static void write_file(const char *path, const uint8_t *data, size_t len)
 {
     FILE *f = fopen(path, "wb");
-    if (!f || fwrite(data, 1, len, f) != len) { perror(path); exit(2); }
+    if (!f || fwrite(data, 1, len, f) != len) {
+        perror(path);
+        exit(2);
+    }
     fclose(f);
 }
 
@@ -43,20 +48,27 @@ static void hex_of(const uint8_t *data, size_t len, char out[65])
 
 int main(int argc, char **argv)
 {
-    if (argc < 2) { fprintf(stderr, "usage: app_rom_test SCRATCH_DIR\n"); return 2; }
+    if (argc < 2) {
+        fprintf(stderr, "usage: app_rom_test SCRATCH_DIR\n");
+        return 2;
+    }
     char hex[65];
     hex_of((const uint8_t *)"", 0, hex);
-    expect(!strcmp(hex, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"), "SHA-256 of the empty string");
+    expect(!strcmp(hex, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"),
+           "SHA-256 of the empty string");
     hex_of((const uint8_t *)"abc", 3, hex);
     expect(!strcmp(hex, "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"), "SHA-256 of abc");
     const char *two = "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
     hex_of((const uint8_t *)two, strlen(two), hex);
-    expect(!strcmp(hex, "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"), "SHA-256 of the two-block vector");
+    expect(!strcmp(hex, "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"),
+           "SHA-256 of the two-block vector");
 
     static uint8_t image[16 + 32768];
     memcpy(image, "NES\x1a", 4);
     image[4] = 2;
-    for (size_t i = 16; i < sizeof image; i++) image[i] = (uint8_t)(i * 7);
+    for (size_t i = 16; i < sizeof image; i++) {
+        image[i] = (uint8_t)(i * 7);
+    }
     char good[65];
     hex_of(image, sizeof image, good);
 
@@ -87,7 +99,8 @@ int main(int argc, char **argv)
     expect(app_rom_verify("no/such/file.nes", good, NULL) == APP_ROM_UNREADABLE, "a missing file is unreadable");
 
     expect(!app_rom_stored_valid(good, stored, sizeof stored), "nothing is stored before an import");
-    expect(app_rom_import(bad, good, stored, sizeof stored, NULL) == APP_ROM_MISMATCH, "a modified image is not imported");
+    expect(app_rom_import(bad, good, stored, sizeof stored, NULL) == APP_ROM_MISMATCH,
+           "a modified image is not imported");
     expect(!app_rom_stored_valid(good, stored, sizeof stored), "a refused import stores nothing");
     expect(app_rom_import(src, good, stored, sizeof stored, NULL) == APP_ROM_OK, "the expected image is imported");
     expect(strstr(stored, "nested") != NULL && strstr(stored, APP_ROM_FILE_NAME) != NULL,

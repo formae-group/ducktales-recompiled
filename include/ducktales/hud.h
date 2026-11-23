@@ -15,8 +15,8 @@
 extern "C" {
 #endif
 
-#define HUD_RECORD(i)   (&gRam[DT_ADDR_HUD_SPRITES + 4 * (i)])
-#define gLives          RAM_U8(DT_ADDR_LIVES)
+#define HUD_RECORD(i) (&gRam[DT_ADDR_HUD_SPRITES + 4 * (i)])
+#define gLives        RAM_U8(DT_ADDR_LIVES)
 
 /* Full HP dots and dots shown (verified). */
 static inline uint8_t Hud_GetHp(uint8_t *max)
@@ -24,12 +24,18 @@ static inline uint8_t Hud_GetHp(uint8_t *max)
     uint8_t full = 0;
     for (uint8_t i = 0; i < DT_HUD_SPRITE_RECORDS; i++) {
         if (HUD_RECORD(i)[0] == DT_HUD_RECORD_END_Y) {
-            if (max) *max = i;
+            if (max) {
+                *max = i;
+            }
             return full;
         }
-        if (!(HUD_RECORD(i)[2] & DT_HP_DOT_LOST)) full++;
+        if (!(HUD_RECORD(i)[2] & DT_HP_DOT_LOST)) {
+            full++;
+        }
     }
-    if (max) *max = 0;
+    if (max) {
+        *max = 0;
+    }
     return 0;
 }
 
@@ -40,8 +46,11 @@ static inline bool Hud_GetMoney(uint32_t *money)
     uint32_t value = 0;
     for (int i = 0; i < DT_MONEY_DIGIT_COUNT; i++) {
         uint8_t tile = gRam[DT_ADDR_MONEY_DIGITS + i];
-        if (tile == DT_MONEY_TILE_BLANK) tile = 0;
-        else if (tile > 9) return false;
+        if (tile == DT_MONEY_TILE_BLANK) {
+            tile = 0;
+        } else if (tile > 9) {
+            return false;
+        }
         value = value * 10 + tile;
     }
     *money = value * 10;

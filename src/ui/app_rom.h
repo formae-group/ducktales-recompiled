@@ -26,10 +26,10 @@ extern "C" {
 
 typedef enum {
     APP_ROM_OK,
-    APP_ROM_UNREADABLE,   /* cannot open or read the file */
-    APP_ROM_NOT_NES,      /* no iNES header */
-    APP_ROM_MISMATCH,     /* an NES image, but not this one (modified, other revision or game) */
-    APP_ROM_WRITE_FAILED  /* import: the copy could not be written */
+    APP_ROM_UNREADABLE,  /* cannot open or read the file */
+    APP_ROM_NOT_NES,     /* no iNES header */
+    APP_ROM_MISMATCH,    /* an NES image, but not this one (modified, other revision or game) */
+    APP_ROM_WRITE_FAILED /* import: the copy could not be written */
 } AppRomStatus;
 
 void app_sha256(const uint8_t *data, size_t len, uint8_t out[32]);
@@ -49,8 +49,7 @@ bool app_rom_stored_path(char *out, size_t cap);
 
 /* Verifies src and copies it to app_rom_stored_path (written to a
  * temporary file, then moved). stored (may be NULL) receives the copy's path. */
-AppRomStatus app_rom_import(const char *src, const char *expected_hex, char *stored, size_t cap,
-                                  char *actual_hex);
+AppRomStatus app_rom_import(const char *src, const char *expected_hex, char *stored, size_t cap, char *actual_hex);
 
 /* True if the stored copy exists and still matches; out receives its path. */
 bool app_rom_stored_valid(const char *expected_hex, char *out, size_t cap);

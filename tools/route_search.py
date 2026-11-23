@@ -16,6 +16,7 @@ later.
 
     py -3 -I tools/route_search.py ROUTE STATE --steps N [--goal right] [--out ROUTE2]
 """
+
 import argparse
 import concurrent.futures as cf
 import shutil
@@ -93,8 +94,22 @@ def run_one(a, work, rows, state, frame, name, length):
         end = frame + length
         macro = [m for m in macro if m[0] <= end]
     st = d / ('s_%05d.bin' % end)
-    cmd = [a.exe, a.rom, '--frames', str(look + 1), '--input', str(d / 'route.txt'), '--load-state', str(state),
-           '--frame-log', str(d / 'fl.bin'), '--frame-log-frames', f'{frame}:{look}', '--save-state', f'{end}:{st}']
+    cmd = [
+        a.exe,
+        a.rom,
+        '--frames',
+        str(look + 1),
+        '--input',
+        str(d / 'route.txt'),
+        '--load-state',
+        str(state),
+        '--frame-log',
+        str(d / 'fl.bin'),
+        '--frame-log-frames',
+        f'{frame}:{look}',
+        '--save-state',
+        f'{end}:{st}',
+    ]
     for _ in range(3):
         p = subprocess.run(cmd, capture_output=True, text=True)
         log = list(frames(str(d / 'fl.bin'))) if p.returncode == 0 and (d / 'fl.bin').exists() else []
@@ -118,6 +133,7 @@ def run_one(a, work, rows, state, frame, name, length):
             x = r[0xF3] * 256 + r[0xF2] + r[0x650]
             return (x if a.goal == 'right' else -x) - a.ypenalty * y
         return -y if a.goal == 'up' else y
+
     score = int(pos(endram) - pos(first)) - 1000 * hp_loss - 100000 * lv_loss
     return name, score, hp_loss + 10 * lv_loss, macro, st, end
 
@@ -128,27 +144,41 @@ def main():
     ap.add_argument('state')
     ap.add_argument('--steps', type=int, default=20)
     ap.add_argument('--length', type=int, default=24, help='frames per macro')
-    ap.add_argument('--lookahead', type=int, default=16,
-                    help="frames the macro's last input is held on that must also be safe")
+    ap.add_argument(
+        '--lookahead', type=int, default=16, help="frames the macro's last input is held on that must also be safe"
+    )
     ap.add_argument('--stall', type=int, default=8, help='stop after this many steps without progress')
-    ap.add_argument('--goal', default='right',
-                    help='right, left, up, down, to:X,Y (hex world coordinates, macros as for right) '
-                         'or min:ADDR (drive a RAM byte down, e.g. a boss hit counter)')
+    ap.add_argument(
+        '--goal',
+        default='right',
+        help='right, left, up, down, to:X,Y (hex world coordinates, macros as for right) '
+        'or min:ADDR (drive a RAM byte down, e.g. a boss hit counter)',
+    )
     ap.add_argument('--macros', help='comma-separated subset of: ' + ','.join(MACROS))
-    ap.add_argument('--prep', default='wait,back,climb,down',
-                    help='macros tried before every other macro when no single macro makes safe progress')
+    ap.add_argument(
+        '--prep',
+        default='wait,back,climb,down',
+        help='macros tried before every other macro when no single macro makes safe progress',
+    )
     ap.add_argument('--ypenalty', type=float, default=0.0, help='for left/right goals, cost per pixel of descent')
     ap.add_argument('--backtrack', type=int, default=4)
-    ap.add_argument('--depth2', action='store_true',
-                    help='score every pair of macros and append only the first macro of the best pair')
+    ap.add_argument(
+        '--depth2',
+        action='store_true',
+        help='score every pair of macros and append only the first macro of the best pair',
+    )
     ap.add_argument('--out', help='route to write (default: overwrite ROUTE)')
     ap.add_argument('--states', default=str(ROOT / 'captures' / 'search' / 'states'))
     ap.add_argument('--prefix', default='st')
     ap.add_argument('--jobs', type=int, default=8)
     ap.add_argument('--exe', default=str(ROOT / 'build' / 'headless' / 'Release' / 'ducktales.exe'))
     ap.add_argument('--rom', default=str(ROOT / 'roms' / 'DuckTales (USA).nes'))
-    ap.add_argument('--add', action='append', default=[],
-                    help='extra macro NAME=OFF:BUTTONS,OFF:BUTTONS (offsets in frames from the macro start)')
+    ap.add_argument(
+        '--add',
+        action='append',
+        default=[],
+        help='extra macro NAME=OFF:BUTTONS,OFF:BUTTONS (offsets in frames from the macro start)',
+    )
     a = ap.parse_args()
     a.commit_first = a.depth2
     for spec in a.add:
@@ -174,9 +204,11 @@ def main():
 
         def trial(n):
             return run_one(a, work, node['rows'], node['state'], node['frame'], n, a.length)
+
         if a.depth2:
-            cands = [f'{p}+{n}' for p in names if p not in node['banned'] for n in names] or \
-                [f'{p}+{n}' for p in names for n in names]
+            cands = [f'{p}+{n}' for p in names if p not in node['banned'] for n in names] or [
+                f'{p}+{n}' for p in names for n in names
+            ]
             best = {}
             for r in pool.map(trial, cands):
                 k = r[0].split('+')[0]
@@ -206,8 +238,10 @@ def main():
         node['chosen'] = name.split('+')[0] if a.depth2 else name
         stack.append({'rows': node['rows'] + macro, 'state': keep, 'frame': end, 'banned': set(), 'chosen': None})
         write_route(out, stack[-1]['rows'])
-        print(f'{end:5d} {name:10s} score={score:6d} loss={loss} '
-              + ' '.join(f'{n}:{s}' for n, s, *_ in res[1:4]), flush=True)
+        print(
+            f'{end:5d} {name:10s} score={score:6d} loss={loss} ' + ' '.join(f'{n}:{s}' for n, s, *_ in res[1:4]),
+            flush=True,
+        )
     shutil.rmtree(base, ignore_errors=True)
     print(f'route -> {out}, last state {stack[-1]["state"]}')
 

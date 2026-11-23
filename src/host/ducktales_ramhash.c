@@ -23,14 +23,25 @@ static long s_frame;
 
 static FILE *open_out(FILE *old, const char *option, const char *path)
 {
-    if (old) fclose(old);
+    if (old) {
+        fclose(old);
+    }
     FILE *f = fopen(path, "w");
-    if (!f) fprintf(stderr, "%s: cannot write %s\n", option, path);
+    if (!f) {
+        fprintf(stderr, "%s: cannot write %s\n", option, path);
+    }
     return f;
 }
 
-bool dt_ramhash_open(const char *path) { return (s_file = open_out(s_file, "--ram-hash-out", path)) != NULL; }
-bool dt_laglog_open(const char *path) { return (s_lag = open_out(s_lag, "--lag-log", path)) != NULL; }
+bool dt_ramhash_open(const char *path)
+{
+    return (s_file = open_out(s_file, "--ram-hash-out", path)) != NULL;
+}
+
+bool dt_laglog_open(const char *path)
+{
+    return (s_lag = open_out(s_lag, "--lag-log", path)) != NULL;
+}
 
 void dt_ramhash_power_on(void)
 {
@@ -63,7 +74,11 @@ void dt_ramhash_frame_end(void)
             .chr = cyc_chr_ram(&chr_len),
             .cycles = cyc_cycle_count(),
             .pc = cpu_state.pc,
-            .a = cpu_state.a, .x = cpu_state.x, .y = cpu_state.y, .s = cpu_state.s, .p = cpu_state.p,
+            .a = cpu_state.a,
+            .x = cpu_state.x,
+            .y = cpu_state.y,
+            .s = cpu_state.s,
+            .p = cpu_state.p,
         };
         in.chr_len = chr_len;
         native_hash_line(s_file, s_frame, &in);

@@ -38,7 +38,10 @@ typedef enum EventId {
     EVENT_COUNT
 } EventId;
 
-typedef enum EventResult { EVENT_CONTINUE = 0, EVENT_CANCEL = 1 } EventResult;
+typedef enum EventResult {
+    EVENT_CONTINUE = 0,
+    EVENT_CANCEL = 1
+} EventResult;
 
 typedef EventResult (*EventHandler)(EventId id, void *user);
 
