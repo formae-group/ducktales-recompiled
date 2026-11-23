@@ -97,7 +97,7 @@
 
 static void apu_write(uint8_t reg, uint8_t value)
 {
-    Decomp_Store((uint16_t)(APU_BASE + reg), value);
+    Decomp_BusWrite((uint16_t)(APU_BASE + reg), value);
 }
 
 static uint16_t rom_word(uint16_t addr)
@@ -887,7 +887,7 @@ static void Sound_Update(void)
     Decomp_Enter(DT_CODE_SOUND_UPDATE, 0, 0, 0);
     apu_write(0x01, SWEEP_OFF);
     apu_write(0x05, SWEEP_OFF);
-    Decomp_Store(APU_STATUS, CHANNELS_ON);
+    Decomp_BusWrite(APU_STATUS, CHANNELS_ON);
     gSndFrame++;
     if (gBusy) {
         return;
@@ -943,8 +943,7 @@ static void Run_SoundPlay(Regs *r)
 }
 
 const DecompRoutine gAudioRoutines[] = {
-    { DT_CODE_SOUND_UPDATE, "ducktales.decomp.3.8000", "Sound_Update", Run_SoundUpdate, OUT_DEVICE,
-      .bank = DT_SND_BANK },
-    { DT_CODE_SOUND_PLAY, "ducktales.decomp.3.8003", "Sound_Play", Run_SoundPlay, OUT_DEVICE, .bank = DT_SND_BANK },
+    { DT_CODE_SOUND_UPDATE, "ducktales.decomp.3.8000", "Sound_Update", Run_SoundUpdate, OUT_HW, .bank = DT_SND_BANK },
+    { DT_CODE_SOUND_PLAY, "ducktales.decomp.3.8003", "Sound_Play", Run_SoundPlay, OUT_HW, .bank = DT_SND_BANK },
 };
 const int gAudioRoutineCount = sizeof gAudioRoutines / sizeof gAudioRoutines[0];

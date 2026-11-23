@@ -117,7 +117,17 @@ timing, replace mode also runs the original routine in an isolated call, only to
 count from the same state. After storing the C's results, it spends that many CPU cycles as reads
 of the routine's first byte (`cpu_read`, with every device clocked), polling interrupts in the
 last one as the RTS would. So interrupts and frame boundaries come at the same points of the game's
-work as on the console. The one difference: an NMI that the original would take in the middle of a
+work as on the console.
+
+**Bus operations.** A routine that writes the PPU or the mapper does it through
+`Decomp_BusWrite(addr, value)`, which records the write (the C's own view of the ROM banks follows
+mapper writes at once). Replace mode makes the recorded writes on the machine spread evenly among
+those reads, and check mode makes them the same way on an isolated copy of the machine at entry and
+compares CIRAM, palette RAM, CHR RAM and the PRG bank with the original's (contract `OUT_HW`). The
+spacing matters: the PPU acts on a `$2006` or `$2007` write a few cycles late, so writes made back to
+back put every byte of a VRAM queue one address off. That left 84 nametable bytes wrong from
+`african_mines_intro` frame 221, which moved the sprite-0 split and showed in RAM only at frame
+1383 (found on the level branch). The one difference: an NMI that the original would take in the middle of a
 routine is taken right after it, so the bytes it pushes on the stack differ. With this, replace
 mode is RAM-identical to the console on every frame of every route (see Verification).
 
@@ -137,11 +147,14 @@ the HP-dot work it skips, and `moon_intro` drifted from the console at frame 108
 each (`NES_MOD_MAX_FUNCTION_HOOKS` in `runner/src/mod_function_hooks.c`), so one site per routine
 would not last the whole game. A routine has a site (`site_id` in its table entry) only if
 original code reaches it; `tools/decomp_callers.py` lists, from a build's generated code, the
-instructions outside the decompiled ranges that jump to an entry. Of the 31 routines here, 9 have
+instructions outside the decompiled ranges that jump to an entry. Of the 49 routines in the player,
+motion, sound, level and collision tables, 24 have
 one: `Player_Update` (the frame loop's `JSR` at `$DB6C`), `Player_PitDeath` (the original
 mode 15 and 16 code jumps to it at `$EDCC`), the four motion primitives and the two sound requests
-(object and game code everywhere), and `Player_TakeDamage`, kept for replace mode's measuring call
-above. As more of the game is decompiled the boundary moves out and sites go away.
+(object and game code everywhere), `Player_TakeDamage`, kept for replace mode's measuring call
+above, and 15 of the 18 camera, scrolling, level and background routines (all but
+`Level_ScreenPointer`, `Level_DecodeBlock` and `Level_MetatileAt`, which only decompiled code
+calls). As more of the game is decompiled the boundary moves out and sites go away.
 
 Check mode still compares every call of every routine. The C of each routine starts with
 `Decomp_Enter(addr, a, x, y)`, giving the registers the original gets (0 for those the C does not
@@ -181,9 +194,21 @@ leave the jump vector in `$00/$01` as the original's loop does.
 | `Player_Walk`, `Player_Knockback` | X | none | X is the slot the push of `$73` moves when no direction is held, and what the sound request keeps in `$00` |
 | `Player_MoveRight`, `Player_MoveLeft`, `Player_Fall`, `Player_Rise`, `Player_ProbeVertical` | X (moves only) | X | X is what the probe or contact routine returned; callers pass it on |
 | every other `Player_*` | none | none | |
-| `Bank_Select`, `Bank_SelectTemp` | A = bank | A, X, P | the bank is stored into the bus-conflict table at `$FFE5` (a device store) |
+| `Camera_Update` | X | X, hardware | the frame loop keeps X past `$CF93` into the code after it: X is the entry X when the camera stays, else what the column streaming leaves |
+| `Scroll_StreamBlocks` | none | X, hardware | X is the last step's collision map index (or the screen id >> 5 when its screen is missing), or where the upload stopped when the screen is blanked |
+| `Vram_FlushQueue` | none | X, hardware | X is the queue index where the upload stopped |
+| `Level_ScreenPointer` | Y = grid cell | X | X = screen id >> 5 |
+| `Level_DecodeBlock` | none | X | X is the block's collision map index |
+| `Level_MetatileAt` | X = probe slot | A, X | |
+| `Map_LoadHeader` | X = map | X | X is kept |
+| `Bg_Probe` | X = slot | X, hardware | X is kept |
+| `Bg_SnapRight`, `Bg_SnapLeft`, `Bg_SnapHead`, `Bg_SnapFeet` | X = slot | X | X is kept |
+| `Level_TileEdit` | X = slot | hardware | |
+| `Level_DrawStartColumns`, `Level_DrawScreen`, `Vram_FlushTileEdits`, `Chr_StreamRow` | none | hardware | |
+| `Boss_CheckTrigger` | none | none | the arena start runs as the original (`Decomp_RunOriginal`): it scrolls the row |
+| `Bank_Select`, `Bank_SelectTemp` | A = bank | A, X, P, hardware | the bank is written to the bus-conflict table at `$FFE5` |
 | `Oam_Build`, `Random_Next` | none | X, Y | the frame loop yields right after them, and `task_yield` keeps X and Y on the stack |
-| `Ppu_*`, `Input_ReadControllers`, `Chr_*`, `Text_DrawStrings`, `Sound_Update`, `Sound_Play` | as the original | none | device access: check mode also compares the PPU, APU and mapper state after the routine |
+| `Ppu_Blank`, `Ppu_Unblank`, `Ppu_FillNametable`, `Chr_LoadList`, `Text_DrawStrings`, `Input_ReadControllers`, `Sound_Update`, `Sound_Play` | as the original | hardware | the controller reads use `Decomp_BusLoad`, made at once; check also compares OAM and the APU, PPU and mapper registers |
 
 ### Routines
 
@@ -226,27 +251,44 @@ RAM-identical in replace mode.
 | `Player_Mode12` | `$EC2D` | checked (pokes only) | 0 | mode12, mode12-page7 | no vertical direction with Y below `$18` |
 | `Player_Death` | `$EC9B` | checked | 8 | hurt-last-dot | none |
 | `Player_Mode14` | `$ECFF` | checked | 1 | - | none |
+| `Camera_Update` | `$EFE2` | checked | 12 | 11 of 11 | not measured |
+| `Map_LoadHeader` | `$C7B0` | checked | 12 | 11 of 11 | not measured |
+| `Level_DrawStartColumns` | `$C71D` | checked | 12 | 11 of 11 | not measured |
+| `Level_DrawScreen` | `$C78F` | checked | 12 | 11 of 11 | not measured |
+| `Scroll_StreamBlocks` | `$C830` | checked | 12 | 11 of 11 | not measured |
+| `Level_DecodeBlock` | `$CCBD` | checked | 12 | 11 of 11 | not measured |
+| `Level_MetatileAt` | `$CDE2` | checked | 6 | - | not measured |
+| `Level_ScreenPointer` | `$CE2C` | checked | 12 | 11 of 11 | not measured |
+| `Vram_FlushQueue` | `$C139` | checked | 12 | 11 of 11 | not measured |
+| `Vram_FlushTileEdits` | `$C15E` | checked | 9 | - | not measured |
+| `Bg_Probe` | `$D120` | checked | 12 | 11 of 11 | not measured |
+| `Bg_SnapRight` | `$D49A` | checked | 10 | 2 of 11 | not measured |
+| `Bg_SnapLeft` | `$D4B2` | checked | 11 | - | not measured |
+| `Bg_SnapHead` | `$D4C8` | checked | 9 | - | not measured |
+| `Bg_SnapFeet` | `$D4D6` | checked | 12 | 11 of 11 | not measured |
+| `Boss_CheckTrigger` | `$CF93` | checked | 12 | 11 of 11 | not measured; the arena start (5 calls) runs as the original |
+| `Level_TileEdit` | `$F574` | checked | 9 | - | not measured |
+| `Chr_StreamRow` | `$C42C` | checked | 12 | 11 of 11 | not measured |
 | `Nmi_Handler` | `$C000` | claimed (decomp/system): the NMI has no site form yet | - | - | - |
 | `Ppu_NmiOff` | `$C183` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
 | `Ppu_NmiOn` | `$C18D` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
-| `Ppu_Blank` | `$C197` | checked | 12 | - | not measured (no coverage build yet) |
-| `Ppu_Unblank` | `$C1A1` | checked | 12 | - | not measured (no coverage build yet) |
-| `Input_ReadControllers` | `$C1AB` | checked | 12 | - | not measured (no coverage build yet) |
-| `Ppu_FillNametable` | `$C203` | checked | 12 | - | not measured (no coverage build yet) |
+| `Ppu_Blank` | `$C197` | checked | 12 | - | not measured |
+| `Ppu_Unblank` | `$C1A1` | checked | 12 | - | not measured |
+| `Input_ReadControllers` | `$C1AB` | checked | 12 | - | not measured |
+| `Ppu_FillNametable` | `$C203` | checked | 12 | - | not measured |
 | `Mem_FillPages` | `$C24F` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
-| `Oam_Clear` | `$C267` | checked | 12 | - | not measured (no coverage build yet) |
+| `Oam_Clear` | `$C267` | checked | 12 | - | not measured |
 | `Palette_FadeIn` | `$C279` | claimed (decomp/system): task routine, a stop point of the flow until then | - | - | - |
 | `Palette_FadeOut` | `$C282` | claimed (decomp/system): task routine, a stop point of the flow until then | - | - | - |
-| `Random_Next` | `$C2E6` | checked | 12 | - | not measured (no coverage build yet) |
-| `Chr_LoadList` | `$C301` | checked | 12 | - | not measured (no coverage build yet) |
-| `Chr_StreamRow` | `$C42C` | checked | 12 | - | not measured (no coverage build yet) |
+| `Random_Next` | `$C2E6` | checked | 12 | - | not measured |
+| `Chr_LoadList` | `$C301` | checked | 12 | - | not measured |
 | `Palette_LoadScene` | `$F76D` | written, not compared | 0 | - | every branch (no route calls it; needs a poke case) |
-| `Bank_Select` | `$FFDE` | checked | 12 | - | not measured (no coverage build yet) |
-| `Bank_SelectTemp` | `$FFE0` | checked | 12 | - | not measured (no coverage build yet) |
-| `Oam_Build` | bank 5 `$8000` | checked | 12 | - | not measured (no coverage build yet) |
-| `Text_DrawStrings` | bank 5 `$BAB0` | checked | 12 | - | not measured (no coverage build yet) |
-| `Sound_Update` | bank 3 `$8000` | checked | 12 | - | not measured (no coverage build yet) |
-| `Sound_Play` | bank 3 `$8003` | checked | 12 | - | not measured (no coverage build yet) |
+| `Bank_Select` | `$FFDE` | checked | 12 | - | not measured |
+| `Bank_SelectTemp` | `$FFE0` | checked | 12 | - | not measured |
+| `Oam_Build` | bank 5 `$8000` | checked | 12 | - | not measured |
+| `Text_DrawStrings` | bank 5 `$BAB0` | checked | 12 | - | not measured |
+| `Sound_Update` | bank 3 `$8000` | checked | 12 | - | not measured |
+| `Sound_Play` | bank 3 `$8003` | checked | 12 | - | not measured |
 
 **Claimed, in progress** (branch `decomp/flow`, `src/decomp/flow.c`): the game flow of the main task in the fixed
 bank, `$D4E6-$E353` and the boss trigger `$CF93-$D04C`: title and difficulty select (`$D4E6`), Land Select and the
@@ -257,8 +299,8 @@ the HUD timer `timer_tick` (`$E28C`).
 
 Not decompiled yet, and still run as the original from the C:
 
-- Through `Decomp_Call`: the background probe `$D120` and its snaps `$D49A`/`$D4B2`/`$D4C8`/`$D4D6`,
-  the object contact tests `$D202`/`$D291`, the climbing steps `$F192`/`$F1A8`, the walls move
+- Through `Decomp_Call`: the background probe `$D120` and its snaps `$D49A`/`$D4B2`/`$D4C8`/`$D4D6`
+  (decompiled in `collision.c`, but `player.c` still calls their originals), the object contact tests `$D202`/`$D291`, the climbing steps `$F192`/`$F1A8`, the walls move
   `$F0F8` and the Select refill `$E2FE`.
 - Through `Decomp_RunOriginal`: `Player_Update` in modes 15 (`$ED05`, message or item) and 16
   (`$EF62`, treasure), and every call that reaches the row change at `$E8C0`.
@@ -269,8 +311,16 @@ or 76%. With the collision and movement helpers he shares with other objects (`$
 `$F0F8-$F233`, 1,281 bytes) it is 54%. The motion (`$F234-$F2C6`) and sound (`$F752`) primitives
 are decompiled too, and they also serve every other object.
 
-**Next routines, in order:** the background probe `$D120` with its snaps (every move uses them),
-the contact tests `$D202`/`$D291`, the climbing steps and the walls move, the Select refill, then
+**Level routines** (`level.c`, `collision.c`): the camera `$EFE2-$F0E0`, the column streaming
+`$C7C5-$C969`, the map header `$C7B0`, the start and Land Select draws `$C71D-$C7AF`, the block
+decoding `$CCBD-$CE56`, the queue uploads `$C139-$C182`, the row's sprite CHR stream `$C42C-$C507`,
+the boss trigger `$CF93`, the tile edit `$F574` and the background probe with its snaps
+`$D120-$D4E5`. Branch coverage of these two files was not measured. Not decompiled yet: the row
+scroll (`$E9`), the tile-edit metatile helper `$F697` and the room transitions, which the flow's
+task code runs.
+
+**Next routines, in order:** `player.c` calling the C of the background probe and its snaps
+instead of their originals, the contact tests `$D202`/`$D291`, the climbing steps and the walls move, the Select refill, then
 modes 15 and 16 and the row change. Those last three wait for frames, so they need a C form of
 `task_yield` before they can leave `Decomp_RunOriginal`. After that comes `death_or_warp` (`$DC3E`,
 called from the frame loop at `$DBAD`) and the frame loop itself.
@@ -319,6 +369,29 @@ A routine every route runs at power-on selects frame 0 and saves nothing; run th
 | `verify_routes` | native, interpreter and oracle agree on every frame at 4 alignments |
 | `verify_routes` with `DUCKTALES_DECOMP=check` | the same, with check mode on in the recompiled runs |
 | `enhancements_test` | each enhancement, now an event handler, is identical to stock when off, acts when on, and can be toggled |
+
+**Ideas from other projects** (reviewed 2026-11-23; none of their code is used):
+
+- [DecompPipeline](https://github.com/GeneralAtrox/DecompPipeline): one machine verdict per
+  function, which agents cannot argue with, bounded repair attempts, and a job registry that never
+  repeats a job on unchanged inputs. We already have the verdict: check mode compares every call
+  on the whole RAM. From that project we took the reuse rule (AGENTS.md, "Checks") and the queue
+  (`tools/test_slot.py`). We did not take its mutation check. It finds harnesses that do not
+  observe a result, and check mode observes all of RAM, so the branches the coverage build lists
+  already name the gaps.
+- [mesen-for-ai](https://github.com/paulomanrique/mesen-for-ai) (GPL-3.0): Mesen driven headless
+  with watches, breakpoints and the code/data logger. The same questions are answered here by
+  `tools/whoaccesses.py`, `--miss-log` coverage and the TriCNES oracle, so we did not add it.
+- [Ghidra6502](https://github.com/tom-seddon/Ghidra6502): Ghidra's analysis of indexed addressing.
+  We did not take it, because `tools/disasm6502.py` and `tools/player_xref.py` cover the routines
+  we decompile, without a JVM.
+- [NESRecomp](https://github.com/mstan/nesrecomp) upstream is 8 commits past our pin. The pin
+  already has `symbol_file` and function-entry mod hooks.
+- [awesome-rea](https://github.com/yibie/awesome-rea): "done" is a gate a machine decides. For us
+  that is `decomp_test` and `verify_routes`.
+
+A difference in check or replace mode names the RAM address with its `ducktales_symbols.h` name
+(`$0011 CONTACT_DEPTH/SCRATCH11`), so a mismatch reads without a symbol lookup.
 
 Why replace mode is not part of `verify_routes`: the oracle compares bus traces, and a replaced
 routine's bus activity is `cpu_read`s of one address instead of the original's accesses. Replace

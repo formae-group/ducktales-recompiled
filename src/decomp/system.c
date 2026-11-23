@@ -2,15 +2,9 @@
  * system.c - the system layer of the fixed bank, decompiled
  * (docs/functions.md, docs/rendering.md, docs/decompilation.md): bank
  * switching, the controllers, the PPU blanking helpers, the nametable fill,
- * the OAM park, the random generator, the CHR list upload, the per-row
- * sprite CHR stream, the scene palettes and the direct string drawing of
- * bank 5.
- *
- * Chr_StreamRow draws its packet at once when the picture is blanked, with
- * the VRAM queue upload of $C139. That routine stores to the PPU, which an
- * original routine called from C (Decomp_Call) cannot do for real, so its
- * loop is written here too (flush_vram_queue); $C139 itself is the
- * decompilation of decomp/level.
+ * the OAM park, the random generator, the CHR list upload, the scene
+ * palettes and the direct string drawing of bank 5. The per-row sprite CHR
+ * stream ($C42C) is decomp/level's (level.c).
  *
  * Bank switching on this UxROM board is a store of the bank number into the
  * fixed bank's bus-conflict table at $FFE5 (the table holds 0, 1, 2 ..., so
@@ -31,13 +25,6 @@
 #define gPalette       (&gRam[DT_ADDR_PALETTE_SHOWN])
 #define gPaletteMaster (&gRam[DT_ADDR_PALETTE])
 #define gRandom        (&gRam[DT_ADDR_RANDOM])
-#define gVramQueue     (&gRam[DT_ADDR_VRAM_QUEUE])
-#define gVramPending   RAM_U8(DT_ADDR_VRAM_PENDING)
-#define gRowChrState   RAM_U8(DT_ADDR_ROW_CHR_STATE)
-#define gRowChrBank    RAM_U8(DT_ADDR_ROW_CHR_BANK)
-#define gRowChrOffset  RAM_U8(DT_ADDR_ROW_CHR_OFFSET)
-#define gRowChrByte    RAM_U8(DT_ADDR_ROW_CHR_BYTE)
-#define gRowChrPages   RAM_U8(DT_ADDR_ROW_CHR_PAGES)
 
 #define MASK_SHOWN        0x1E
 #define OAM_PARKED_Y      0xF8
@@ -46,9 +33,6 @@
 #define PAD_LEFT_RIGHT    (DT_PAD_LEFT | DT_PAD_RIGHT)
 #define CHR_LIST_END      0x80
 #define SCENE_SPRITE_PAL3 0x80
-#define QUEUE_END         0x80
-#define ROW_CHR_PACKET    0x40
-#define ROW_LIST_BY_PAGE  0x80
 #define STRING_END        0xFE
 #define STRINGS_TOTAL     0x0B
 #define TOTAL_DIGITS      8
@@ -63,7 +47,7 @@ static uint16_t rom_pointer(uint16_t lo_table, uint16_t hi_table, uint8_t index)
 static void Bank_SelectTemp(uint8_t bank)
 {
     Decomp_Enter(DT_CODE_BANK_SELECT_TEMP, bank, 0, 0);
-    Decomp_Store((uint16_t)(DT_CODE_BANK_TABLE + bank), bank);
+    Decomp_BusWrite((uint16_t)(DT_CODE_BANK_TABLE + bank), bank);
 }
 
 /* $FFDE */
@@ -92,13 +76,13 @@ static void Input_ReadControllers(void)
         return;
     }
     uint8_t *pads = &gRam[DT_ADDR_PAD_NEW];
-    Decomp_Store(JOYPAD1, 1);
-    Decomp_Store(JOYPAD1, 0);
+    Decomp_BusWrite(JOYPAD1, 1);
+    Decomp_BusWrite(JOYPAD1, 0);
     for (int bit = 0; bit < 8; bit++) {
-        uint8_t a = Decomp_Load(JOYPAD1);
+        uint8_t a = Decomp_BusLoad(JOYPAD1);
         pads[0] = (uint8_t)(pads[0] << 1 | (a & 1));
         RAM_U8(DT_ADDR_SCRATCH0) = (uint8_t)(RAM_U8(DT_ADDR_SCRATCH0) << 1 | (a >> 1 & 1));
-        uint8_t b = Decomp_Load(JOYPAD2);
+        uint8_t b = Decomp_BusLoad(JOYPAD2);
         pads[1] = (uint8_t)(pads[1] << 1 | (b & 1));
         RAM_U8(DT_ADDR_SCRATCH1) = (uint8_t)(RAM_U8(DT_ADDR_SCRATCH1) << 1 | (b >> 1 & 1));
     }
@@ -143,7 +127,7 @@ static void Ppu_FillNametable(uint8_t nt, uint8_t tile, uint8_t attribute)
     RAM_U8(DT_ADDR_SCRATCH0) = nt;
     RAM_U8(DT_ADDR_SCRATCH1) = tile;
     RAM_U8(DT_ADDR_SCRATCH2) = attribute;
-    (void)Ppu_ReadStatus();
+    Ppu_ResetLatch();
     Ppu_SetCtrl(gPpuCtrl & 0xFE);
     Ppu_SetAddress((uint16_t)(nt << 8));
     unsigned pages = nt >= 0x20 ? 4 : attribute ? attribute : 0x100;
@@ -192,130 +176,32 @@ static void Chr_LoadList(uint8_t n)
     Decomp_Enter(DT_CODE_CHR_LOAD, 0, n, 0);
     Ppu_SetCtrl(gPpuCtrl & 0xFE);
     uint16_t list = rom_pointer(DT_TABLE_CHR_LIST_LO, DT_TABLE_CHR_LIST_HI, n);
-    Ram_SetU16(DT_ADDR_CHR_LIST, DT_ADDR_CHR_LIST + 1, list);
+    Ram_SetU16(DT_ADDR_CHR_LOAD_LIST, DT_ADDR_CHR_LOAD_LIST + 1, list);
     uint8_t i = 0;
     do {
         uint8_t head = Game_ReadRom((uint16_t)(list + i));
         if (head & CHR_LIST_END) {
             return;
         }
-        RAM_U8(DT_ADDR_CHR_BANK) = head >> 4;
-        RAM_U8(DT_ADDR_CHR_PAGES) = head & 0x0F;
+        RAM_U8(DT_ADDR_CHR_LOAD_BANK) = head >> 4;
+        RAM_U8(DT_ADDR_CHR_LOAD_PAGES) = head & 0x0F;
         i++;
-        Ram_SetU16(DT_ADDR_CHR_SOURCE, DT_ADDR_CHR_SOURCE + 1, (uint16_t)(Game_ReadRom((uint16_t)(list + i)) << 8));
+        Ram_SetU16(DT_ADDR_CHR_LOAD_SOURCE, DT_ADDR_CHR_LOAD_SOURCE + 1,
+                   (uint16_t)(Game_ReadRom((uint16_t)(list + i)) << 8));
         i++;
-        (void)Ppu_ReadStatus();
+        Ppu_ResetLatch();
         Ppu_SetAddress((uint16_t)(Game_ReadRom((uint16_t)(list + i)) << 8));
-        RAM_U8(DT_ADDR_CHR_INDEX) = i;
-        Bank_Select(RAM_U8(DT_ADDR_CHR_BANK));
+        RAM_U8(DT_ADDR_CHR_LOAD_INDEX) = i;
+        Bank_Select(RAM_U8(DT_ADDR_CHR_LOAD_BANK));
         do {
-            uint16_t page = Ram_GetU16(DT_ADDR_CHR_SOURCE, DT_ADDR_CHR_SOURCE + 1);
+            uint16_t page = Ram_GetU16(DT_ADDR_CHR_LOAD_SOURCE, DT_ADDR_CHR_LOAD_SOURCE + 1);
             for (int b = 0; b < 0x100; b++) {
                 Ppu_Write(Game_ReadRom((uint16_t)(page + b)));
             }
-            RAM_U8(DT_ADDR_CHR_SOURCE + 1)++;
-        } while ((int8_t)--RAM_U8(DT_ADDR_CHR_PAGES) >= 0);
-        i = (uint8_t)(RAM_U8(DT_ADDR_CHR_INDEX) + 1);
+            RAM_U8(DT_ADDR_CHR_LOAD_SOURCE + 1)++;
+        } while ((int8_t)--RAM_U8(DT_ADDR_CHR_LOAD_PAGES) >= 0);
+        i = (uint8_t)(RAM_U8(DT_ADDR_CHR_LOAD_INDEX) + 1);
     } while (i);
-}
-
-/* The VRAM queue at $0400 to the PPU (the loop of $C139): records of PPU
- * address high, low, count - 1 and the bytes, ended by a high byte with bit 7
- * set. */
-static void flush_vram_queue(void)
-{
-    gVramPending = 0;
-    uint8_t x = 0;
-    do {
-        if (gVramQueue[x] & QUEUE_END) {
-            return;
-        }
-        Decomp_Store(PPU_ADDR, gVramQueue[x]);
-        Decomp_Store(PPU_ADDR, gVramQueue[x + 1]);
-        uint8_t left = gVramQueue[x + 2];
-        do {
-            Ppu_Write(gVramQueue[x + 3]);
-            x++;
-        } while ((int8_t)--left >= 0);
-        x = (uint8_t)(x + 3);
-    } while (x);
-}
-
-static uint8_t row_index(void)
-{
-    return (uint8_t)(Game_ReadRom((uint16_t)(DT_TABLE_ROW_BASE + gLand)) + gMapRow);
-}
-
-/* $C42C: stream the current map row's enemy sprite CHR, 64 bytes per call
- * through the VRAM queue (drawn at once while blanked), from the row's list
- * (same record format as Chr_LoadList; a list number with bit 7 set picks
- * one of two lists by camera page). At the end of the list it loads sprite
- * palette 3 for the row and leaves $50 negative. */
-static void Chr_StreamRow(void)
-{
-    Decomp_Enter(DT_CODE_ROW_CHR_STREAM, 0, 0, 0);
-    if (gRowChrState & 0x80) {
-        return;
-    }
-    if (!gRowChrState) {
-        uint8_t list = Game_ReadRom((uint16_t)(DT_TABLE_ROW_CHR_LIST + row_index()));
-        if (list & ROW_LIST_BY_PAGE) {
-            list &= 0x7F;
-            if (gCameraPage >= (gLand == LAND_MOON ? 3 : 4)) {
-                list++;
-            }
-        }
-        gRowChrState++;
-        Ram_SetU16(DT_ADDR_ROW_CHR_LIST, DT_ADDR_ROW_CHR_LIST + 1,
-                   rom_pointer(DT_TABLE_ROW_LISTS_LO, DT_TABLE_ROW_LISTS_HI, list));
-        gRowChrOffset = 0;
-        RAM_U8(DT_ADDR_ROW_CHR_SOURCE) = 0;
-        RAM_U8(DT_ADDR_ROW_CHR_PPU) = 0;
-    }
-    if (!(gRowChrState & 0x02)) {
-        gRowChrState++;
-        uint16_t list = Ram_GetU16(DT_ADDR_ROW_CHR_LIST, DT_ADDR_ROW_CHR_LIST + 1);
-        uint8_t head = Game_ReadRom((uint16_t)(list + gRowChrOffset));
-        if (head & CHR_LIST_END) {
-            gRowChrState = head;
-            uint8_t pal = (uint8_t)(Game_ReadRom((uint16_t)(DT_TABLE_ROW_PALETTE + row_index())) << 2);
-            for (int i = 0; i < 4; i++) {
-                uint8_t color = Game_ReadRom((uint16_t)(DT_TABLE_ROW_PALETTES + (uint8_t)(pal + i)));
-                gPalette[0x1C + i] = color;
-                gPaletteMaster[0x1C + i] = color;
-            }
-            return;
-        }
-        gRowChrBank = head >> 4;
-        gRowChrPages = head & 0x0F;
-        RAM_U8(DT_ADDR_ROW_CHR_SOURCE + 1) = Game_ReadRom((uint16_t)(list + (uint8_t)(gRowChrOffset + 1)));
-        RAM_U8(DT_ADDR_ROW_CHR_PPU + 1) = Game_ReadRom((uint16_t)(list + (uint8_t)(gRowChrOffset + 2)));
-        gRowChrOffset = (uint8_t)(gRowChrOffset + 3);
-        gRowChrByte = 0;
-    }
-    Bank_Select(gRowChrBank);
-    uint16_t source = Ram_GetU16(DT_ADDR_ROW_CHR_SOURCE, DT_ADDR_ROW_CHR_SOURCE + 1);
-    for (int i = 0; i < ROW_CHR_PACKET; i++) {
-        gVramQueue[3 + i] = Game_ReadRom((uint16_t)(source + gRowChrByte));
-        gRowChrByte++;
-    }
-    uint16_t ppu = Ram_GetU16(DT_ADDR_ROW_CHR_PPU, DT_ADDR_ROW_CHR_PPU + 1);
-    gVramQueue[2] = ROW_CHR_PACKET - 1;
-    gVramQueue[0] = (uint8_t)(ppu >> 8);
-    gVramQueue[1] = (uint8_t)ppu;
-    Ram_SetU16(DT_ADDR_ROW_CHR_PPU, DT_ADDR_ROW_CHR_PPU + 1, (uint16_t)(ppu + ROW_CHR_PACKET));
-    if (!gRowChrByte) {
-        RAM_U8(DT_ADDR_ROW_CHR_SOURCE + 1)++;
-        if ((int8_t)--gRowChrPages < 0) {
-            gRowChrState--;
-        }
-    }
-    gVramQueue[3 + ROW_CHR_PACKET] = 0xFF;
-    if (!gBlanked) {
-        gVramPending = 0xFF;
-        return;
-    }
-    flush_vram_queue();
 }
 
 static uint8_t string_byte(uint8_t y)
@@ -341,14 +227,14 @@ static void Text_DrawStrings(uint8_t set)
     Ram_SetU16(DT_ADDR_SCRATCH0, DT_ADDR_SCRATCH1, rom_pointer(DT_TABLE_STRINGS_LO, DT_TABLE_STRINGS_HI, set));
     uint8_t y = 0;
     for (;;) {
-        (void)Ppu_ReadStatus();
+        Ppu_ResetLatch();
         uint8_t high = string_byte(y);
         if (!high) {
             break;
         }
-        Decomp_Store(PPU_ADDR, high);
+        Decomp_BusWrite(PPU_ADDR, high);
         y = string_next(y);
-        Decomp_Store(PPU_ADDR, string_byte(y));
+        Decomp_BusWrite(PPU_ADDR, string_byte(y));
         y = string_next(y);
         for (uint8_t tile; (tile = string_byte(y)) != STRING_END; y = string_next(y)) {
             Ppu_Write(tile);
@@ -457,31 +343,24 @@ static void Run_PaletteLoadScene(Regs *r)
     Palette_LoadScene(r->y);
 }
 
-static void Run_ChrStreamRow(Regs *r)
-{
-    (void)r;
-    Chr_StreamRow();
-}
-
 static void Run_TextDrawStrings(Regs *r)
 {
     Text_DrawStrings(r->x);
 }
 
 const DecompRoutine gSystemRoutines[] = {
-    { DT_CODE_BANK_SELECT, "ducktales.decomp.FFDE", "Bank_Select", Run_BankSelect, OUT_A | OUT_X | OUT_P | OUT_DEVICE },
+    { DT_CODE_BANK_SELECT, "ducktales.decomp.FFDE", "Bank_Select", Run_BankSelect, OUT_A | OUT_X | OUT_P | OUT_HW },
     { DT_CODE_BANK_SELECT_TEMP, "ducktales.decomp.FFE0", "Bank_SelectTemp", Run_BankSelectTemp,
-      OUT_A | OUT_X | OUT_P | OUT_DEVICE },
-    { DT_CODE_READ_CONTROLLERS, "ducktales.decomp.C1AB", "Input_ReadControllers", Run_ReadControllers, OUT_DEVICE },
-    { DT_CODE_SCREEN_OFF, "ducktales.decomp.C197", "Ppu_Blank", Run_PpuBlank, OUT_DEVICE },
-    { DT_CODE_SCREEN_ON, "ducktales.decomp.C1A1", "Ppu_Unblank", Run_PpuUnblank, OUT_DEVICE },
-    { DT_CODE_NT_FILL, "ducktales.decomp.C203", "Ppu_FillNametable", Run_FillNametable, OUT_DEVICE },
+      OUT_A | OUT_X | OUT_P | OUT_HW },
+    { DT_CODE_READ_CONTROLLERS, "ducktales.decomp.C1AB", "Input_ReadControllers", Run_ReadControllers, OUT_HW },
+    { DT_CODE_SCREEN_OFF, "ducktales.decomp.C197", "Ppu_Blank", Run_PpuBlank, OUT_HW },
+    { DT_CODE_SCREEN_ON, "ducktales.decomp.C1A1", "Ppu_Unblank", Run_PpuUnblank, OUT_HW },
+    { DT_CODE_NT_FILL, "ducktales.decomp.C203", "Ppu_FillNametable", Run_FillNametable, OUT_HW },
     { DT_CODE_OAM_CLEAR, "ducktales.decomp.C267", "Oam_Clear", Run_OamClear, 0 },
     { DT_CODE_RANDOM, "ducktales.decomp.C2E6", "Random_Next", Run_RandomNext, OUT_X | OUT_Y },
-    { DT_CODE_CHR_LOAD, "ducktales.decomp.C301", "Chr_LoadList", Run_ChrLoadList, OUT_DEVICE },
+    { DT_CODE_CHR_LOAD, "ducktales.decomp.C301", "Chr_LoadList", Run_ChrLoadList, OUT_HW },
     { DT_CODE_PALETTE_SCENE, "ducktales.decomp.F76D", "Palette_LoadScene", Run_PaletteLoadScene, 0 },
-    { DT_CODE_ROW_CHR_STREAM, "ducktales.decomp.C42C", "Chr_StreamRow", Run_ChrStreamRow, OUT_DEVICE },
-    { DT_CODE_DRAW_STRINGS, "ducktales.decomp.5.BAB0", "Text_DrawStrings", Run_TextDrawStrings, OUT_DEVICE,
+    { DT_CODE_DRAW_STRINGS, "ducktales.decomp.5.BAB0", "Text_DrawStrings", Run_TextDrawStrings, OUT_HW,
       .bank = STRINGS_BANK },
 };
 const int gSystemRoutineCount = sizeof gSystemRoutines / sizeof gSystemRoutines[0];

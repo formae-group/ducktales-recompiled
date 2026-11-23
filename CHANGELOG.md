@@ -12,10 +12,21 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   the routes reach late.
 - `tools/test_slot.py` queues heavy test runs across worktrees, at most two at once.
 - The system layer is decompiled (`src/decomp/system.c`, `sprites.c`, `audio.c`): bank switching,
-  the controllers, PPU blanking, nametable fill, CHR uploads and streaming, the OAM clear, the random
-  generator, the sprite builder (bank 5), the string drawer and the bank-3 sound driver. Device
-  access goes through `Decomp_Store` and the new `Decomp_Load`, compared in check mode as PPU, APU
-  and mapper state; routines of the switchable window match their site only with their bank mapped.
+  the controllers, PPU blanking, nametable fill, CHR uploads, the OAM clear, the random generator,
+  the sprite builder (bank 5), the string drawer and the bank-3 sound driver. They use the bus
+  operations of `decomp/level`, with `Decomp_BusLoad` added for reads whose value the C needs; check
+  mode now also compares OAM and the device registers, and routines of the switchable window match
+  their site only with their bank mapped.
+- `tests/decomp_test.py` names each differing RAM address with its `ducktales_symbols.h` name.
+- The camera, the column streaming, the map and block decoding, the VRAM queue uploads and the
+  background probe with its four snaps are decompiled (`src/decomp/level.c`, `src/decomp/collision.c`):
+  18 routines, checked on every call of every route and RAM-identical in replace mode.
+
+### Fixed
+
+- Replace mode made a decompiled routine's PPU writes back to back. The PPU acts on `$2006`/`$2007`
+  writes a few cycles late, so every byte of a VRAM queue landed one address off; the writes are
+  now spread over the original routine's cycles.
 
 ## [1.0.0] - 2026-11-23
 

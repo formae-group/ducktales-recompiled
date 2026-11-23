@@ -22,8 +22,9 @@
  *            real.
  *   replace  the image's changes are stored into the machine with
  *            cyc_mod_poke (the dead stack excepted), the contract's registers
- *            set, and the CPU spends the original's cycle count as reads of
- *            the routine's first byte, polling interrupts in the last one as
+ *            set, and the CPU spends the original's cycle count as the C's
+ *            bus operations (Decomp_BusWrite) spread evenly among reads of
+ *            the routine's first byte, polling interrupts in the last read as
  *            the RTS would; then the scheduler returns from the routine as
  *            its RTS would. Interrupts and frames therefore come at the same
  *            points of the game's work as on the console (an NMI that the
@@ -61,21 +62,17 @@
  * stop and jumps there. Inside an isolated call every other site lets the
  * original run.
  *
- * Device access outside task code (Decomp_Load/Decomp_Store, routines marked
- * OUT_DEVICE). In check mode the C's accesses go to its isolated scope, so a
- * store changes the scope's PPU, APU or mapper as the original's stores
- * changed the original's scope; at the end both scopes' devices are compared:
- * CIRAM, palette, OAM, CHR RAM and every device register the machine lists
- * (cyc_hw_state_dump) but the CPU bus fields and the two PPUMASK bits that
- * show the previous bus value until two dots after a $2001 store (no clock
- * runs in a scope, so they never settle there; the stored value itself is
- * compared). In replace mode the C's accesses are real CPU accesses on the
- * machine, made after storing the RAM the C has changed so far. Each takes
- * the four cycles of an absolute load or store (three reads of the
- * routine's first byte, then the access), so accesses are spaced as the
- * original's are; the cycles spent afterwards are the original's minus
- * those. A routine with device access must have a site: an inner check
- * would run the C and the original on the same scope's devices.
+ * Device access (Decomp_BusWrite, Decomp_BusRead, Decomp_BusLoad; routines
+ * marked OUT_HW). The C records its writes and its side-effect reads; replace
+ * mode makes them on the bus after storing the RAM, spread over the
+ * original's cycles, and check mode makes them on an isolated copy of the
+ * machine and compares CIRAM, palette, OAM, CHR RAM, the PRG bank and every
+ * device register the machine lists (cyc_hw_state_dump) but the CPU bus
+ * fields and the two PPUMASK bits that show the previous bus value until two
+ * dots after a $2001 store (no clock runs in a scope, so they never settle
+ * there). A read whose value the C needs (Decomp_BusLoad: the controllers)
+ * is made at once with the operations before it: in the C's scope in check
+ * mode, for real in replace mode, each spaced as an absolute load is.
  *
  * Routines of the switchable window ($8000-$BFFF) match their site only with
  * their bank (DecompRoutine.bank) mapped. A replaced routine that an NMI
@@ -91,7 +88,6 @@
 #include "cyc_core.h"
 #include "cyc_mod.h"
 #include "cyc_ring.h"
-#include "hw.h"
 #include "hw_internal.h"
 #include "mod_function_hooks.h"
 #include "mod_runtime.h"
@@ -104,10 +100,13 @@
  * (runner/cyc/hw_machine.c); task code compares them. */
 extern uint64_t hw_isolated_io_writes;
 
-#define MAX_ROUTINES         160
-#define MAX_STORES           8
-#define FRAME_END_MARGIN     32
-#define DEVICE_ACCESS_CYCLES 4
+#define MAX_ROUTINES     256
+#define MAX_BUS_OPS      16384
+#define MAX_STORES       8
+#define FRAME_END_MARGIN 32
+#define SCOPE_OP_GAP     8
+#define LOAD_GAP         3
+#define REGS_TEXT        0x4000
 
 typedef struct {
     uint64_t calls, compared, original;
@@ -128,22 +127,30 @@ static bool s_top_entered, s_inner;
 static bool s_damage_cancel[8];
 static int s_damage_raised, s_damage_replayed;
 
+typedef struct {
+    uint16_t addr;
+    uint8_t value;
+    bool write;
+} BusOp;
+
+static BusOp s_ops[MAX_BUS_OPS];
+static int s_nops, s_ops_in_scope;
+
+typedef struct {
+    uint64_t ciram, palette, chr, oam, regs;
+    unsigned bank;
+} HwState;
+
+static HwState s_orig_hw;
+static char s_orig_regs[REGS_TEXT], s_c_regs[REGS_TEXT];
+static FILE *s_dump;
+static int s_played, s_loads;
+static uint64_t s_early, s_nmi_debt;
+static uint8_t s_c_bank, s_handoff_bank;
 static uint8_t s_cur_s;
 static bool s_handoff_set;
 static uint16_t s_handoff;
 static uint8_t s_handoff_uses;
-static uint8_t s_c_bank, s_handoff_bank;
-static uint64_t s_io_cycles, s_nmi_debt;
-
-typedef struct {
-    uint8_t ciram[0x1000], palette[32], oam[256], chr[0x2000];
-    char regs[0x4000];
-} DeviceState;
-
-static DeviceState s_dev_orig, s_dev_c;
-static FILE *s_dump;
-
-static void device_state(DeviceState *d);
 
 static struct {
     uint16_t addr;
@@ -173,36 +180,123 @@ static void fail(const char *what, uint16_t routine)
     exit(3);
 }
 
-static void open_scope(uint16_t routine)
+static void record(uint16_t addr, uint8_t value, bool write)
 {
-    if (s_scope) {
-        return;
+    if (s_nops == MAX_BUS_OPS) {
+        fail("too many bus operations in one call", addr);
     }
-    if (!cyc_mod_isolate_begin()) {
-        fail("cannot open an isolated scope", routine);
-    }
-    s_scope = true;
+    s_ops[s_nops++] = (BusOp){ addr, value, write };
 }
 
-static void close_scope(void)
+void Decomp_BusWrite(uint16_t addr, uint8_t value)
 {
-    if (s_scope) {
-        cyc_mod_isolate_end();
+    record(addr, value, true);
+    Game_MapperWrite(addr, value);
+    if (Game_RomView() >= 0) {
+        s_c_bank = (uint8_t)Game_RomView();
     }
-    s_scope = false;
+}
+
+void Decomp_BusRead(uint16_t addr)
+{
+    record(addr, 0, false);
+}
+
+/* The recorded bus operations from index from on, made on the machine (or
+ * on the isolated copy inside a scope), with spare reads of addr spread
+ * evenly between them: the PPU acts on a $2006 or $2007 write a few cycles
+ * late, so the operations cannot come back to back. Returns the reads made,
+ * fewer than spare when spare is not 0. */
+static uint64_t play_ops(int from, uint64_t spare, uint16_t addr)
+{
+    uint64_t slots = (uint64_t)(s_nops - from) + 1, spent = 0;
+    for (int i = from; i < s_nops; i++) {
+        for (uint64_t due = spare * (uint64_t)(i - from + 1) / slots; spent < due; spent++) {
+            (void)cpu_read(addr, 0);
+        }
+        if (s_ops[i].write) {
+            cpu_write(s_ops[i].addr, s_ops[i].value, 0);
+        } else {
+            (void)cpu_read(s_ops[i].addr, 0);
+        }
+    }
+    return spent;
+}
+
+static uint64_t fnv(const uint8_t *p, size_t n)
+{
+    uint64_t h = 0xCBF29CE484222325ull;
+    for (size_t i = 0; p && i < n; i++) {
+        h = (h ^ p[i]) * 0x100000001B3ull;
+    }
+    return h;
+}
+
+static bool device_line_compared(const char *line)
+{
+    return strncmp(line, "hw.", 3) && strncmp(line, "ppu.greyscale ", 14) && strncmp(line, "ppu.emphasis ", 13);
+}
+
+/* The machine's device registers as text, the lines compared. */
+static void device_regs(char *regs)
+{
+    if (!s_dump && !(s_dump = tmpfile())) {
+        fail("cannot open a scratch file for the device state", 0);
+    }
+    rewind(s_dump);
+    cyc_hw_state_dump(s_dump);
+    fputc(0, s_dump);
+    fflush(s_dump);
+    rewind(s_dump);
+    char line[512];
+    size_t used = 0;
+    while (fgets(line, sizeof line, s_dump) && line[0]) {
+        size_t len = strlen(line);
+        if (device_line_compared(line) && used + len + 1 <= REGS_TEXT) {
+            memcpy(regs + used, line, len);
+            used += len;
+        }
+    }
+    regs[used] = 0;
+}
+
+static HwState hw_state(char *regs)
+{
+    size_t n = 0;
+    HwState s;
+    const uint8_t *ciram = cyc_ppu_ciram(&n);
+    s.ciram = fnv(ciram, n);
+    s.palette = fnv(cyc_ppu_palette(), 32);
+    const uint8_t *chr = cyc_chr_ram(&n);
+    s.chr = fnv(chr, n);
+    s.oam = fnv(cyc_ppu_oam(), 256);
+    device_regs(regs);
+    s.regs = fnv((const uint8_t *)regs, strlen(regs));
+    s.bank = hw_prg_bank4(0x8000);
+    return s;
 }
 
 /* An original routine in the C's isolated scope, from the image the C works
- * on (gRam); its RAM is left in the scope's machine. */
+ * on (gRam) and the bus operations the C made so far; its RAM is left in the
+ * scope's machine. */
 static bool call_in_scope(uint16_t routine, CycModRegs *r)
 {
-    open_scope(routine);
+    if (!s_scope) {
+        if (!cyc_mod_isolate_begin()) {
+            fail("cannot open an isolated scope", routine);
+        }
+        s_scope = true;
+    }
     const uint8_t *ram = cyc_cpu_ram();
     for (uint16_t i = 0; i < GAME_RAM_SIZE; i++) {
         if (ram[i] != gRam[i]) {
             cyc_mod_poke(i, gRam[i]);
         }
     }
+    if (s_ops_in_scope < s_nops) {
+        play_ops(s_ops_in_scope, (uint64_t)(s_nops - s_ops_in_scope) * SCOPE_OP_GAP, routine);
+    }
+    s_ops_in_scope = s_nops;
     return cyc_mod_call(routine, r);
 }
 
@@ -218,10 +312,40 @@ Regs Decomp_Call(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
 
 void Decomp_RunOriginal(void)
 {
-    if (s_io_cycles) {
-        fail("a routine gave its call to the original after accessing a device", s_top->addr);
+    if (s_loads) {
+        fail("a routine gave its call to the original after a device load", s_top->addr);
     }
     s_run_original = true;
+}
+
+/* A read the C needs the value of, made with the operations before it: in
+ * the C's scope in check mode, on the machine in replace mode. */
+uint8_t Decomp_BusLoad(uint16_t addr)
+{
+    if (s_top->task) {
+        fail("task code reads a device", addr);
+    }
+    s_loads++;
+    uint8_t value;
+    if (s_mode == DECOMP_CHECK) {
+        if (!s_scope) {
+            if (!cyc_mod_isolate_begin()) {
+                fail("cannot open an isolated scope", addr);
+            }
+            s_scope = true;
+        }
+        play_ops(s_ops_in_scope, (uint64_t)(s_nops - s_ops_in_scope + 1) * SCOPE_OP_GAP, addr);
+        value = cpu_read(addr, 0);
+        record(addr, value, false);
+        s_ops_in_scope = s_nops;
+        return value;
+    }
+    uint64_t gap = (uint64_t)(s_nops - s_played + 1) * LOAD_GAP;
+    s_early += play_ops(s_played, gap, s_top->addr);
+    value = cpu_read(addr, 0);
+    record(addr, value, false);
+    s_played = s_nops;
+    return value;
 }
 
 void Decomp_Push(uint8_t value)
@@ -286,6 +410,11 @@ void Decomp_SelectBank(uint8_t bank)
     record_store((uint16_t)(DT_CODE_BANK_TABLE + bank), bank);
 }
 
+void Decomp_Store(uint16_t addr, uint8_t value)
+{
+    record_store(addr, value);
+}
+
 int Decomp_RaiseEvent(int event)
 {
     if (s_mode != DECOMP_REPLACE) {
@@ -310,20 +439,21 @@ static void run_c(const DecompRoutine *rt, const CycModRegs *in, Regs *out)
     s_scope = false;
     s_top = rt;
     s_top_entered = false;
+    s_nops = s_ops_in_scope = s_played = s_loads = 0;
+    s_early = 0;
+    s_c_bank = (uint8_t)(hw_prg_bank4(0x8000) >> 2);
     s_cur_s = in->s;
     s_handoff_set = false;
     s_stores = 0;
-    s_io_cycles = 0;
-    s_c_bank = (uint8_t)(hw_prg_bank(0x8000) >> 1);
     Regs r = { in->a, in->x, in->y, in->p };
     GameRam_Enter(s_image);
     rt->run(&r);
     GameRam_Leave();
-    if (s_mode == DECOMP_CHECK && (rt->out & OUT_DEVICE)) {
-        open_scope(rt->addr);
-        device_state(&s_dev_c);
+    Game_ResetRomView();
+    if (s_scope) {
+        cyc_mod_isolate_end();
     }
-    close_scope();
+    s_scope = false;
     if (!s_top_entered) {
         fail("a decompiled routine does not start with Decomp_Enter", rt->addr);
     }
@@ -336,124 +466,6 @@ static void run_c(const DecompRoutine *rt, const CycModRegs *in, Regs *out)
 static bool live(uint16_t a, uint8_t entry_s)
 {
     return (a & 0xFF00) != 0x0100 || a < DT_ADDR_STACK_FLOOR || (a & 0xFF) >= entry_s + 3u;
-}
-
-/* Device access of a routine that is not task code: in check mode in the C's
- * isolated scope; in replace mode for real, after storing the RAM the C has
- * changed so far, spaced as an absolute load or store is. */
-static void device_access(uint16_t addr)
-{
-    if (s_mode == DECOMP_CHECK) {
-        open_scope(addr);
-        return;
-    }
-    close_scope();
-    const uint8_t *ram = cyc_cpu_ram();
-    for (uint16_t a = 0; a < GAME_RAM_SIZE; a++) {
-        if (live(a, s_entry_s) && ram[a] != gRam[a]) {
-            cyc_mod_poke(a, gRam[a]);
-        }
-    }
-    for (int i = 1; i < DEVICE_ACCESS_CYCLES; i++) {
-        (void)cpu_read(s_top->addr, 0);
-    }
-    s_io_cycles += DEVICE_ACCESS_CYCLES;
-}
-
-void Decomp_Store(uint16_t addr, uint8_t value)
-{
-    if (addr >= DT_CODE_BANK_TABLE && addr < DT_CODE_BANK_TABLE + 8) {
-        s_c_bank = value;
-    }
-    if (s_top->task) {
-        record_store(addr, value);
-        return;
-    }
-    device_access(addr);
-    cpu_write(addr, value, 0);
-}
-
-uint8_t Decomp_Load(uint16_t addr)
-{
-    if (s_top->task) {
-        fail("task code reads a device", addr);
-    }
-    device_access(addr);
-    return cpu_read(addr, 0);
-}
-
-static bool device_line_compared(const char *line)
-{
-    return strncmp(line, "hw.", 3) && strncmp(line, "ppu.greyscale ", 14) && strncmp(line, "ppu.emphasis ", 13);
-}
-
-/* The devices of the machine (an isolated scope's). */
-static void device_state(DeviceState *d)
-{
-    size_t n;
-    const uint8_t *m = cyc_ppu_ciram(&n);
-    memset(d, 0, sizeof *d);
-    memcpy(d->ciram, m, n < sizeof d->ciram ? n : sizeof d->ciram);
-    memcpy(d->palette, cyc_ppu_palette(), sizeof d->palette);
-    memcpy(d->oam, cyc_ppu_oam(), sizeof d->oam);
-    m = cyc_chr_ram(&n);
-    if (m) {
-        memcpy(d->chr, m, n < sizeof d->chr ? n : sizeof d->chr);
-    }
-    if (!s_dump && !(s_dump = tmpfile())) {
-        fail("cannot open a scratch file for the device state", 0);
-    }
-    rewind(s_dump);
-    cyc_hw_state_dump(s_dump);
-    fputc(0, s_dump);
-    fflush(s_dump);
-    rewind(s_dump);
-    char line[512];
-    size_t used = 0;
-    while (fgets(line, sizeof line, s_dump) && line[0]) {
-        size_t len = strlen(line);
-        if (!device_line_compared(line) || used + len + 1 > sizeof d->regs) {
-            continue;
-        }
-        memcpy(d->regs + used, line, len);
-        used += len;
-    }
-    d->regs[used] = 0;
-}
-
-/* Check mode: the devices after the C against those after the original. */
-static void compare_devices(const DecompRoutine *rt)
-{
-    const char *what = NULL;
-    if (memcmp(s_dev_orig.ciram, s_dev_c.ciram, sizeof s_dev_c.ciram)) {
-        what = "nametables (CIRAM)";
-    } else if (memcmp(s_dev_orig.palette, s_dev_c.palette, sizeof s_dev_c.palette)) {
-        what = "palette RAM";
-    } else if (memcmp(s_dev_orig.oam, s_dev_c.oam, sizeof s_dev_c.oam)) {
-        what = "OAM";
-    } else if (memcmp(s_dev_orig.chr, s_dev_c.chr, sizeof s_dev_c.chr)) {
-        what = "CHR RAM";
-    } else if (strcmp(s_dev_orig.regs, s_dev_c.regs)) {
-        what = "device registers";
-    }
-    if (!what) {
-        return;
-    }
-    fprintf(stderr, "[decomp] MISMATCH %s ($%04X) at frame %llu: %s differ after the routine\n", rt->name, rt->addr,
-            (unsigned long long)cyc_ring_frame, what);
-    const char *o = s_dev_orig.regs, *c = s_dev_c.regs;
-    int shown = 0;
-    while (*o && *c && shown < 24) {
-        size_t lo = strcspn(o, "\n"), lc = strcspn(c, "\n");
-        if (lo != lc || memcmp(o, c, lo)) {
-            fprintf(stderr, "[decomp]   original %.*s / decompiled %.*s\n", (int)lo, o, (int)lc, c);
-            shown++;
-        }
-        o += lo + (o[lo] != 0);
-        c += lc + (c[lc] != 0);
-    }
-    fflush(stderr);
-    exit(3);
 }
 
 /* The original routine alone on the machine's state: its RAM into s_orig,
@@ -472,11 +484,19 @@ static uint64_t run_original(const DecompRoutine *rt, const CycModRegs *in, CycM
     bool returned = cyc_mod_call(rt->addr, out);
     cyc_mod_stats(&after);
     memcpy(s_orig, cyc_cpu_ram(), GAME_RAM_SIZE);
-    if (s_mode == DECOMP_CHECK && (rt->out & OUT_DEVICE)) {
-        device_state(&s_dev_orig);
+    if (rt->out & OUT_HW) {
+        s_orig_hw = hw_state(s_orig_regs);
     }
     cyc_mod_isolate_end();
     return returned ? after.cycles - before.cycles : 0;
+}
+
+/* The original's cycles that the C's bus operations leave to spend, at
+ * least the one that polls interrupts. */
+static uint64_t spare_cycles(uint64_t cycles)
+{
+    uint64_t used = (uint64_t)s_nops + s_early;
+    return cycles > used ? cycles - used : 1;
 }
 
 /* Stops early when an NMI comes: the rest is spent when the handler returns
@@ -550,6 +570,42 @@ static void report(const DecompRoutine *rt, const CycModRegs *in, const char *ca
     exit(3);
 }
 
+/* The C's bus operations made on a copy of the machine at entry must leave
+ * the PPU's memories and the PRG bank as the original left them. */
+static void check_hw(const DecompRoutine *rt, uint64_t cycles)
+{
+    if (!cyc_mod_isolate_begin()) {
+        fail("cannot open an isolated scope", rt->addr);
+    }
+    play_ops(0, spare_cycles(cycles), rt->addr);
+    HwState c = hw_state(s_c_regs);
+    cyc_mod_isolate_end();
+    if (c.ciram == s_orig_hw.ciram && c.palette == s_orig_hw.palette && c.chr == s_orig_hw.chr &&
+        c.oam == s_orig_hw.oam && c.regs == s_orig_hw.regs && c.bank == s_orig_hw.bank) {
+        return;
+    }
+    fprintf(stderr, "[decomp] MISMATCH %s ($%04X) at frame %llu: hardware differs:%s%s%s%s%s%s (%d bus operations)\n",
+            rt->name, rt->addr, (unsigned long long)cyc_ring_frame, c.ciram != s_orig_hw.ciram ? " CIRAM" : "",
+            c.palette != s_orig_hw.palette ? " palette" : "", c.chr != s_orig_hw.chr ? " CHR-RAM" : "",
+            c.oam != s_orig_hw.oam ? " OAM" : "", c.regs != s_orig_hw.regs ? " registers" : "",
+            c.bank != s_orig_hw.bank ? " PRG bank" : "", s_nops);
+    if (c.bank != s_orig_hw.bank) {
+        fprintf(stderr, "[decomp]   PRG bank original %u decompiled %u (4 KiB units)\n", s_orig_hw.bank, c.bank);
+    }
+    const char *o = s_orig_regs, *d = s_c_regs;
+    for (int shown = 0; *o && *d && shown < 24;) {
+        size_t lo = strcspn(o, "\n"), ld = strcspn(d, "\n");
+        if (lo != ld || memcmp(o, d, lo)) {
+            fprintf(stderr, "[decomp]   original %.*s / decompiled %.*s\n", (int)lo, o, (int)ld, d);
+            shown++;
+        }
+        o += lo + (o[lo] != 0);
+        d += ld + (d[ld] != 0);
+    }
+    fflush(stderr);
+    exit(3);
+}
+
 static void check(int i, const CycModRegs *in)
 {
     const DecompRoutine *rt = s_routine[i];
@@ -566,8 +622,8 @@ static void check(int i, const CycModRegs *in)
     if (!agree(rt, in->s, cycles != 0, s_orig, &orig, s_image, &c)) {
         report(rt, in, NULL, cycles != 0, s_orig, &orig, s_image, &c);
     }
-    if (rt->out & OUT_DEVICE) {
-        compare_devices(rt);
+    if (rt->out & OUT_HW) {
+        check_hw(rt, cycles);
     }
     s_stats[i].compared++;
 }
@@ -581,11 +637,9 @@ static void check(int i, const CycModRegs *in)
 static void check_inner(int i, Regs in, bool drill)
 {
     const DecompRoutine *rt = s_routine[i];
-    if (rt->out & OUT_DEVICE) {
-        fail("a routine with device access has no site", rt->addr);
-    }
     const DecompRoutine *top = s_top;
     bool top_entered = s_top_entered, run_original = s_run_original, inner = s_inner;
+    int nops = s_nops, view = Game_RomView();
     uint8_t image[GAME_RAM_SIZE], orig_ram[GAME_RAM_SIZE];
     memcpy(image, gRam, GAME_RAM_SIZE);
     s_top = rt;
@@ -601,6 +655,11 @@ static void check_inner(int i, Regs in, bool drill)
     s_top_entered = top_entered;
     s_run_original = run_original;
     s_inner = inner;
+    s_nops = nops;
+    if (s_ops_in_scope > s_nops) {
+        s_ops_in_scope = s_nops;
+    }
+    Game_SetRomView(view);
     if (!entered) {
         fail("a decompiled routine does not start with Decomp_Enter", rt->addr);
     }
@@ -624,13 +683,6 @@ static void check_inner(int i, Regs in, bool drill)
     s_stats[i].compared++;
 }
 
-/* Whether the CPU at addr is at the routine's entry: for a routine of the
- * switchable window, with its bank mapped. */
-static bool at_entry(const DecompRoutine *rt, uint16_t addr)
-{
-    return rt->addr == addr && (addr >= 0xC000 || hw_prg_bank(addr) >> 1 == rt->bank);
-}
-
 void Decomp_Enter(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
 {
     if (!s_top_entered && routine == s_top->addr) {
@@ -641,7 +693,7 @@ void Decomp_Enter(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
         return;
     }
     for (int i = 0; i < s_count; i++) {
-        if (!at_entry(s_routine[i], routine)) {
+        if (s_routine[i]->addr != routine) {
             continue;
         }
         if (!s_routine[i]->site_id && !s_routine[i]->task) {
@@ -668,6 +720,9 @@ void Decomp_FrameEnd(void)
  * the frame ends (with a margin of a few instructions). */
 static bool spans_frame_end(uint64_t cycles)
 {
+    if (cpu.do_nmi || cpu.nmi_edge) {
+        return true;
+    }
     if (!s_frame_cycles) {
         return false;
     }
@@ -709,7 +764,8 @@ static int replace(int i, const CycModRegs *in)
     uint8_t flags = P_N | P_V | P_Z | P_C;
     CycModRegs set = { c.a, c.x, c.y, in->s, (uint8_t)((c.p & flags) | (in->p & ~flags)), 0 };
     cyc_mod_set_regs(&set);
-    spend_cycles(rt->addr, cycles > s_io_cycles ? cycles - s_io_cycles : 1);
+    uint64_t spare = spare_cycles(cycles);
+    spend_cycles(rt->addr, spare - play_ops(s_played, spare, rt->addr));
     return 1;
 }
 
@@ -739,7 +795,7 @@ static int task_isolated_site(uint16_t addr)
     if (!s_run.stop_armed || s_run.stopped || addr != s_run.stop_pc || r.s != s_run.stop_s) {
         return 0;
     }
-    if (addr < 0xC000 && hw_prg_bank(addr) >> 1 != s_run.stop_bank) {
+    if (addr < 0xC000 && hw_prg_bank4(addr) >> 2 != s_run.stop_bank) {
         return 0;
     }
     s_run.stopped = true;
@@ -983,6 +1039,13 @@ static void on_return(void)
     }
 }
 
+/* Whether the CPU at addr is at the routine's entry: for a routine of the
+ * switchable window, with its bank mapped. */
+static bool at_entry(const DecompRoutine *rt, uint16_t addr)
+{
+    return rt->addr == addr && (addr >= 0xC000 || hw_prg_bank4(addr) >> 2 == rt->bank);
+}
+
 static int on_entry(uint16_t addr)
 {
     if (cyc_mod_isolated()) {
@@ -1048,6 +1111,8 @@ NES_MOD_CONSTRUCTOR(dt_register_decomp_sites)
     add_table(gMotionRoutines, gMotionRoutineCount);
     add_table(gSoundRoutines, gSoundRoutineCount);
     add_table(gPlayerRoutines, gPlayerRoutineCount);
+    add_table(gLevelRoutines, gLevelRoutineCount);
+    add_table(gCollisionRoutines, gCollisionRoutineCount);
     add_table(gFlowRoutines, gFlowRoutineCount);
     add_table(gSystemRoutines, gSystemRoutineCount);
     add_table(gSpriteRoutines, gSpriteRoutineCount);
