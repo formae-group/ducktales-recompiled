@@ -370,6 +370,9 @@ On main `8569c86` (the release tree before its changelog and documentation commi
 - `tests/window_smoke.py --build build/windows`: 18/18 PASS with the help markers (formae-ui
   0.3.0), including the game running behind the menu on the native player (76 game frames) and no
   game frame with `MenuPausesGame = on`.
+- By eye (the owner, 2026-11-23, before publishing): the 1.0.0 window build plays normally, the game
+  keeps running behind the menu during a level, the "(?)" tooltips show with the mouse and with the
+  keyboard and controller, and the sound is right.
 - The mods branch before its merge: `tests/package_test.py` 12/12 (13 files), `tests/mods_test.py`
   47/47, `tests/native_player_test.py` `full_amazon` 60 of 60 pictures identical.
 
@@ -377,8 +380,6 @@ On main `8569c86` (the release tree before its changelog and documentation commi
 
 - The full `tests/verify_routes.py`, `tests/enhancements_test.py` and `tests/decomp_test.py` on
   the 1.0.0 tree itself (see "Release 1.0.0").
-- The "(?)" tooltips in this game's window by eye: only formae-ui's own self-test shot of a tooltip
-  was looked at; the window smoke test draws every page with the markers but no tooltip.
 
 - `tests/quick_verify.py --runtime cycle` with `--from-state` on routes other than the ones above, and
   any timing on an idle PC: every number in "Fast verification" was measured with other agents'
