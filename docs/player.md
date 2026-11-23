@@ -32,7 +32,9 @@ run passes through `$E387`).
 | 5 | `$EAB9` | Hurt variant that waits for `$7D` | code; trigger not found |
 | 6 | `$EB00` | Knockback after contact with a harmful object | verified |
 | 13 (`$0D`) | `$EC9B` | Death jump | verified |
-| 7-12, 14-16 | `$EB82`...`$EF62` | Other scripted states | not studied |
+| 7-12, 14 | `$EB82`...`$ECFF` | Other scripted states | not studied |
+| 15 (`$0F`) | `$ED05` | Message box: the text of message `$6E`, page by page, then what the message does as it closes | code (docs/decompilation.md) |
+| 16 (`$10`) | `$EF62` | Treasure held up: 256 frames of music, then the time turns into money and the land is left | code (docs/decompilation.md) |
 
 ## Vertical motion
 
