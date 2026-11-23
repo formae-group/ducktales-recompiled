@@ -14,6 +14,7 @@
  * The metatile lookup ($CDE2, level.c) switches banks and restores them, so
  * the probe's contract has OUT_HW.
  */
+#include "decomp/collision.h"
 #include "decomp/decomp.h"
 #include "decomp/level.h"
 

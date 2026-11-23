@@ -94,6 +94,20 @@ addr = 0xF252
 length = 8
 crc32 = 0x7E95A00A
 
+# Obj_AddVelocityY
+[[mod_function_hook]]
+id = "ducktales.decomp.F270"
+addr = 0xF270
+length = 8
+crc32 = 0xB85A90CB
+
+# Obj_SubVelocityY
+[[mod_function_hook]]
+id = "ducktales.decomp.F284"
+addr = 0xF284
+length = 8
+crc32 = 0x94C209F4
+
 # Music_Request
 [[mod_function_hook]]
 id = "ducktales.decomp.F752"
@@ -231,6 +245,118 @@ addr = 0xC42C
 length = 8
 crc32 = 0xC14ABEE7
 
+# Obj_UpdateAll (bank 6)
+[[mod_function_hook]]
+id = "ducktales.decomp.6.8000"
+bank = 6
+addr = 0x8000
+length = 8
+crc32 = 0x6DA2AF28
+
+# Obj_TouchScrooge
+[[mod_function_hook]]
+id = "ducktales.decomp.F436"
+addr = 0xF436
+length = 8
+crc32 = 0x50BEDDDC
+
+# Obj_WalkRight
+[[mod_function_hook]]
+id = "ducktales.decomp.F0F8"
+addr = 0xF0F8
+length = 8
+crc32 = 0xB4FBD458
+
+# Obj_WalkLeft
+[[mod_function_hook]]
+id = "ducktales.decomp.F13B"
+addr = 0xF13B
+length = 8
+crc32 = 0xC3CF4302
+
+# Obj_Fall
+[[mod_function_hook]]
+id = "ducktales.decomp.F1BE"
+addr = 0xF1BE
+length = 8
+crc32 = 0xA40336AB
+
+# Obj_Rise
+[[mod_function_hook]]
+id = "ducktales.decomp.F1F9"
+addr = 0xF1F9
+length = 8
+crc32 = 0x9496E318
+
+# Obj_SetSpeedIndex
+[[mod_function_hook]]
+id = "ducktales.decomp.F312"
+addr = 0xF312
+length = 8
+crc32 = 0x86C3C87D
+
+# Obj_FaceScrooge
+[[mod_function_hook]]
+id = "ducktales.decomp.F6BD"
+addr = 0xF6BD
+length = 8
+crc32 = 0xA4CA0EC3
+
+# Obj_FindFreeSlot
+[[mod_function_hook]]
+id = "ducktales.decomp.F7BE"
+addr = 0xF7BE
+length = 8
+crc32 = 0x5A610BF8
+
+# Obj_DistanceY
+[[mod_function_hook]]
+id = "ducktales.decomp.F7CC"
+addr = 0xF7CC
+length = 8
+crc32 = 0xCEC41FA7
+
+# Obj_DistanceX
+[[mod_function_hook]]
+id = "ducktales.decomp.F7DA"
+addr = 0xF7DA
+length = 8
+crc32 = 0x6C8400A8
+
+# Obj_MarkConsumed
+[[mod_function_hook]]
+id = "ducktales.decomp.F7F0"
+addr = 0xF7F0
+length = 8
+crc32 = 0x353FCE0E
+
+# Hud_RefillHp
+[[mod_function_hook]]
+id = "ducktales.decomp.F812"
+addr = 0xF812
+length = 8
+crc32 = 0x1394DA66
+
+# Money_Max
+[[mod_function_hook]]
+id = "ducktales.decomp.F83F"
+addr = 0xF83F
+length = 8
+crc32 = 0xFAC618EC
+# Obj_ClimbDown
+[[mod_function_hook]]
+id = "ducktales.decomp.F192"
+addr = 0xF192
+length = 8
+crc32 = 0xC368F144
+
+# Obj_ClimbUp
+[[mod_function_hook]]
+id = "ducktales.decomp.F1A8"
+addr = 0xF1A8
+length = 8
+crc32 = 0x4ACB0A80
+
 # Game flow (src/decomp/flow.c, docs/decompilation.md "Task code"): the
 # entries of the main task's decompiled code that original code reaches (its
 # resume points have no site: the RTS observer starts them), then the
@@ -327,12 +453,6 @@ id = "ducktales.decomp.stop.C1A1"
 addr = 0xC1A1
 length = 8
 crc32 = 0x9490DE2F
-
-[[mod_function_hook]]
-id = "ducktales.decomp.stop.8000.6"
-addr = 0x8000
-length = 8
-crc32 = 0x6DA2AF28
 
 [[mod_function_hook]]
 id = "ducktales.decomp.stop.AEA0.6"

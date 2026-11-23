@@ -365,6 +365,22 @@ in replace), plus 11 poke cases and both event cases. At default decompilation s
 and matching oracle and interpreter output. The full 12-route decompilation suite passed on
 the flow branch before integration; it has not been rerun in full on this merge.
 
+## Decompiled level, player, flow and objects (2026-11-23)
+
+Each branch passed its own gate before the merge: format, `quick_verify.py` native and cycle
+(12/12 routes), and the full `decomp_test.py`. The tree that joins all four (main 0c9ef61 with
+`decomp/flow` and `decomp/objects`, tree a02e215) passed one combined gate, with `--jobs 2`:
+
+- `quick_verify.py` native: 12/12 routes, 82,626 frames, 24.2 s. With `--runtime cycle`: 12/12,
+  82,626 frames, 304.7 s.
+- `decomp_test.py`, all modes, 1,191 s:
+  - check: 12/12 routes, 1,983,338 calls
+  - replace: 12/12 routes, 82,626 frames RAM-identical
+  - pokes: 18/18 in check (194,198 calls) and 18/18 in replace (1,920 frames each)
+  - events: 2/2 in check and 2/2 in replace
+
+Not run on this tree: the full `verify_routes.py`, `enhancements_test.py` and the window build tests.
+
 ## Release 1.0.0
 
 On main `8569c86` (the release tree before its changelog and documentation commit), 2026-11-23:

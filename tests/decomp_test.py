@@ -17,7 +17,8 @@
            interrupts pushed, which differs because an NMI the original takes
            inside a replaced routine is taken right after it.
   pokes    (needs --dev-build) states no route reaches, made with
-           --dt-poke-at from a point of re_amazon_moves (POKES below): each
+           --dt-poke-at (and extra pad states, written into a copy of the
+           route) from a point of re_amazon_moves (POKES below): each
            case runs in check mode, where the routines it targets must be
            compared at least once, and stock against replace as above.
   events   (needs --dev-build) enhancements whose event a decompiled routine
@@ -30,8 +31,9 @@
 
 --changed [BANK:]ADDR[-ADDR] ... keeps only the routes whose quick_verify coverage (the golden
 directory, tests/quick_verify.py) executes those PRG addresses; --from-state starts each of them
-from the golden save state just before the first segment that does, and --span N stops N frames
-later. That is the loop for one routine; the merge gate is every route from power-on.
+from the latest golden save state at or before the first segment that does where the game's
+scheduler is idle (S = $FF on the frame before it: a state inside a task would resume the original's
+task while replace mode runs the C), and --span N stops N frames after that segment's start. That is the loop for one routine; the merge gate is every route from power-on.
 
 DUCKTALES_DECOMP=check py -3 -I tests/verify_routes.py runs the oracle comparison with
 the checks on.
@@ -70,7 +72,8 @@ NAMED = re.compile(r'\$([0-9A-F]{4})(?= original)')
 POKE_ROUTE = ROOT / 'tests' / 'routes' / 're_amazon_moves.txt'
 POKE_FRAME = 1700  # Scrooge on the ground in the Amazon
 POKE_FRAMES = 220
-# name, {address: value} stored before POKE_FRAME (or {frame: {...}}), routines that must be compared
+# name, {address: value} stored before POKE_FRAME (or {frame: {...}}), routines that must be compared,
+# optionally {frame: buttons} pad states added to the route
 POKES = [
     ('hurt-wait', {0x39: 0x05, 0x7D: 0x20}, ['Player_Hurt']),
     ('hurt-now', {0x39: 0x05, 0x7D: 0x00}, ['Player_Hurt', 'Player_TakeDamage']),
@@ -83,6 +86,14 @@ POKES = [
     ('mode12-page7', {0x39: 0x0C, 0x780: 0x00, 0x730: 0x07}, ['Player_Mode12']),
     ('invulnerable-held', {0x7D: 0x90, 0x75: 0x80}, ['Player_Update']),
     ('slippery', {POKE_FRAME + 10 * i: {0x71: 0x01} for i in range(20)}, ['Player_Walk']),
+    (
+        'select-refill',
+        {0x34A: 0x01, 0x334: 0x01},
+        ['Player_SelectRefill'],
+        {POKE_FRAME + 8: 'LEFT+SELECT', POKE_FRAME + 10: 'LEFT'},
+    ),
+    ('select-poor', {0x34A: 0x01}, ['Player_SelectRefill'], {POKE_FRAME + 8: 'LEFT+SELECT', POKE_FRAME + 10: 'LEFT'}),
+    ('select-full', {}, ['Player_SelectRefill'], {POKE_FRAME + 8: 'LEFT+SELECT', POKE_FRAME + 10: 'LEFT'}),
     ('hud-total', {0xAB: 0x01}, ['Hud_RefreshTotal']),
     ('scene-1', {0x78: 0x81}, ['Scene_Placed', 'Scene_Done']),
     ('scene-2', {0x78: 0x82}, ['Scene_Placed', 'Scene_Done']),
@@ -107,6 +118,32 @@ POKES = [
         },
         ['BankTransfer_Next'],
     ),
+    # slot 9 made a pickup on Scrooge (step 2, waiting): the extra HP dot; a big diamond with money at 999...
+    (
+        'extra-dot',
+        {0x709: 0xA2, 0x719: 0x13, 0x629: 0x2B, 0x649: 0xA6, 0x729: 0x62, 0x739: 0x00, 0x7D9: 0x01, 0x609: 0x80},
+        ['Pickup_Take', 'Pickup_ExtraDot', 'Hud_RefillHp'],
+    ),
+    (
+        'money-max',
+        {
+            0x709: 0xA2,
+            0x719: 0x13,
+            0x629: 0x61,
+            0x6B9: 0xFF,
+            0x649: 0xA6,
+            0x729: 0x62,
+            0x739: 0x00,
+            0x7D9: 0x01,
+            0x609: 0x80,
+            0x324: 0x09,
+            0x325: 0x09,
+            0x326: 0x09,
+        },
+        ['Money_Add', 'Money_Max'],
+    ),
+    # slot 9 made a lift (kind $0F) under Scrooge
+    ('lift', {0x709: 0xA0, 0x719: 0x0F, 0x649: 0xB0, 0x729: 0x62, 0x739: 0x00, 0x609: 0x80}, ['Obj_Lift']),
 ]
 
 # name, route, options, routines that must be compared
@@ -144,16 +181,26 @@ def select_routes(routes, args):
             sys.exit(f'{route.stem}: no coverage in {golden}; record it with tests/quick_verify.py --record')
         reach = [s for s, offs in quick_verify.read_cover(cover) if quick_verify.hits(offs, ranges)]
         if reach:
-            start = reach[0] if args.from_state else 0
+            start = 0
+            if args.from_state:
+                idle = {
+                    int(m[1]) + 1
+                    for m in re.finditer(r'^(\d+) .*\bS=FF\b', (golden / f'{route.stem}.txt').read_text(), re.M)
+                }
+                start = max(
+                    (s for s in idle if s <= reach[0] and quick_verify.state_path(golden, route, s).exists()), default=0
+                )
             state = quick_verify.state_path(golden, route, start) if start else None
-            selected.append(route_case(route, start, state, args.span))
-            print(f'{route.stem}: executes {" ".join(args.changed)} from the segment at frame {reach[0]}')
+            selected.append(route_case(route, reach[0] if args.from_state else 0, state, args.span))
+            print(
+                f'{route.stem}: executes {" ".join(args.changed)} from the segment at frame {reach[0]}, run from frame {start}'
+            )
     if not selected:
         sys.exit(f'no route executes {" ".join(args.changed)}; add a route that does')
     return selected
 
 
-def poke_case(name, pokes, want):
+def poke_case(name, pokes, want, presses=None):
     if not all(isinstance(v, dict) for v in pokes.values()):
         pokes = {POKE_FRAME: pokes}
     extra = [
@@ -162,7 +209,20 @@ def poke_case(name, pokes, want):
         for addr, value in at.items()
         for arg in ('--dt-poke-at', f'{frame}:{addr:X}={value:02X}')
     ]
-    return {'name': name, 'route': POKE_ROUTE, 'frames': POKE_FRAME + POKE_FRAMES, 'extra': extra, 'want': want}
+    case = {'name': name, 'route': POKE_ROUTE, 'frames': POKE_FRAME + POKE_FRAMES, 'extra': extra, 'want': want}
+    return case | {'presses': presses} if presses else case
+
+
+def pressed_route(case, tmp):
+    events = {}
+    for line in POKE_ROUTE.read_text().splitlines():
+        if line.strip() and not line.startswith('#'):
+            frame, buttons = line.split(None, 1)
+            events[int(frame)] = buttons.strip()
+    events.update(case['presses'])
+    path = Path(tmp) / f'{case["name"]}.txt'
+    path.write_text(''.join(f'{frame} {buttons}\n' for frame, buttons in sorted(events.items())))
+    return path
 
 
 def event_case(name, route, options, want):
@@ -280,7 +340,11 @@ def main():
     exe = ROOT / args.build / args.config / 'ducktales.exe'
     dev = ROOT / args.dev_build / args.config / 'ducktales.exe' if args.dev_build else None
     failed = []
-    with concurrent.futures.ThreadPoolExecutor(args.jobs) as pool:
+    scratch = ROOT / 'captures' if (ROOT / 'captures').is_dir() else None
+    with tempfile.TemporaryDirectory(dir=scratch) as tmp, concurrent.futures.ThreadPoolExecutor(args.jobs) as pool:
+        for case in pokes:
+            if 'presses' in case:
+                case['route'] = pressed_route(case, tmp)
         if 'check' in args.modes:
             run_checks(pool, exe, args.rom, cases, 'check', failed)
         if 'replace' in args.modes and dev:

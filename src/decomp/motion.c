@@ -62,6 +62,28 @@ void Obj_MoveLeft(int slot)
     s_p = p;
 }
 
+/* $F270: Y += vertical velocity, a move down for a velocity that is
+ * positive. */
+void Obj_AddVelocityY(int slot)
+{
+    Decomp_Enter(DT_CODE_ADD_VY, 0, (uint8_t)slot, 0);
+    uint8_t p = 0;
+    gObjects->yFrac[slot] = Alu_Adc(gObjects->yFrac[slot], gObjects->vyFrac[slot], &p);
+    gObjects->y[slot] = s_a = Alu_Adc(gObjects->y[slot], gObjects->vy[slot], &p);
+    s_p = p;
+}
+
+/* $F284: Y -= vertical velocity, the same code as $F2A1 at its own
+ * address. */
+void Obj_SubVelocityY(int slot)
+{
+    Decomp_Enter(DT_CODE_SUB_VY, 0, (uint8_t)slot, 0);
+    uint8_t p = P_C;
+    gObjects->yFrac[slot] = Alu_Sbc(gObjects->yFrac[slot], gObjects->vyFrac[slot], &p);
+    gObjects->y[slot] = s_a = Alu_Sbc(gObjects->y[slot], gObjects->vy[slot], &p);
+    s_p = p;
+}
+
 /* ---- site adapters: X = slot; A and N, V, Z, C as the RTS leaves them ---- */
 
 static void finish(Regs *r)
@@ -94,6 +116,18 @@ static void Run_MoveLeft(Regs *r)
     finish(r);
 }
 
+static void Run_AddVelocityY(Regs *r)
+{
+    Obj_AddVelocityY(r->x);
+    finish(r);
+}
+
+static void Run_SubVelocityY(Regs *r)
+{
+    Obj_SubVelocityY(r->x);
+    finish(r);
+}
+
 const DecompRoutine gMotionRoutines[] = {
     { DT_CODE_APPLY_VY, "ducktales.decomp.F2A1", "Obj_ApplyVelocityY", Run_ApplyVelocityY,
       OUT_A | OUT_X | OUT_Y | OUT_P },
@@ -102,5 +136,7 @@ const DecompRoutine gMotionRoutines[] = {
     { DT_CODE_MOVE_RIGHT_SPEED, "ducktales.decomp.F234", "Obj_MoveRight", Run_MoveRight,
       OUT_A | OUT_X | OUT_Y | OUT_P },
     { DT_CODE_MOVE_LEFT_SPEED, "ducktales.decomp.F252", "Obj_MoveLeft", Run_MoveLeft, OUT_A | OUT_X | OUT_Y | OUT_P },
+    { DT_CODE_ADD_VY, "ducktales.decomp.F270", "Obj_AddVelocityY", Run_AddVelocityY, OUT_A | OUT_X | OUT_Y | OUT_P },
+    { DT_CODE_SUB_VY, "ducktales.decomp.F284", "Obj_SubVelocityY", Run_SubVelocityY, OUT_A | OUT_X | OUT_Y | OUT_P },
 };
 const int gMotionRoutineCount = sizeof gMotionRoutines / sizeof gMotionRoutines[0];

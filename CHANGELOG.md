@@ -19,12 +19,26 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - The camera, the column streaming, the map and block decoding, the VRAM queue uploads and the
   background probe with its four snaps are decompiled (`src/decomp/level.c`, `src/decomp/collision.c`):
   18 routines, checked on every call of every route and RAM-identical in replace mode.
+- Decompiled: Scrooge's object contact tests (`$D202`/`$D291`), the Select refill (`$E2FE`) and
+  the vertical velocity moves (`$F270`/`$F284`). `tests/decomp_test.py` poke cases can add pad
+  states to their route; three of them press Select.
+- The object system is decompiled (`src/decomp/objects.c`, `src/decomp/objcommon.c`): the per-frame
+  dispatch of bank 6, 21 of the 67 object kinds (the Amazon's enemies, the Himalayas' dangler,
+  Transylvania's swooper, blocks, pickups and what taking each item does, hidden items, chests,
+  doors, the lift and talking characters) and the shared helpers: contact with Scrooge, the movers,
+  block tests, the climbing steps, money and HP. 62 routines, each checked on its own at every call
+  (1,989,532 calls compared on the 12 routes) and RAM-identical in replace mode; poke cases cover
+  the lift, the extra HP dot and the money cap, which no route reaches. Hook sites only where
+  original code calls them.
 
 ### Fixed
 
 - Replace mode made a decompiled routine's PPU writes back to back. The PPU acts on `$2006`/`$2007`
   writes a few cycles late, so every byte of a VRAM queue landed one address off; the writes are
   now spread over the original routine's cycles.
+- `tests/decomp_test.py --from-state` starts only from a golden state where the game's scheduler is
+  idle. `full_moon` saved at frame 500 inside a task, and replace mode failed on its first frame
+  from there, because the run resumed the original's task while replace ran the C.
 
 ## [1.0.0] - 2026-11-23
 
