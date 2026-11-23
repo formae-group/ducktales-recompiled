@@ -55,6 +55,7 @@
 #define SFX_POUNCER_LAND 0x20
 #define SFX_SPLASH       0x21
 #define SFX_ROLL         0x27
+#define SFX_SPOUT        0x25
 
 #define gObjCursor        RAM_U8(DT_ADDR_OBJ_CURSOR)
 #define gScratch0         RAM_U8(DT_ADDR_SCRATCH0)
@@ -2610,6 +2611,61 @@ static void Obj_Roller(uint8_t x)
     }
 }
 
+/* Kind $2C ($A1E9): once Scrooge is within 4 px, it throws out four
+ * treats (kind $2D, pose $24, 16 px above it, vertical velocity $02D4) one
+ * every 60 frames, up, right, up and left (sound $25, pose $49 back to $48
+ * on animation frame 7). The thrower's slot is left in $00. */
+static void Obj_TreatSpout(uint8_t x)
+{
+    static const uint8_t dirs[4] = { 0, OBJ_DIR_RIGHT, 0, OBJ_DIR_LEFT };
+    static const uint16_t speeds[4] = { 0x0000, 0x0100, 0x0000, 0x0100 };
+
+    Decomp_Enter(DT_CODE_KIND_TREAT_SPOUT, 0x22, x, gObjects->kind[x]);
+    if (Step(x) == 0) {
+        if (Obj_DistanceX(x) >= 4) {
+            return;
+        }
+        gObjects->state[x]++;
+        gObjects->timer[x] = 0;
+        gObjects->unk_06C0[x] = 0;
+    }
+    if (gObjects->unk_06C0[x] == 0) {
+        uint8_t y = 0x0F;
+        while (gObjects->state[y] & OBJ_STATUS_LIVE) {
+            if (--y == 0) {
+                return;
+            }
+        }
+        Sound_Request(SFX_SPOUT, x);
+        gObjects->action[x]++;
+        gObjects->state[y] = 0xA0;
+        gObjects->flags[y] = 0xA0;
+        gObjects->action[y] = 0x24;
+        gObjects->worldPage[y] = gObjects->worldPage[x];
+        gObjects->worldX[y] = gObjects->worldX[x];
+        gObjects->y[y] = (uint8_t)(gObjects->y[x] - 0x10);
+        ResetAnim(x);
+        ResetAnim(y);
+        gObjects->hitbox[y] = 0;
+        gObjects->kind[y] = OBJ_KIND_TREAT;
+        gScratch0 = x;
+        Obj_SetVelocityY(y, 0x02D4);
+        uint8_t i = gObjects->timer[x];
+        gObjects->dir[y] = dirs[i];
+        Obj_SetSpeed(y, speeds[i]);
+        gObjects->unk_06C0[x] = ++gObjects->timer[x] == 4 ? 0xFF : 0x3C;
+        return;
+    }
+    if (!(gObjects->unk_06C0[x] & 0x80)) {
+        gObjects->unk_06C0[x]--;
+    }
+    if (gObjects->action[x] == 0x48 || gObjects->animTimer[x] != 7) {
+        return;
+    }
+    gObjects->action[x]--;
+    ResetAnim(x);
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -2729,6 +2785,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_DROPPING:
             Obj_Dropping(slot);
+            break;
+        case OBJ_KIND_TREAT_SPOUT:
+            Obj_TreatSpout(slot);
             break;
         case OBJ_KIND_DOOR:
             Obj_Door(slot);
@@ -2980,6 +3039,11 @@ static void Run_Roller(Regs *r)
     Obj_Roller(r->x);
 }
 
+static void Run_TreatSpout(Regs *r)
+{
+    Obj_TreatSpout(r->x);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -3149,6 +3213,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_TREAT_SPOUT, NULL, "Obj_TreatSpout", Run_TreatSpout, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_ROLLER, NULL, "Obj_Roller", Run_Roller, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_BOULDER, NULL, "Obj_Boulder", Run_Boulder, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_BOUNCER, NULL, "Obj_Bouncer", Run_Bouncer, 0, .bank = DT_BANK_OBJECTS },

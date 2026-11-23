@@ -62,6 +62,8 @@ extern "C" {
 #define OBJ_KIND_CEILING_HOPPER  0x25 /* an enemy that drops from the ceiling and hops at Scrooge (code) */
 #define OBJ_KIND_RISING_SHOT     0x27 /* a shot that flies up and sideways (code) */
 #define OBJ_KIND_DROPPING        0x2B /* something that drops and breaks on the floor (code) */
+#define OBJ_KIND_TREAT_SPOUT     0x2C /* throws out four treats when Scrooge is near (code) */
+#define OBJ_KIND_TREAT           0x2D /* a treat that gives an HP dot back (code) */
 #define OBJ_KIND_DOOR            0x2F /* a door: warp request (code) */
 #define OBJ_KIND_PICKPOCKET      0x32 /* enemy: walks at Scrooge, takes money on contact (code) */
 #define OBJ_KIND_TALKER          0x35 /* a character that shows a message (code) */
