@@ -1884,7 +1884,7 @@ static void Run_SelectRefill(Regs *r)
  * the damage event runs at its own [[mod_function_hook]] there (declared
  * first, so it fires first), and the adapter is the routine without it. */
 const DecompRoutine gPlayerRoutines[] = {
-    { DT_CODE_PLAYER_UPDATE, "ducktales.decomp.E354", "Player_Update", Run_Update, OUT_HW },
+    { DT_CODE_PLAYER_UPDATE, "ducktales.decomp.E354", "Player_Update", Run_Update, 0 },
     { DT_CODE_PLAYER_GROUND, NULL, "Player_Ground", Run_Ground, 0 },
     { DT_CODE_JUMP_START, NULL, "Player_StartJump", Run_StartJump, 0 },
     { DT_CODE_PLAYER_WALK, NULL, "Player_Walk", Run_Walk, 0 },

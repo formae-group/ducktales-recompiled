@@ -223,7 +223,7 @@ leave the jump vector in `$00/$01` as the original's loop does.
 |---|---|---|---|
 | `Obj_ApplyVelocityY`, `Obj_ApplyGravity`, `Obj_MoveRight`, `Obj_MoveLeft`, `Obj_AddVelocityY`, `Obj_SubVelocityY` | X = slot | A, X, Y, P | callers test the flags of the last `ADC`/`SBC` (`$F298` keeps the Y move's carry across the probe) |
 | `Music_Request`, `Sound_Request` | A = id, X | A, X, Y, P | the caller's X is left in `$00` and the id in `$01` |
-| `Player_Update` | X | hardware | X goes into the power-up music request; the probe's metatile lookup switches banks; modes 15 and 16 run as the original, which reaches `Player_Message` and `Player_Treasure` at their sites |
+| `Player_Update` | X | none | X goes into the power-up music request; the probe's metatile lookup switches banks and back, so the call leaves no device change (as for `Level_MetatileAt`); modes 15 and 16 run as the original, which reaches `Player_Message` and `Player_Treasure` at their sites |
 | `Player_Walk`, `Player_Knockback` | X | none | X is the slot the push of `$73` moves when no direction is held, and what the sound request keeps in `$00` |
 | `Player_MoveRight`, `Player_MoveLeft`, `Player_Fall`, `Player_Rise`, `Player_ProbeVertical` | X (moves only) | X | X is what the probe or contact routine returned; callers pass it on |
 | `Player_ContactH` | none | X, C | X is the slot touched (0 for none, carry set); the cane swing reads its kind |

@@ -42,6 +42,8 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - `src/decomp/player.c` calls the C of the probe point `$D350` (with the carry it returns, new in
   `collision.c`) and of the HP refill `$F812` (`objects.c`). A poke case reaches the fall into
   `$D350` under the power-up.
+- `Player_Update`'s contract drops `OUT_HW`: the probe's bank switches are undone before it
+  returns, and check and replace pass on the 12 routes without it.
 
 ### Fixed
 
