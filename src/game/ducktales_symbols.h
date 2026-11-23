@@ -489,6 +489,7 @@
 #define DT_CODE_KIND_FLYER           0x916C /* kind $0D */
 #define DT_CODE_KIND_SWING           0x9225 /* kind $0E */
 #define DT_CODE_KIND_SWOOPER         0x9430 /* kind $11 */
+#define DT_CODE_KIND_PATROLLER       0x96D5 /* kind $18 */
 #define DT_CODE_OBJ_FIND_FREE_Y      0x80B3 /* highest free slot 15..1 in Y */
 #define DT_CODE_OBJ_HIT_OTHERS       0x80C1 /* the slot a thrown slot hits */
 #define DT_CODE_OBJ_SET_MOTION       0x818A /* vertical velocity and speed by index */

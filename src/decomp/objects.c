@@ -1552,6 +1552,36 @@ static void Obj_Swooper(uint8_t x)
     }
 }
 
+/* Kind $18 ($96D5): an enemy that walks a ledge at $0080 a frame and turns
+ * back at its edges (no floor under probe $2D or $2E) and at walls. A hit
+ * beats it. */
+static void Obj_Patroller(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_PATROLLER, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0) {
+        Obj_Defeat(x);
+        return;
+    }
+    if (Step(x) == 0) {
+        Obj_SetVelocityY(x, 0);
+        Obj_SetSpeed(x, 0x0080);
+        gObjects->dir[x] = OBJ_DIR_RIGHT;
+        gObjects->state[x]++;
+    }
+    x = Obj_Fall(x, (uint8_t)(0x2D + (gObjects->dir[x] & OBJ_DIR_RIGHT)), 0);
+    if (!(gProbeHits & 1)) {
+        gObjects->dir[x] ^= 3;
+    }
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        x = Obj_WalkRight(x, 0x29, 0);
+    } else {
+        x = Obj_WalkLeft(x, 0x2B, 0);
+    }
+    if (gProbeHits & 1) {
+        gObjects->dir[x] ^= 3;
+    }
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -1626,6 +1656,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_CHEST:
             Obj_Chest(slot);
+            break;
+        case OBJ_KIND_PATROLLER:
+            Obj_Patroller(slot);
             break;
         case OBJ_KIND_DOOR:
             Obj_Door(slot);
@@ -1741,6 +1774,11 @@ static void Run_Swing(Regs *r)
 static void Run_Lift(Regs *r)
 {
     Obj_Lift(r->x);
+}
+
+static void Run_Patroller(Regs *r)
+{
+    Obj_Patroller(r->x);
 }
 
 static void Run_Swooper(Regs *r)
@@ -1912,6 +1950,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_PATROLLER, NULL, "Obj_Patroller", Run_Patroller, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_PICKUP, NULL, "Obj_Pickup", Run_Pickup, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_HIDDEN_ITEM, NULL, "Obj_HiddenItem", Run_HiddenItem, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_CHEST, NULL, "Obj_Chest", Run_Chest, 0, .bank = DT_BANK_OBJECTS },
