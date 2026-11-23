@@ -49,6 +49,7 @@ extern "C" {
 #define OBJ_KIND_HIDDEN_ITEM 0x14 /* an item that appears when touched (code) */
 #define OBJ_KIND_CHEST       0x15 /* a chest the cane opens (code) */
 #define OBJ_KIND_PATROLLER   0x18 /* enemy: walks a ledge, turns at its edges and at walls (code) */
+#define OBJ_KIND_LEAPER      0x1C /* enemy: walks a ledge, turns and leaps with a puff of dust (code) */
 #define OBJ_KIND_BOBBER      0x20 /* enemy: bobs up and down in place (code) */
 #define OBJ_KIND_DOOR        0x2F /* a door: warp request (code) */
 #define OBJ_KIND_TALKER      0x35 /* a character that shows a message (code) */

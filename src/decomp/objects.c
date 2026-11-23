@@ -47,6 +47,7 @@
 #define SFX_SWOOP    0x30
 #define SFX_CHARGE   0x31
 #define SFX_BOUNCE   0x1D
+#define SFX_LEAP     0x34
 
 #define gObjCursor        RAM_U8(DT_ADDR_OBJ_CURSOR)
 #define gScratch0         RAM_U8(DT_ADDR_SCRATCH0)
@@ -1709,6 +1710,94 @@ static void Obj_Bobber(uint8_t x)
     }
 }
 
+/* $9C0A: a puff of dust (action $57, kind 0, freed when its animation
+ * ends) 4 px below the slot, in the highest free slot; none when every slot
+ * is taken. */
+static void Obj_SpawnDust(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_LEAPER_DUST, 0, x, 0);
+    uint8_t y;
+    if (!Obj_FindFreeSlotY(&y)) {
+        return;
+    }
+    gObjects->state[y] = 0xA8;
+    gObjects->flags[y] = 0xA8;
+    ResetAnim(y);
+    gObjects->kind[y] = OBJ_KIND_NONE;
+    gObjects->hitbox[y] = 0;
+    gObjects->action[y] = 0x57;
+    gObjects->y[y] = (uint8_t)(gObjects->y[x] + 4);
+    gObjects->worldX[y] = gObjects->worldX[x];
+    gObjects->worldPage[y] = gObjects->worldPage[x];
+}
+
+/* Kind $1C ($9B10): an enemy that wakes when Scrooge is within 80 px, walks
+ * a ledge at $0133 a frame, and after 80 frames, at a wall or with nothing
+ * under it turns and leaps (4 px a frame up) with a puff of dust; landing
+ * it walks again. A hit beats it (pose $56). */
+static void Obj_Leaper(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_LEAPER, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0) {
+        gObjects->action[x] = 0x56;
+        Obj_Defeat(x);
+        return;
+    }
+    if (Step(x) == 0) {
+        if (Obj_DistanceX(x) >= 0x50) {
+            return;
+        }
+        Obj_SetVelocityY(x, 0);
+        Obj_SetSpeed(x, 0x0133);
+        gObjects->timer[x] = 0x50;
+        gObjects->state[x] = (uint8_t)((gObjects->state[x] & (uint8_t)~OBJ_STATUS_HIDDEN) | 1);
+        gObjects->dir[x] = OBJ_DIR_RIGHT;
+    }
+    (void)Obj_TouchScrooge(x);
+    if (gObjects->state[x] & 2) {
+        if (!(gObjects->state[x] & 1)) {
+            x = Obj_Rise(x, 0x2F, 1);
+            if (!(gObjects->vy[x] & 0x80)) {
+                return;
+            }
+            gObjects->animFrame[x]++;
+            Obj_SetVelocityY(x, 0);
+            gObjects->state[x]++;
+            return;
+        }
+        x = Obj_Fall(x, 0x2D, 1);
+        if (!(gProbeHits & 1)) {
+            return;
+        }
+        ResetAnim(x);
+        gObjects->action[x] = 0x55;
+        gObjects->y[x]++;
+        gObjects->state[x] -= 2;
+        return;
+    }
+    x = Obj_Fall(x, (uint8_t)(0x2D + (gObjects->dir[x] & OBJ_DIR_RIGHT)), 0);
+    if (gProbeHits != 0) {
+        gObjects->y[x] += 2;
+        if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+            x = Obj_WalkRight(x, 0x29, 0);
+        } else {
+            x = Obj_WalkLeft(x, 0x2B, 0);
+        }
+        if (!(gProbeHits & 1) && --gObjects->timer[x] != 0) {
+            return;
+        }
+    }
+    gObjects->dir[x] ^= 3;
+    gObjects->timer[x] = 0x50;
+    gObjects->state[x]++;
+    Obj_SetVelocityY(x, 0x0400);
+    gObjects->action[x] = 0x56;
+    gObjects->animFrame[x] = 0;
+    gObjects->animTimer[x] = 0x80;
+    Sound_Request(SFX_LEAP, x);
+    Obj_SpawnDust(x);
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -1789,6 +1878,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_PATROLLER:
             Obj_Patroller(slot);
+            break;
+        case OBJ_KIND_LEAPER:
+            Obj_Leaper(slot);
             break;
         case OBJ_KIND_BOBBER:
             Obj_Bobber(slot);
@@ -1922,6 +2014,16 @@ static void Run_Charger(Regs *r)
 static void Run_Bobber(Regs *r)
 {
     Obj_Bobber(r->x);
+}
+
+static void Run_Leaper(Regs *r)
+{
+    Obj_Leaper(r->x);
+}
+
+static void Run_SpawnDust(Regs *r)
+{
+    Obj_SpawnDust(r->x);
 }
 
 static void Run_Swooper(Regs *r)
@@ -2093,6 +2195,8 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_LEAPER, NULL, "Obj_Leaper", Run_Leaper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_LEAPER_DUST, NULL, "Obj_SpawnDust", Run_SpawnDust, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_BOBBER, NULL, "Obj_Bobber", Run_Bobber, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_CHARGER, NULL, "Obj_Charger", Run_Charger, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_PATROLLER, NULL, "Obj_Patroller", Run_Patroller, 0, .bank = DT_BANK_OBJECTS },
