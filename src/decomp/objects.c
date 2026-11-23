@@ -45,6 +45,8 @@
 #define SFX_WATCHER  0x2A
 #define SFX_FLYER    0x2B
 #define SFX_SWOOP    0x30
+#define SFX_CHARGE   0x31
+#define SFX_BOUNCE   0x1D
 
 #define gObjCursor        RAM_U8(DT_ADDR_OBJ_CURSOR)
 #define gScratch0         RAM_U8(DT_ADDR_SCRATCH0)
@@ -53,6 +55,7 @@
 #define gProbeHits        RAM_U8(DT_ADDR_PROBE_HITS)
 #define gContactDepth     RAM_U8(DT_ADDR_CONTACT_DEPTH)
 #define gBlockOpened      RAM_U8(DT_ADDR_BLOCK_OPENED)
+#define gContactSlot      RAM_U8(DT_ADDR_CONTACT_SLOT)
 #define gMoneyDigit(i)    RAM_U8(DT_ADDR_MONEY_DIGITS + (i))
 #define gMoneyChanged     RAM_U8(DT_ADDR_HUD_MONEY_DIRTY)
 #define gExtraDotTaken    RAM_U8(DT_ADDR_EXTRA_DOT_TAKEN)
@@ -1582,6 +1585,97 @@ static void Obj_Patroller(uint8_t x)
     }
 }
 
+/* Kind $10 ($9313): an enemy that faces Scrooge, waits 120 frames, then
+ * charges at 2 px a frame. Against a wall or a block it turns, knocks the
+ * block ($86F7) and bounces up ($06C0 counts the bounce, negative once it
+ * falls); landing from the bounce leaves it dazed (pose $42) for 30 frames
+ * before it charges again. A hit beats it. */
+static void Obj_Charger(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_CHARGER, 0x22, x, gObjects->kind[x]);
+    if (Step(x) == 0) {
+        gObjects->state[x]++;
+        Obj_SetVelocityY(x, 0);
+        gObjects->unk_06C0[x] = 0;
+        Obj_SetSpeed(x, 0x0200);
+        gObjects->timer[x] = 0x78;
+        Obj_FaceScrooge(x);
+    }
+    if (!(gObjects->state[x] & 2)) {
+        if (gObjects->timer[x] != 0) {
+            gObjects->timer[x]--;
+            gObjects->animTimer[x] = 0;
+            return;
+        }
+        if (gObjects->animFrame[x] != 3) {
+            return;
+        }
+        ResetAnim(x);
+        gObjects->action[x] = 0x2D;
+        gObjects->hitbox[x] |= 0x80;
+        gObjects->state[x]++;
+    }
+    uint8_t bounce = gObjects->unk_06C0[x];
+    if (bounce != 0) {
+        if (gObjects->animFrame[x] == 3) {
+            gObjects->animTimer[x] = 0;
+        }
+        if (!(bounce & 0x80)) {
+            x = Obj_Rise(x, 9, 2);
+            if (!(gObjects->vy[x] & 0x80)) {
+                return;
+            }
+            gObjects->unk_06C0[x] = gObjects->vy[x];
+            Obj_SetVelocityY(x, 0);
+            return;
+        }
+    }
+    x = Obj_Fall(x, 6, 2);
+    if (!(gProbeHits & 1)) {
+        return;
+    }
+    if (gObjects->unk_06C0[x] & 0x80) {
+        ResetAnim(x);
+        gObjects->unk_06C0[x] = 0;
+        gObjects->action[x] = 0x42;
+        gObjects->timer[x] = 0x1E;
+        gObjects->state[x]--;
+        return;
+    }
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        x = Obj_WalkRight(x, 0, 2);
+    } else {
+        x = Obj_WalkLeft(x, 3, 2);
+    }
+    if (gObjects->animTimer[x] == 0) {
+        Sound_Request(SFX_CHARGE, x);
+    }
+    if (gObjects->unk_0690[x] != 0) {
+        Obj_Defeat(x);
+        return;
+    }
+    if (!(gProbeHits & 1)) {
+        return;
+    }
+    uint8_t block = gContactSlot;
+    if (gObjects->kind[block] == OBJ_KIND_BLOCK && (gObjects->state[block] & OBJ_STATUS_HIDDEN) && !gBlockOpened) {
+        /* The tile edit needs the Y the walls move left, which the C does
+         * not model: the original runs this call. */
+        Decomp_RunOriginal();
+        return;
+    }
+    gObjects->dir[x] ^= 3;
+    gObjects->action[x] = 0x2E;
+    ResetAnim(x);
+    gObjects->hitbox[x] &= 0x7F;
+    if (gObjects->kind[block] == OBJ_KIND_BLOCK) {
+        Obj_HitBlock(block, 0);
+    }
+    Sound_Request(SFX_BOUNCE, x);
+    gObjects->unk_06C0[x]++;
+    Obj_SetVelocityY(x, 0x02D4);
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -1644,6 +1738,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_LIFT:
             Obj_Lift(slot);
+            break;
+        case OBJ_KIND_CHARGER:
+            Obj_Charger(slot);
             break;
         case OBJ_KIND_SWOOPER:
             Obj_Swooper(slot);
@@ -1779,6 +1876,11 @@ static void Run_Lift(Regs *r)
 static void Run_Patroller(Regs *r)
 {
     Obj_Patroller(r->x);
+}
+
+static void Run_Charger(Regs *r)
+{
+    Obj_Charger(r->x);
 }
 
 static void Run_Swooper(Regs *r)
@@ -1950,6 +2052,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_CHARGER, NULL, "Obj_Charger", Run_Charger, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_PATROLLER, NULL, "Obj_Patroller", Run_Patroller, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_PICKUP, NULL, "Obj_Pickup", Run_Pickup, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_HIDDEN_ITEM, NULL, "Obj_HiddenItem", Run_HiddenItem, 0, .bank = DT_BANK_OBJECTS },

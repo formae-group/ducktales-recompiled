@@ -43,6 +43,7 @@ extern "C" {
 #define OBJ_KIND_FLYER       0x0D /* enemy: weaving flyer (code) */
 #define OBJ_KIND_SWING       0x0E /* swinging hold Scrooge grabs with Up (code) */
 #define OBJ_KIND_LIFT        0x0F /* platform that rises and sinks (code) */
+#define OBJ_KIND_CHARGER     0x10 /* enemy: charges at Scrooge, bounces off walls and blocks (code) */
 #define OBJ_KIND_SWOOPER     0x11 /* enemy: drops to Scrooge's height and weaves (code) */
 #define OBJ_KIND_PICKUP      0x13 /* an item Scrooge takes by touching it (code) */
 #define OBJ_KIND_HIDDEN_ITEM 0x14 /* an item that appears when touched (code) */
