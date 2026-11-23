@@ -181,6 +181,9 @@ leave the jump vector in `$00/$01` as the original's loop does.
 | `Player_Walk`, `Player_Knockback` | X | none | X is the slot the push of `$73` moves when no direction is held, and what the sound request keeps in `$00` |
 | `Player_MoveRight`, `Player_MoveLeft`, `Player_Fall`, `Player_Rise`, `Player_ProbeVertical` | X (moves only) | X | X is what the probe or contact routine returned; callers pass it on |
 | every other `Player_*` | none | none | |
+| `Bank_Select`, `Bank_SelectTemp` | A = bank | A, X, P | the bank is stored into the bus-conflict table at `$FFE5` (a device store) |
+| `Oam_Build`, `Random_Next` | none | X, Y | the frame loop yields right after them, and `task_yield` keeps X and Y on the stack |
+| `Ppu_*`, `Input_ReadControllers`, `Chr_*`, `Text_DrawStrings`, `Sound_Update`, `Sound_Play` | as the original | none | device access: check mode also compares the PPU, APU and mapper state after the routine |
 
 ### Routines
 
@@ -223,27 +226,27 @@ RAM-identical in replace mode.
 | `Player_Mode12` | `$EC2D` | checked (pokes only) | 0 | mode12, mode12-page7 | no vertical direction with Y below `$18` |
 | `Player_Death` | `$EC9B` | checked | 8 | hurt-last-dot | none |
 | `Player_Mode14` | `$ECFF` | checked | 1 | - | none |
-| `Nmi_Handler` | `$C000` | claimed (decomp/system) | - | - | - |
-| `Ppu_NmiOff` | `$C183` | claimed (decomp/system) | - | - | - |
-| `Ppu_NmiOn` | `$C18D` | claimed (decomp/system) | - | - | - |
-| `Ppu_Blank` | `$C197` | claimed (decomp/system) | - | - | - |
-| `Ppu_Unblank` | `$C1A1` | claimed (decomp/system) | - | - | - |
-| `Input_ReadControllers` | `$C1AB` | claimed (decomp/system) | - | - | - |
-| `Ppu_FillNametable` | `$C203` | claimed (decomp/system) | - | - | - |
-| `Mem_FillPages` | `$C24F` | claimed (decomp/system) | - | - | - |
-| `Oam_Clear` | `$C267` | claimed (decomp/system) | - | - | - |
-| `Palette_FadeIn` | `$C279` | claimed (decomp/system) | - | - | - |
-| `Palette_FadeOut` | `$C282` | claimed (decomp/system) | - | - | - |
-| `Random_Next` | `$C2E6` | claimed (decomp/system) | - | - | - |
-| `Chr_LoadList` | `$C301` | claimed (decomp/system) | - | - | - |
-| `Chr_StreamRow` | `$C42C` | claimed (decomp/system) | - | - | - |
-| `Palette_LoadScene` | `$F76D` | claimed (decomp/system) | - | - | - |
-| `Bank_Select` | `$FFDE` | claimed (decomp/system) | - | - | - |
-| `Bank_SelectTemp` | `$FFE0` | claimed (decomp/system) | - | - | - |
-| `Oam_Build` | bank 5 `$8000` | claimed (decomp/system) | - | - | - |
-| `Text_DrawStrings` | bank 5 `$BAB0` | claimed (decomp/system) | - | - | - |
-| `Sound_Update` | bank 3 `$8000` | claimed (decomp/system) | - | - | - |
-| `Sound_Play` | bank 3 `$8003` | claimed (decomp/system) | - | - | - |
+| `Nmi_Handler` | `$C000` | claimed (decomp/system): the NMI has no site form yet | - | - | - |
+| `Ppu_NmiOff` | `$C183` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
+| `Ppu_NmiOn` | `$C18D` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
+| `Ppu_Blank` | `$C197` | checked | 12 | - | not measured (no coverage build yet) |
+| `Ppu_Unblank` | `$C1A1` | checked | 12 | - | not measured (no coverage build yet) |
+| `Input_ReadControllers` | `$C1AB` | checked | 12 | - | not measured (no coverage build yet) |
+| `Ppu_FillNametable` | `$C203` | checked | 12 | - | not measured (no coverage build yet) |
+| `Mem_FillPages` | `$C24F` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
+| `Oam_Clear` | `$C267` | checked | 12 | - | not measured (no coverage build yet) |
+| `Palette_FadeIn` | `$C279` | claimed (decomp/system): task routine, a stop point of the flow until then | - | - | - |
+| `Palette_FadeOut` | `$C282` | claimed (decomp/system): task routine, a stop point of the flow until then | - | - | - |
+| `Random_Next` | `$C2E6` | checked | 12 | - | not measured (no coverage build yet) |
+| `Chr_LoadList` | `$C301` | checked | 12 | - | not measured (no coverage build yet) |
+| `Chr_StreamRow` | `$C42C` | checked | 12 | - | not measured (no coverage build yet) |
+| `Palette_LoadScene` | `$F76D` | written, not compared | 0 | - | every branch (no route calls it; needs a poke case) |
+| `Bank_Select` | `$FFDE` | checked | 12 | - | not measured (no coverage build yet) |
+| `Bank_SelectTemp` | `$FFE0` | checked | 12 | - | not measured (no coverage build yet) |
+| `Oam_Build` | bank 5 `$8000` | checked | 12 | - | not measured (no coverage build yet) |
+| `Text_DrawStrings` | bank 5 `$BAB0` | checked | 12 | - | not measured (no coverage build yet) |
+| `Sound_Update` | bank 3 `$8000` | checked | 12 | - | not measured (no coverage build yet) |
+| `Sound_Play` | bank 3 `$8003` | checked | 12 | - | not measured (no coverage build yet) |
 
 **Claimed, in progress** (branch `decomp/flow`, `src/decomp/flow.c`): the game flow of the main task in the fixed
 bank, `$D4E6-$E353` and the boss trigger `$CF93-$D04C`: title and difficulty select (`$D4E6`), Land Select and the
