@@ -8,12 +8,13 @@
            compared, or given to the original routine.
   replace  (needs --dev-build) every route runs stock and with
            --decomp replace, both with --dt-ram-log, and CPU RAM outside
-           page 1 must be equal after every frame. Page 1 is compared where
+           the stack ($0161-$01FF) must be equal after every frame. Page 1 is compared where
            both runs sit in the game's scheduler with every task yielded
            (S = $FF): there the main task's live stack (above its saved S up
            to its base $BF) must be equal. The rest of page 1 holds what
            interrupts pushed, which differs because an NMI the original takes
-           inside a replaced routine is taken right after it.
+           inside a replaced routine is taken right after it (replace mode gives
+           a call in which VBlank starts to the original routine).
   pokes    (needs --dev-build) states no route reaches, made with
            --dt-poke-at from a point of re_amazon_moves (POKES below): each
            case runs in check mode, where the routines it targets must be
@@ -41,6 +42,7 @@ RAM = 0x800
 IDLE_S = 0xFF
 TASKS = 0x80
 MAIN_TASK_BASE = 0xBF
+STACK_LOW = 0x161    # page 1 below this is data (palette, consumed bits, HUD time sprites)
 LINE = re.compile(r'^decomp: mode=\S+ routine=(\S+) addr=\$([0-9A-F]{4}) calls=(\d+) compared=(\d+) original=(\d+)$', re.M)
 
 POKE_ROUTE = ROOT / 'tests' / 'routes' / 're_amazon_moves.txt'
@@ -135,7 +137,7 @@ def replace_case(exe, rom, case, tmp):
             idle += 1
             if a[TASKS]:
                 live = range(0x101 + a[TASKS + 2], 0x100 + MAIN_TASK_BASE + 1)
-        diff = [i for i in range(RAM) if a[i] != b[i] and (not 0x100 <= i < 0x200 or i in live)]
+        diff = [i for i in range(RAM) if a[i] != b[i] and (not STACK_LOW <= i < 0x200 or i in live)]
         if diff:
             shown = ' '.join(f'${i:04X}:{a[i]:02X}/{b[i]:02X}' for i in diff[:12])
             result = f'frame {frame}: {shown}'

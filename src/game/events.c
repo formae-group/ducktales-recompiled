@@ -17,6 +17,7 @@
 #include "ducktales/game.h"
 #include "ducktales/hud.h"
 
+#include "cyc_mod.h"
 #include "mod_function_hooks.h"
 #include "mod_runtime.h"
 
@@ -94,6 +95,7 @@ EventResult Events_Raise(EventId id)
 
 static int at_site(EventId id)
 {
+    if (cyc_mod_isolated()) return 0;
     GameRam_Begin();
     EventResult result = Events_Raise(id);
     GameRam_End();

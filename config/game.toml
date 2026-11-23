@@ -281,3 +281,342 @@ id = "ducktales.decomp.ECFF"
 addr = 0xECFF
 length = 8
 crc32 = 0xC7E90C41
+
+# Game flow (src/decomp/flow.c, docs/decompilation.md "Task code"): the
+# entries and resume points of the main task's decompiled code, then the
+# routines it hands off to, where check mode stops the original.
+
+# Timer_Tick
+[[mod_function_hook]]
+id = "ducktales.decomp.E28C"
+addr = 0xE28C
+length = 8
+crc32 = 0x87984161
+
+# Hud_RefreshMoney
+[[mod_function_hook]]
+id = "ducktales.decomp.DE6C"
+addr = 0xDE6C
+length = 8
+crc32 = 0xF879F070
+
+# Hud_RefreshTotal
+[[mod_function_hook]]
+id = "ducktales.decomp.DEA3"
+addr = 0xDEA3
+length = 8
+crc32 = 0x0DE40D60
+
+# Hud_Reset
+[[mod_function_hook]]
+id = "ducktales.decomp.D60A"
+addr = 0xD60A
+length = 8
+crc32 = 0xE0BA6A38
+
+# Land_ApplyTables
+[[mod_function_hook]]
+id = "ducktales.decomp.D9CA"
+addr = 0xD9CA
+length = 8
+crc32 = 0x064DF66E
+
+# Land_LoadPalette
+[[mod_function_hook]]
+id = "ducktales.decomp.D9F5"
+addr = 0xD9F5
+length = 8
+crc32 = 0x1FB8AD30
+
+# FrameLoop
+[[mod_function_hook]]
+id = "ducktales.decomp.DB36"
+addr = 0xDB36
+length = 8
+crc32 = 0xD74F1957
+
+# FrameLoop_AfterPlayer
+[[mod_function_hook]]
+id = "ducktales.decomp.DB6F"
+addr = 0xDB6F
+length = 8
+crc32 = 0x37C7B055
+
+# FrameLoop_AfterObjects
+[[mod_function_hook]]
+id = "ducktales.decomp.DB7B"
+addr = 0xDB7B
+length = 8
+crc32 = 0xE84D6D01
+
+# FrameLoop_AfterCamera
+[[mod_function_hook]]
+id = "ducktales.decomp.DB8C"
+addr = 0xDB8C
+length = 8
+crc32 = 0x578115E0
+
+# FrameLoop_AfterBossTrigger
+[[mod_function_hook]]
+id = "ducktales.decomp.DB8F"
+addr = 0xDB8F
+length = 8
+crc32 = 0xA62EA284
+
+# FrameLoop_AfterDeath
+[[mod_function_hook]]
+id = "ducktales.decomp.DBB0"
+addr = 0xDBB0
+length = 8
+crc32 = 0x956283FC
+
+# FrameLoop_Sprites
+[[mod_function_hook]]
+id = "ducktales.decomp.DBC5"
+addr = 0xDBC5
+length = 8
+crc32 = 0x9CF0F150
+
+# FrameLoop_AfterSpawn
+[[mod_function_hook]]
+id = "ducktales.decomp.DBE4"
+addr = 0xDBE4
+length = 8
+crc32 = 0x99730F20
+
+# DeathOrWarp
+[[mod_function_hook]]
+id = "ducktales.decomp.DC3E"
+addr = 0xDC3E
+length = 8
+crc32 = 0xF1B885FB
+
+# Death_Fade
+[[mod_function_hook]]
+id = "ducktales.decomp.DC68"
+addr = 0xDC68
+length = 8
+crc32 = 0xAF07F9B2
+
+# Death_Blank
+[[mod_function_hook]]
+id = "ducktales.decomp.DC6B"
+addr = 0xDC6B
+length = 8
+crc32 = 0x2C0BB4E6
+
+# Death_Place
+[[mod_function_hook]]
+id = "ducktales.decomp.DC81"
+addr = 0xDC81
+length = 8
+crc32 = 0x3D75FD6A
+
+# Death_Placed
+[[mod_function_hook]]
+id = "ducktales.decomp.DC84"
+addr = 0xDC84
+length = 8
+crc32 = 0xB13DABEB
+
+# Death_RowChr
+[[mod_function_hook]]
+id = "ducktales.decomp.DCBD"
+addr = 0xDCBD
+length = 8
+crc32 = 0xB50AD090
+
+# Death_Shown
+[[mod_function_hook]]
+id = "ducktales.decomp.DCD8"
+addr = 0xDCD8
+length = 8
+crc32 = 0x66B9E8F6
+
+# Death_FadeIn
+[[mod_function_hook]]
+id = "ducktales.decomp.DCDB"
+addr = 0xDCDB
+length = 8
+crc32 = 0x15E65EC3
+
+# Death_Resume
+[[mod_function_hook]]
+id = "ducktales.decomp.DCE2"
+addr = 0xDCE2
+length = 8
+crc32 = 0xFF438EA5
+
+# Death_Spawned
+[[mod_function_hook]]
+id = "ducktales.decomp.DD14"
+addr = 0xDD14
+length = 8
+crc32 = 0xD6F450F7
+
+# Death_Done
+[[mod_function_hook]]
+id = "ducktales.decomp.DD1C"
+addr = 0xDD1C
+length = 8
+crc32 = 0x56A38533
+
+# DeathPause
+[[mod_function_hook]]
+id = "ducktales.decomp.DD23"
+addr = 0xDD23
+length = 8
+crc32 = 0x07798744
+
+# DeathPause_Next
+[[mod_function_hook]]
+id = "ducktales.decomp.DD42"
+addr = 0xDD42
+length = 8
+crc32 = 0x7EC9BF2D
+
+# Respawn_Place
+[[mod_function_hook]]
+id = "ducktales.decomp.DD4E"
+addr = 0xDD4E
+length = 8
+crc32 = 0x39768EC7
+
+# Respawn_PlaceAt
+[[mod_function_hook]]
+id = "ducktales.decomp.DD52"
+addr = 0xDD52
+length = 8
+crc32 = 0x6C7EAD65
+
+# Respawn_Drawn
+[[mod_function_hook]]
+id = "ducktales.decomp.DDAB"
+addr = 0xDDAB
+length = 8
+crc32 = 0x8F1156DB
+
+# GameOver
+[[mod_function_hook]]
+id = "ducktales.decomp.DEB9"
+addr = 0xDEB9
+length = 8
+crc32 = 0xE537A374
+
+# GameOver_Next
+[[mod_function_hook]]
+id = "ducktales.decomp.DEDE"
+addr = 0xDEDE
+length = 8
+crc32 = 0x87B47165
+
+# LandExit
+[[mod_function_hook]]
+id = "ducktales.decomp.DF08"
+addr = 0xDF08
+length = 8
+crc32 = 0x995BEAA2
+
+# LandExit_Next
+[[mod_function_hook]]
+id = "ducktales.decomp.DF1E"
+addr = 0xDF1E
+length = 8
+crc32 = 0x09BF30E2
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.FFAC"
+addr = 0xFFAC
+length = 8
+crc32 = 0x937EB346
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.FEE0"
+addr = 0xFEE0
+length = 8
+crc32 = 0x446DE306
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.C279"
+addr = 0xC279
+length = 8
+crc32 = 0x4BEACFCA
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.C282"
+addr = 0xC282
+length = 8
+crc32 = 0xA8DC18AB
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.C197"
+addr = 0xC197
+length = 8
+crc32 = 0xB236959A
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.C1A1"
+addr = 0xC1A1
+length = 8
+crc32 = 0x9490DE2F
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.C42C"
+addr = 0xC42C
+length = 8
+crc32 = 0xC14ABEE7
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.C830"
+addr = 0xC830
+length = 8
+crc32 = 0x30386A7B
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.8000.6"
+addr = 0x8000
+length = 8
+crc32 = 0x6DA2AF28
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.AEA0.6"
+addr = 0xAEA0
+length = 8
+crc32 = 0x2CF3FD6D
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.EFE2"
+addr = 0xEFE2
+length = 8
+crc32 = 0x1944514D
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.CF93"
+addr = 0xCF93
+length = 8
+crc32 = 0x54FB3F07
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.D630"
+addr = 0xD630
+length = 8
+crc32 = 0xDACBE679
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.D79B"
+addr = 0xD79B
+length = 8
+crc32 = 0xDACBE679
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.DF27"
+addr = 0xDF27
+length = 8
+crc32 = 0x7C77B11E
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.E1AF"
+addr = 0xE1AF
+length = 8
+crc32 = 0xD1E4F218
+# END game flow
