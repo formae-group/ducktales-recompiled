@@ -11,6 +11,7 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   a decompiled routine, from the golden save state before it: 32 s instead of 689 s for a routine
   the routes reach late.
 - `tools/test_slot.py` queues heavy test runs across worktrees, at most two at once.
+- `tests/decomp_test.py` names each differing RAM address with its `ducktales_symbols.h` name.
 
 ## [1.0.0] - 2026-11-23
 

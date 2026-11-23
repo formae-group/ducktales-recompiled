@@ -296,6 +296,29 @@ A routine every route runs at power-on selects frame 0 and saves nothing; run th
 | `verify_routes` with `DUCKTALES_DECOMP=check` | the same, with check mode on in the recompiled runs |
 | `enhancements_test` | each enhancement, now an event handler, is identical to stock when off, acts when on, and can be toggled |
 
+**Ideas from other projects** (reviewed 2026-11-23; none of their code is used):
+
+- [DecompPipeline](https://github.com/GeneralAtrox/DecompPipeline): one machine verdict per
+  function, which agents cannot argue with, bounded repair attempts, and a job registry that never
+  repeats a job on unchanged inputs. We already have the verdict: check mode compares every call
+  on the whole RAM. From that project we took the reuse rule (AGENTS.md, "Checks") and the queue
+  (`tools/test_slot.py`). We did not take its mutation check. It finds harnesses that do not
+  observe a result, and check mode observes all of RAM, so the branches the coverage build lists
+  already name the gaps.
+- [mesen-for-ai](https://github.com/paulomanrique/mesen-for-ai) (GPL-3.0): Mesen driven headless
+  with watches, breakpoints and the code/data logger. The same questions are answered here by
+  `tools/whoaccesses.py`, `--miss-log` coverage and the TriCNES oracle, so we did not add it.
+- [Ghidra6502](https://github.com/tom-seddon/Ghidra6502): Ghidra's analysis of indexed addressing.
+  We did not take it, because `tools/disasm6502.py` and `tools/player_xref.py` cover the routines
+  we decompile, without a JVM.
+- [NESRecomp](https://github.com/mstan/nesrecomp) upstream is 8 commits past our pin. The pin
+  already has `symbol_file` and function-entry mod hooks.
+- [awesome-rea](https://github.com/yibie/awesome-rea): "done" is a gate a machine decides. For us
+  that is `decomp_test` and `verify_routes`.
+
+A difference in check or replace mode names the RAM address with its `ducktales_symbols.h` name
+(`$0011 CONTACT_DEPTH/SCRATCH11`), so a mismatch reads without a symbol lookup.
+
 Why replace mode is not part of `verify_routes`: the oracle compares bus traces, and a replaced
 routine's bus activity is `cpu_read`s of one address instead of the original's accesses. Replace
 mode is checked on RAM, per frame, against the recompiled original.
