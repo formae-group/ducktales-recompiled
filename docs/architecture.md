@@ -277,7 +277,12 @@ assets/brand/formae.png  the About page's logo, embedded by formae_ui_embed_file
   `frame_begin`, `event`, `input`, `audio_mix`, and the `[Game]` section writer.
 - The menu opens from the `event` callback, on Escape or on the controller's Menu binding (RB by
   default). It runs its own modal loop inside that callback. It pumps SDL events and draws over the
-  last game picture, so no machine frame runs while it is open, and the pause is exact.
+  latest game picture. Each menu frame it calls the host's menu tick (`app_ui_set_menu_tick`): the
+  native player runs the game frames that are due at 60.0988 Hz with no buttons pressed and queues
+  their sound, so the game keeps running behind the menu, as in other PC ports.
+  `[Game] MenuPausesGame` (Settings, General, off by default) stops it, and an open Reset or Quit
+  question always does. The cycle host sets no tick, so the menu pauses it exactly: no machine
+  frame runs while it is open.
 - The menu's layout follows Ship of Harkinian's: a bar of tabs (Settings, Enhancements, About) with
   Reset, Quit and Resume icon buttons on its right, and under it a sidebar of the tab's categories
   beside the chosen category's page. Settings has General (menu background opacity, controller
@@ -322,7 +327,7 @@ assets/brand/formae.png  the About page's logo, embedded by formae_ui_embed_file
     at start.
   - Pixels, pixel aspect, overscan crop and the HUD split line act on the picture the window
     shows (`CycHostExtras.present`), never on the machine: [presentation.md](presentation.md).
-  - `[Game] MenuOpacity` and `MenuControllerNav` are the menu's own; `ducktales_host.c` hands
+  - `[Game] MenuOpacity`, `MenuControllerNav` and `MenuPausesGame` are the menu's own; `ducktales_host.c` hands
     them to `app_ui_load_game_setting`/`app_ui_write_game_settings` with the other `[Game]` keys.
   - `[Game] NoSlowdown` (the No slowdown row, on by default) sets the cycle host's extra
     scanlines between frames (`ducktales_host_set_no_slowdown`); see

@@ -46,10 +46,11 @@ void app_bind_text(int row, bool pad, char *out, size_t cap); /* "Unbound" when 
 const char *app_bind_set(int row, bool pad, int value);
 void app_bind_defaults(void);
 
-/* ---- the menu's own settings (config.ini [Game] MenuOpacity, MenuControllerNav) ---- */
+/* ---- the menu's own settings (config.ini [Game] MenuOpacity, MenuControllerNav, MenuPausesGame) ---- */
 typedef struct {
     int opacity; /* the menu's background over the game, percent 0..100 */
     int pad_nav; /* bool: a controller moves through the menu */
+    int pause;   /* bool: the game stops while the menu is open */
 } AppMenuPrefs;
 
 void app_menu_prefs_get(AppMenuPrefs *out);
@@ -63,7 +64,7 @@ void app_settings_commit(void);
 /* ---- the menu (app_ui.cpp) ---- */
 bool app_is_menu_key(int scancode);
 bool app_is_menu_button(int sdl_button);
-/* Runs the paused menu until the player resumes; false if it could not open. */
+/* Runs the menu until the player resumes; false if it could not open. */
 bool app_menu_run(SDL_Window *win);
 /* The input hold after the menu closes, until every button is up. */
 void app_menu_closed(void);
