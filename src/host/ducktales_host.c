@@ -190,6 +190,7 @@ static void frame_end(void *ctx)
     dt_ramhash_frame_end();
     dt_diag_frame_end();
     nv_check_frame_end();
+    Decomp_FrameEnd();
 }
 
 static void state_loaded(void *ctx)

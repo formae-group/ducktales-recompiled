@@ -77,6 +77,11 @@
 #define DT_PAD_LEFT    0x02
 #define DT_PAD_RIGHT   0x01
 
+/* Page 1 below this is data, not stack: the master palette $0100-$011F, the
+ * consumed-record bits $0120-$013F and the HUD time group $0140-$015F
+ * (verified, memory-map.md, game-state.md). */
+#define DT_ADDR_STACK_FLOOR      0x0160
+
 /* ---- object tables: one 16-byte row per attribute, column = slot ----
  * Slot 0 is Scrooge (docs/memory-map.md "Object tables", docs/player.md). */
 #define DT_OBJ_SLOTS             16

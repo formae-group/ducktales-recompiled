@@ -20,6 +20,7 @@ static uint8_t s_a;
 /* $F754 */
 uint8_t Sound_Request(uint8_t id, uint8_t x)
 {
+    Decomp_Enter(DT_CODE_SOUND_REQUEST, id, x, 0);
     RAM_U8(DT_ADDR_SCRATCH0) = x;
     RAM_U8(DT_ADDR_SCRATCH1) = id;
     uint8_t slot = gSoundWrite;
@@ -36,6 +37,7 @@ uint8_t Sound_Request(uint8_t id, uint8_t x)
 /* $F752: a music id is also remembered in $C5. */
 uint8_t Music_Request(uint8_t id, uint8_t x)
 {
+    Decomp_Enter(DT_CODE_MUSIC_REQUEST, id, x, 0);
     gMusic = id;
     return Sound_Request(id, x);
 }
