@@ -74,6 +74,7 @@
 #define gRandom(i)        RAM_U8(DT_ADDR_RANDOM + (i))
 #define gPaletteUpload    RAM_U8(DT_ADDR_PALETTE_REQUEST)
 #define gHeldSlot         RAM_U8(DT_ADDR_HELD_SLOT)
+#define gProbeCount       RAM_U8(DT_ADDR_PROBE_COUNT)
 #define gPaletteShown(i)  RAM_U8(DT_ADDR_PALETTE_SHOWN + (i))
 
 /* ---- shared pieces of the handlers ---- */
@@ -2559,6 +2560,33 @@ static void Obj_Bouncer(uint8_t x)
     }
 }
 
+/* Kind $24 ($A024): a boulder that, once Scrooge is within 4 px, rolls
+ * right at $0180 a frame with probe $35 (the walls move skips the block test
+ * for this kind). At a wall it walks once more and stops for good (kind 0).
+ * Within $15 px of him both ways it pushes him right ($73). The second walk
+ * takes probe 1 and the Y the first one left: the probes left to test, 0
+ * after a solid hit; a hit on a special tile would leave that tile's handler
+ * index instead, which the C does not model. */
+static void Obj_Boulder(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_BOULDER, 0x22, x, gObjects->kind[x]);
+    if (Step(x) == 0) {
+        if (Obj_DistanceX(x) >= 4) {
+            return;
+        }
+        Obj_SetSpeed(x, 0x0180);
+        gObjects->state[x]++;
+    }
+    x = Obj_WalkRight(x, 0x35, 0);
+    if (gProbeHits & 1) {
+        x = Obj_WalkRight(x, 1, gProbeCount);
+        gObjects->kind[x] = OBJ_KIND_NONE;
+    }
+    if (Obj_DistanceX(x) < 0x15 && Obj_DistanceY(x) < 0x15) {
+        gPlayerPushRight++;
+    }
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -2663,6 +2691,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_BOBBER:
             Obj_Bobber(slot);
+            break;
+        case OBJ_KIND_BOULDER:
+            Obj_Boulder(slot);
             break;
         case OBJ_KIND_CEILING_HOPPER:
             Obj_CeilingHopper(slot);
@@ -2913,6 +2944,11 @@ static void Run_Bouncer(Regs *r)
     Obj_Bouncer(r->x);
 }
 
+static void Run_Boulder(Regs *r)
+{
+    Obj_Boulder(r->x);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -3082,6 +3118,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_BOULDER, NULL, "Obj_Boulder", Run_Boulder, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_BOUNCER, NULL, "Obj_Bouncer", Run_Bouncer, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_PIT_JUMPER, NULL, "Obj_PitJumper", Run_PitJumper, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_PIT_SPLASH_OUT, NULL, "Obj_PitSplashOut", Run_PitSplashOut, 0, .bank = DT_BANK_OBJECTS },

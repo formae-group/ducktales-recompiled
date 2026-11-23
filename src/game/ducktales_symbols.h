@@ -489,6 +489,7 @@
 #define DT_CODE_KIND_FLYER           0x916C /* kind $0D */
 #define DT_CODE_KIND_SWING           0x9225 /* kind $0E */
 #define DT_CODE_KIND_SWOOPER         0x9430 /* kind $11 */
+#define DT_CODE_KIND_BOULDER         0xA024 /* kind $24 */
 #define DT_CODE_KIND_BOUNCER         0x9A81 /* kind $1B */
 #define DT_CODE_KIND_PIT_JUMPER      0x9956 /* kind $1A */
 #define DT_CODE_PIT_SPLASH_OUT       0x9A1E /* kind $1A: splash out of the pit */
