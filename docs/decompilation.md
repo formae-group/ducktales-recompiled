@@ -631,6 +631,7 @@ the events check covers.
 
 What has not been verified:
 
-- Replace mode with the window build in real play.
+- Replace mode in long real play. One owner session on the window build's cycle host covered one
+  land, about 8,400 frames (docs/validation.md). The native player cannot run replace mode yet.
 - Paths no route or poke case reaches (table above). They are written from the code, and check mode
   will stop on any of them that is wrong, the first time a route reaches it.

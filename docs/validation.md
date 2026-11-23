@@ -387,6 +387,12 @@ native cycles and oracle = recompiled = interpreter. 3,409 s wall, against 11,85
 earlier run had other agents' builds and tests on the PC, so the two times say nothing about the code.
 `tests/window_smoke.py --build build/windows` passed on the same tree.
 
+**Owner playtest with the decompiled C on** (2026-11-23, main 21a7ffb, `build/windows`
+`ducktales_cycle.exe --decomp replace`): about 8,400 game frames in one land, from the title screen
+through the land load, one death and respawn, climbing and row changes. 92 of the 198 routines ran
+as C, and the log has no decomp error. The owner's verdict: "tudo perfeito". The native player
+(`ducktales.exe`) cannot run the decompiled C yet.
+
 ## Release 1.0.0
 
 On main `8569c86` (the release tree before its changelog and documentation commit), 2026-11-23:
