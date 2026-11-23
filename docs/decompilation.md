@@ -195,8 +195,8 @@ call can do. `flow.c` decompiles that code as **task code** (`DecompRoutine.task
   (frame counters, the land and row around a redraw). `Decomp_SelectBank` and `Decomp_Store` make
   the device writes the C needs (the mapper, `$2000`), for real in replace mode.
 - Its C starts at a site (original code reaches it: `$D4E6` from the scheduler's `JMP ($93)`, `$D79B`
-  from Land Select, `$DB36` after each frame, `$DD52` from the scenes), from another task routine's
-  C (a plain C call), or at a **resume point** (`DecompRoutine.resume`): the address an RTS returns
+  from Land Select, `$DB36` after each frame, `$DD52` from the scenes, `$DFED` from the message
+  box), from another task routine's C (a plain C call), or at a **resume point** (`DecompRoutine.resume`): the address an RTS returns
   to after the original a hand-off reached. Resume points have no site: the RTS observer
   (`cyc_mod_set_return_hook`) sees every RTS and starts the C when it lands on one (one in the
   switchable window, bank 4's take-off scene, only with its bank mapped). On the routes
@@ -205,7 +205,7 @@ call can do. `flow.c` decompiles that code as **task code** (`DecompRoutine.task
   enters through an RTS (`$FFAB`) whose return the observer moves to the start, at the routine's
   true S, with the isolated call's return address in place of the routine's own (at S + locals
   + 1). When the C hands off, the original stops where it reaches the same routine at the same
-  depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`, 9 of
+  depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`, 8 of
   them). Check compares RAM, the stack down to that depth, the registers the hand-off uses and the
   number of device writes.
 - Replace mode stores the C's results, makes its device writes, spends the original's cycles up to
@@ -374,6 +374,7 @@ RAM-identical in replace mode.
 | `FinalTrip` (3 resume points), `SpritesFrame` (1 resume point) | bank 4 `$BE00-$BEAA`, `$F855-$F868` | checked | 0 | final-trip | not measured |
 | `BankTransfer` (1 resume point) | `$D8D9-$D9BD` | checked | 5 | all-treasures (no money), total-max (TOTAL at 99999) | not measured |
 | `Scene` (6 resume points) | `$DF27-$DFEC` | checked | 0 | scene-1, scene-2 | not measured |
+| `Mode15_Redraw` (5 resume points) | `$DFED-$E053` | checked | 0 | mode15-redraw, message-scene | not measured |
 | `Ending` (3 resume points), `Ending_BankTransfer` (`$FFC7`) | `$E1AF-$E1F8` | checked (first frame; the later frames run the original) | 0 | ending | not measured |
 | `EndingScreen` (11 resume points) | `$E054-$E11A` | checked | 0 | ending | not measured |
 | `WaitA` (1 resume point) | `$D9BE` | checked | 5 | final-trip | not measured |
@@ -388,17 +389,18 @@ RAM-identical in replace mode.
 (`$D4E6-$D620`), Land Select with its tables, the bank transfer of money and the wait for A
 (`$D630-$D79A`, `$D8A6-$D9C9`), the land load (`$D79B-$D8A5`), the per-land tables and palettes
 (`$D9CA-$DA0F`), the frame loop with pause, the boss checkpoint, death, warps, respawn, game over and
-land exit (`$DB36-$DF26`), the special scenes with their tables (`$DF27-$DFEC`), the ending's screens
-and its first frame with their tables (`$E054-$E126`, `$E133-$E142`, `$E1AF-$E1F8`), the HUD timer
-(`$E28C-$E2FD`) and the boss trigger with the arena scroll (`$CF93-$D04C`): 3,115 of the 3,880 bytes,
-or 80% (tables inside the ranges included). Outside these ranges the flow also has the final trip's
-take-off scene (bank 4 `$BE00-$BEAA`) with the sprites frame it waits with (`$F855-$F868`). Not yet: the scene set-up that Scrooge's code calls
-(`$DFED-$E053`), the ending's later frames (`$E1F9-$E28B`: the credits scroll with a raster split
-polled on `$2002`, which `Ending` gives to the original) and the Select refill `$E2FE` (Scrooge's);
-the scene palette tables `$E127-$E132` and `$E143-$E1AE` are read by `Palette_LoadScene`
-(system.c). The flow has 18 sites: 9 entries that original code reaches and 9 stop sites (one for
-`Player_RowChange`'s hand-off to the row scroll `$C976`, and three for Scrooge's message box: the
-scene set-up `$DFED`, the block draw `$D068` and bank 5 `$B580`).
+land exit (`$DB36-$DF26`), the special scenes with their tables (`$DF27-$DFEC`), the scene set-up
+of message `$0B` that Scrooge's message box calls (`$DFED-$E053`), the ending's screens and its
+first frame with their tables (`$E054-$E126`, `$E133-$E142`, `$E1AF-$E1F8`), the HUD timer
+(`$E28C-$E2FD`) and the boss trigger with the arena scroll (`$CF93-$D04C`): 3,218 of the 3,880 bytes,
+or 83% (tables inside the ranges included). Outside these ranges the flow also has the final trip's
+take-off scene (bank 4 `$BE00-$BEAA`) with the sprites frame it waits with (`$F855-$F868`). Not
+yet: the ending's later frames (`$E1F9-$E28B`: the credits scroll with a raster split polled on
+`$2002`, which `Ending` gives to the original) and the Select refill `$E2FE` (Scrooge's); the
+scene palette tables `$E127-$E132` and `$E143-$E1AE` are read by `Palette_LoadScene` (system.c).
+The flow has 18 sites: 10 entries that original code reaches and 8 stop sites (one for
+`Player_RowChange`'s hand-off to the row scroll `$C976`, and two for Scrooge's message box: the
+block draw `$D068` and bank 5 `$B580`).
 
 Not decompiled yet, and still run as the original from the C:
 

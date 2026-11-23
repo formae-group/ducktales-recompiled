@@ -425,6 +425,13 @@ addr = 0xD630
 length = 8
 crc32 = 0xDACBE679
 
+# Mode15_Redraw
+[[mod_function_hook]]
+id = "ducktales.decomp.DFED"
+addr = 0xDFED
+length = 8
+crc32 = 0x0971742F
+
 # Ending
 [[mod_function_hook]]
 id = "ducktales.decomp.E1AF"
@@ -468,14 +475,6 @@ id = "ducktales.decomp.stop.C976"
 addr = 0xC976
 length = 8
 crc32 = 0x51C43FB5
-
-# What the message box ($ED05, src/decomp/player.c) hands off to besides task_wait:
-# the scene set-up of message $0B, the block draw of message $06 and the pause text.
-[[mod_function_hook]]
-id = "ducktales.decomp.stop.DFED"
-addr = 0xDFED
-length = 8
-crc32 = 0x0971742F
 
 [[mod_function_hook]]
 id = "ducktales.decomp.stop.D068"

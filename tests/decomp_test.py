@@ -103,6 +103,7 @@ POKES = [
     ('hud-total', {0xAB: 0x01}, ['Hud_RefreshTotal']),
     ('scene-1', {0x78: 0x81}, ['Scene_Placed', 'Scene_Done']),
     ('scene-2', {0x78: 0x82}, ['Scene_Placed', 'Scene_Done']),
+    ('mode15-redraw', {0x39: 0x0F, 0x6E: 0x0B}, ['Mode15_Redraw', 'Mode15_ArenaChr', 'Mode15_Spawned']),
     ('final-trip', {100: {0x5E: 0x01}}, ['LandSelect_FinalScene', 'FinalTrip_Next', 'FinalTrip_Flashed']),
     ('all-treasures', {100: {0x5D: 0x01, 0xA0: 0x1F}}, ['LandSelect_Banked', 'LandSelect_FinalWait']),
     (

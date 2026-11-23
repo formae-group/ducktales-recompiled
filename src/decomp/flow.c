@@ -112,6 +112,9 @@
 #define TRIP_FLASH_FRAMES     4
 #define TRIP_COLOUR_BRIGHT    0x16
 #define TRIP_COLOUR_DARK      0x0F
+#define M15_SCREEN            0x17 /* camera screen: row 2, page 7 */
+#define M15_STREAM_ROW        6
+#define M15_ROW               2
 #define ENDING_TOTAL_PPU      0x206C
 #define ENDING_MONEY_PPU      0x2043
 #define ENDING_WAIT           0x78
@@ -2042,6 +2045,98 @@ static void FinalTrip_Flashed(Regs *r)
     gSelectMessage = 0;
 }
 
+/* ---- mode 15 redraw ---- */
+
+static void Mode15_Stream(Regs *r);
+
+/* $DFED: called by Scrooge's mode 15 ($ED0B) when $6E is $0B. The objects
+ * go, the camera moves to screen $17 (row 2, page 7) and map row 6 is
+ * streamed in a block a frame with Transylvania's blocks, with the arena's
+ * row CHR (land 5) streamed before and after; then row 2 and its objects. */
+static void Mode15_Redraw(Regs *r)
+{
+    Decomp_Enter(DT_CODE_MESSAGE_SCENE, r->a, r->x, r->y);
+    Call(r, DT_CODE_CLEAR_OBJECTS);
+    gStreamPos = 0;
+    gRowChrState = 0;
+    gStreamScreen = M15_SCREEN;
+    gCameraScreen = M15_SCREEN;
+    gStreamPage = M15_SCREEN & 7;
+    gObjects->worldPage[P_] = M15_SCREEN & 7;
+    gCameraPage = M15_SCREEN & 7;
+    gLand = LAND_ARENA;
+    gMapRow = M15_STREAM_ROW;
+    r->a = M15_STREAM_ROW;
+    Jsr(DT_CODE_ROW_CHR_STREAM, DT_FLOW_M15_ROW_CHR, 0);
+}
+
+/* $E010 */
+static void Mode15_RowChr(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_M15_ROW_CHR, r->a, r->x, r->y);
+    gLand = LAND_TRANSYLVANIA;
+    r->a = LAND_TRANSYLVANIA;
+    Mode15_Stream(r);
+}
+
+/* $E014: 64 blocks, one a frame; then the row CHR until it is in. */
+static void Mode15_Stream(Regs *r)
+{
+    r->a = gStreamPos;
+    if (gStreamPos == ENDING_STREAM_STEPS) {
+        gLand = LAND_ARENA;
+        r->a = LAND_ARENA;
+        Jsr(DT_CODE_ROW_CHR_STREAM, DT_FLOW_M15_ARENA_CHR, 0);
+        return;
+    }
+    gStreamSteps = 1;
+    gStreamQueueEnd = 0;
+    r->a = 0;
+    Jsr(DT_CODE_STREAM_BLOCK, DT_FLOW_M15_STREAMED, OUT_A | OUT_X | OUT_Y);
+}
+
+/* $E025 */
+static void Mode15_Streamed(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_M15_STREAMED, r->a, r->x, r->y);
+    gStreamPos++;
+    Yield(DT_FLOW_M15_NEXT);
+}
+
+/* $E02A */
+static void Mode15_Next(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_M15_NEXT, r->a, r->x, r->y);
+    Mode15_Stream(r);
+}
+
+/* $E034: once the row CHR is in, row 2 with its objects, and the palette
+ * uploaded. */
+static void Mode15_ArenaChr(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_M15_ARENA_CHR, r->a, r->x, r->y);
+    gLand = LAND_TRANSYLVANIA;
+    r->a = gRowChrState;
+    if (!(gRowChrState & 0x80)) {
+        Yield(DT_FLOW_M15_NEXT);
+        return;
+    }
+    gMapRow = M15_ROW;
+    SelectBank(r, DT_BANK_OBJECTS);
+    Call(r, DT_B6_SPAWN_RESET);
+    gBossFight = 0;
+    r->a = 0;
+    Jsr(DT_B6_SPAWN, DT_FLOW_M15_SPAWNED, 0);
+}
+
+/* $E04F */
+static void Mode15_Spawned(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_M15_SPAWNED, r->a, r->x, r->y);
+    RAM_U8(DT_ADDR_PALETTE_REQUEST) = 0xFF;
+    r->a = 0xFF;
+}
+
 /* ---- ending ---- */
 
 static void Ending_Banked(Regs *r);
@@ -2422,6 +2517,12 @@ const DecompRoutine gFlowRoutines[] = {
     RESUME_IN(DT_BANK_FINAL_TRIP, DT_B4_FLOW_TRIP_FRAME, "FinalTrip_Next", FinalTrip_Next, 0),
     RESUME_IN(DT_BANK_FINAL_TRIP, DT_B4_FLOW_TRIP_DARK, "FinalTrip_Dark", FinalTrip_Dark, 1),
     RESUME_IN(DT_BANK_FINAL_TRIP, DT_B4_FLOW_TRIP_FLASH, "FinalTrip_Flashed", FinalTrip_Flashed, 1),
+    TASK(DT_CODE_MESSAGE_SCENE, SITE("DFED"), "Mode15_Redraw", Mode15_Redraw, 0),
+    RESUME(DT_FLOW_M15_ROW_CHR, "Mode15_RowChr", Mode15_RowChr, 0),
+    RESUME(DT_FLOW_M15_STREAMED, "Mode15_Streamed", Mode15_Streamed, 0),
+    RESUME(DT_FLOW_M15_NEXT, "Mode15_Next", Mode15_Next, 0),
+    RESUME(DT_FLOW_M15_ARENA_CHR, "Mode15_ArenaChr", Mode15_ArenaChr, 0),
+    RESUME(DT_FLOW_M15_SPAWNED, "Mode15_Spawned", Mode15_Spawned, 0),
     TASK(DT_CODE_ENDING, SITE("E1AF"), "Ending", Ending, 0),
     TASK(DT_CODE_ENDING_BANK, NULL, "Ending_BankTransfer", Ending_BankTransfer, 0),
     RESUME(DT_FLOW_ENDING_BANKED, "Ending_Banked", Ending_Banked, 0),
@@ -2453,8 +2554,8 @@ const int gFlowRoutineCount = sizeof gFlowRoutines / sizeof gFlowRoutines[0];
  * 6 in objects.c, the fades, the PPU and CHR loaders and bank 5 $BAB0 in
  * system.c) stop the isolated runs at their own sites. */
 const DecompStop gFlowStops[] = {
-    STOP(DT_CODE_TASK_YIELD, "FFAC"),    STOP(DT_CODE_RESET, "FEE0"),      STOP(DT_B6_SPAWN, "AEA0.6"),
-    STOP(DT_CODE_FADE_IN_KEEP, "C27C"),  STOP(DT_CODE_TASK_WAIT, "FFA5"),  STOP(DT_CODE_ROW_SCROLL, "C976"),
-    STOP(DT_CODE_MESSAGE_SCENE, "DFED"), STOP(DT_CODE_BLOCK_DRAW, "D068"), STOP(DT_B5_PAUSE_TEXT, "B580.5"),
+    STOP(DT_CODE_TASK_YIELD, "FFAC"),   STOP(DT_CODE_RESET, "FEE0"),      STOP(DT_B6_SPAWN, "AEA0.6"),
+    STOP(DT_CODE_FADE_IN_KEEP, "C27C"), STOP(DT_CODE_TASK_WAIT, "FFA5"),  STOP(DT_CODE_ROW_SCROLL, "C976"),
+    STOP(DT_CODE_BLOCK_DRAW, "D068"),   STOP(DT_B5_PAUSE_TEXT, "B580.5"),
 };
 const int gFlowStopCount = sizeof gFlowStops / sizeof gFlowStops[0];

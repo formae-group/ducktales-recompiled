@@ -263,7 +263,7 @@
 #define DT_CODE_MESSAGE_LINE_LO  0xEF59 /* PPU address low byte of each of the box's 3 lines, high $20 (code) */
 #define DT_CODE_MESSAGE_LINE_END 0xEF5C /* queue offset where each line's entry ends (code) */
 #define DT_CODE_MESSAGE_LINE_AT  0xEF5F /* queue offset of each line's entry (code) */
-#define DT_CODE_MESSAGE_SCENE    0xDFED /* the scene draw before message $0B; waits for frames (code; not studied) */
+#define DT_CODE_MESSAGE_SCENE    0xDFED /* mode 15, message $0B: map row 6 streamed, then row 2 (code) */
 #define DT_CODE_BLOCK_DRAW       0xD068 /* queue the draw of block Y of the tileset (code; not studied) */
 #define DT_B1_MESSAGE_TILE_OFF  0x82D0 /* bank 1: CHR tile $12D restored when the box closes (verified, rendering.md) */
 #define DT_B2_MESSAGE_TILE      0xA8F0 /* bank 2: CHR tile $12D while a message shows (verified, rendering.md) */
@@ -527,6 +527,11 @@
 #define DT_FLOW_SELECT_NEXT        0xD792
 #define DT_FLOW_BANK_NEXT          0xD9B8
 #define DT_FLOW_WAIT_A_NEXT        0xD9C7
+#define DT_FLOW_M15_ROW_CHR        0xE010
+#define DT_FLOW_M15_STREAMED       0xE025
+#define DT_FLOW_M15_NEXT           0xE02A
+#define DT_FLOW_M15_ARENA_CHR      0xE034
+#define DT_FLOW_M15_SPAWNED        0xE04F
 #define DT_FLOW_ENDING_BANKED      0xE1BA
 #define DT_FLOW_ENDING_WAITED      0xE1BF
 #define DT_FLOW_ENDING_SHOWN       0xE1EC
