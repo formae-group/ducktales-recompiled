@@ -7,6 +7,11 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- The row scroll `$C976`, the 60-frame vertical transition between map rows, is decompiled as task
+  code with resume points `$C99D`, `$C9FB`, `$CA09` and `$CA22`, and its eight step routines
+  `$CA4A-$CC84` (block row draw, queue headers, the kept half, the half rows of the screens beside
+  the camera's) as routines with sites (`src/decomp/level.c`). Its site replaces the flow's stop
+  at `$C976`. The sprite builder's slot routine (bank 5 `$80BE`) is checked on its own.
 - The game flow is decompiled as task code (`src/decomp/flow.c`, docs/decompilation.md "Task
   code"): the title and difficulty select, Land Select with the bank transfer of money, the land load, the frame loop with pause, death, warps,
   respawn, game over and land exit, the special scenes, the HUD timer and refreshes, and the boss trigger with the
@@ -57,6 +62,10 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Fixed
 
+- `tools/decomp_progress.py` took bank 5 `$8003`, one instruction into `Oam_Build`, for a target
+  of the NMI's `JSR $8003` (bank 3's `Sound_Play`), so 187 bytes of the sprite builder counted as
+  original. A fixed-bank JSR into the window now skips a bank where an executed instruction falls
+  through into the target, when another bank qualifies.
 - `Chr_StreamRow` (`$C42C`) now returns the X the original leaves. The scene draw before message
   `$0B` pushes it in `task_yield`, so replace mode left a different byte on the task's stack.
 - Replace mode made a decompiled routine's PPU writes back to back. The PPU acts on `$2006`/`$2007`
