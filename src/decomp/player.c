@@ -19,8 +19,9 @@
  *
  * Not decompiled yet and called through Decomp_Call: the background probe
  * $D120 and its snaps $D49A/$D4B2/$D4C8/$D4D6, one probe point $D350 (where
- * the vertical contact test can fall through to), and the climbing steps
- * $F192/$F1A8 and the walls move $F0F8, which every object kind shares.
+ * the vertical contact test can fall through to), and the walls move $F0F8,
+ * which every object kind shares. The climbing steps $F192/$F1A8 are the C
+ * of objcommon.c.
  * Given to the original routine (Decomp_RunOriginal):
  * Player_Update in modes 15 and 16 (message and treasure: they wait for
  * frames) and every call that reaches the row change at $E8C0 (it scrolls
