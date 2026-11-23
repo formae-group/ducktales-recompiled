@@ -161,6 +161,7 @@ static void CopyRom(uint16_t dst, uint16_t src, uint8_t len)
  * frames. */
 static void Timer_Tick(Regs *r)
 {
+    Decomp_Enter(DT_CODE_TIMER_TICK, r->a, r->x, r->y);
     if (gPlayerMode == PLAYER_MODE_TREASURE || gPlayerMode == PLAYER_MODE_DEATH) return;
     if (gTimeDigit(0) == DT_TIME_TILE_UP0) {
         gPlayerMode = PLAYER_MODE_DEATH;
@@ -193,6 +194,7 @@ static void Timer_Tick(Regs *r)
  * is still pending. */
 static void Hud_RefreshMoney(Regs *r)
 {
+    Decomp_Enter(DT_CODE_HUD_MONEY, r->a, r->x, r->y);
     if (gVramPending) return;
     uint8_t first = 0;
     while (first < DT_MONEY_DIGIT_COUNT && gRam[DT_ADDR_MONEY_DIGITS + first] >= DT_MONEY_TILE_BLANK) first++;
@@ -208,6 +210,7 @@ static void Hud_RefreshMoney(Regs *r)
 /* $DEA3: queue TOTAL for drawing. */
 static void Hud_RefreshTotal(Regs *r)
 {
+    Decomp_Enter(DT_CODE_HUD_TOTAL, r->a, r->x, r->y);
     if (gVramPending) return;
     gHudTotalDirty = 0;
     Copy(DT_ADDR_VRAM_QUEUE, DT_ADDR_HUD_TOTAL_PACKET, DT_HUD_TOTAL_PACKET_LEN);
@@ -219,6 +222,7 @@ static void Hud_RefreshTotal(Regs *r)
 /* $D60A: the TOTAL packet and the HP dots as a new game starts them. */
 static void Hud_Reset(Regs *r)
 {
+    Decomp_Enter(DT_CODE_HUD_TEMPLATE, r->a, r->x, r->y);
     CopyRom(DT_ADDR_HUD_TOTAL_PACKET, DT_DATA_HUD_TOTAL, DT_HUD_TOTAL_PACKET_LEN);
     CopyRom(DT_ADDR_HUD_SPRITES, DT_DATA_HUD_HP, DT_HUD_HP_TEMPLATE_LEN);
     r->a = Rom(DT_DATA_HUD_HP);
@@ -231,6 +235,7 @@ static void Hud_Reset(Regs *r)
  * colours, into the palette as loaded ($0100) and as shown ($0300). */
 static void Land_LoadPalette(Regs *r, uint8_t set)
 {
+    Decomp_Enter(DT_CODE_LAND_PALETTE, r->a, set, r->y);
     for (uint8_t i = 0; i < 16; i++) {
         uint8_t bg = Rom((uint16_t)(DT_DATA_PALETTES + (uint8_t)(set + i)));
         uint8_t sprite = Rom((uint16_t)(DT_DATA_SPRITE_PALETTE + i));
@@ -246,6 +251,7 @@ static void Land_LoadPalette(Regs *r, uint8_t set)
  * and its palette. */
 static void Land_ApplyTables(Regs *r)
 {
+    Decomp_Enter(DT_CODE_LAND_TABLES, r->a, r->x, r->y);
     uint8_t land = gLand;
     MusicRequest(r, land);
     gRam[DT_ADDR_TILESET_BANK] = Rom((uint16_t)(DT_DATA_LAND_TILESET + land));
@@ -292,6 +298,7 @@ static bool Respawn_Advance(void)
 /* $DDAB */
 static void Respawn_Drawn(Regs *r)
 {
+    Decomp_Enter(DT_FLOW_RESPAWN_DRAWN, r->a, r->x, r->y);
     if (Respawn_Advance()) Respawn_DrawScreens(r);
 }
 
@@ -299,6 +306,7 @@ static void Respawn_Drawn(Regs *r)
  * (levels.md "Respawn and warp table") and draw the screens around him. */
 static void Respawn_PlaceAt(Regs *r, uint8_t entry)
 {
+    Decomp_Enter(DT_CODE_RESPAWN_ENTRY, entry, r->x, r->y);
     gScratch0 = entry;
     uint16_t e = (uint16_t)(DT_DATA_RESPAWN + (uint8_t)(entry * RESPAWN_ENTRY_LEN));
     gMapRow = Rom(e);
@@ -317,7 +325,11 @@ static void Respawn_PlaceAt(Regs *r, uint8_t entry)
 }
 
 /* $DD4E: at the entry of the pending respawn request. */
-static void Respawn_Place(Regs *r) { Respawn_PlaceAt(r, gRespawn & 0x1F); }
+static void Respawn_Place(Regs *r)
+{
+    Decomp_Enter(DT_CODE_RESPAWN_PLACE, r->a, r->x, r->y);
+    Respawn_PlaceAt(r, gRespawn & 0x1F);
+}
 
 /* ---- death, warps and game over ---- */
 
@@ -333,12 +345,14 @@ static void DeathPause_Frame(Regs *r, uint8_t frames)
  * keeping the sprites drawn. Returns A = 0. */
 static void DeathPause(Regs *r)
 {
+    Decomp_Enter(DT_CODE_DEATH_PAUSE, r->a, r->x, r->y);
     DeathPause_Frame(r, gRespawn >= RESPAWN_LIFE ? DEATH_PAUSE_FALL : DEATH_PAUSE_WARP);
 }
 
 /* $DD42 (the frame count on the stack) */
 static void DeathPause_Next(Regs *r)
 {
+    Decomp_Enter(DT_FLOW_DEATH_PAUSE_NEXT, r->a, r->x, r->y);
     gObjects->animTimer[P_] = 0;
     uint8_t frames = (uint8_t)(Decomp_Pull() - 1);
     r->a = frames;
@@ -357,6 +371,7 @@ static void GameOver_Frame(Regs *r, uint8_t frames)
  * then the reset vector: a full restart at the title. */
 static void GameOver(Regs *r)
 {
+    Decomp_Enter(DT_CODE_GAME_OVER, r->a, r->x, r->y);
     MusicRequest(r, MUSIC_GAME_OVER);
     CopyRom(DT_ADDR_HUD_GROUP_TIME, DT_DATA_GAME_OVER_SPRITES, DT_GAME_OVER_SPRITES_LEN);
     GameOver_Frame(r, GAME_OVER_FRAMES);
@@ -365,6 +380,7 @@ static void GameOver(Regs *r)
 /* $DEDE (the frame count on the stack) */
 static void GameOver_Next(Regs *r)
 {
+    Decomp_Enter(DT_FLOW_GAME_OVER_NEXT, r->a, r->x, r->y);
     uint8_t frames = (uint8_t)(Decomp_Pull() - 1);
     r->a = frames;
     if (frames) {
@@ -386,6 +402,7 @@ static void LandExit_Frame(Regs *r, uint8_t frames)
  * scene), then Land Select. */
 static void LandExit(Regs *r)
 {
+    Decomp_Enter(DT_CODE_LAND_EXIT, r->a, r->x, r->y);
     if (gScene) {
         Jump(DT_CODE_LAND_SELECT, 0);
         return;
@@ -396,6 +413,7 @@ static void LandExit(Regs *r)
 /* $DF1E (the frame count on the stack) */
 static void LandExit_Next(Regs *r)
 {
+    Decomp_Enter(DT_FLOW_LAND_EXIT_NEXT, r->a, r->x, r->y);
     uint8_t frames = (uint8_t)(Decomp_Pull() - 1);
     r->a = frames;
     if (frames) {
@@ -413,6 +431,7 @@ static void Death_Fade(Regs *r);
  * entry, the screens are redrawn and the picture fades back in. */
 static void DeathOrWarp(Regs *r)
 {
+    Decomp_Enter(DT_CODE_DEATH_OR_WARP, r->a, r->x, r->y);
     gPogoCeiling = 0;
     if (gScene) {
         LandExit(r);
@@ -434,7 +453,7 @@ static void DeathOrWarp(Regs *r)
 /* $DC68 */
 static void Death_Fade(Regs *r)
 {
-    (void)r;
+    Decomp_Enter(DT_FLOW_DEATH_FADE, r->a, r->x, r->y);
     Jsr(DT_CODE_FADE_OUT, DT_FLOW_DEATH_BLANK, 0);
 }
 
@@ -442,6 +461,7 @@ static void Death_Fade(Regs *r)
  * rendering off for the redraw. */
 static void Death_Blank(Regs *r)
 {
+    Decomp_Enter(DT_FLOW_DEATH_BLANK, r->a, r->x, r->y);
     gUnk4F = 0;
     gBossFight = 0;
     for (int i = 0x0B; i >= 0; i--) gRam[DT_ADDR_HAZARD + i] = 0;
@@ -457,6 +477,7 @@ static void Death_Placed(Regs *r);
 /* $DC81 */
 static void Death_Place(Regs *r)
 {
+    Decomp_Enter(DT_FLOW_DEATH_PLACE, r->a, r->x, r->y);
     if (Gosub(Respawn_Place, r, DT_FLOW_DEATH_PLACED)) Death_Placed(r);
 }
 
@@ -465,6 +486,7 @@ static void Death_Place(Regs *r)
  * streams the arena's CHR. */
 static void Death_Placed(Regs *r)
 {
+    Decomp_Enter(DT_FLOW_DEATH_PLACED, r->a, r->x, r->y);
     Call(r, DT_CODE_CLEAR_OBJECTS);
     Decomp_Push(gLand);
     Decomp_Push(gMapRow);
@@ -485,6 +507,7 @@ static void Death_Placed(Regs *r)
 /* $DCBD (the land and row on the stack) */
 static void Death_RowChr(Regs *r)
 {
+    Decomp_Enter(DT_FLOW_DEATH_ROW_CHR, r->a, r->x, r->y);
     if (!(gRowChrState & 0x80)) {
         Jsr(DT_CODE_ROW_CHR_STREAM, DT_FLOW_DEATH_ROW_CHR, 0);
         return;
@@ -501,13 +524,14 @@ static void Death_RowChr(Regs *r)
 /* $DCD8 */
 static void Death_Shown(Regs *r)
 {
-    (void)r;
+    Decomp_Enter(DT_FLOW_DEATH_SHOWN, r->a, r->x, r->y);
     Yield(DT_FLOW_DEATH_FADE_IN);
 }
 
 /* $DCDB */
 static void Death_FadeIn(Regs *r)
 {
+    Decomp_Enter(DT_FLOW_DEATH_FADE_IN, r->a, r->x, r->y);
     gHudSplit = SPLIT_ON;
     r->a = SPLIT_ON;
     Jsr(DT_CODE_FADE_IN, DT_FLOW_DEATH_RESUME, 0);
@@ -519,6 +543,7 @@ static void Death_Done(Regs *r);
  * music and its start time; then the objects spawn and a pause follows. */
 static void Death_Resume(Regs *r)
 {
+    Decomp_Enter(DT_FLOW_DEATH_RESUME, r->a, r->x, r->y);
     r->y = gBossFight;
     if (gBossFight & 0x80) {
         MusicRequest(r, MUSIC_BOSS);
@@ -538,6 +563,7 @@ static void Death_Resume(Regs *r)
 /* $DD14 */
 static void Death_Spawned(Regs *r)
 {
+    Decomp_Enter(DT_FLOW_DEATH_SPAWNED, r->a, r->x, r->y);
     gObjects->state[P_] = SCROOGE_RESPAWN;
     r->a = SCROOGE_RESPAWN;
     if (Gosub(DeathPause, r, DT_FLOW_DEATH_DONE)) Death_Done(r);
@@ -546,6 +572,7 @@ static void Death_Spawned(Regs *r)
 /* $DD1C */
 static void Death_Done(Regs *r)
 {
+    Decomp_Enter(DT_FLOW_DEATH_DONE, r->a, r->x, r->y);
     gPlayerInvulnerable = gPlayerMode = gRespawn = 0;
     r->a = 0;
 }
@@ -563,6 +590,7 @@ static void FrameLoop_AfterSpawn(Regs *r);
  * nothing but keep the sprites. Then Scrooge moves. */
 static void FrameLoop(Regs *r)
 {
+    Decomp_Enter(DT_CODE_FRAME_LOOP, r->a, r->x, r->y);
     if (gEnding) {
         Jsr(DT_CODE_ENDING, DT_FLOW_AFTER_ENDING, 0);
         return;
@@ -588,6 +616,7 @@ static void FrameLoop(Regs *r)
 /* $DB6F: the objects move, unless a message is up. */
 static void FrameLoop_AfterPlayer(Regs *r)
 {
+    Decomp_Enter(DT_FLOW_AFTER_PLAYER, r->a, r->x, r->y);
     if (gMessage) {
         FrameLoop_Requests(r);
         return;
@@ -601,6 +630,7 @@ static void FrameLoop_AfterPlayer(Regs *r)
  * boss trigger is tested. */
 static void FrameLoop_AfterObjects(Regs *r)
 {
+    Decomp_Enter(DT_FLOW_AFTER_OBJECTS, r->a, r->x, r->y);
     Timer_Tick(r);
     if (gLandLeft) {
         LandExit(r);
@@ -616,7 +646,7 @@ static void FrameLoop_AfterObjects(Regs *r)
 /* $DB8C */
 static void FrameLoop_AfterCamera(Regs *r)
 {
-    (void)r;
+    Decomp_Enter(DT_FLOW_AFTER_CAMERA, r->a, r->x, r->y);
     Jsr(DT_CODE_BOSS_TRIGGER, DT_FLOW_AFTER_BOSS_TRIGGER, 0);
 }
 
@@ -624,6 +654,7 @@ static void FrameLoop_AfterCamera(Regs *r)
  * Select (negative). */
 static void FrameLoop_AfterBossTrigger(Regs *r)
 {
+    Decomp_Enter(DT_FLOW_AFTER_BOSS_TRIGGER, r->a, r->x, r->y);
     uint8_t redirect = gLandRedirect;
     if (redirect == 0) {
         FrameLoop_Requests(r);
@@ -655,6 +686,7 @@ static void FrameLoop_Requests(Regs *r)
 /* $DBB0: HUD redraws, and a scene request. */
 static void FrameLoop_AfterDeath(Regs *r)
 {
+    Decomp_Enter(DT_FLOW_AFTER_DEATH, r->a, r->x, r->y);
     if (gHudMoneyDirty) Hud_RefreshMoney(r);
     if (gHudTotalDirty) Hud_RefreshTotal(r);
     if (gScene & 0x80) {
@@ -668,6 +700,7 @@ static void FrameLoop_AfterDeath(Regs *r)
  * edit tiles). */
 static void FrameLoop_Sprites(Regs *r)
 {
+    Decomp_Enter(DT_FLOW_FRAME_SPRITES, r->a, r->x, r->y);
     BuildSprites(r, true);
     if (gEnding || gBgOffBelowSplit) {
         FrameLoop_Yield(r);
@@ -680,6 +713,7 @@ static void FrameLoop_Sprites(Regs *r)
 /* $DBE4: a hazard's mode change. */
 static void FrameLoop_AfterSpawn(Regs *r)
 {
+    Decomp_Enter(DT_FLOW_AFTER_SPAWN, r->a, r->x, r->y);
     gPrevCameraX = gCameraX;
     gUnk2E = 0;
     gUnk5B = 0;
@@ -717,44 +751,46 @@ static void FrameLoop_Yield(Regs *r)
 static void Run_LandPalette(Regs *r) { Land_LoadPalette(r, r->x); }
 static void Run_RespawnEntry(Regs *r) { Respawn_PlaceAt(r, r->a); }
 
-#define ROUTINE(addr, id, name, fn, out) { addr, "ducktales.decomp." id, name, fn, out, false, 0 }
-#define TASK(addr, id, name, fn, locals) { addr, "ducktales.decomp." id, name, fn, 0, true, locals }
+#define SITE(id) "ducktales.decomp." id
+#define ROUTINE(addr, site, name, fn, out) { addr, site, name, fn, out, false, 0, false }
+#define TASK(addr, site, name, fn, locals) { addr, site, name, fn, 0, true, locals, false }
+#define RESUME(addr, name, fn, locals) { addr, NULL, name, fn, 0, true, locals, true }
 
 const DecompRoutine gFlowRoutines[] = {
-    ROUTINE(DT_CODE_TIMER_TICK, "E28C", "Timer_Tick", Timer_Tick, 0),
-    ROUTINE(DT_CODE_HUD_MONEY, "DE6C", "Hud_RefreshMoney", Hud_RefreshMoney, 0),
-    ROUTINE(DT_CODE_HUD_TOTAL, "DEA3", "Hud_RefreshTotal", Hud_RefreshTotal, 0),
-    ROUTINE(DT_CODE_HUD_TEMPLATE, "D60A", "Hud_Reset", Hud_Reset, 0),
-    ROUTINE(DT_CODE_LAND_TABLES, "D9CA", "Land_ApplyTables", Land_ApplyTables, OUT_X | OUT_Y),
-    ROUTINE(DT_CODE_LAND_PALETTE, "D9F5", "Land_LoadPalette", Run_LandPalette, OUT_X | OUT_Y),
-    TASK(DT_CODE_FRAME_LOOP, "DB36", "FrameLoop", FrameLoop, 0),
-    TASK(DT_FLOW_AFTER_PLAYER, "DB6F", "FrameLoop_AfterPlayer", FrameLoop_AfterPlayer, 0),
-    TASK(DT_FLOW_AFTER_OBJECTS, "DB7B", "FrameLoop_AfterObjects", FrameLoop_AfterObjects, 0),
-    TASK(DT_FLOW_AFTER_CAMERA, "DB8C", "FrameLoop_AfterCamera", FrameLoop_AfterCamera, 0),
-    TASK(DT_FLOW_AFTER_BOSS_TRIGGER, "DB8F", "FrameLoop_AfterBossTrigger", FrameLoop_AfterBossTrigger, 0),
-    TASK(DT_FLOW_AFTER_DEATH, "DBB0", "FrameLoop_AfterDeath", FrameLoop_AfterDeath, 0),
-    TASK(DT_FLOW_FRAME_SPRITES, "DBC5", "FrameLoop_Sprites", FrameLoop_Sprites, 0),
-    TASK(DT_FLOW_AFTER_SPAWN, "DBE4", "FrameLoop_AfterSpawn", FrameLoop_AfterSpawn, 0),
-    TASK(DT_CODE_DEATH_OR_WARP, "DC3E", "DeathOrWarp", DeathOrWarp, 0),
-    TASK(DT_FLOW_DEATH_FADE, "DC68", "Death_Fade", Death_Fade, 0),
-    TASK(DT_FLOW_DEATH_BLANK, "DC6B", "Death_Blank", Death_Blank, 0),
-    TASK(DT_FLOW_DEATH_PLACE, "DC81", "Death_Place", Death_Place, 0),
-    TASK(DT_FLOW_DEATH_PLACED, "DC84", "Death_Placed", Death_Placed, 0),
-    TASK(DT_FLOW_DEATH_ROW_CHR, "DCBD", "Death_RowChr", Death_RowChr, 2),
-    TASK(DT_FLOW_DEATH_SHOWN, "DCD8", "Death_Shown", Death_Shown, 0),
-    TASK(DT_FLOW_DEATH_FADE_IN, "DCDB", "Death_FadeIn", Death_FadeIn, 0),
-    TASK(DT_FLOW_DEATH_RESUME, "DCE2", "Death_Resume", Death_Resume, 0),
-    TASK(DT_FLOW_DEATH_SPAWNED, "DD14", "Death_Spawned", Death_Spawned, 0),
-    TASK(DT_FLOW_DEATH_DONE, "DD1C", "Death_Done", Death_Done, 0),
-    TASK(DT_CODE_DEATH_PAUSE, "DD23", "DeathPause", DeathPause, 0),
-    TASK(DT_FLOW_DEATH_PAUSE_NEXT, "DD42", "DeathPause_Next", DeathPause_Next, 1),
-    TASK(DT_CODE_RESPAWN_PLACE, "DD4E", "Respawn_Place", Respawn_Place, 0),
-    TASK(DT_CODE_RESPAWN_ENTRY, "DD52", "Respawn_PlaceAt", Run_RespawnEntry, 0),
-    TASK(DT_FLOW_RESPAWN_DRAWN, "DDAB", "Respawn_Drawn", Respawn_Drawn, 0),
-    TASK(DT_CODE_GAME_OVER, "DEB9", "GameOver", GameOver, 0),
-    TASK(DT_FLOW_GAME_OVER_NEXT, "DEDE", "GameOver_Next", GameOver_Next, 1),
-    TASK(DT_CODE_LAND_EXIT, "DF08", "LandExit", LandExit, 0),
-    TASK(DT_FLOW_LAND_EXIT_NEXT, "DF1E", "LandExit_Next", LandExit_Next, 1),
+    ROUTINE(DT_CODE_TIMER_TICK, NULL, "Timer_Tick", Timer_Tick, 0),
+    ROUTINE(DT_CODE_HUD_MONEY, NULL, "Hud_RefreshMoney", Hud_RefreshMoney, 0),
+    ROUTINE(DT_CODE_HUD_TOTAL, NULL, "Hud_RefreshTotal", Hud_RefreshTotal, 0),
+    ROUTINE(DT_CODE_HUD_TEMPLATE, SITE("D60A"), "Hud_Reset", Hud_Reset, 0),
+    ROUTINE(DT_CODE_LAND_TABLES, SITE("D9CA"), "Land_ApplyTables", Land_ApplyTables, OUT_X | OUT_Y),
+    ROUTINE(DT_CODE_LAND_PALETTE, SITE("D9F5"), "Land_LoadPalette", Run_LandPalette, OUT_X | OUT_Y),
+    TASK(DT_CODE_FRAME_LOOP, SITE("DB36"), "FrameLoop", FrameLoop, 0),
+    RESUME(DT_FLOW_AFTER_PLAYER, "FrameLoop_AfterPlayer", FrameLoop_AfterPlayer, 0),
+    RESUME(DT_FLOW_AFTER_OBJECTS, "FrameLoop_AfterObjects", FrameLoop_AfterObjects, 0),
+    RESUME(DT_FLOW_AFTER_CAMERA, "FrameLoop_AfterCamera", FrameLoop_AfterCamera, 0),
+    RESUME(DT_FLOW_AFTER_BOSS_TRIGGER, "FrameLoop_AfterBossTrigger", FrameLoop_AfterBossTrigger, 0),
+    RESUME(DT_FLOW_AFTER_DEATH, "FrameLoop_AfterDeath", FrameLoop_AfterDeath, 0),
+    RESUME(DT_FLOW_FRAME_SPRITES, "FrameLoop_Sprites", FrameLoop_Sprites, 0),
+    RESUME(DT_FLOW_AFTER_SPAWN, "FrameLoop_AfterSpawn", FrameLoop_AfterSpawn, 0),
+    TASK(DT_CODE_DEATH_OR_WARP, NULL, "DeathOrWarp", DeathOrWarp, 0),
+    RESUME(DT_FLOW_DEATH_FADE, "Death_Fade", Death_Fade, 0),
+    RESUME(DT_FLOW_DEATH_BLANK, "Death_Blank", Death_Blank, 0),
+    RESUME(DT_FLOW_DEATH_PLACE, "Death_Place", Death_Place, 0),
+    RESUME(DT_FLOW_DEATH_PLACED, "Death_Placed", Death_Placed, 0),
+    RESUME(DT_FLOW_DEATH_ROW_CHR, "Death_RowChr", Death_RowChr, 2),
+    RESUME(DT_FLOW_DEATH_SHOWN, "Death_Shown", Death_Shown, 0),
+    RESUME(DT_FLOW_DEATH_FADE_IN, "Death_FadeIn", Death_FadeIn, 0),
+    RESUME(DT_FLOW_DEATH_RESUME, "Death_Resume", Death_Resume, 0),
+    RESUME(DT_FLOW_DEATH_SPAWNED, "Death_Spawned", Death_Spawned, 0),
+    RESUME(DT_FLOW_DEATH_DONE, "Death_Done", Death_Done, 0),
+    TASK(DT_CODE_DEATH_PAUSE, NULL, "DeathPause", DeathPause, 0),
+    RESUME(DT_FLOW_DEATH_PAUSE_NEXT, "DeathPause_Next", DeathPause_Next, 1),
+    TASK(DT_CODE_RESPAWN_PLACE, NULL, "Respawn_Place", Respawn_Place, 0),
+    TASK(DT_CODE_RESPAWN_ENTRY, SITE("DD52"), "Respawn_PlaceAt", Run_RespawnEntry, 0),
+    RESUME(DT_FLOW_RESPAWN_DRAWN, "Respawn_Drawn", Respawn_Drawn, 0),
+    TASK(DT_CODE_GAME_OVER, NULL, "GameOver", GameOver, 0),
+    RESUME(DT_FLOW_GAME_OVER_NEXT, "GameOver_Next", GameOver_Next, 1),
+    TASK(DT_CODE_LAND_EXIT, NULL, "LandExit", LandExit, 0),
+    RESUME(DT_FLOW_LAND_EXIT_NEXT, "LandExit_Next", LandExit_Next, 1),
 };
 const int gFlowRoutineCount = sizeof gFlowRoutines / sizeof gFlowRoutines[0];
 

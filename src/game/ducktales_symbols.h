@@ -77,10 +77,11 @@
 #define DT_PAD_LEFT    0x02
 #define DT_PAD_RIGHT   0x01
 
-/* Page 1 below this is data, not stack: the palette $0100-$011F, the
- * consumed-object bits $0120-$013F and the HUD time sprites $0140-$0160 (the
- * game-over box writes up to $0160) (verified, memory-map.md). */
-#define DT_ADDR_STACK_LOW        0x0161
+/* Page 1 below this is data, not stack: the master palette $0100-$011F, the
+ * consumed-record bits $0120-$013F and the HUD time group $0140-$015F, which
+ * the game-over box ($DEB9, 33 bytes) replaces up to its end mark at $0160
+ * (verified, memory-map.md, game-state.md). */
+#define DT_ADDR_STACK_FLOOR      0x0161
 
 /* ---- object tables: one 16-byte row per attribute, column = slot ----
  * Slot 0 is Scrooge (docs/memory-map.md "Object tables", docs/player.md). */
@@ -247,6 +248,7 @@
 #define DT_CODE_RESET            0xFEE0
 #define DT_CODE_TASK_YIELD       0xFFAC  /* wait one frame */
 #define DT_CODE_TASK_WAIT        0xFFA5  /* wait X frames */
+#define DT_CODE_RTS              0xFFAB  /* task_wait's RTS: the entry of task code's isolated runs */
 #define DT_CODE_BANK_SELECT      0xFFDE
 #define DT_CODE_BANK_TABLE       0xFFE5  /* bus-conflict table: bank n is written at $FFE5 + n */
 #define DT_CODE_SCREEN_OFF       0xC197  /* $E8++, rendering off */

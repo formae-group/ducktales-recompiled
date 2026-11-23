@@ -12,6 +12,9 @@
  *   LIFE_LOST       before the lives decrement: one more life first
  *   TIMER_TICK      before the decrement of $B0: reload it with 60
  *   BOSS_HIT        before the decrement of $B1: one more hit first
+ *
+ * Inside an isolated call (cyc_mod.h) a site raises nothing: the original
+ * routine runs there only to be measured (src/decomp/decomp.c).
  */
 #include "ducktales/events.h"
 #include "ducktales/game.h"

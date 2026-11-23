@@ -62,8 +62,9 @@ addr = 0xF6DD
 length = 8
 crc32 = 0xA509A34C
 
-# Decompiled routines (src/decomp/, docs/decompilation.md): one site at each
-# routine's entry, enabled only with --decomp check or replace.
+# Decompiled routines (src/decomp/, docs/decompilation.md): a site at the
+# entry of each routine that original code calls (routines only decompiled
+# code calls have none), enabled only with --decomp check or replace.
 
 # Obj_ApplyVelocityY
 [[mod_function_hook]]
@@ -114,131 +115,12 @@ addr = 0xE354
 length = 8
 crc32 = 0x981F7EF4
 
-# Player_Ground
-[[mod_function_hook]]
-id = "ducktales.decomp.E3B8"
-addr = 0xE3B8
-length = 8
-crc32 = 0x9510AD3B
-
-# Player_StartJump
-[[mod_function_hook]]
-id = "ducktales.decomp.E3F2"
-addr = 0xE3F2
-length = 8
-crc32 = 0x3A9326C0
-
-# Player_Walk
-[[mod_function_hook]]
-id = "ducktales.decomp.E482"
-addr = 0xE482
-length = 8
-crc32 = 0xF84BF35C
-
-# Player_MoveRight
-[[mod_function_hook]]
-id = "ducktales.decomp.E593"
-addr = 0xE593
-length = 8
-crc32 = 0x1AB47A51
-
-# Player_MoveLeft
-[[mod_function_hook]]
-id = "ducktales.decomp.E5C3"
-addr = 0xE5C3
-length = 8
-crc32 = 0x6706D75E
-
-# Player_Air
-[[mod_function_hook]]
-id = "ducktales.decomp.E63B"
-addr = 0xE63B
-length = 8
-crc32 = 0xA8B27F84
-
-# Player_GrabClimb
-[[mod_function_hook]]
-id = "ducktales.decomp.E740"
-addr = 0xE740
-length = 8
-crc32 = 0xBD1DE187
-
-# Player_Pogo
-[[mod_function_hook]]
-id = "ducktales.decomp.E7EA"
-addr = 0xE7EA
-length = 8
-crc32 = 0x3DD17A9F
-
-# Player_Climb
-[[mod_function_hook]]
-id = "ducktales.decomp.E806"
-addr = 0xE806
-length = 8
-crc32 = 0xC87CD9B9
-
-# Player_Cane
-[[mod_function_hook]]
-id = "ducktales.decomp.E8EB"
-addr = 0xE8EB
-length = 8
-crc32 = 0x1EF17231
-
-# Player_Fall
-[[mod_function_hook]]
-id = "ducktales.decomp.E970"
-addr = 0xE970
-length = 8
-crc32 = 0xE7054618
-
-# Player_Rise
-[[mod_function_hook]]
-id = "ducktales.decomp.E9BA"
-addr = 0xE9BA
-length = 8
-crc32 = 0xB2127B5B
-
-# Player_ProbeVertical
-[[mod_function_hook]]
-id = "ducktales.decomp.EA5E"
-addr = 0xEA5E
-length = 8
-crc32 = 0xC7D4B7F0
-
-# Player_Hurt
-[[mod_function_hook]]
-id = "ducktales.decomp.EAB9"
-addr = 0xEAB9
-length = 8
-crc32 = 0xB039F37B
-
-# Player_Knockback
-[[mod_function_hook]]
-id = "ducktales.decomp.EB00"
-addr = 0xEB00
-length = 8
-crc32 = 0x8441AD8D
-
 # Player_TakeDamage
 [[mod_function_hook]]
 id = "ducktales.decomp.EB5E"
 addr = 0xEB5E
 length = 8
 crc32 = 0xE8776DC5
-
-# Player_Stuck
-[[mod_function_hook]]
-id = "ducktales.decomp.EB82"
-addr = 0xEB82
-length = 8
-crc32 = 0x9982568C
-
-# Player_Pit
-[[mod_function_hook]]
-id = "ducktales.decomp.EBA7"
-addr = 0xEBA7
-length = 8
-crc32 = 0xCAB2E625
 
 # Player_PitDeath
 [[mod_function_hook]]
@@ -247,65 +129,10 @@ addr = 0xEBB4
 length = 8
 crc32 = 0xDB4C6AB4
 
-# Player_Mode9
-[[mod_function_hook]]
-id = "ducktales.decomp.EBC9"
-addr = 0xEBC9
-length = 8
-crc32 = 0x7BF1D3EB
-
-# Player_Carried
-[[mod_function_hook]]
-id = "ducktales.decomp.EBD9"
-addr = 0xEBD9
-length = 8
-crc32 = 0x97C8C4AB
-
-# Player_Mode12
-[[mod_function_hook]]
-id = "ducktales.decomp.EC2D"
-addr = 0xEC2D
-length = 8
-crc32 = 0xC28A9A22
-
-# Player_Death
-[[mod_function_hook]]
-id = "ducktales.decomp.EC9B"
-addr = 0xEC9B
-length = 8
-crc32 = 0x19983867
-
-# Player_Mode14
-[[mod_function_hook]]
-id = "ducktales.decomp.ECFF"
-addr = 0xECFF
-length = 8
-crc32 = 0xC7E90C41
-
 # Game flow (src/decomp/flow.c, docs/decompilation.md "Task code"): the
-# entries and resume points of the main task's decompiled code, then the
-# routines it hands off to, where check mode stops the original.
-
-# Timer_Tick
-[[mod_function_hook]]
-id = "ducktales.decomp.E28C"
-addr = 0xE28C
-length = 8
-crc32 = 0x87984161
-
-# Hud_RefreshMoney
-[[mod_function_hook]]
-id = "ducktales.decomp.DE6C"
-addr = 0xDE6C
-length = 8
-crc32 = 0xF879F070
-
-# Hud_RefreshTotal
-[[mod_function_hook]]
-id = "ducktales.decomp.DEA3"
-addr = 0xDEA3
-length = 8
-crc32 = 0x0DE40D60
+# entries of the main task's decompiled code that original code reaches (its
+# resume points have no site: the RTS observer starts them), then the
+# routines it hands off to, where an isolated run of the original stops.
 
 # Hud_Reset
 [[mod_function_hook]]
@@ -335,194 +162,12 @@ addr = 0xDB36
 length = 8
 crc32 = 0xD74F1957
 
-# FrameLoop_AfterPlayer
-[[mod_function_hook]]
-id = "ducktales.decomp.DB6F"
-addr = 0xDB6F
-length = 8
-crc32 = 0x37C7B055
-
-# FrameLoop_AfterObjects
-[[mod_function_hook]]
-id = "ducktales.decomp.DB7B"
-addr = 0xDB7B
-length = 8
-crc32 = 0xE84D6D01
-
-# FrameLoop_AfterCamera
-[[mod_function_hook]]
-id = "ducktales.decomp.DB8C"
-addr = 0xDB8C
-length = 8
-crc32 = 0x578115E0
-
-# FrameLoop_AfterBossTrigger
-[[mod_function_hook]]
-id = "ducktales.decomp.DB8F"
-addr = 0xDB8F
-length = 8
-crc32 = 0xA62EA284
-
-# FrameLoop_AfterDeath
-[[mod_function_hook]]
-id = "ducktales.decomp.DBB0"
-addr = 0xDBB0
-length = 8
-crc32 = 0x956283FC
-
-# FrameLoop_Sprites
-[[mod_function_hook]]
-id = "ducktales.decomp.DBC5"
-addr = 0xDBC5
-length = 8
-crc32 = 0x9CF0F150
-
-# FrameLoop_AfterSpawn
-[[mod_function_hook]]
-id = "ducktales.decomp.DBE4"
-addr = 0xDBE4
-length = 8
-crc32 = 0x99730F20
-
-# DeathOrWarp
-[[mod_function_hook]]
-id = "ducktales.decomp.DC3E"
-addr = 0xDC3E
-length = 8
-crc32 = 0xF1B885FB
-
-# Death_Fade
-[[mod_function_hook]]
-id = "ducktales.decomp.DC68"
-addr = 0xDC68
-length = 8
-crc32 = 0xAF07F9B2
-
-# Death_Blank
-[[mod_function_hook]]
-id = "ducktales.decomp.DC6B"
-addr = 0xDC6B
-length = 8
-crc32 = 0x2C0BB4E6
-
-# Death_Place
-[[mod_function_hook]]
-id = "ducktales.decomp.DC81"
-addr = 0xDC81
-length = 8
-crc32 = 0x3D75FD6A
-
-# Death_Placed
-[[mod_function_hook]]
-id = "ducktales.decomp.DC84"
-addr = 0xDC84
-length = 8
-crc32 = 0xB13DABEB
-
-# Death_RowChr
-[[mod_function_hook]]
-id = "ducktales.decomp.DCBD"
-addr = 0xDCBD
-length = 8
-crc32 = 0xB50AD090
-
-# Death_Shown
-[[mod_function_hook]]
-id = "ducktales.decomp.DCD8"
-addr = 0xDCD8
-length = 8
-crc32 = 0x66B9E8F6
-
-# Death_FadeIn
-[[mod_function_hook]]
-id = "ducktales.decomp.DCDB"
-addr = 0xDCDB
-length = 8
-crc32 = 0x15E65EC3
-
-# Death_Resume
-[[mod_function_hook]]
-id = "ducktales.decomp.DCE2"
-addr = 0xDCE2
-length = 8
-crc32 = 0xFF438EA5
-
-# Death_Spawned
-[[mod_function_hook]]
-id = "ducktales.decomp.DD14"
-addr = 0xDD14
-length = 8
-crc32 = 0xD6F450F7
-
-# Death_Done
-[[mod_function_hook]]
-id = "ducktales.decomp.DD1C"
-addr = 0xDD1C
-length = 8
-crc32 = 0x56A38533
-
-# DeathPause
-[[mod_function_hook]]
-id = "ducktales.decomp.DD23"
-addr = 0xDD23
-length = 8
-crc32 = 0x07798744
-
-# DeathPause_Next
-[[mod_function_hook]]
-id = "ducktales.decomp.DD42"
-addr = 0xDD42
-length = 8
-crc32 = 0x7EC9BF2D
-
-# Respawn_Place
-[[mod_function_hook]]
-id = "ducktales.decomp.DD4E"
-addr = 0xDD4E
-length = 8
-crc32 = 0x39768EC7
-
 # Respawn_PlaceAt
 [[mod_function_hook]]
 id = "ducktales.decomp.DD52"
 addr = 0xDD52
 length = 8
 crc32 = 0x6C7EAD65
-
-# Respawn_Drawn
-[[mod_function_hook]]
-id = "ducktales.decomp.DDAB"
-addr = 0xDDAB
-length = 8
-crc32 = 0x8F1156DB
-
-# GameOver
-[[mod_function_hook]]
-id = "ducktales.decomp.DEB9"
-addr = 0xDEB9
-length = 8
-crc32 = 0xE537A374
-
-# GameOver_Next
-[[mod_function_hook]]
-id = "ducktales.decomp.DEDE"
-addr = 0xDEDE
-length = 8
-crc32 = 0x87B47165
-
-# LandExit
-[[mod_function_hook]]
-id = "ducktales.decomp.DF08"
-addr = 0xDF08
-length = 8
-crc32 = 0x995BEAA2
-
-# LandExit_Next
-[[mod_function_hook]]
-id = "ducktales.decomp.DF1E"
-addr = 0xDF1E
-length = 8
-crc32 = 0x09BF30E2
 
 [[mod_function_hook]]
 id = "ducktales.decomp.stop.FFAC"
@@ -619,4 +264,5 @@ id = "ducktales.decomp.stop.E1AF"
 addr = 0xE1AF
 length = 8
 crc32 = 0xD1E4F218
+
 # END game flow

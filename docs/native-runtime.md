@@ -1,8 +1,10 @@
 # Native runtime: the shipped build without a cycle-level host
 
-Status as of 2026-11-22: a working headless prototype, `ducktales_native` (`-DDUCKTALES_NATIVE=ON`),
-built from `src/native/`. The window build still runs NESRecomp's cycle host; switching it over is
-the step after a renderer and a synth exist (see [Next steps](#next-steps)).
+Status as of 2026-11-22: the player build. `ducktales.exe` in a window build runs the recompiled
+program on the native runtime, draws it with the native renderer and plays it through the synth seam
+([The player build](#the-player-build)); the cycle host build is kept as `ducktales_cycle.exe` for
+verification. `ducktales_native` (`-DDUCKTALES_NATIVE=ON`) is the headless prototype the route
+comparison below runs.
 
 In its faithful lag mode the native runtime matches the cycle build on every frame of every route:
 CPU RAM, the cycle count and all CPU registers, 82,621 frames over the 12 routes in `tests/routes/`
@@ -18,12 +20,20 @@ src/native/native_bus.c       NESRecomp's hw.h for the generated code: RAM, UNRO
                               sprite DMA, APU write capture, cycle count, scheduler watch
 src/native/native_video.c     PPU registers and memories, VBlank/NMI/$2002/sprite-0 timing
 src/native/native_state.h     the interface for a renderer and a synth
+src/native/native_audio.c     the synth: a frame's APU writes in, its samples out (audio.md)
 src/native/native_hash.h      the per-frame state line both builds write (--ram-hash-out)
 src/native/native_main.c      ducktales_native: input routes, logs, dumps
+src/native/native_hooks.c     game.toml hook sites: the enhancements' callbacks
+src/native/native_route.c     input routes (tests/routes) for both native programs
+src/native/native_window.c    the player build's window (ducktales.exe)
+src/native/native_present.c   the frame record drawn and offered as cyc_render.h
+src/native/native_audio.c     the native synth: each frame's APU writes to samples
+src/host/ducktales_settings.c config.ini [Game] and the game options, shared by both hosts
 src/host/ducktales_ramhash.c  --ram-hash-out and --lag-log for the cycle host (headless only)
 tools/native_compare.py       compares two per-frame state files field by field
 tests/native_routes.py        native (faithful) vs cycle build on every route
 tests/lag_modes.py            lag measurements and the faithful vs no-slowdown logic comparison
+tests/native_player_test.py   the player's presented picture vs the cycle build's, off screen
 ```
 
 ## The seam: what the generated code needs
@@ -203,8 +213,10 @@ The runtime hands out, per machine frame (VBlank to VBlank):
 
 A renderer draws frame N from `start`, applying `ppu_writes[]` in order; one that only wants the HUD
 split uses `split_line`. A synth plays `apu_writes[]` at their cycle offsets (1,789,773 Hz); when the
-no-slowdown mode has stretched a frame it scales the offsets by 29781 / `cycles`, since every frame
-is still presented for one 60 Hz period. Nothing in the interface is read back by the game, so a
+no-slowdown mode has stretched a frame it plays it in `cycles - held_cycles` and scales the offsets
+to match, since every frame is still presented for one 60 Hz period. The synth exists:
+`native_audio_frame()` in `src/native/native_audio.h` ([audio.md](audio.md#native-synth)), and
+`ducktales_native --wav-out FILE` records it. Nothing in the interface is read back by the game, so a
 renderer or synth cannot change the machine.
 
 ## Lag
@@ -383,20 +395,60 @@ only the stretch it still follows is comparable. Differences from the native no-
 - the APU is paused across the lines, so a sound effect started in the task during them starts at
   the end of the frame's extra time instead of mid-frame (by ear: not verified).
 
+## The player build
+
+`-DDUCKTALES_PLAYER=native` (the default) makes the window build's `ducktales.exe` the
+`ducktales_player` target, and the cycle host target `ducktales_cycle.exe`;
+`-DDUCKTALES_PLAYER=cycle` swaps the names back (the native one is then `ducktales_player.exe`).
+The install rules and the CPack ZIP package whichever is `ducktales.exe`. Headless builds are
+unchanged: `build/headless/Release/ducktales.exe` is the cycle host every verification runs.
+
+The player links the generated C, `src/native/`, `src/game`, `src/host/ducktales_sprites.c`,
+`src/host/ducktales_settings.c`, `src/host/ducktales_main.c`, `src/ui` and Dear ImGui. From
+NESRecomp it takes the CPU sequences and instruction templates, the hook registry
+(`runner/src/mod_function_hooks.c`), the settings file and bindings (`cyc_settings.c`,
+`cyc_input.c`), the PNG writer and the toast font, and no part of the cycle host (no `cyc_host.c`,
+`cyc_sdl.c`, PPU, APU or mapper).
+
+| Part | How it works on the native runtime |
+|---|---|
+| Frame loop | `native_window.c`: one `native_run_frame()` per 60.0988 Hz period, at its deadline; VSync as `[Display] VSync` (resolved from FramePacing at launch); fast-forward (Tab, held) and `--uncapped` run unpaced and present at most 60 pictures a second |
+| Picture | `native_present.c` replays the frame's register writes over the memories at line 0 (`NativeFrame`), with the PPU's scroll counters, into the per-line record the cycle host keeps (`cyc_frame_lines`), fills `NvVideo` from it (`nv_cycle_fill`) and draws it with `nv_render`. It serves the `cyc_render.h` calls `ui/app_present.c` and `host/ducktales_sprites.c` make, so the HUD split, overscan, scaling, 8:7 and No sprite flicker are the same code as in the cycle build |
+| Menu, settings, input | `app_ui_event`, `app_ui_input`, `app_ui_frame_begin`, `app_ui_audio` and `app_ui_present` called where the cycle host's extras call them; config.ini read and written with `cyc_settings` (on F11 and at exit, reconciled by `app_settings.c`); bindings evaluated with `cyc_input_eval` |
+| No slowdown | `[Game] NoSlowdown`: on (default) is `NATIVE_LAG_NONE`, off is `NATIVE_LAG_FAITHFUL` |
+| Enhancements | `native_hooks.c` binds the plugins `src/game` registers (`mod_function_hooks.h`) to the `game.toml` sites, arms `cyc_hooks_armed` while one is enabled, and runs the callbacks at the instruction boundary when the content key holds, returning from a handled routine as its RTS would: the cycle host's rules (`cyc_hooks.c`) |
+| Save states | F8 / F9: `<exe dir>/saves/DuckTales.native-state`, CPU registers and interrupt lines, CPU RAM, the bus (bank, cycle count, DMA, controllers, lag state) and the video state (memories, registers, frame timing), with the generated program's PRG hash; a toast confirms |
+| Sound | `native_audio.h`: `native_audio_frame(frame, out, cap)` per frame, queued at 48 kHz with at most 100 ms waiting (the native synth, docs/audio.md "Native synth") |
+
+Off screen (`--frames N [--input ROUTE] [--lag none|faithful] [--present-out FILE --present-every K]
+[--state-check F]`) the player writes the picture the window would show at 1x, named as the cycle
+host's `--present-out` names it, and can check a save state round trip.
+
+### Its verification
+
+- `tests/native_player_test.py --build build/windows`: `ducktales.exe --lag faithful` and
+  `ducktales_cycle.exe --extra-scanlines 0` off screen on the same route, the presented pictures
+  compared pixel for pixel (results in [validation.md](validation.md)).
+- `tests/window_smoke.py --build build/windows` on `ducktales.exe` (and `--exe ducktales_cycle.exe`).
+- `tests/native_routes.py`, so any change to the bus is held to the cycle build frame by frame.
+
 ## Next steps
 
-1. A renderer (sprite compositor and HUD, agent 11) and a synth reading `native_state.h`.
-2. A window front end (agent 12's presentation) over `native_run_frame()`, with the no-slowdown
-   mode, the enhancements' hook sites (they are `cyc_hooks_armed` sites in the same generated code,
-   so `src/game/enhancements.c` can register the same callbacks) and save states (CPU RAM, the
-   video state and the bus are small and plain).
-3. Keep `tests/native_routes.py` in the verification set, so any regeneration of the C or change to
-   the bus is held to the cycle build frame by frame.
+1. Listen to the native synth in the player's window (it is compared only by `tests/audio_compare.py`).
+2. The split column from the write's dot (`NvSegment.split_column`), so the original HUD split line
+   jitters as on the console; with the default clean split it is not shown.
+3. Keep `tests/native_routes.py` and `tests/native_player_test.py` in the verification set.
 
 ## Not verified
 
-- No picture or sound is produced by the native runtime yet; the interface is checked only by
-  the logs (`--split-log`).
+- Sound by ear: `--wav-out` is compared with the cycle host APU by `tests/audio_compare.py`,
+  but nobody has listened to it in a window.
+- The player's window as a person sees it (pacing on the 144 Hz monitor, VSync, full screen, gamepads,
+  F8/F9 by hand): only hidden and off-screen runs were made.
+- `HudSplit = original` on the native player: the split line is drawn at a line boundary
+  (no split column), so it differs from the cycle build's on that one line; not compared.
+- Save state files from one build loaded in another build (the format is the build's own structures,
+  checked by size and PRG hash only).
 - Real-time pacing and audio of the No slowdown setting in the window (144 Hz monitor, by ear):
   needs a person at the screen. The window build was only run hidden (`tests/window_smoke.py`).
 - Lag outside the five full_* routes (other screens, Easy/Difficult, more enemies on screen).

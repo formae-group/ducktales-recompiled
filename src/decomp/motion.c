@@ -19,6 +19,7 @@ static uint8_t s_a, s_p;
 /* $F2A1: Y -= vertical velocity, so a positive velocity moves up. */
 void Obj_ApplyVelocityY(int slot)
 {
+    Decomp_Enter(DT_CODE_APPLY_VY, 0, (uint8_t)slot, 0);
     uint8_t p = P_C;
     gObjects->yFrac[slot] = Alu_Sbc(gObjects->yFrac[slot], gObjects->vyFrac[slot], &p);
     gObjects->y[slot] = s_a = Alu_Sbc(gObjects->y[slot], gObjects->vy[slot], &p);
@@ -28,6 +29,7 @@ void Obj_ApplyVelocityY(int slot)
 /* $F2B5: vertical velocity -= gravity ($EF). */
 void Obj_ApplyGravity(int slot)
 {
+    Decomp_Enter(DT_CODE_APPLY_GRAVITY, 0, (uint8_t)slot, 0);
     uint8_t p = P_C;
     gObjects->vyFrac[slot] = Alu_Sbc(gObjects->vyFrac[slot], gGravity, &p);
     gObjects->vy[slot] = s_a = Alu_Sbc(gObjects->vy[slot], 0, &p);
@@ -37,6 +39,7 @@ void Obj_ApplyGravity(int slot)
 /* $F234: world X += horizontal speed. */
 void Obj_MoveRight(int slot)
 {
+    Decomp_Enter(DT_CODE_MOVE_RIGHT_SPEED, 0, (uint8_t)slot, 0);
     uint8_t p = 0;
     gObjects->xFrac[slot] = Alu_Adc(gObjects->xFrac[slot], gObjects->speedFrac[slot], &p);
     gObjects->worldX[slot] = s_a = Alu_Adc(gObjects->worldX[slot], gObjects->speed[slot], &p);
@@ -47,6 +50,7 @@ void Obj_MoveRight(int slot)
 /* $F252: world X -= horizontal speed. */
 void Obj_MoveLeft(int slot)
 {
+    Decomp_Enter(DT_CODE_MOVE_LEFT_SPEED, 0, (uint8_t)slot, 0);
     uint8_t p = P_C;
     gObjects->xFrac[slot] = Alu_Sbc(gObjects->xFrac[slot], gObjects->speedFrac[slot], &p);
     gObjects->worldX[slot] = s_a = Alu_Sbc(gObjects->worldX[slot], gObjects->speed[slot], &p);
