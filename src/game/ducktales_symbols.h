@@ -250,6 +250,8 @@
 #define DT_ADDR_ROW_SCROLL         0x00E9 /* vertical row scroll running (hypothesis) */
 #define DT_ADDR_HUD_SPLIT          0x00EA /* sprite-0 HUD split, $40 in play (verified) */
 #define DT_ADDR_ROW_SCROLL_ADDR    0x00ED /* mid-frame $2006 low byte of the row scroll (hypothesis) */
+#define DT_ADDR_ROW_SCROLL_ADDR_HI 0x00EE /* its high byte (hypothesis) */
+#define DT_ADDR_SPRITE0_Y          0x00FA /* sprite-0 Y of the HUD split (verified, memory-map.md) */
 #define DT_ADDR_TILESET_BANK       0x00F7 /* bank of the land's blocks and metatiles (verified) */
 #define DT_ADDR_BG_OFF_BELOW_SPLIT 0x00F8 /* background off below the split (verified, code) */
 #define DT_ADDR_HUD_MONEY_PACKET   0x0320 /* VRAM packet of the money: PPU address, count, digits (verified) */
@@ -289,8 +291,11 @@
 #define DT_BANK_SPRITES        5
 #define DT_B5_BUILD_OAM        0x8000
 #define DT_B5_PAUSE_TEXT       0xB580 /* pause or message text into the VRAM queue (code) */
+#define DT_B5_PPU_STRINGS      0xBAB0 /* X = set: PPU address and data strings written to the PPU (code) */
+#define DT_B5_CONSUMED_BITS    0xB760 /* the land's consumed-record bits $0120-$013F (code) */
 #define DT_BANK_OBJECTS        6
 #define DT_B6_OBJECTS          0x8000 /* every object's per-frame code */
+#define DT_B6_SPAWN_TABLES     0xAE20 /* the land's spawn table pointers into $60-$69 (code) */
 #define DT_B6_SPAWN_RESET      0xAE60
 #define DT_B6_SPAWN            0xAEA0
 
@@ -337,6 +342,18 @@
 #define DT_FLOW_RESPAWN_DRAWN      0xDDAB
 #define DT_FLOW_GAME_OVER_NEXT     0xDEDE
 #define DT_FLOW_LAND_EXIT_NEXT     0xDF1E
+#define DT_FLOW_LOAD_FADED         0xD79E
+#define DT_FLOW_LOAD_BLACK         0xD7A5
+#define DT_FLOW_LOAD_SCREEN_OFF    0xD7A8
+#define DT_FLOW_LOAD_FILLED        0xD7B9
+#define DT_FLOW_LOAD_DRAWN         0xD7C2
+#define DT_FLOW_LOAD_STRINGS       0xD7CC
+#define DT_FLOW_LOAD_CHR           0xD7D1
+#define DT_FLOW_LOAD_REDRAWN       0xD7D4
+#define DT_FLOW_LOAD_ROW_CHR       0xD7DB
+#define DT_FLOW_LOAD_SHOWN         0xD837
+#define DT_FLOW_LOAD_FADE_IN       0xD83A
+#define DT_FLOW_LOAD_DONE          0xD845
 
 /* Tables the flow reads from the ROM (bank 7). */
 #define DT_DATA_LAND_TILESET      0xDA10 /* per land: tileset bank */
@@ -349,6 +366,8 @@
 #define DT_DATA_HUD_TOTAL         0xDAE0 /* the TOTAL packet's start value */
 #define DT_DATA_HUD_HP            0xDAED /* the HP dot records */
 #define DT_HUD_HP_TEMPLATE_LEN    21
+#define DT_DATA_HUD_TIME_GROUP    0xDB0F /* the HUD time group as a land starts it */
+#define DT_HUD_TIME_GROUP_LEN     29
 #define DT_DATA_LAND_TIME         0xDB2C /* per land: start time hundreds and tens */
 #define DT_DATA_CHECKPOINT_ROW    0xDC2C /* per land: boss-checkpoint row and page */
 #define DT_DATA_CHECKPOINT_PAGE   0xDC35
