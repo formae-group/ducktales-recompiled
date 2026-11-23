@@ -11,6 +11,9 @@ The first release.
 
 ### Added
 
+- The ROM is found by its SHA-256 under any file name: in `roms/` for the build and the test
+  scripts, and in the first-run screen and `--import-rom` for players. The configure step refuses a
+  ROM with another hash and names both.
 - Every setting in the menu, the enhancements included, has a "(?)" after its label with a tooltip
   saying what it does, shown to the mouse and under keyboard or controller focus (formae-ui 0.3.0).
 - The project lives on GitHub (https://github.com/formae-group/ducktales-recompiled), with releases

@@ -58,6 +58,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'tools'))
+from romfile import default_rom  # noqa: E402
+
 NATIVE_FIELDS = ['ram', 'cycles', 'PC', 'A', 'X', 'Y', 'S', 'P']
 GOLDEN_FIELDS = ['ram', 'nt', 'pal', 'oam', 'chr', 'cycles', 'PC', 'A', 'X', 'Y', 'S', 'P', 'trace', 'mem', 'int', 'hw']
 NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
@@ -518,7 +521,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('--build', default='build/headless', help='headless build directory')
     ap.add_argument('--config', default='Release')
-    ap.add_argument('--rom', default=str(ROOT / 'roms' / 'DuckTales (USA).nes'))
+    ap.add_argument('--rom', default=default_rom())
     ap.add_argument('--routes', nargs='*', help='route files (default: tests/routes/*.txt)')
     ap.add_argument('--golden', default=str(ROOT / 'build' / 'golden'), help='golden root; files go in <ROM SHA-256>/')
     ap.add_argument('--out', default=str(ROOT / 'build' / 'quick-verify'))

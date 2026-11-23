@@ -27,6 +27,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'tools'))
+from romfile import default_rom  # noqa: E402
+
 VERIFY = ROOT / 'external' / 'nesrecomp' / 'tools' / 'cyc' / 'cyc_verify.py'
 
 
@@ -57,7 +60,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--build', default='build/headless', help='headless build directory')
     ap.add_argument('--config', default='Release')
-    ap.add_argument('--rom', default=str(ROOT / 'roms' / 'DuckTales (USA).nes'))
+    ap.add_argument('--rom', default=default_rom())
     ap.add_argument('--routes', nargs='*', help='route files (default: tests/routes/*.txt)')
     ap.add_argument('--align', type=int, nargs='+', default=[0, 1, 2, 3])
     ap.add_argument(

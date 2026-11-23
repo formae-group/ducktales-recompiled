@@ -45,7 +45,10 @@ import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-ROM = ROOT / 'roms' / 'DuckTales (USA).nes'
+sys.path.insert(0, str(ROOT / 'tools'))
+from romfile import default_rom  # noqa: E402
+
+ROM = Path(default_rom())
 PRG_SHA256 = '8ba8baed01a9fbaf1e9ff29e0c9825db1963ac2aff211d6f1f3bcfd3839e2013'
 failures = []
 

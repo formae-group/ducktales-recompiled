@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
 project(DuckTalesPC C CXX)
 
-set(DUCKTALES_ROM "${CMAKE_SOURCE_DIR}/roms/DuckTales (USA).nes" CACHE FILEPATH
-    "DuckTales (USA) iNES image supplied by the user")
+set(DUCKTALES_ROM_SHA256_EXPECTED "97d472f7b2c1088448d1644155b2650a546bad887b3cba571e16d7986824c169")
+set(DUCKTALES_ROM "" CACHE FILEPATH
+    "DuckTales (USA) iNES image supplied by the user, any file name; empty = the file in roms/ with its SHA-256")
 option(DUCKTALES_HEADLESS "Build the headless verification host only (no SDL window/audio)" OFF)
 option(DUCKTALES_ORACLE "Also build the TriCNES reference machine used by differential tests" OFF)
 option(DUCKTALES_DEV_DIAGNOSTICS "Developer diagnostics (typed state log, TCP commands); never in distribution builds" OFF)
@@ -21,9 +22,33 @@ set(NESRECOMP_ROOT "${CMAKE_SOURCE_DIR}/external/nesrecomp")
 if(NOT EXISTS "${NESRECOMP_ROOT}/runner/cyc/project.cmake")
     message(FATAL_ERROR "external/nesrecomp is missing; run: git submodule update --init external/nesrecomp")
 endif()
-if(NOT EXISTS "${DUCKTALES_ROM}")
-    message(FATAL_ERROR "ROM not found: ${DUCKTALES_ROM}\nCopy DuckTales (USA).nes into roms/ or pass -DDUCKTALES_ROM=<path>.")
+set(_ducktales_rom "${DUCKTALES_ROM}")
+if(NOT _ducktales_rom)
+    file(GLOB _ducktales_rom_candidates LIST_DIRECTORIES false "${CMAKE_SOURCE_DIR}/roms/*")
+    foreach(_candidate IN LISTS _ducktales_rom_candidates)
+        file(SIZE "${_candidate}" _candidate_size)
+        if(_candidate_size EQUAL 131088)
+            file(SHA256 "${_candidate}" _candidate_sha256)
+            if(_candidate_sha256 STREQUAL DUCKTALES_ROM_SHA256_EXPECTED)
+                set(_ducktales_rom "${_candidate}")
+                break()
+            endif()
+        endif()
+    endforeach()
+    if(NOT _ducktales_rom)
+        message(FATAL_ERROR "No DuckTales (USA) ROM in roms/. Copy yours there under any name (baserom.nes, for "
+            "example) or pass -DDUCKTALES_ROM=<path>; it is found by its SHA-256, ${DUCKTALES_ROM_SHA256_EXPECTED}.")
+    endif()
 endif()
+if(NOT EXISTS "${_ducktales_rom}")
+    message(FATAL_ERROR "ROM not found: ${_ducktales_rom}")
+endif()
+file(SHA256 "${_ducktales_rom}" _ducktales_rom_sha256)
+if(NOT _ducktales_rom_sha256 STREQUAL DUCKTALES_ROM_SHA256_EXPECTED)
+    message(FATAL_ERROR "${_ducktales_rom} is not DuckTales (USA): its SHA-256 is ${_ducktales_rom_sha256}, "
+        "the supported revision's is ${DUCKTALES_ROM_SHA256_EXPECTED} (docs/rom.md).")
+endif()
+message(STATUS "DuckTales ROM: ${_ducktales_rom}")
 
 # Players need no Visual C++ redistributable: the window build links the static
 # MSVC runtime (/MT). Verification builds keep CMake's default.
@@ -133,7 +158,7 @@ if(DUCKTALES_HEADLESS)
         "${CMAKE_SOURCE_DIR}/src/ui/app_rom.c")
 endif()
 nesrecomp_add_cycle_game(ducktales
-    ROM "${DUCKTALES_ROM}"
+    ROM "${_ducktales_rom}"
     GAME_CONFIG "${CMAKE_SOURCE_DIR}/config/game.toml"
     ${_ducktales_options}
     HOST_EXTRAS ${_ducktales_extras})
@@ -142,7 +167,6 @@ target_link_libraries(ducktales PRIVATE ducktales_lua)
 if(NOT DUCKTALES_HEADLESS)
     # The ROM identity the first-run import checks (docs/rom.md: SHA-256 of
     # the whole file), taken from the ROM this build was generated from.
-    file(SHA256 "${DUCKTALES_ROM}" _ducktales_rom_sha256)
     target_compile_features(ducktales PRIVATE cxx_std_17)
     target_compile_definitions(ducktales PRIVATE DUCKTALES_WINDOW=1
         "DUCKTALES_ROM_SHA256=\"${_ducktales_rom_sha256}\"")

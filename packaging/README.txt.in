@@ -11,7 +11,7 @@ Supplying the ROM
 
 Only DuckTales (USA) is supported:
 
-  File      DuckTales (USA).nes (131,088 bytes, iNES)
+  File      any name (131,088 bytes, iNES)
   SHA-256   97d472f7b2c1088448d1644155b2650a546bad887b3cba571e16d7986824c169
 
 Start ducktales.exe, then pick the ROM in the window or drop the file on it.
@@ -21,7 +21,7 @@ modified file is refused. The checked copy is stored in
 
 From a command prompt you can import it without opening the window:
 
-  ducktales.exe --import-rom "C:\path\to\DuckTales (USA).nes"
+  ducktales.exe --import-rom "C:\path\to\your ROM.nes"
 
 
 Controls

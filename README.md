@@ -51,12 +51,13 @@ ROM-derived code locally.
 
 ## Supported ROM
 
-Only one revision is supported. The file is verified when imported and again at every start; any
-other dump, revision or modified image is refused.
+Only one revision is supported. It is identified by its hashes, never by its file name, so name the
+file as you like. It is verified when imported and again at every start; any other dump, revision or
+modified image is refused.
 
 | Field | Value |
 |---|---|
-| File | `DuckTales (USA).nes`, 131,088 bytes, iNES 1.0, mapper 2 (UxROM), 128 KiB PRG, 8 KiB CHR-RAM |
+| File | Any name (No-Intro: `DuckTales (USA).nes`), 131,088 bytes, iNES 1.0, mapper 2 (UxROM), 128 KiB PRG, 8 KiB CHR-RAM |
 | SHA-256 | `97d472f7b2c1088448d1644155b2650a546bad887b3cba571e16d7986824c169` |
 | SHA-1 | `f83191749d019d75eb5ff95d247ef25882c2571a` |
 | MD5 | `ee0812f62f6595e45812a8b26bbb637e` |
@@ -73,10 +74,14 @@ Python 3.11+ and Git.
 ```powershell
 git clone --recurse-submodules https://github.com/formae-group/ducktales-recompiled.git
 cd ducktales-recompiled
-copy "C:\path\to\DuckTales (USA).nes" roms\
+copy "C:\path\to\your ROM.nes" roms\baserom.nes
 cmake -S . -B build/windows -G "Visual Studio 17 2022" -A x64
 cmake --build build/windows --config Release --parallel
 ```
+
+The build takes the file in `roms\` whose SHA-256 matches the table above, whatever its name
+(`baserom.nes` is only the name these docs use), or the file `-DDUCKTALES_ROM=<path>` names; a ROM
+with another hash stops the configure step with both hashes.
 
 The executable is written to `build\windows\Release\ducktales.exe`. Code generation runs at configure
 time and again whenever the ROM, `config/` or the recompiler changes; the generated sources live under
@@ -95,7 +100,7 @@ and `cmake --build build/windows --config Release --target PACKAGE` writes the p
 
 ## Running
 
-On first launch, select your `DuckTales (USA).nes` or drop it on the window. The file's SHA-256 is
+On first launch, select your ROM (any file name) or drop it on the window. The file's SHA-256 is
 checked against the table above, and the verified copy is stored in `%APPDATA%\DuckTales Recompiled\`
 for later launches. Headless import: `ducktales.exe --import-rom <path>` (exit code 0 on success,
 1 when refused). `DUCKTALES_DATA_DIR` overrides the data folder.
@@ -226,7 +231,7 @@ New routes can reach code no route has executed; append its interpreter misses t
 rebuild:
 
 ```powershell
-build\headless\Release\ducktales.exe "roms\DuckTales (USA).nes" --input tests\routes\NEW.txt --frames N --miss-log config\ducktales.seeds
+build\headless\Release\ducktales.exe roms\baserom.nes --input tests\routes\NEW.txt --frames N --miss-log config\ducktales.seeds
 ```
 
 ## Documentation

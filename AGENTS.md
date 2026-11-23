@@ -31,7 +31,8 @@ settings, presentation and enhancements. The goal is a polished PC port, not an 
 
 - Windows, Visual Studio 2022, CMake, Python through `py -3 -I`, Git for Windows.
 - Pass `C:/...` paths to git and to the executables, not `/c/...`.
-- The ROM is `roms/DuckTales (USA).nes` (ignored by git), or `-DDUCKTALES_ROM=<path>`. Its SHA-256 is
+- The ROM is the file in `roms/` (ignored by git) with the SHA-256 below, under any name (the docs call
+  it `roms/baserom.nes`), or `-DDUCKTALES_ROM=<path>`. Its SHA-256 is
   `97d472f7b2c1088448d1644155b2650a546bad887b3cba571e16d7986824c169`.
 - Disk space is limited. Keep at least 8 GB free, bound frame logs with `--frame-log-frames` and
   delete scratch under `captures/` when done.
