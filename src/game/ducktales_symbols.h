@@ -53,6 +53,7 @@
 #define DT_ADDR_KEY_ITEMS       0x00A3 /* key items, bit 1 = African Mines key (verified bit 1) */
 #define DT_ADDR_LAND_REDIRECT   0x00A4 /* positive: load Transylvania, negative: Land Select (verified) */
 #define DT_ADDR_POGO_CEILING    0x00A7 /* non-zero: no pogo bounce below Y $A0 (code; meaning unknown) */
+#define DT_ADDR_HUD_TOTAL_DIRTY 0x00AB /* the frame loop redraws TOTAL when set (code) */
 #define DT_ADDR_TICK_FRAMES     0x00B0 /* frames until the HUD time drops by one (verified) */
 #define DT_TICK_FRAMES_RELOAD   0x3C   /* what the timer reloads it with: 60 frames (verified) */
 #define DT_ADDR_BOSS_HITS       0x00B1 /* boss hits left, 5 at the start of a fight (verified) */
@@ -117,6 +118,8 @@
 #define DT_ADDR_MONEY_DIGITS  0x0324 /* 6 digit tiles, most significant first (verified) */
 #define DT_MONEY_DIGIT_COUNT  6
 #define DT_MONEY_TILE_BLANK   0x24   /* suppressed leading zero (verified) */
+#define DT_ADDR_TOTAL_DIGITS  0x0334 /* TOTAL money digit tiles (verified) */
+#define DT_TOTAL_DIGIT_COUNT  7      /* most significant first; the HUD adds a fixed 0 (verified) */
 #define DT_ADDR_HUD_SPRITES   0x0340 /* HUD sprite records: Y, tile, attribute, X (verified) */
 #define DT_HUD_SPRITE_RECORDS 10     /* $0340-$0367 */
 #define DT_HUD_RECORD_END_Y   0xFF   /* Y that ends a group of records (verified) */
@@ -163,6 +166,7 @@
 #define DT_CODE_BG_PROBE         0xD120 /* background probes $40.. against the collision map */
 #define DT_CODE_CONTACT_H        0xD202 /* Scrooge-object contact while moving horizontally */
 #define DT_CODE_CONTACT_V        0xD291 /* Scrooge-object contact while moving vertically */
+#define DT_CODE_PROBE_POINT      0xD350 /* one background probe point of a slot, Y = probe (code) */
 #define DT_CODE_SNAP_RIGHT       0xD49A /* snap world X back after a probe hit on the right */
 #define DT_CODE_SNAP_LEFT        0xD4B2 /* snap world X back after a probe hit on the left */
 #define DT_CODE_SNAP_HEAD        0xD4C8 /* push Y down below the tile the head probe hit */
@@ -200,10 +204,15 @@
 #define DT_CODE_CLIMB_UP         0xF1A8 /* climbing step up with probes (code) */
 #define DT_CODE_MOVE_RIGHT_SPEED 0xF234 /* world X += speed (X = slot) */
 #define DT_CODE_MOVE_LEFT_SPEED  0xF252 /* world X -= speed (X = slot) */
+#define DT_CODE_ADD_VY           0xF270 /* Y += vertical velocity (X = slot) */
+#define DT_CODE_SUB_VY           0xF284 /* Y -= vertical velocity, the same code as $F2A1 (X = slot) */
 #define DT_CODE_APPLY_VY         0xF2A1 /* Y -= vertical velocity (X = slot) */
 #define DT_CODE_APPLY_GRAVITY    0xF2B5 /* vertical velocity -= gravity (X = slot) */
+#define DT_CODE_HITBOX_HEIGHT    0xF498 /* half-height by hitbox entry (code) */
+#define DT_CODE_HITBOX_WIDTH     0xF4B8 /* half-width by hitbox entry (code) */
 #define DT_CODE_MUSIC_REQUEST    0xF752 /* remember the music id in $C5, then queue it */
 #define DT_CODE_SOUND_REQUEST    0xF754 /* queue a sound id in the request ring */
+#define DT_CODE_HUD_REFILL_HP    0xF812 /* every HP dot full (fixed bank) */
 
 /* ---- hook sites of the event system (src/game/events.c) ----
  * config/game.toml declares each with a length/crc32 content key, so another

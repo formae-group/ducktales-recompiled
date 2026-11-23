@@ -163,20 +163,22 @@ too and are not counted.
 ### Calling contract
 
 The adapter of each routine (`Run_*` in the C files, used at its site and by the inner check) maps
-registers to C arguments and back. "Out"
-lists the registers that callers read after the routine returns. Check mode compares exactly those,
-and replace mode sets them. P means N, V, Z and C; I and D are left as they were at entry. Every
-routine also leaves its RAM effects, scratch bytes `$00-$0F` included, exactly as the original
-does. That includes values later code uses as pointers: the background probe, for one, must
+registers to C arguments and back. "Out" lists the registers that callers read after the routine
+returns. Check mode compares exactly those, and replace mode sets them. P means N, V, Z and C, and
+C the carry alone; I and D are left as they were at entry. Every routine also leaves its RAM
+effects, scratch bytes `$00-$0F` included, exactly as the original does. That includes values later code uses as pointers: the background probe, for one, must
 leave the jump vector in `$00/$01` as the original's loop does.
 
 | Routine | In | Out | Notes |
 |---|---|---|---|
-| `Obj_ApplyVelocityY`, `Obj_ApplyGravity`, `Obj_MoveRight`, `Obj_MoveLeft` | X = slot | A, X, Y, P | callers test the flags of the last `ADC`/`SBC` (`$F298` keeps the Y move's carry across the probe) |
+| `Obj_ApplyVelocityY`, `Obj_ApplyGravity`, `Obj_MoveRight`, `Obj_MoveLeft`, `Obj_AddVelocityY`, `Obj_SubVelocityY` | X = slot | A, X, Y, P | callers test the flags of the last `ADC`/`SBC` (`$F298` keeps the Y move's carry across the probe) |
 | `Music_Request`, `Sound_Request` | A = id, X | A, X, Y, P | the caller's X is left in `$00` and the id in `$01` |
 | `Player_Update` | X | none | X goes into the power-up music request; modes 15 and 16 run as the original |
 | `Player_Walk`, `Player_Knockback` | X | none | X is the slot the push of `$73` moves when no direction is held, and what the sound request keeps in `$00` |
 | `Player_MoveRight`, `Player_MoveLeft`, `Player_Fall`, `Player_Rise`, `Player_ProbeVertical` | X (moves only) | X | X is what the probe or contact routine returned; callers pass it on |
+| `Player_ContactH` | none | X, C | X is the slot touched (0 for none, carry set); the cane swing reads its kind |
+| `Player_ContactV` | none | C | carry clear for a contact |
+| `Player_SelectRefill` | none | X | X goes on to `Player_Walk` |
 | every other `Player_*` | none | none | |
 
 ### Routines
@@ -193,10 +195,12 @@ RAM-identical in replace mode.
 | `Obj_ApplyGravity` | `$F2B5` | checked | 12 | - | none |
 | `Obj_MoveRight` | `$F234` | checked | 11 | - | none |
 | `Obj_MoveLeft` | `$F252` | checked | 12 | - | none |
+| `Obj_AddVelocityY` | `$F270` | checked | 9 | - | not measured |
+| `Obj_SubVelocityY` | `$F284` | checked | 7 | - | not measured |
 | `Music_Request` | `$F752` | checked | 12 | - | none |
 | `Sound_Request` | `$F754` | checked | 12 | - | a request dropped because its ring entry is still full |
 | `Player_Update` | `$E354` | checked | 12 | invulnerable-held | none (modes 15 and 16 run as the original) |
-| `Player_Ground` | `$E3B8` | checked | 12 | - | Select newly pressed (the refill call) |
+| `Player_Ground` | `$E3B8` | checked | 12 | select-refill, select-poor, select-full | none |
 | `Player_StartJump` | `$E3F2` | checked | 12 | - | none |
 | `Player_Walk` | `$E482` | checked | 12 | slippery | the push of `$73` with no direction held; reversing on slippery floor; momentum speed at `$0300` or more |
 | `Player_MoveRight` | `$E593` | checked | 11 | - | an object contact deeper than 12 px (the clamp) |
@@ -220,26 +224,32 @@ RAM-identical in replace mode.
 | `Player_Mode12` | `$EC2D` | checked (pokes only) | 0 | mode12, mode12-page7 | no vertical direction with Y below `$18` |
 | `Player_Death` | `$EC9B` | checked | 8 | hurt-last-dot | none |
 | `Player_Mode14` | `$ECFF` | checked | 1 | - | none |
+| `Player_ContactH` | `$D202` | checked | 12 | - | not measured |
+| `Player_ContactV` | `$D291` | checked | 12 | - | not measured (the fall into `$D350` needs `$0690` to wrap under the power-up) |
+| `Player_SelectRefill` | `$E2FE` | checked (pokes only) | 0 | select-refill, select-poor, select-full | not measured |
 
 Not decompiled yet, and still run as the original from the C:
 
 - Through `Decomp_Call`: the background probe `$D120` and its snaps `$D49A`/`$D4B2`/`$D4C8`/`$D4D6`,
-  the object contact tests `$D202`/`$D291`, the climbing steps `$F192`/`$F1A8`, the walls move
-  `$F0F8` and the Select refill `$E2FE`.
+  one probe point `$D350` (where `Player_ContactV` can fall through to), the climbing steps
+  `$F192`/`$F1A8`, the walls move `$F0F8` and the HP refill `$F812`. The probe belongs with the
+  level code and the rest with the object code (`$F179`, `$F1BE`, `$F1F9`), so they are decompiled
+  there.
 - Through `Decomp_RunOriginal`: `Player_Update` in modes 15 (`$ED05`, message or item) and 16
   (`$EF62`, treasure), and every call that reaches the row change at `$E8C0`.
 
-**Coverage of Scrooge's code.** His own code in the fixed bank is `$E354-$EFE1` (3,214 bytes). The
-decompiled routines cover `$E354-$ED04` except the row change `$E8C0-$E8EA`, which is 2,438 bytes
-or 76%. With the collision and movement helpers he shares with other objects (`$D120-$D4E5` and
-`$F0F8-$F233`, 1,281 bytes) it is 54%. The motion (`$F234-$F2C6`) and sound (`$F752`) primitives
-are decompiled too, and they also serve every other object.
+**Coverage of Scrooge's code.** His own code in the fixed bank is `$E2FE-$EFE1` (3,300 bytes).
+The decompiled routines cover `$E2FE-$ED04` except the row change `$E8C0-$E8EA`: 2,524 bytes or
+76%. With the collision and movement helpers he shares with other objects (`$D120-$D4E5` and
+`$F0F8-$F233`, 1,281 bytes, of which the contact tests `$D202-$D34F` are decompiled) it is 2,858
+of 4,581 bytes, 62%. By routine, 36 of the 49 routines his code runs are C (73%): the 36 rows
+above against the 13 listed as not decompiled.
+The motion (`$F234-$F2C6` but `$F298`) and sound (`$F752`) primitives are decompiled too, and they
+also serve every other object.
 
-**Next routines, in order:** the background probe `$D120` with its snaps (every move uses them),
-the contact tests `$D202`/`$D291`, the climbing steps and the walls move, the Select refill, then
-modes 15 and 16 and the row change. Those last three wait for frames, so they need a C form of
-`task_yield` before they can leave `Decomp_RunOriginal`. After that comes `death_or_warp` (`$DC3E`,
-called from the frame loop at `$DBAD`) and the frame loop itself.
+**Next routines, in order:** modes 15 and 16 and the row change. They wait for frames, so they
+need a C form of `task_yield` before they can leave `Decomp_RunOriginal`. After that comes
+`death_or_warp` (`$DC3E`, called from the frame loop at `$DBAD`) and the frame loop itself.
 
 ### Adding a routine
 

@@ -8,3 +8,5 @@ void Obj_ApplyVelocityY(int slot);
 void Obj_ApplyGravity(int slot);
 void Obj_MoveRight(int slot);
 void Obj_MoveLeft(int slot);
+void Obj_AddVelocityY(int slot);
+void Obj_SubVelocityY(int slot);

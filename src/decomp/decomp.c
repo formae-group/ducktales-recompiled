@@ -223,6 +223,9 @@ static bool agree(const DecompRoutine *rt, uint8_t entry_s, bool returned, const
     if ((rt->out & OUT_P) && ((orig->p ^ c->p) & (P_N | P_V | P_Z | P_C))) {
         return false;
     }
+    if ((rt->out & OUT_C) && ((orig->p ^ c->p) & P_C)) {
+        return false;
+    }
     return true;
 }
 
