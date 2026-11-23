@@ -190,6 +190,22 @@ POKES = [
         {0x709: 0xA0, 0x719: 0x24, 0x649: 0xB4, 0x729: 0x60, 0x739: 0x00, 0x609: 0x80, 0x699: 0x00},
         ['Obj_Boulder', 'Obj_WalkRight'],
     ),
+    # kind $2D dropped on Scrooge: taken, it gives an HP dot back
+    (
+        'treat-taken',
+        {
+            0x709: 0xA1,
+            0x719: 0x2D,
+            0x649: 0xB0,
+            0x729: 0x58,
+            0x739: 0x00,
+            0x609: 0x80,
+            0x7E9: 0x00,
+            0x7C9: 0x00,
+            0x7B9: 0x00,
+        },
+        ['Obj_Treat', 'Hud_RestoreDot'],
+    ),
 ]
 
 # name, route, options, routines that must be compared

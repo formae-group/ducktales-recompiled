@@ -489,6 +489,7 @@
 #define DT_CODE_KIND_FLYER           0x916C /* kind $0D */
 #define DT_CODE_KIND_SWING           0x9225 /* kind $0E */
 #define DT_CODE_KIND_SWOOPER         0x9430 /* kind $11 */
+#define DT_CODE_KIND_TREAT           0xA2BA /* kind $2D */
 #define DT_CODE_KIND_TREAT_SPOUT     0xA1E9 /* kind $2C */
 #define DT_CODE_KIND_ROLLER          0x9FEC /* kind $23 */
 #define DT_CODE_KIND_BOULDER         0xA024 /* kind $24 */

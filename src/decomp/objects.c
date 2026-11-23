@@ -2666,6 +2666,49 @@ static void Obj_TreatSpout(uint8_t x)
     ResetAnim(x);
 }
 
+/* Kind $2D ($A2BA): a treat that rises, then falls at up to 3 px a frame
+ * while its sideways speed runs down by $40 a frame; touched, it is freed
+ * and Scrooge gets an HP dot back ($8B82). It is freed past Y $F0. */
+static void Obj_Treat(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_TREAT, 0x22, x, gObjects->kind[x]);
+    if (Step(x) == 0) {
+        Obj_ApplyVelocityY(x);
+        Obj_ApplyGravity(x);
+        if (gObjects->vy[x] & 0x80) {
+            Obj_SetVelocityY(x, 0);
+            gObjects->state[x]++;
+        }
+    } else {
+        if (gObjects->vy[x] != 0xFD) {
+            Obj_ApplyGravity(x);
+        }
+        Obj_ApplyVelocityY(x);
+    }
+    if (gObjects->dir[x] != 0) {
+        if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+            Obj_MoveRight(x);
+        } else {
+            Obj_MoveLeft(x);
+        }
+        if (Step(x) != 0) {
+            Obj_SetSpeed(x, (uint16_t)(Obj_GetSpeed(x) - 0x40));
+            if (Obj_GetSpeed(x) == 0) {
+                gObjects->dir[x] = 0;
+            }
+        }
+    }
+    if (Obj_TouchScrooge(x)) {
+        gObjects->state[x] = 0;
+        Hud_RestoreDot();
+        return;
+    }
+    if (gObjects->y[x] >= 0xF0) {
+        gObjects->state[x] = 0;
+        gObjects->flags[x] = 0;
+    }
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -2788,6 +2831,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_TREAT_SPOUT:
             Obj_TreatSpout(slot);
+            break;
+        case OBJ_KIND_TREAT:
+            Obj_Treat(slot);
             break;
         case OBJ_KIND_DOOR:
             Obj_Door(slot);
@@ -3044,6 +3090,11 @@ static void Run_TreatSpout(Regs *r)
     Obj_TreatSpout(r->x);
 }
 
+static void Run_Treat(Regs *r)
+{
+    Obj_Treat(r->x);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -3213,6 +3264,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_TREAT, NULL, "Obj_Treat", Run_Treat, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_TREAT_SPOUT, NULL, "Obj_TreatSpout", Run_TreatSpout, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_ROLLER, NULL, "Obj_Roller", Run_Roller, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_BOULDER, NULL, "Obj_Boulder", Run_Boulder, 0, .bank = DT_BANK_OBJECTS },
