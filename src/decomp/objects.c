@@ -1618,11 +1618,15 @@ static void Run_MoneyAdd(Regs *r)
 static void Run_RefillHp(Regs *r)
 {
     Hud_RefillHp();
+    r->a = 0;
+    r->y = 0xFC;
 }
 
 static void Run_MoneyMax(Regs *r)
 {
     Money_Max();
+    r->a = 9;
+    r->y = 0xFF;
 }
 
 const DecompRoutine gObjectRoutines[] = {
@@ -1669,7 +1673,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_PICKUP_EXTRA_DOT, NULL, "Pickup_ExtraDot", Run_PickupExtraDot, 0, DT_OBJ_BANK },
     { DT_CODE_HUD_RESTORE_DOT, NULL, "Hud_RestoreDot", Run_RestoreDot, 0, DT_OBJ_BANK },
     { DT_CODE_MONEY_ADD, NULL, "Money_Add", Run_MoneyAdd, 0, DT_OBJ_BANK },
-    { DT_CODE_HUD_REFILL_HP, NULL, "Hud_RefillHp", Run_RefillHp, 0 },
-    { DT_CODE_MONEY_MAX, NULL, "Money_Max", Run_MoneyMax, 0 },
+    { DT_CODE_HUD_REFILL_HP, "ducktales.decomp.F812", "Hud_RefillHp", Run_RefillHp, OUT_A | OUT_Y },
+    { DT_CODE_MONEY_MAX, "ducktales.decomp.F83F", "Money_Max", Run_MoneyMax, OUT_A | OUT_Y },
 };
 const int gObjectRoutineCount = sizeof gObjectRoutines / sizeof gObjectRoutines[0];

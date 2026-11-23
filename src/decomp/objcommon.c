@@ -354,7 +354,13 @@ static void Run_TouchBlockV(Regs *r)
 
 static void Run_FaceScrooge(Regs *r)
 {
-    Obj_FaceScrooge(r->x);
+    uint8_t x = r->x;
+    Obj_FaceScrooge(x);
+    bool borrow = gObjects->worldX[x] < gObjects->worldX[P_];
+    r->a = (uint8_t)(gObjects->worldPage[x] - gObjects->worldPage[P_] - borrow);
+    if (gObjects->dir[x] == OBJ_DIR_LEFT) {
+        r->a = OBJ_DIR_LEFT;
+    }
 }
 
 static void Run_DistanceX(Regs *r)
@@ -370,6 +376,8 @@ static void Run_DistanceY(Regs *r)
 static void Run_MarkConsumed(Regs *r)
 {
     Obj_MarkConsumed(r->x);
+    r->y = (uint8_t)(gObjects->record[r->x] >> 3);
+    r->a = RAM_U8(DT_ADDR_CONSUMED + r->y);
 }
 
 static void Run_DifficultAction(Regs *r)
@@ -380,6 +388,8 @@ static void Run_DifficultAction(Regs *r)
 static void Run_SetSpeedIndex(Regs *r)
 {
     Obj_SetSpeedIndex(r->x, r->a);
+    r->y = (uint8_t)(r->a << 1);
+    r->a = gObjects->speed[r->x];
 }
 
 static void Run_FindFreeSlot(Regs *r)
@@ -398,12 +408,12 @@ const DecompRoutine gObjCommonRoutines[] = {
     { DT_CODE_OBJ_DESPAWN, NULL, "Obj_Despawn", Run_Despawn, 0 },
     { DT_CODE_OBJ_TOUCH_BLOCK_H, NULL, "Obj_TouchBlockH", Run_TouchBlockH, OUT_C },
     { DT_CODE_OBJ_TOUCH_BLOCK_V, NULL, "Obj_TouchBlockV", Run_TouchBlockV, OUT_C },
-    { DT_CODE_OBJ_FACE_SCROOGE, NULL, "Obj_FaceScrooge", Run_FaceScrooge, 0 },
-    { DT_CODE_OBJ_DISTANCE_X, NULL, "Obj_DistanceX", Run_DistanceX, OUT_A },
-    { DT_CODE_OBJ_DISTANCE_Y, NULL, "Obj_DistanceY", Run_DistanceY, OUT_A },
-    { DT_CODE_OBJ_MARK_CONSUMED, NULL, "Obj_MarkConsumed", Run_MarkConsumed, 0 },
+    { DT_CODE_OBJ_FACE_SCROOGE, "ducktales.decomp.F6BD", "Obj_FaceScrooge", Run_FaceScrooge, OUT_A },
+    { DT_CODE_OBJ_DISTANCE_X, "ducktales.decomp.F7DA", "Obj_DistanceX", Run_DistanceX, OUT_A },
+    { DT_CODE_OBJ_DISTANCE_Y, "ducktales.decomp.F7CC", "Obj_DistanceY", Run_DistanceY, OUT_A },
+    { DT_CODE_OBJ_MARK_CONSUMED, "ducktales.decomp.F7F0", "Obj_MarkConsumed", Run_MarkConsumed, OUT_A | OUT_Y },
     { DT_CODE_OBJ_DIFFICULT_ACTION, NULL, "Obj_DifficultAction", Run_DifficultAction, 0 },
-    { DT_CODE_OBJ_SET_SPEED, NULL, "Obj_SetSpeedIndex", Run_SetSpeedIndex, 0 },
-    { DT_CODE_OBJ_FIND_FREE, NULL, "Obj_FindFreeSlot", Run_FindFreeSlot, OUT_X | OUT_C },
+    { DT_CODE_OBJ_SET_SPEED, "ducktales.decomp.F312", "Obj_SetSpeedIndex", Run_SetSpeedIndex, OUT_A | OUT_Y },
+    { DT_CODE_OBJ_FIND_FREE, "ducktales.decomp.F7BE", "Obj_FindFreeSlot", Run_FindFreeSlot, OUT_X | OUT_C },
 };
 const int gObjCommonRoutineCount = sizeof gObjCommonRoutines / sizeof gObjCommonRoutines[0];

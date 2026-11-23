@@ -171,3 +171,59 @@ id = "ducktales.decomp.F1F9"
 addr = 0xF1F9
 length = 8
 crc32 = 0x9496E318
+
+# Obj_SetSpeedIndex
+[[mod_function_hook]]
+id = "ducktales.decomp.F312"
+addr = 0xF312
+length = 8
+crc32 = 0x86C3C87D
+
+# Obj_FaceScrooge
+[[mod_function_hook]]
+id = "ducktales.decomp.F6BD"
+addr = 0xF6BD
+length = 8
+crc32 = 0xA4CA0EC3
+
+# Obj_FindFreeSlot
+[[mod_function_hook]]
+id = "ducktales.decomp.F7BE"
+addr = 0xF7BE
+length = 8
+crc32 = 0x5A610BF8
+
+# Obj_DistanceY
+[[mod_function_hook]]
+id = "ducktales.decomp.F7CC"
+addr = 0xF7CC
+length = 8
+crc32 = 0xCEC41FA7
+
+# Obj_DistanceX
+[[mod_function_hook]]
+id = "ducktales.decomp.F7DA"
+addr = 0xF7DA
+length = 8
+crc32 = 0x6C8400A8
+
+# Obj_MarkConsumed
+[[mod_function_hook]]
+id = "ducktales.decomp.F7F0"
+addr = 0xF7F0
+length = 8
+crc32 = 0x353FCE0E
+
+# Hud_RefillHp
+[[mod_function_hook]]
+id = "ducktales.decomp.F812"
+addr = 0xF812
+length = 8
+crc32 = 0x1394DA66
+
+# Money_Max
+[[mod_function_hook]]
+id = "ducktales.decomp.F83F"
+addr = 0xF83F
+length = 8
+crc32 = 0xFAC618EC
