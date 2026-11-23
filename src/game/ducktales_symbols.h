@@ -328,6 +328,7 @@
 #define DT_ADDR_UNK_4C            0x004C /* $4C-$4E cleared as a scene starts (code; meaning unknown) */
 #define DT_ADDR_HELD_SLOT \
     0x004F /* slot | $80 of a marked object, $3C when it despawns; cleared at land load, respawn and scenes (code; meaning unknown) */
+#define DT_ADDR_MINES_BOSS_05E7  0x05E7 /* set to $55 when the African Mines boss starts (code; meaning unknown) */
 #define DT_ADDR_ROW_CHR_STATE    0x0050 /* row sprite-CHR stream state, negative = done (verified) */
 #define DT_ADDR_BLOCK_OPENED     0x005B /* a block was launched or uncovered this frame; cleared every frame (code) */
 #define DT_ADDR_TILE_EDIT_OFFSET 0x005C /* write offset of the $0440 queue (verified) */
@@ -611,6 +612,7 @@
 #define DT_CODE_KIND_FLYER           0x916C /* kind $0D */
 #define DT_CODE_KIND_SWING           0x9225 /* kind $0E */
 #define DT_CODE_KIND_SWOOPER         0x9430 /* kind $11 */
+#define DT_CODE_KIND_MINES_BOSS      0xA6D3 /* kind $28 */
 #define DT_CODE_KIND_THIEF           0xAC3D /* kind $30 */
 #define DT_CODE_KIND_TREAT           0xA2BA /* kind $2D */
 #define DT_CODE_KIND_TREAT_SPOUT     0xA1E9 /* kind $2C */
@@ -651,6 +653,7 @@
 #define DT_CODE_OBJ_BREAK            0x88DF /* pose $1C, then $88E4 */
 #define DT_CODE_OBJ_SHATTER          0x88E4 /* the debris animation */
 #define DT_CODE_OBJ_DEFEAT           0x8932 /* an enemy is beaten */
+#define DT_CODE_BOSS_HIT             0xF6D7 /* a counted hit on a boss; carry set when it beat it (code) */
 #define DT_CODE_OBJ_OPEN_BLOCK       0x8A11 /* an opened block or chest picks its item */
 #define DT_CODE_OBJ_BECOME_PICKUP    0x8A32 /* become a pickup now */
 #define DT_CODE_PICKUP_TAKE          0x8B21 /* Scrooge takes a pickup */
