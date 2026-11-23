@@ -1,9 +1,13 @@
 # Changelog
 
 All notable changes to DuckTales Recompiled are recorded here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). No version has been released yet.
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
+
+## [1.0.0] - 2026-11-23
+
+The first release.
 
 ### Added
 
@@ -100,3 +104,6 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 ### Removed
 
 - The Formae name from the application, its files and its data folder.
+
+[Unreleased]: https://github.com/formae-group/ducktales-recompiled/compare/v1.0.0...main
+[1.0.0]: https://github.com/formae-group/ducktales-recompiled/releases/tag/v1.0.0

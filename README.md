@@ -32,9 +32,9 @@ ROM-derived code locally.
 - **No sprite flicker.** Every sprite is drawn on every frame in a fixed order, with no 8-per-line or
   64-sprite limit, and the HUD stays visible. Presentation only; the machine is untouched.
 - **Native runtime.** The game runs on a native bus and renderer instead of an emulated PPU, and its
-  presented picture is checked pixel for pixel against the cycle-exact build. Sound is not played yet:
-  the native synth is still being built, and until it lands the game is silent
-  (`ducktales_cycle.exe` has sound).
+  presented picture is checked pixel for pixel against the cycle-exact build. Its sound comes from a
+  native synth of the APU, compared with the cycle build's APU on every route
+  ([docs/validation.md](docs/validation.md#native-synth)).
 - **No slowdown.** VBlank waits until the frame's logic is done, removing the console's lag frames
   without changing game logic.
 - **Modern presentation.** Direct3D 11, per-monitor DPI awareness, refresh-aware frame pacing,

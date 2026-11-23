@@ -193,6 +193,9 @@ The player build (`ducktales.exe` on the native runtime, docs/native-runtime.md 
 
 ## Native synth
 
+By ear (2026-11-22): the owner played the native player in its window and reports that the sound
+plays cleanly, with no stutter or glitch, while the window is not focused.
+
 `tests/audio_compare.py` records each route twice from power-on at 48 kHz: the cycle host's APU
 (`ducktales.exe --wav-out`) and the native runtime's synth (`ducktales_native --lag faithful
 --wav-out`, [audio.md](audio.md#native-synth)). Both runs also write `--ram-hash-out`; RAM and cycle
@@ -355,7 +358,27 @@ in replace), plus 11 poke cases and both event cases. At default decompilation s
 and matching oracle and interpreter output. The full 12-route decompilation suite passed on
 the flow branch before integration; it has not been rerun in full on this merge.
 
+## Release 1.0.0
+
+On main `8569c86` (the release tree before its changelog and documentation commit), 2026-11-23:
+
+- `tests/quick_verify.py --build build/headless --jobs 4`: 12/12 routes pass on the native
+  runtime, 82,626 frames compared, 10.6 s; with `--runtime cycle` 12/12 routes, 82,626 frames,
+  every golden field, 206.5 s. The golden files are the 9126ee3 recording, which 3f86ea7 reproduced
+  exactly ("Fast verification"), so the full gate of 9126ee3 carries over through them; the full
+  `verify_routes.py` was not run again on this tree.
+- `tests/window_smoke.py --build build/windows`: 18/18 PASS with the help markers (formae-ui
+  0.3.0), including the game running behind the menu on the native player (76 game frames) and no
+  game frame with `MenuPausesGame = on`.
+- The mods branch before its merge: `tests/package_test.py` 12/12 (13 files), `tests/mods_test.py`
+  47/47, `tests/native_player_test.py` `full_amazon` 60 of 60 pictures identical.
+
 ## Not verified
+
+- The full `tests/verify_routes.py`, `tests/enhancements_test.py` and `tests/decomp_test.py` on
+  the 1.0.0 tree itself (see "Release 1.0.0").
+- The "(?)" tooltips in this game's window by eye: only formae-ui's own self-test shot of a tooltip
+  was looked at; the window smoke test draws every page with the markers but no tooltip.
 
 - `tests/quick_verify.py --runtime cycle` with `--from-state` on routes other than the ones above, and
   any timing on an idle PC: every number in "Fast verification" was measured with other agents'
@@ -372,7 +395,7 @@ the flow branch before integration; it has not been rerun in full on this merge.
   `HudSplit = original` against the cycle build.
 - The extra voices by ear in the player's window, and `$37` (all four channels) under music; only
   off-screen runs were made.
-- The native synth by ear in the player's window (only hidden and off-screen runs were made);
+- The native synth by ear beyond the owner's check of the unfocused window ("Native synth");
   Launchpad ride music `$0B`; effects alone are covered only where routes trigger them (the
   "no music" row and the effects inside the music rows).
 - Window presentation as a person sees it on the 144 Hz monitor, gamepads, audio quality by ear,
