@@ -1096,9 +1096,11 @@ bool Decomp_SetMode(DecompMode mode)
         atexit(report_stats);
     }
     s_mode = mode;
+    const char *only = getenv("DT_DECOMP_ONLY");
     for (int i = 0; i < s_count; i++) {
         if (s_routine[i]->site_id) {
-            nes_mod_set_function_hook_enabled(s_routine[i]->site_id, mode != DECOMP_OFF);
+            bool on = mode != DECOMP_OFF && (!only || strstr(only, s_routine[i]->name));
+            nes_mod_set_function_hook_enabled(s_routine[i]->site_id, on);
         }
     }
     for (int i = 0; i < gFlowStopCount; i++) {

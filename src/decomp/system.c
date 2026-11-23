@@ -438,10 +438,13 @@ static void Run_OamClear(Regs *r)
     Oam_Clear();
 }
 
+/* Random_Next leaves its loop's X (4) and Y (0): the frame loop yields right
+ * after it, and the yield keeps X and Y on the stack. */
 static void Run_RandomNext(Regs *r)
 {
-    (void)r;
     Random_Next();
+    r->x = 4;
+    r->y = 0;
 }
 
 static void Run_ChrLoadList(Regs *r)
@@ -474,7 +477,7 @@ const DecompRoutine gSystemRoutines[] = {
     { DT_CODE_SCREEN_ON, "ducktales.decomp.C1A1", "Ppu_Unblank", Run_PpuUnblank, OUT_DEVICE },
     { DT_CODE_NT_FILL, "ducktales.decomp.C203", "Ppu_FillNametable", Run_FillNametable, OUT_DEVICE },
     { DT_CODE_OAM_CLEAR, "ducktales.decomp.C267", "Oam_Clear", Run_OamClear, 0 },
-    { DT_CODE_RANDOM, "ducktales.decomp.C2E6", "Random_Next", Run_RandomNext, 0 },
+    { DT_CODE_RANDOM, "ducktales.decomp.C2E6", "Random_Next", Run_RandomNext, OUT_X | OUT_Y },
     { DT_CODE_CHR_LOAD, "ducktales.decomp.C301", "Chr_LoadList", Run_ChrLoadList, OUT_DEVICE },
     { DT_CODE_PALETTE_SCENE, "ducktales.decomp.F76D", "Palette_LoadScene", Run_PaletteLoadScene, 0 },
     { DT_CODE_ROW_CHR_STREAM, "ducktales.decomp.C42C", "Chr_StreamRow", Run_ChrStreamRow, OUT_DEVICE },

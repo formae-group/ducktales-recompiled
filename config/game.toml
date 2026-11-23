@@ -292,14 +292,14 @@ crc32 = 0xED4A869E
 
 # Palette_FadeIn
 [[mod_function_hook]]
-id = "ducktales.decomp.C279"
+id = "ducktales.decomp.stop.C279"
 addr = 0xC279
 length = 8
 crc32 = 0x4BEACFCA
 
 # Palette_FadeOut
 [[mod_function_hook]]
-id = "ducktales.decomp.C282"
+id = "ducktales.decomp.stop.C282"
 addr = 0xC282
 length = 8
 crc32 = 0xA8DC18AB
