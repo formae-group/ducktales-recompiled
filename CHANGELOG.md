@@ -7,6 +7,8 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- Every setting in the menu, the enhancements included, has a "(?)" after its label with a tooltip
+  saying what it does, shown to the mouse and under keyboard or controller focus (formae-ui 0.3.0).
 - The project lives on GitHub (https://github.com/formae-group/ducktales-recompiled), with releases
   there and a GitHub Actions check of the layout and the Python syntax on every push and pull
   request. The `external/formae-ui` submodule is fetched from github.com/formae-group/formae-ui.

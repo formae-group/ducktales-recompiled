@@ -146,13 +146,16 @@ void page_general()
     app_menu_prefs_get(&prefs);
     const AppMenuPrefs was = prefs;
     ui::section("Menu");
-    ui::slider_percent("Menu background opacity", &prefs.opacity, 0, 100, 5);
+    ui::slider_percent("Menu background opacity", &prefs.opacity, 0, 100, 5, nullptr,
+                       "How much the menu darkens the game behind it.");
     bool nav = prefs.pad_nav != 0;
-    if (ui::toggle("Controller navigation", &nav)) {
+    if (ui::toggle("Controller navigation", &nav,
+                   "Move through this menu with a controller's D-pad, sticks and buttons.")) {
         prefs.pad_nav = nav;
     }
     bool pause = prefs.pause != 0;
-    if (ui::toggle("Pause game while menu is open", &pause)) {
+    if (ui::toggle("Pause game while menu is open", &pause,
+                   "Freeze the game while the menu is open. When off, the game keeps running behind it.")) {
         prefs.pause = pause;
     }
     if (std::memcmp(&prefs, &was, sizeof prefs)) {
@@ -173,27 +176,42 @@ void page_graphics(SDL_Window *win)
     app_display_get(&d);
     const AppDisplay was = d;
     ui::section("Display");
-    ui::combo("Display mode", &d.fullscreen, MODES, 3);
+    ui::combo("Display mode", &d.fullscreen, MODES, 3, nullptr,
+              "Windowed keeps the desktop around the game. Borderless full screen covers the screen and switches "
+              "instantly; exclusive full screen takes over the display.");
     ImGui::BeginDisabled(d.fullscreen != 0);
-    ui::slider("Window size", &d.window_scale, 1, 8, 1, "%d\xC3\x97");
+    ui::slider("Window size", &d.window_scale, 1, 8, 1, "%d\xC3\x97", nullptr,
+               "The window's size as a multiple of the NES picture. Windowed mode only.");
     ImGui::EndDisabled();
     bool integer = d.integer_scale != 0;
-    if (ui::toggle("Integer scaling", &integer)) {
+    if (ui::toggle("Integer scaling", &integer,
+                   "Scale the picture by whole multiples only, so every pixel has the same size. Leaves a border "
+                   "around the picture.")) {
         d.integer_scale = integer;
     }
     ui::section("Picture");
-    ui::combo("Pixels", &d.pixels, PIXELS, APP_PIXELS_COUNT);
-    ui::combo("Pixel aspect", &d.aspect, ASPECT, APP_ASPECT_COUNT);
-    ui::combo("Crop overscan", &d.overscan, OVERSCAN, APP_OVERSCAN_COUNT);
-    ui::combo("HUD split line", &d.clean_split, SPLIT, 2);
+    ui::combo("Pixels", &d.pixels, PIXELS, APP_PIXELS_COUNT, nullptr,
+              "Nearest keeps hard edges, but at sizes that are not whole multiples some pixels are wider than "
+              "others. Sharp keeps the edges and evens the pixels out. Smooth blurs the picture.");
+    ui::combo("Pixel aspect", &d.aspect, ASPECT, APP_ASPECT_COUNT, nullptr,
+              "Square shows the NES pixels as squares. 8:7 makes them slightly wider, as a television did.");
+    ui::combo("Crop overscan", &d.overscan, OVERSCAN, APP_OVERSCAN_COUNT, nullptr,
+              "Hide the edges a television cut off: 8 lines at the top and bottom, or those and 8 columns on "
+              "each side.");
+    ui::combo("HUD split line", &d.clean_split, SPLIT, 2, nullptr,
+              "Clean removes the broken line where the HUD meets the level. Original shows it as the console "
+              "did.");
     ui::section("Motion");
-    ui::combo("Frame pacing", &d.pacing, PACING, APP_PACING_COUNT,
-              app_vsync_pending() ? ui::restart_to_apply : nullptr);
+    ui::combo("Frame pacing", &d.pacing, PACING, APP_PACING_COUNT, app_vsync_pending() ? ui::restart_to_apply : nullptr,
+              "How pictures reach the display. Auto uses VSync on displays up to 70 Hz and a steady hold "
+              "above that; VSync and Steady force one. Applies at the next launch.");
     if (std::memcmp(&d, &was, sizeof d)) {
         app_display_set(win, &d);
     }
     bool sprites = dt_sprites_get();
-    if (ui::toggle(DT_SPRITES_LABEL, &sprites)) {
+    if (ui::toggle(DT_SPRITES_LABEL, &sprites,
+                   "Draw every sprite on every frame, without the console's 8-per-line limit, so nothing flickers. "
+                   "Changes only the picture.")) {
         dt_sprites_set(sprites);
         ducktales_host_set_saved_sprites(sprites);
         app_settings_changed();
@@ -205,19 +223,23 @@ void page_audio(SDL_Window *win)
     AppDisplay d;
     app_display_get(&d);
     ui::section("Volume");
-    if (ui::slider_percent("Master volume", &d.volume, 0, 100, 5,
-                           app_volume_pending() ? ui::restart_to_apply : nullptr)) {
+    if (ui::slider_percent("Master volume", &d.volume, 0, 100, 5, app_volume_pending() ? ui::restart_to_apply : nullptr,
+                           "The volume of all the game's sound.")) {
         app_display_set(win, &d);
     }
 #if DUCKTALES_NATIVE_PLAYER
     ui::section("Sound effects");
     bool music = ducktales_host_music_under_effects();
-    if (ui::toggle("Keep music under sound effects", &music)) {
+    if (ui::toggle("Keep music under sound effects", &music,
+                   "Keep playing the part of the music a sound effect takes over on the console. Plays on extra "
+                   "channels and changes nothing in the game.")) {
         ducktales_host_set_music_under_effects(music);
         app_settings_changed();
     }
     bool overlap = ducktales_host_overlap_effects();
-    if (ui::toggle("Overlapping sound effects", &overlap)) {
+    if (ui::toggle("Overlapping sound effects", &overlap,
+                   "Let a sound effect finish when a newer one starts instead of cutting it off. Plays on extra "
+                   "channels and changes nothing in the game.")) {
         ducktales_host_set_overlap_effects(overlap);
         app_settings_changed();
     }
@@ -263,7 +285,8 @@ void page_gameplay()
 {
     ui::section("Speed");
     bool on = ducktales_host_no_slowdown();
-    if (ui::toggle("No slowdown", &on)) {
+    if (ui::toggle("No slowdown", &on,
+                   "Remove the console's slowdown when many objects are on screen. The game logic is unchanged.")) {
         ducktales_host_set_no_slowdown(on);
         app_settings_changed();
     }
@@ -286,7 +309,7 @@ void page_mods()
 {
     ui::section("Mods");
     bool on = app_mods_enabled();
-    if (ui::toggle("Enable mods", &on)) {
+    if (ui::toggle("Enable mods", &on, "Load the mods switched on in the list below. Mods higher in the list win.")) {
         app_mods_set_enabled(on);
         app_settings_changed();
     }
@@ -353,14 +376,15 @@ void page_enh_gameplay()
         ImGui::PushID(e);
         if (in->kind == DT_ENH_KIND_TOGGLE) {
             bool on = v != 0;
-            if (ui::toggle(in->label, &on)) {
+            if (ui::toggle(in->label, &on, in->help)) {
                 v = on;
             }
         } else {
             ui::slider(in->label, &v, in->min, in->max, in->step,
                        in->kind == DT_ENH_KIND_PERCENT ? "%d%%"
                        : v == in->stock                ? "Off"
-                                                       : "%d");
+                                                       : "%d",
+                       nullptr, in->help);
         }
         ImGui::PopID();
         enh_store((DtEnh)e, v);
