@@ -84,6 +84,8 @@ POKES = [
     ('invulnerable-held', {0x7D: 0x90, 0x75: 0x80}, ['Player_Update']),
     ('slippery', {POKE_FRAME + 10 * i: {0x71: 0x01} for i in range(20)}, ['Player_Walk']),
     ('hud-total', {0xAB: 0x01}, ['Hud_RefreshTotal']),
+    ('scene-1', {0x78: 0x81}, ['Scene_Placed', 'Scene_Done']),
+    ('scene-2', {0x78: 0x82}, ['Scene_Placed', 'Scene_Done']),
     ('final-trip', {100: {0x5E: 0x01}}, ['LandSelect_FinalWait', 'LandSelect_FinalScene']),
     ('all-treasures', {100: {0x5D: 0x01, 0xA0: 0x1F}}, ['LandSelect_Banked', 'LandSelect_FinalWait']),
     (

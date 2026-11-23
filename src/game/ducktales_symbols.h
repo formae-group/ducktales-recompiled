@@ -238,6 +238,7 @@
 #define DT_ADDR_STREAM_PAGE       0x002C /* page of the screen being streamed (verified) */
 #define DT_ADDR_PREV_CAMERA_X     0x0025 /* previous frame's $F2 (verified) */
 #define DT_ADDR_UNK_2E            0x002E /* cleared every frame by the frame loop (code; meaning unknown) */
+#define DT_ADDR_UNK_4C            0x004C /* $4C-$4E cleared as a scene starts (code; meaning unknown) */
 #define DT_ADDR_UNK_4F            0x004F /* cleared at land load, respawn and scenes (code; meaning unknown) */
 #define DT_ADDR_ROW_CHR_STATE     0x0050 /* row sprite-CHR stream state, negative = done (verified) */
 #define DT_ADDR_SELECT_MESSAGE \
@@ -308,6 +309,7 @@
 #define DT_BANK_OBJECTS        6
 #define DT_B6_OBJECTS          0x8000 /* every object's per-frame code */
 #define DT_B6_SPAWN_TABLES     0xAE20 /* the land's spawn table pointers into $60-$69 (code) */
+#define DT_B6_SPAWN_TABLES_MAP 0xAE22 /* X = map: its spawn table pointers into $60-$69 (code) */
 #define DT_B6_SPAWN_RESET      0xAE60
 #define DT_B6_SPAWN            0xAEA0
 
@@ -358,6 +360,13 @@
 #define DT_FLOW_RESPAWN_DRAWN      0xDDAB
 #define DT_FLOW_GAME_OVER_NEXT     0xDEDE
 #define DT_FLOW_LAND_EXIT_NEXT     0xDF1E
+#define DT_FLOW_SCENE_FADED        0xDF2A
+#define DT_FLOW_SCENE_SCREEN_OFF   0xDF45
+#define DT_FLOW_SCENE_CHR          0xDF64
+#define DT_FLOW_SCENE_PLACED       0xDF6C
+#define DT_FLOW_SCENE_SHOWN        0xDFC4
+#define DT_FLOW_SCENE_FADE_IN      0xDFC7
+#define DT_FLOW_SCENE_DONE         0xDFCE
 #define DT_FLOW_TITLE_START        0xD4F1
 #define DT_FLOW_TITLE_FADED        0xD500
 #define DT_FLOW_TITLE_BLACK        0xD509
@@ -437,6 +446,9 @@
 #define DT_DATA_CHECKPOINT_ROW    0xDC2C /* per land: boss-checkpoint row and page */
 #define DT_DATA_CHECKPOINT_PAGE   0xDC35
 #define DT_DATA_RESPAWN           0xDDC1 /* 9-byte respawn and warp entries (levels.md) */
+#define DT_DATA_SCENE_OBJECTS_AT  0xDFCE /* per scene: its objects' offset from DT_DATA_SCENE_OBJECTS */
+#define DT_DATA_SCENE_OBJECTS     0xDFD1 /* action, X, page, Y, kind, hitbox each; $FF ends a scene's */
+#define DT_DATA_SCENE_MODE        0xDFEA /* per scene: Scrooge's mode ($39) */
 #define DT_DATA_GAME_OVER_SPRITES 0xDEE7
 #define DT_GAME_OVER_SPRITES_LEN  33
 

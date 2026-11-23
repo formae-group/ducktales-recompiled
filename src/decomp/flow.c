@@ -23,7 +23,7 @@
  * object spawner (bank 6 $AEA0), the fades $C279/$C282, $C197/$C1A1, $C42C,
  * $C78F, $C830, the object code (bank 6 $8000), Scrooge's update $E354, the
  * final trip's take-off scene (bank 4 $BE00) and the routines of this
- * subsystem that are not decompiled yet (scenes, ending, reset).
+ * subsystem that are not decompiled yet (ending, reset).
  */
 #include "decomp/decomp.h"
 #include "decomp/sound.h"
@@ -92,6 +92,13 @@
 #define SELECT_MESSAGE_ALL    3 /* all five treasures held */
 #define SELECT_MESSAGE_FINAL  4
 #define SFX_BANK_STEP         0x15
+#define MUSIC_SCENE           0x0B
+#define SCENE_NUMBER          0x0F /* $78: the scene, below its request bit */
+#define SCENE_MAP             6    /* map of scene 0; the scene's map follows */
+#define SCENE_RESPAWN         0x10 /* respawn entry of scene 0 */
+#define SCENE_TILESET         3
+#define SCENE_PALETTE         0x70
+#define SCENE_OBJECT_STATE    0xA0
 #define BANK_STEPS            10 /* steps of the transfer per two frames */
 #define BANK_WAIT             2
 #define BANK_TOTAL_PPU        0x220A
@@ -131,6 +138,7 @@
 #define gRowScrollAddrHi RAM_U8(DT_ADDR_ROW_SCROLL_ADDR_HI)
 #define gSprite0Y        RAM_U8(DT_ADDR_SPRITE0_Y)
 #define gHudGate         RAM_U8(DT_ADDR_HUD_GATE)
+#define gUnk4C(i)        RAM_U8(DT_ADDR_UNK_4C + (i))
 #define gSelectMessage   RAM_U8(DT_ADDR_SELECT_MESSAGE)
 #define gSelectMove      RAM_U8(DT_ADDR_SCRATCH10)
 #define gBankSteps       RAM_U8(DT_ADDR_SCRATCH10)
@@ -688,6 +696,7 @@ static void LandLoad(Regs *r);
 static void FrameLoop_Yield(Regs *r);
 static void FrameLoop_Requests(Regs *r);
 static void FrameLoop_Sprites(Regs *r);
+static void Scene(Regs *r);
 static void FrameLoop_AfterSpawn(Regs *r);
 
 /* $DB36: one frame of play. The ending replaces it once started. Start
@@ -803,8 +812,9 @@ static void FrameLoop_AfterDeath(Regs *r)
         Hud_RefreshTotal(r);
     }
     if (gScene & 0x80) {
-        Jsr(DT_CODE_SCENE, DT_FLOW_FRAME_SPRITES, 0);
-        return;
+        if (!Gosub(Scene, r, DT_FLOW_FRAME_SPRITES)) {
+            return;
+        }
     }
     FrameLoop_Sprites(r);
 }
@@ -1733,6 +1743,124 @@ static void LandSelect_Next(Regs *r)
     LandSelect_Loop(r);
 }
 
+/* ---- scenes ---- */
+
+static void Scene_Placed(Regs *r);
+static void Run_RespawnEntry(Regs *r);
+
+/* $DF27: a special scene ($78 bit 7; the Launchpad ride home and the sky
+ * scene): the picture fades out, the land's movement state is cleared, and
+ * the scene's map is loaded with rendering off. */
+static void Scene(Regs *r)
+{
+    Decomp_Enter(DT_CODE_SCENE, r->a, r->x, r->y);
+    Jsr(DT_CODE_FADE_OUT, DT_FLOW_SCENE_FADED, 0);
+}
+
+/* $DF2A */
+static void Scene_Faded(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_SCENE_FADED, r->a, r->x, r->y);
+    gHudSplit = 0;
+    gUnk4F = 0;
+    gBossFight = 0;
+    gRowScroll = 0;
+    gUnk4C(0) = 0;
+    gUnk4C(1) = 0;
+    gUnk4C(2) = 0;
+    RAM_U8(DT_ADDR_SLIPPERY) = 0;
+    RAM_U8(DT_ADDR_MOMENTUM_DIR) = 0;
+    RAM_U8(DT_ADDR_MOVE_SIDE) = 1;
+    r->a = 1;
+    Jsr(DT_CODE_SCREEN_OFF, DT_FLOW_SCENE_SCREEN_OFF, 0);
+}
+
+/* $DF45: the scene's map header, spawn tables and CHR. */
+static void Scene_ScreenOff(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_SCENE_SCREEN_OFF, r->a, r->x, r->y);
+    Call(r, DT_CODE_CLEAR_OBJECTS);
+    gRam[DT_ADDR_TILESET_BANK] = SCENE_TILESET;
+    r->a = SCENE_TILESET;
+    SelectBank(r, DT_BANK_OBJECTS);
+    gScene &= SCENE_NUMBER;
+    r->a = gScene;
+    r->x = (uint8_t)(gScene + SCENE_MAP);
+    Call(r, DT_CODE_MAP_HEADER);
+    Call(r, DT_B6_SPAWN_TABLES_MAP);
+    Jsr(DT_CODE_CHR_LOAD, DT_FLOW_SCENE_CHR, OUT_X);
+}
+
+/* $DF64: Scrooge and the camera at the scene's respawn entry. */
+static void Scene_Chr(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_SCENE_CHR, r->a, r->x, r->y);
+    r->a = (uint8_t)(gScene + SCENE_RESPAWN);
+    if (Gosub(Run_RespawnEntry, r, DT_FLOW_SCENE_PLACED)) {
+        Scene_Placed(r);
+    }
+}
+
+/* $DF6C: the scene's palette, Scrooge's mode and the scene's objects (in
+ * every other slot from 0), its music; rendering on. */
+static void Scene_Placed(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_SCENE_PLACED, r->a, r->x, r->y);
+    r->x = SCENE_PALETTE;
+    Land_LoadPalette(r, SCENE_PALETTE);
+    uint8_t scene = gScene;
+    gPlayerMode = Rom((uint16_t)(DT_DATA_SCENE_MODE + scene));
+    r->y = Rom((uint16_t)(DT_DATA_SCENE_OBJECTS_AT + scene));
+    r->x = 0;
+    for (;;) {
+        uint16_t e = (uint16_t)(DT_DATA_SCENE_OBJECTS + r->y);
+        r->a = Rom(e);
+        if (r->a & 0x80) {
+            break;
+        }
+        uint8_t slot = r->x;
+        gObjects->action[slot] = r->a;
+        gObjects->worldX[slot] = Rom((uint16_t)(e + 1));
+        gObjects->worldPage[slot] = Rom((uint16_t)(e + 2));
+        gObjects->y[slot] = Rom((uint16_t)(e + 3));
+        gObjects->kind[slot] = Rom((uint16_t)(e + 4));
+        gObjects->hitbox[slot] = Rom((uint16_t)(e + 5));
+        gObjects->state[slot] = SCENE_OBJECT_STATE;
+        gObjects->flags[slot] = SCENE_OBJECT_STATE;
+        gObjects->animTimer[slot] = 0;
+        gObjects->animFrame[slot] = 0;
+        r->y = (uint8_t)(r->y + 6);
+        r->x = (uint8_t)(r->x + 2);
+        if (r->x == 0) {
+            break;
+        }
+    }
+    MusicRequest(r, MUSIC_SCENE);
+    Jsr(DT_CODE_SCREEN_ON, DT_FLOW_SCENE_SHOWN, 0);
+}
+
+/* $DFC4 */
+static void Scene_Shown(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_SCENE_SHOWN, r->a, r->x, r->y);
+    Yield(DT_FLOW_SCENE_FADE_IN);
+}
+
+/* $DFC7: the HUD split on, and the picture fades in. */
+static void Scene_FadeIn(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_SCENE_FADE_IN, r->a, r->x, r->y);
+    gHudSplit = SPLIT_ON;
+    r->a = SPLIT_ON;
+    Jsr(DT_CODE_FADE_IN, DT_FLOW_SCENE_DONE, 0);
+}
+
+/* $DFCE */
+static void Scene_Done(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_SCENE_DONE, r->a, r->x, r->y);
+}
+
 /* ---- site adapters ---- */
 
 static void Run_LandPalette(Regs *r)
@@ -1832,6 +1960,14 @@ const DecompRoutine gFlowRoutines[] = {
     RESUME(DT_FLOW_SELECT_RESULT_READ, "LandSelect_ResultRead", LandSelect_ResultRead, 0),
     RESUME(DT_FLOW_SELECT_CURSOR, "LandSelect_Cursor", LandSelect_Cursor, 0),
     RESUME(DT_FLOW_SELECT_NEXT, "LandSelect_Next", LandSelect_Next, 0),
+    TASK(DT_CODE_SCENE, NULL, "Scene", Scene, 0),
+    RESUME(DT_FLOW_SCENE_FADED, "Scene_Faded", Scene_Faded, 0),
+    RESUME(DT_FLOW_SCENE_SCREEN_OFF, "Scene_ScreenOff", Scene_ScreenOff, 0),
+    RESUME(DT_FLOW_SCENE_CHR, "Scene_Chr", Scene_Chr, 0),
+    RESUME(DT_FLOW_SCENE_PLACED, "Scene_Placed", Scene_Placed, 0),
+    RESUME(DT_FLOW_SCENE_SHOWN, "Scene_Shown", Scene_Shown, 0),
+    RESUME(DT_FLOW_SCENE_FADE_IN, "Scene_FadeIn", Scene_FadeIn, 0),
+    RESUME(DT_FLOW_SCENE_DONE, "Scene_Done", Scene_Done, 0),
     TASK(DT_CODE_BANK_TRANSFER, NULL, "BankTransfer", BankTransfer, 0),
     RESUME(DT_FLOW_BANK_NEXT, "BankTransfer_Next", BankTransfer_Next, 0),
     TASK(DT_CODE_WAIT_A, NULL, "WaitA", WaitA, 0),
@@ -1848,7 +1984,7 @@ const DecompStop gFlowStops[] = {
     STOP(DT_CODE_TASK_YIELD, "FFAC"), STOP(DT_CODE_RESET, "FEE0"),       STOP(DT_CODE_FADE_IN, "C279"),
     STOP(DT_CODE_FADE_OUT, "C282"),   STOP(DT_CODE_SCREEN_OFF, "C197"),  STOP(DT_CODE_SCREEN_ON, "C1A1"),
     STOP(DT_B6_OBJECTS, "8000.6"),    STOP(DT_B6_SPAWN, "AEA0.6"),       STOP(DT_CODE_NT_FILL, "C203"),
-    STOP(DT_CODE_CHR_LOAD, "C301"),   STOP(DT_B5_PPU_STRINGS, "BAB0.5"), STOP(DT_CODE_SCENE, "DF27"),
-    STOP(DT_CODE_ENDING, "E1AF"),     STOP(DT_CODE_TASK_WAIT, "FFA5"),   STOP(DT_B4_FINAL_TRIP, "BE00.4"),
+    STOP(DT_CODE_CHR_LOAD, "C301"),   STOP(DT_B5_PPU_STRINGS, "BAB0.5"), STOP(DT_CODE_ENDING, "E1AF"),
+    STOP(DT_CODE_TASK_WAIT, "FFA5"),  STOP(DT_B4_FINAL_TRIP, "BE00.4"),
 };
 const int gFlowStopCount = sizeof gFlowStops / sizeof gFlowStops[0];
