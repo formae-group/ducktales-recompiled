@@ -68,11 +68,20 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - Reverse-engineering references: memory map, functions, Scrooge's movement, game state, levels,
   rendering pipeline and sound driver.
 
+- Fast verification tier, `tests/quick_verify.py`: golden per-frame hashes recorded once from a
+  verified build, the native runtime or the cycle build at alignment 0, a stop at the first
+  differing frame with the fields that differ, route selection by the PRG addresses a change
+  touches and starts from recorded save states. The full `tests/verify_routes.py` moves to nightly
+  runs and releases.
+- `ducktales_native --save-state F:FILE` and `--load-state FILE`.
+
 ### Changed
 
 - One code layout for every C, C++ and Python source: `.clang-format` (4 spaces, 120 columns,
   braces always, no one-line statements) and Black, applied by `tools/format.py` (`--check` to
   verify). The machine and every hash are unchanged.
+- The cycle host's `--ram-hash-out` numbers frames on from a loaded state (`--load-state`), as
+  `--hash-out` does.
 - The menu and the first-run screen are drawn by [formae-ui](https://github.com/formae-group/formae-ui)
   0.1.0 (`external/formae-ui`), Formae's menu library extracted from them for the next ports. Their
   look and behaviour are unchanged: the 16 self-test PNGs are pixel-identical.

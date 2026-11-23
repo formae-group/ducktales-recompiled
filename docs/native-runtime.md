@@ -183,6 +183,13 @@ the store instruction, so a store that is the last instruction of a frame lands 
 on the console and in this one here. The next frame agrees again, RAM is never affected, and a
 renderer only reads the memories at line 0 of the following frame, after the write in both.
 
+`ducktales_native --save-state F:FILE` (repeatable) writes `native_state_save` after frame F with
+the frame to continue at, and `--load-state FILE` continues from it: the route's input from that
+frame on, every log's frame numbers continuing the saved run's. The lag mode is not in the state, so
+a run is loaded with the same `--lag`. `tests/quick_verify.py --record` saves one every 500 frames
+of every route and replays each segment from its state against the golden frames (161 states, all
+equal), and `--from-state` starts the native runtime from them.
+
 Each place the native runtime can diverge, and what catches it:
 
 | Divergence point | What goes wrong | How it shows | Found |
@@ -437,7 +444,8 @@ host's `--present-out` names it, and can check a save state round trip.
 1. Listen to the native synth in the player's window (it is compared only by `tests/audio_compare.py`).
 2. The split column from the write's dot (`NvSegment.split_column`), so the original HUD split line
    jitters as on the console; with the default clean split it is not shown.
-3. Keep `tests/native_routes.py` and `tests/native_player_test.py` in the verification set.
+3. Keep `tests/native_routes.py` and `tests/native_player_test.py` in the verification set;
+   `tests/quick_verify.py` runs the same comparison against recorded golden hashes in seconds.
 
 ## Not verified
 
