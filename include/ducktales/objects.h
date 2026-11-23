@@ -59,6 +59,7 @@ extern "C" {
 #define OBJ_KIND_RISING_SHOT     0x27 /* a shot that flies up and sideways (code) */
 #define OBJ_KIND_DROPPING        0x2B /* something that drops and breaks on the floor (code) */
 #define OBJ_KIND_DOOR            0x2F /* a door: warp request (code) */
+#define OBJ_KIND_PICKPOCKET      0x32 /* enemy: walks at Scrooge, takes money on contact (code) */
 #define OBJ_KIND_TALKER          0x35 /* a character that shows a message (code) */
 #define OBJ_KIND_MOVING_PLATFORM 0x39 /* a platform that carries Scrooge (code) */
 #define OBJ_KIND_KEY_SPOT        0x41 /* a spot that needs the land's key item (code) */

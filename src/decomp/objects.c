@@ -2315,6 +2315,103 @@ static void Obj_Pouncer(uint8_t x)
     Sound_Request(SFX_POUNCER_LAND, x);
 }
 
+/* $AD56: the pickpocket's walk, in its direction with probes $18 or $1B. */
+static uint8_t Obj_PickpocketWalk(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_PICKPOCKET_WALK, 0, x, 0);
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        return Obj_WalkRight(x, 0x18, 2);
+    }
+    return Obj_WalkLeft(x, 0x1B, 2);
+}
+
+/* $AD6B: take 1 from the money's third digit ($06B0 counts the thefts).
+ * Blank digits count as 0; a borrow out of the top blanks all six digits,
+ * else the leading zeros are blanked again. */
+static void Obj_StealMoney(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_PICKPOCKET_STEAL, 0, x, 0);
+    gObjects->timer[x]++;
+    gScratch0 = 1;
+    bool carry = true;
+    for (int y = 2; y >= 0; y--) {
+        uint8_t d = gMoneyDigit(y) == DT_MONEY_TILE_BLANK ? 0 : gMoneyDigit(y);
+        int v = d - gScratch0 - (carry ? 0 : 1);
+        carry = v >= 0;
+        if (!carry) {
+            v += 10;
+        }
+        gMoneyDigit(y) = (uint8_t)v;
+        gScratch0 = 0;
+    }
+    if (!carry) {
+        for (int y = 5; y >= 0; y--) {
+            gMoneyDigit(y) = DT_MONEY_TILE_BLANK;
+        }
+    } else {
+        for (int y = 0; y < 6; y++) {
+            if (gMoneyDigit(y) == DT_MONEY_TILE_BLANK) {
+                continue;
+            }
+            if (gMoneyDigit(y) != 0) {
+                break;
+            }
+            gMoneyDigit(y) = DT_MONEY_TILE_BLANK;
+        }
+    }
+    gMoneyChanged++;
+}
+
+/* Kind $32 ($ACBE): an enemy that walks at Scrooge (speed index 1),
+ * jumps (4 px a frame) when it walks into a wall, and the first time it
+ * touches him takes 1 from the money's third digit. Off screen or hit, it
+ * is beaten. */
+static void Obj_Pickpocket(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_PICKPOCKET, 0x22, x, gObjects->kind[x]);
+    if (Enemy_Beaten(x, 0)) {
+        return;
+    }
+    if (Step(x) == 0) {
+        Obj_SetVelocityY(x, 0);
+        gObjects->speedFrac[x] = 0;
+        gObjects->timer[x] = 0;
+        gObjects->speed[x] = 1;
+        gObjects->state[x]++;
+        Obj_SetSpeedIndex(x, 1);
+        Obj_FaceScrooge(x);
+    }
+    bool landed = false;
+    if (gObjects->state[x] & 2) {
+        x = Obj_Rise(x, 0x21, 2);
+        if (gObjects->vy[x] & 0x80) {
+            gObjects->state[x]--;
+            Obj_SetVelocityY(x, 0);
+            x = Obj_Fall(x, 0x1E, 2);
+            landed = gProbeHits & 1;
+        }
+    } else {
+        x = Obj_Fall(x, 0x1E, 2);
+        landed = gProbeHits & 1;
+    }
+    if (!landed) {
+        gObjects->animFrame[x] = 0;
+        gObjects->animTimer[x] = 0;
+    }
+    x = Obj_PickpocketWalk(x);
+    if (gObjects->timer[x] == 0 && Obj_TouchScrooge(x)) {
+        Obj_StealMoney(x);
+    }
+    if ((gObjects->state[x] & 2) || !(gProbeHits & 1)) {
+        return;
+    }
+    if (Obj_GetVelocityY(x) != 0) {
+        return;
+    }
+    gObjects->state[x]++;
+    Obj_SetVelocityY(x, 0x0400);
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -2425,6 +2522,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_DOOR:
             Obj_Door(slot);
+            break;
+        case OBJ_KIND_PICKPOCKET:
+            Obj_Pickpocket(slot);
             break;
         case OBJ_KIND_TALKER:
             Obj_Talker(slot);
@@ -2625,6 +2725,21 @@ static void Run_Pouncer(Regs *r)
     Obj_Pouncer(r->x);
 }
 
+static void Run_Pickpocket(Regs *r)
+{
+    Obj_Pickpocket(r->x);
+}
+
+static void Run_PickpocketWalk(Regs *r)
+{
+    Obj_PickpocketWalk(r->x);
+}
+
+static void Run_StealMoney(Regs *r)
+{
+    Obj_StealMoney(r->x);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -2794,6 +2909,9 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_PICKPOCKET, NULL, "Obj_Pickpocket", Run_Pickpocket, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_PICKPOCKET_WALK, NULL, "Obj_PickpocketWalk", Run_PickpocketWalk, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_PICKPOCKET_STEAL, NULL, "Obj_StealMoney", Run_StealMoney, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_POUNCER, NULL, "Obj_Pouncer", Run_Pouncer, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LEDGE_WALKER, NULL, "Obj_LedgeWalker", Run_LedgeWalker, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_PACER, NULL, "Obj_Pacer", Run_Pacer, 0, .bank = DT_BANK_OBJECTS },
