@@ -15,6 +15,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from romfile import default_rom  # noqa: E402
+
 sys.path.insert(0, str(ROOT / 'tools'))
 from framelog import frames  # noqa: E402
 
@@ -47,7 +50,7 @@ def main():
     ap.add_argument('--no-log', action='store_true', help='skip the frame log and table')
     ap.add_argument('--objs', action='store_true', help='also list live object slots 1-15 (slot:type x y)')
     ap.add_argument('--exe', default=str(ROOT / 'build' / 'headless' / 'Release' / 'ducktales.exe'))
-    ap.add_argument('--rom', default=str(ROOT / 'roms' / 'DuckTales (USA).nes'))
+    ap.add_argument('--rom', default=default_rom())
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)

@@ -34,6 +34,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'tools'))
+from romfile import default_rom  # noqa: E402
+
 LANDS = {0: 'Amazon', 1: 'Transylvania', 2: 'African Mines', 3: 'Himalayas', 4: 'Moon', 5: 'select', 9: 'ending'}
 # RAM the NMI handler writes and the tasks also read. A lag frame runs one
 # more NMI during a logic step, so these may differ between the modes; any
@@ -211,7 +214,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--build', default='build/headless')
     ap.add_argument('--config', default='Release')
-    ap.add_argument('--rom', default=str(ROOT / 'roms' / 'DuckTales (USA).nes'))
+    ap.add_argument('--rom', default=default_rom())
     ap.add_argument('--routes', nargs='*')
     ap.add_argument('--out', default=str(ROOT / 'build' / 'lag-modes'))
     ap.add_argument('--jobs', type=int, default=2)

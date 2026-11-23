@@ -32,6 +32,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'tools'))
+from romfile import default_rom  # noqa: E402
+
 LUA = ROOT / 'tools' / 'mesen' / 'replay_route.lua'
 MESEN_RAM = {'zeros': 'AllZeros', 'ones': 'AllOnes'}
 # Every Mesen2 start re-extracts its native DLLs into the portable folder, so two
@@ -236,7 +239,7 @@ def main():
     ap.add_argument('--build', default='build/headless')
     ap.add_argument('--config', default='Release')
     ap.add_argument('--mesen', default=str(ROOT / 'build' / 'tools' / 'mesen2' / 'Mesen.exe'))
-    ap.add_argument('--rom', default=str(ROOT / 'roms' / 'DuckTales (USA).nes'))
+    ap.add_argument('--rom', default=default_rom())
     ap.add_argument('--routes', nargs='*', help='route files (default: tests/routes/*.txt)')
     ap.add_argument('--frames', type=int, help='frames per route (default: last route line + 120)')
     ap.add_argument('--from-frame', type=int, default=0, help='first frame to compare (default 0)')

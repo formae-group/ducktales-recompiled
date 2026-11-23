@@ -186,6 +186,25 @@
 #define DT_ADDR_SPR_Y           0x0012 /* scratch: the slot's screen Y */
 #define DT_ADDR_SPR_X           0x0013 /* scratch: the slot's screen X */
 
+/* ---- sound driver (bank 3, docs/audio.md) ----
+ * Read by the mods' music and effect replacements (src/mods/ducktales/dt_mods_audio.c). */
+#define DT_SOUND_BANK           3      /* PRG bank of the driver and its sound table */
+#define DT_SOUND_TABLE          0x8A40 /* 2-byte header pointers by request id $00-$37 (verified) */
+#define DT_SOUND_IDS            0x38
+#define DT_SOUND_MUSIC_IDS      0x10   /* $00-$0F music, $10-$37 effects (verified) */
+#define DT_ADDR_LAST_MUSIC      0x00C5 /* last music id requested through $F752 (verified) */
+#define DT_ADDR_SOUND_RING_READ 0x00C7 /* the NMI's read index into the ring (verified) */
+#define DT_ADDR_SOUND_RING      0x00C8 /* 8 request slots (verified) */
+#define DT_SOUND_RING_EMPTY     0x88
+#define DT_ADDR_SOUND_PRIORITY  0x00D0 /* high nibble: playing effect, low: playing music (verified) */
+#define DT_ADDR_SOUND_EFFECT_CH 0x00DF /* channels the effect owns: bit 0 pulse 1 .. bit 3 noise (verified) */
+#define DT_SOUND_STOP_MUSIC     0xFF
+#define DT_SOUND_STOP_EFFECT    0xFE
+#define DT_MUSIC_GAME_OVER      0x09 /* the two songs that end by themselves (verified) */
+#define DT_MUSIC_DEATH          0x0A
+#define DT_MUSIC_LAND_SELECT    0x05
+#define DT_MUSIC_TITLE          0x07
+
 /* ---- code sites (fixed bank 7 at $C000-$FFFF) ---- */
 /* ---- code (fixed bank 7 at $C000-$FFFF) ----
  * Routines the decompilation names or calls (docs/functions.md,

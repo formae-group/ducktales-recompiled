@@ -406,7 +406,7 @@ channels in `$DF`.
 ## Reproducing
 
 ```sh
-E=build/headless/Release/ducktales.exe; ROM="roms/DuckTales (USA).nes"
+E=build/headless/Release/ducktales.exe; ROM=roms/baserom.nes
 mkdir -p captures/audio
 $E "$ROM" --frames 351 --input tests/routes/amazon_intro.txt --save-state 350:captures/audio/ls350.state
 py -3 -I tools/audio_driver.py "$ROM" table
