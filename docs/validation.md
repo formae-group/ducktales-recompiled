@@ -379,7 +379,13 @@ Each branch passed its own gate before the merge: format, `quick_verify.py` nati
   - pokes: 18/18 in check (194,198 calls) and 18/18 in replace (1,920 frames each)
   - events: 2/2 in check and 2/2 in replace
 
-Not run on this tree: the full `verify_routes.py`, `enhancements_test.py` and the window build tests.
+Not run on that tree: the full `verify_routes.py`, `enhancements_test.py` and the window build tests.
+
+**Full gate on main 21a7ffb** (those four plus `decomp/system`): `verify_routes.py --jobs 3` in a
+clean worktree, every oracle run uncached. All 12 routes pass at the four alignments, with 100.0%
+native cycles and oracle = recompiled = interpreter. 3,409 s wall, against 11,855 s on 9126ee3; that
+earlier run had other agents' builds and tests on the PC, so the two times say nothing about the code.
+`tests/window_smoke.py --build build/windows` passed on the same tree.
 
 ## Release 1.0.0
 
