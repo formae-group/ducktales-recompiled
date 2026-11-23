@@ -336,9 +336,9 @@ Not decompiled yet, and still run as the original from the C:
 
 - Through `Decomp_Call`: the background probe `$D120` and its snaps `$D49A`/`$D4B2`/`$D4C8`/`$D4D6`
   (decompiled in `collision.c`, but `player.c` still calls their originals), one probe point
-  `$D350` (where `Player_ContactV` can fall through to), the walls move `$F0F8` and the HP refill
-  `$F812`. The last two are decompiled with the object code (`objcommon.c`, `objects.c`). The
-  climbing steps `$F192`/`$F1A8` are C there too, and `player.c` calls that C.
+  `$D350` (where `Player_ContactV` can fall through to) and the HP refill `$F812` (decompiled in
+  `objects.c` as `Hud_RefillHp`, but `player.c` still calls the original). The walls move `$F0F8`
+  and the climbing steps `$F192`/`$F1A8` are C in `objcommon.c`, and `player.c` calls that C.
 - Through `Decomp_RunOriginal`: `Player_Update` in modes 15 (`$ED05`, message or item) and 16
   (`$EF62`, treasure), and every call that reaches the row change at `$E8C0`.
 
