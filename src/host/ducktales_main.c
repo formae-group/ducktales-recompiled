@@ -19,6 +19,11 @@
  * Direct3D 9, blocks in its VSync presents and drops pictures). The
  * SDL_RENDER_DRIVER environment variable still wins. docs/presentation.md.
  *
+ * The window build is a Windows program (no console of its own). Started from
+ * a terminal with nothing redirected, it attaches to that terminal so --help,
+ * --import-rom and errors still print there; pipes and files given by a test
+ * or script are used as they are.
+ *
  * --import-rom FILE verifies and imports without a window (exit 0 or 1), for
  * scripts and tests; DUCKTALES_DATA_DIR overrides the data folder. Everything
  * else goes to NESRecomp's host untouched, and the application UI is told which
@@ -105,8 +110,25 @@ static void sdl_hints(void)
 #endif
 }
 
+static void attach_parent_console(void)
+{
+#ifdef _WIN32
+    HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (out != NULL && out != INVALID_HANDLE_VALUE) {
+        return;
+    }
+    if (!AttachConsole(ATTACH_PARENT_PROCESS)) {
+        return;
+    }
+    FILE *f = NULL;
+    freopen_s(&f, "CONOUT$", "w", stdout);
+    freopen_s(&f, "CONOUT$", "w", stderr);
+#endif
+}
+
 int main(int argc, char **argv)
 {
+    attach_parent_console();
     sdl_hints();
     char **args = (char **)calloc((size_t)argc + 2, sizeof *args);
     if (!args) {

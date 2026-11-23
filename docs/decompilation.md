@@ -8,9 +8,10 @@ port's own files and all switched off by default:
 - **Game events** (`include/ducktales/events.h`, `src/game/events.c`): verified code sites where mod
   code can react to, or cancel, something the game does. The enhancements are handlers of these
   events.
-- **Decompiled routines** (`src/decomp/`): Scrooge's per-frame code and the motion and sound
-  primitives it uses, written as C on the API. Each replaces the recompiled routine at its entry, and
-  each is checked against the original on every call of every route.
+- **Decompiled routines** (`src/decomp/`): Scrooge's per-frame code, shared motion and sound
+  primitives, and parts of the frame loop and HUD, written as C. The cycle host can check them
+  against the original or run them in its place. Flow tasks can hand control back to recompiled
+  code and resume in C when the task resumes, without a hook at each resume point.
 
 Addresses are named only in `src/game/ducktales_symbols.h`. Status words (verified, code,
 hypothesis) are used as in [memory-map.md](memory-map.md). Code addresses are in bank 7 (the fixed
@@ -100,11 +101,13 @@ option is not given.
 
 The C of a routine always runs on a private image of CPU RAM taken at the routine's entry. In check
 mode "agree" means: all of CPU RAM except the stack below the routine's return address (dead after
-its RTS), plus the registers of the routine's contract. The stack ends at `$0160`
+its RTS), plus the registers of the routine's contract. The stack ends at `$0161`
 (`DT_ADDR_STACK_FLOOR`): below it page 1 holds the master palette, the consumed-record bits
-`$0120-$013F` and the HUD time group, which are always compared and stored. (Treating them as dead
+`$0120-$013F` and the HUD time group, which the game-over box replaces up to its end mark at `$0160`; they
+are always compared and stored. (Treating them as dead
 stack dropped an object routine's writes to `$0120` in replace mode, and `amazon_intro` diverged at
-frame 1630; found on the objects branch.)
+frame 1630; found on the objects branch. With the floor at `$0160`, replace mode dropped the game-over
+box's end mark and the sprites of its next frame differed; found on the flow branch.)
 
 **Timing in replace mode.** A hook that handles a routine returns in zero guest time, and the
 NESRecomp API has no call that charges cycles. A replaced routine that takes no time makes the game
@@ -144,11 +147,12 @@ the HP-dot work it skips, and `moon_intro` drifted from the console at frame 108
 each (`NES_MOD_MAX_FUNCTION_HOOKS` in `runner/src/mod_function_hooks.c`), so one site per routine
 would not last the whole game. A routine has a site (`site_id` in its table entry) only if
 original code reaches it; `tools/decomp_callers.py` lists, from a build's generated code, the
-instructions outside the decompiled ranges that jump to an entry. Of the 50 routines here, 25 have
+instructions outside the decompiled ranges that jump to an entry. Of the 49 routines in the player,
+motion, sound, level and collision tables, 24 have
 one: `Player_Update` (the frame loop's `JSR` at `$DB6C`), `Player_PitDeath` (the original
 mode 15 and 16 code jumps to it at `$EDCC`), the four motion primitives and the two sound requests
 (object and game code everywhere), `Player_TakeDamage`, kept for replace mode's measuring call
-above, and 16 of the 19 camera, scrolling, level and background routines (all but
+above, and 15 of the 18 camera, scrolling, level and background routines (all but
 `Level_ScreenPointer`, `Level_DecodeBlock` and `Level_MetatileAt`, which only decompiled code
 calls). As more of the game is decompiled the boundary moves out and sites go away.
 
@@ -200,7 +204,7 @@ leave the jump vector in `$00/$01` as the original's loop does.
 | `Bg_Probe` | X = slot | X, hardware | X is kept |
 | `Bg_SnapRight`, `Bg_SnapLeft`, `Bg_SnapHead`, `Bg_SnapFeet` | X = slot | X | X is kept |
 | `Level_TileEdit` | X = slot | hardware | |
-| `Level_DrawStartColumns`, `Level_DrawScreen`, `Level_PlaceFromEntry`, `Vram_FlushTileEdits`, `Chr_StreamRow` | none | hardware | |
+| `Level_DrawStartColumns`, `Level_DrawScreen`, `Vram_FlushTileEdits`, `Chr_StreamRow` | none | hardware | |
 | `Boss_CheckTrigger` | none | none | the arena start runs as the original (`Decomp_RunOriginal`): it scrolls the row |
 
 ### Routines
@@ -259,10 +263,16 @@ RAM-identical in replace mode.
 | `Bg_SnapLeft` | `$D4B2` | claimed (decomp/level) | - | - | - |
 | `Bg_SnapHead` | `$D4C8` | claimed (decomp/level) | - | - | - |
 | `Bg_SnapFeet` | `$D4D6` | claimed (decomp/level) | - | - | - |
-| `Level_PlaceFromEntry` | `$DD4E` | claimed (decomp/level) | - | - | - |
 | `Boss_CheckTrigger` | `$CF93` | claimed (decomp/level) | - | - | - |
 | `Level_TileEdit` | `$F574` | claimed (decomp/level) | - | - | - |
 | `Chr_StreamRow` | `$C42C` | claimed (decomp/level) | - | - | - |
+
+**Claimed, in progress** (branch `decomp/flow`, `src/decomp/flow.c`): the game flow of the main task in the fixed
+bank, `$D4E6-$E353` and the boss trigger `$CF93-$D04C`: title and difficulty select (`$D4E6`), Land Select and the
+banking of money (`$D630`, `$D8D9`), land load (`$D79B`) and the per-land tables (`$D9CA`), the frame loop (`$DB36`)
+with pause and the boss checkpoint (`$DC04`), death and warps (`$DC3E`, `$DD23`, `$DD4E`), the HUD refreshes
+(`$DE6C`, `$DEA3`), game over (`$DEB9`), land exit and scenes (`$DF08`, `$DF27`), the ending (`$E054`, `$E1AF`) and
+the HUD timer `timer_tick` (`$E28C`).
 
 Not decompiled yet, and still run as the original from the C:
 

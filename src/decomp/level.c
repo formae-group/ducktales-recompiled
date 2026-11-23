@@ -550,45 +550,6 @@ static void Level_DrawScreen(void)
     } while (++gStreamPos != STREAM_COLUMNS);
 }
 
-/* $DD4E: place Scrooge and the camera from respawn/warp entry $7E & $1F
- * (9 bytes at $DDC1: row, camera X and page, steps to draw, streamed
- * screen, first block, Scrooge's Y, X and page | screen row) and draw the
- * columns around him. */
-static void Level_PlaceFromEntry(void)
-{
-    Decomp_Enter(DT_CODE_PLACE_FROM_ENTRY, 0, 0, 0);
-    uint8_t index = gRespawn & 0x1F;
-    gScratch0 = index;
-    uint16_t entry = (uint16_t)(DT_CODE_RESPAWN_ENTRIES + (uint8_t)(index * 9));
-    gMapRow = rom(entry);
-    gCameraX = rom((uint16_t)(entry + 1));
-    gCameraPage = rom((uint16_t)(entry + 2));
-    gDrawSteps = rom((uint16_t)(entry + 3));
-    gStreamScreen = rom((uint16_t)(entry + 4));
-    gStreamPage = gStreamScreen & 7;
-    gStreamPos = rom((uint16_t)(entry + 5));
-    gObjects->y[P_] = rom((uint16_t)(entry + 6));
-    gObjects->worldX[P_] = rom((uint16_t)(entry + 7));
-    uint8_t screen = rom((uint16_t)(entry + 8));
-    gObjects->worldPage[P_] = screen & 7;
-    gCameraScreen = (uint8_t)((screen & 0xF8) | gCameraPage);
-    for (;;) {
-        gSteps = 1;
-        gQueueEnd = 0;
-        if (Map_Cell(gStreamScreen) != MAP_NO_SCREEN) {
-            Scroll_StreamBlocks();
-        }
-        if ((int8_t)--gDrawSteps < 0) {
-            return;
-        }
-        gStreamPos = (uint8_t)((gStreamPos + 1) & (STREAM_COLUMNS - 1));
-        if (!gStreamPos) {
-            gStreamScreen++;
-            gStreamPage++;
-        }
-    }
-}
-
 /* $C42C, called until $50 goes negative at land load, respawn and in the
  * boss arena: stream the sprite CHR of the current row ($0900-$0FFF) 64 bytes
  * per call through the $0400 queue, from the list the row picks (by camera
@@ -625,8 +586,8 @@ static void Chr_StreamRow(void)
             uint8_t palette = (uint8_t)(rom((uint16_t)(DT_CODE_ROW_PALETTE + row)) * 4);
             for (int i = 0; i < 4; i++) {
                 uint8_t color = rom((uint16_t)(DT_CODE_SPRITE_PALETTES + (uint8_t)(palette + i)));
+                RAM_U8(DT_ADDR_PALETTE_SHOWN + 0x1C + i) = color;
                 RAM_U8(DT_ADDR_PALETTE + 0x1C + i) = color;
-                RAM_U8(DT_ADDR_PALETTE_MASTER + 0x1C + i) = color;
             }
             return;
         }
@@ -753,12 +714,6 @@ static void Run_DrawScreen(Regs *r)
     Level_DrawScreen();
 }
 
-static void Run_PlaceFromEntry(Regs *r)
-{
-    (void)r;
-    Level_PlaceFromEntry();
-}
-
 static void Run_VramFlush(Regs *r)
 {
     r->x = Vram_FlushQueue();
@@ -812,7 +767,6 @@ const DecompRoutine gLevelRoutines[] = {
     { DT_CODE_STREAM_BLOCKS, "ducktales.decomp.C830", "Scroll_StreamBlocks", Run_StreamBlocks, OUT_X | OUT_HW },
     { DT_CODE_DRAW_START, "ducktales.decomp.C71D", "Level_DrawStartColumns", Run_DrawStartColumns, OUT_HW },
     { DT_CODE_DRAW_SCREEN, "ducktales.decomp.C78F", "Level_DrawScreen", Run_DrawScreen, OUT_HW },
-    { DT_CODE_PLACE_FROM_ENTRY, "ducktales.decomp.DD4E", "Level_PlaceFromEntry", Run_PlaceFromEntry, OUT_HW },
     { DT_CODE_VRAM_FLUSH, "ducktales.decomp.C139", "Vram_FlushQueue", Run_VramFlush, OUT_X | OUT_HW },
     { DT_CODE_TILE_EDIT_FLUSH, "ducktales.decomp.C15E", "Vram_FlushTileEdits", Run_TileEditFlush, OUT_HW },
     { DT_CODE_CAMERA_UPDATE, "ducktales.decomp.EFE2", "Camera_Update", Run_CameraUpdate, OUT_X | OUT_HW },
