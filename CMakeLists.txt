@@ -37,6 +37,46 @@ set(_ducktales_options PLAYERS 1)
 if(DUCKTALES_HEADLESS)
     list(APPEND _ducktales_options HEADLESS)
 endif()
+# Mods (docs/mods.md): replacement tiles, palettes, music and effects from
+# .dtmod archives. They decode PNG, OGG Vorbis and zip deflate with stb
+# (external/stb, MIT or public domain), compiled into src/mods/core/fm_codec.c only.
+# Every host links them, the native player included.
+set(STB_ROOT "${CMAKE_SOURCE_DIR}/external/stb")
+if(NOT EXISTS "${STB_ROOT}/stb_vorbis.c")
+    message(FATAL_ERROR "external/stb is missing; run: git submodule update --init external/stb")
+endif()
+set(_ducktales_mods
+    "${CMAKE_SOURCE_DIR}/src/mods/core/fm_archive.c"
+    "${CMAKE_SOURCE_DIR}/src/mods/core/fm_catalog.c"
+    "${CMAKE_SOURCE_DIR}/src/mods/core/fm_codec.c"
+    "${CMAKE_SOURCE_DIR}/src/mods/core/fm_script.c"
+    "${CMAKE_SOURCE_DIR}/src/mods/nes/fm_nes.c"
+    "${CMAKE_SOURCE_DIR}/src/mods/ducktales/dt_mods.c"
+    "${CMAKE_SOURCE_DIR}/src/mods/ducktales/dt_mods_audio.c")
+set_property(SOURCE "${CMAKE_SOURCE_DIR}/src/mods/core/fm_codec.c" APPEND PROPERTY INCLUDE_DIRECTORIES "${STB_ROOT}")
+# Script mods (docs/mods.md "Scripts") run in Lua 5.4 (external/lua, the
+# official repository at a v5.4 tag, MIT), built here as a static library of
+# the core and the libraries the sandbox opens: the io, os, package and debug
+# libraries, linit.c and the stand-alone programs are left out.
+set(LUA_ROOT "${CMAKE_SOURCE_DIR}/external/lua")
+if(NOT EXISTS "${LUA_ROOT}/lua.h")
+    message(FATAL_ERROR "external/lua is missing; run: git submodule update --init external/lua")
+endif()
+set(_lua_sources lapi lcode lctype ldebug ldo ldump lfunc lgc llex lmem lobject lopcodes lparser lstate lstring
+    ltable ltm lundump lvm lzio lauxlib lbaselib lcorolib lmathlib lstrlib ltablib lutf8lib)
+list(TRANSFORM _lua_sources PREPEND "${LUA_ROOT}/")
+list(TRANSFORM _lua_sources APPEND ".c")
+add_library(ducktales_lua STATIC ${_lua_sources})
+target_include_directories(ducktales_lua PUBLIC "${LUA_ROOT}")
+set_target_properties(ducktales_lua PROPERTIES LINKER_LANGUAGE C)
+set_property(SOURCE "${CMAKE_SOURCE_DIR}/src/mods/core/fm_script.c" APPEND PROPERTY INCLUDE_DIRECTORIES "${LUA_ROOT}")
+# The licence the package carries: lua.h's own notice.
+file(READ "${LUA_ROOT}/lua.h" _lua_header)
+string(REGEX MATCH "\n\\* Copyright \\(C\\) 1994-[^\n]*\n(\\*[^\n]*\n)*" _lua_notice "${_lua_header}")
+string(REGEX REPLACE "\n\\*+/?[ ]?" "\n" _lua_notice "${_lua_notice}")
+string(STRIP "${_lua_notice}" _lua_notice)
+string(APPEND _lua_notice "\n")
+file(WRITE "${CMAKE_BINARY_DIR}/lua-LICENSE.txt" "${_lua_notice}")
 # The port's systems layer (docs/architecture.md): typed game state, the hook
 # sites it alters behaviour at, settings and options; the typed game API and
 # its events (include/ducktales/) and the decompiled routines (src/decomp/,
@@ -56,7 +96,8 @@ set(_ducktales_extras
     "${CMAKE_SOURCE_DIR}/src/decomp/flow.c"
     "${CMAKE_SOURCE_DIR}/src/host/ducktales_settings.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_render.c"
-    "${CMAKE_SOURCE_DIR}/src/native/native_cycle.c")
+    "${CMAKE_SOURCE_DIR}/src/native/native_cycle.c"
+    ${_ducktales_mods})
 # The native renderer checked against the PPU every frame (docs/native-render.md).
 if(DUCKTALES_HEADLESS)
     list(APPEND _ducktales_extras "${CMAKE_SOURCE_DIR}/src/native/native_check.c")
@@ -88,7 +129,8 @@ if(DUCKTALES_DEV_DIAGNOSTICS)
     list(APPEND _ducktales_extras "${CMAKE_SOURCE_DIR}/src/host/ducktales_diagnostics.c")
 endif()
 if(DUCKTALES_HEADLESS)
-    list(APPEND _ducktales_extras "${CMAKE_SOURCE_DIR}/src/host/ducktales_ramhash.c")
+    list(APPEND _ducktales_extras "${CMAKE_SOURCE_DIR}/src/host/ducktales_ramhash.c"
+        "${CMAKE_SOURCE_DIR}/src/ui/app_rom.c")
 endif()
 nesrecomp_add_cycle_game(ducktales
     ROM "${DUCKTALES_ROM}"
@@ -96,6 +138,7 @@ nesrecomp_add_cycle_game(ducktales
     ${_ducktales_options}
     HOST_EXTRAS ${_ducktales_extras})
 target_include_directories(ducktales PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/include")
+target_link_libraries(ducktales PRIVATE ducktales_lua)
 if(NOT DUCKTALES_HEADLESS)
     # The ROM identity the first-run import checks (docs/rom.md: SHA-256 of
     # the whole file), taken from the ROM this build was generated from.
@@ -229,6 +272,7 @@ if(NOT DUCKTALES_HEADLESS)
         "${CMAKE_SOURCE_DIR}/src/ui/app_present.c"
         "${CMAKE_SOURCE_DIR}/src/ui/app_rom.c"
         "${CMAKE_SOURCE_DIR}/src/ui/app_ui.cpp"
+        ${_ducktales_mods}
         "${IMGUI_ROOT}/backends/imgui_impl_sdl2.cpp"
         "${IMGUI_ROOT}/backends/imgui_impl_sdlrenderer2.cpp"
         "${_nes_cyc}/cyc_settings.c"
@@ -240,7 +284,7 @@ if(NOT DUCKTALES_HEADLESS)
     target_compile_features(ducktales_player PRIVATE cxx_std_17)
     target_compile_definitions(ducktales_player PRIVATE DUCKTALES_WINDOW=1 DUCKTALES_NATIVE_PLAYER=1 CYC_GAME_PLAYERS=1 NESRECOMP_GAME_PLAYERS=1
         "DUCKTALES_ROM_SHA256=\"${_ducktales_rom_sha256}\"")
-    target_link_libraries(ducktales_player PRIVATE imgui formae::ui SDL2::SDL2)
+    target_link_libraries(ducktales_player PRIVATE imgui formae::ui SDL2::SDL2 ducktales_lua)
     formae_ui_embed_file(ducktales_player app_about_logo_png "${CMAKE_SOURCE_DIR}/assets/brand/formae.png")
     if(WIN32)
         target_link_libraries(ducktales_player PRIVATE comdlg32 shell32 avrt winmm)
@@ -282,6 +326,8 @@ if(NOT DUCKTALES_HEADLESS)
     install(FILES "${NESRECOMP_ROOT}/runner/external/SDL2/README-SDL.txt" DESTINATION licenses RENAME SDL2-README-SDL.txt)
     install(FILES "${IMGUI_ROOT}/LICENSE.txt" DESTINATION licenses RENAME imgui-LICENSE.txt)
     install(FILES "${FORMAE_UI_ROOT}/LICENSE" DESTINATION licenses RENAME formae-ui-LICENSE.txt)
+    install(FILES "${STB_ROOT}/LICENSE" DESTINATION licenses RENAME stb-LICENSE.txt)
+    install(FILES "${CMAKE_BINARY_DIR}/lua-LICENSE.txt" DESTINATION licenses)
     set(CPACK_GENERATOR ZIP)
     set(CPACK_PACKAGE_NAME DuckTalesRecompiled)
     set(CPACK_PACKAGE_VERSION "${_ducktales_version}")

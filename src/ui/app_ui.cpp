@@ -39,6 +39,7 @@
 #include "game/enhancements.h"
 #include "host/ducktales_host.h"
 #include "host/ducktales_sprites.h"
+#include "mods/app_mods.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -268,6 +269,72 @@ void page_gameplay()
     }
 }
 
+std::string mod_detail(const AppMod *m)
+{
+    std::string d = m->version;
+    if (*m->author) {
+        d += d.empty() ? "" : " - ";
+        d += m->author;
+    }
+    if (m->folder) {
+        d += d.empty() ? "folder" : " (folder)";
+    }
+    return d;
+}
+
+void page_mods()
+{
+    ui::section("Mods");
+    bool on = app_mods_enabled();
+    if (ui::toggle("Enable mods", &on)) {
+        app_mods_set_enabled(on);
+        app_settings_changed();
+    }
+    std::vector<ui::ListRow> rows;
+    for (int i = 0; i < app_mods_count(); i++) {
+        const AppMod *m = app_mods_get(i);
+        ui::ListRow row;
+        row.id = m->id;
+        row.name = *m->name ? m->name : m->id;
+        row.detail = mod_detail(m);
+        row.error = m->error;
+        row.enabled = m->enabled;
+        rows.push_back(row);
+    }
+    ui::ListOptions options;
+    options.visible_rows = 8.0f;
+    options.header = "Mods higher in the list win";
+    options.empty = "No mods found. Put .dtmod files or mod folders in the mods folder, then Rescan.";
+    const ui::ListEdit edit = ui::reorder_list("mods", rows, options);
+    if (edit.kind == ui::ListEdit::toggled) {
+        app_mods_set_mod_enabled(edit.row, rows[edit.row].enabled);
+        app_settings_changed();
+    } else if (edit.kind == ui::ListEdit::moved) {
+        app_mods_move(edit.row, edit.to);
+        app_settings_changed();
+    }
+    for (int i = 0; i < app_mods_count(); i++) {
+        const AppMod *m = app_mods_get(i);
+        if (m->script_error[0]) {
+            std::string line = std::string(*m->name ? m->name : m->id) + ": script stopped: " + m->script_error;
+            ui::note(line.c_str(), ui::Status::error);
+        }
+    }
+    ImGui::BeginDisabled(!*app_mods_folder());
+    if (ui::inline_button("Open mods folder")) {
+        std::string url = std::string("file:///") + app_mods_folder();
+        SDL_OpenURL(url.c_str());
+    }
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (ui::inline_button("Rescan")) {
+        app_mods_rescan();
+    }
+    if (app_mods_restart_needed()) {
+        ui::note("Restart DuckTales to apply these changes.", ui::Status::ok);
+    }
+}
+
 void enh_store(DtEnh e, int v)
 {
     if (v == dt_enh_get(e) || !dt_enh_set(e, v)) {
@@ -470,7 +537,8 @@ extern "C" bool app_menu_run(SDL_Window *win)
                       ui::section("Player 1");
                       ui::binding_table(*menu_ref, bindings());
                   } },
-                { "Gameplay", page_gameplay } },
+                { "Gameplay", page_gameplay },
+                { "Mods", page_mods } },
               nullptr },
             { "Enhancements",
               { { "Gameplay", page_enh_gameplay }, { "Restore defaults", page_enh_defaults } },

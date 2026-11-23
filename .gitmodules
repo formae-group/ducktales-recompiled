@@ -7,3 +7,9 @@
 [submodule "external/formae-ui"]
 	path = external/formae-ui
 	url = https://gitlab.com/formae/formae-ui.git
+[submodule "external/stb"]
+	path = external/stb
+	url = https://github.com/nothings/stb.git
+[submodule "external/lua"]
+	path = external/lua
+	url = https://github.com/lua/lua.git
