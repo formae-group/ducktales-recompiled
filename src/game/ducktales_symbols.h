@@ -67,6 +67,17 @@
 #define DT_ADDR_DIFFICULTY      0x00F9 /* 0 Easy, 1 Normal, 2 Difficult (verified) */
 #define DT_ADDR_BOSS_FIGHT      0x00FB /* bit 7 = boss fight (verified) */
 #define DT_ADDR_FRAME_COUNTER   0x0092 /* incremented by every NMI (verified) */
+#define DT_ADDR_PAD2_NEW        0x0015 /* controller 2, newly pressed (code, read_controllers) */
+#define DT_ADDR_RANDOM          0x00C0 /* 32-bit shift register stepped by $C2E6 (code) */
+#define DT_ADDR_PPU_MASK        0x00FE /* PPUMASK shadow (verified) */
+#define DT_ADDR_FADE_STEP       0x000D /* scratch of the fades: level change per step */
+#define DT_ADDR_FADE_FRAMES     0x000E /* scratch of the fades: frames per step */
+#define DT_ADDR_FADE_LEVEL      0x000F /* scratch of the fades: amount subtracted from every colour */
+#define DT_ADDR_CHR_LOAD_LIST   0x0002 /* scratch $02/$03 of $C301: the CHR list */
+#define DT_ADDR_CHR_LOAD_PAGES  0x0004 /* scratch of $C301: pages left, minus one */
+#define DT_ADDR_CHR_LOAD_SOURCE 0x0005 /* scratch $05/$06 of $C301: source page */
+#define DT_ADDR_CHR_LOAD_INDEX  0x0007 /* scratch of $C301: offset in the list */
+#define DT_ADDR_CHR_LOAD_BANK   0x0010 /* scratch of $C301: the record's PRG bank */
 
 /* Controller bits, the layout of DT_ADDR_PAD_NEW / DT_ADDR_PAD_HELD. */
 #define DT_PAD_A      0x80
@@ -159,6 +170,18 @@
 #define DT_ADDR_HUD_GROUP_HP    0x0340 /* the three HUD sprite groups, in builder order */
 #define DT_ADDR_HUD_GROUP_LIVES 0x0358
 #define DT_ADDR_HUD_GROUP_TIME  0x0140
+#define DT_ADDR_OAM             0x0200 /* OAM shadow, 64 entries of Y, tile, attribute, X */
+#define DT_ADDR_SPR_SLOT        0x0096 /* slot being drawn */
+#define DT_ADDR_OAM_NEXT        0x0097 /* offset of the next free OAM entry; 0 = full */
+#define DT_ADDR_SPR_SCRIPT      0x0000 /* scratch $00/$01: the slot's animation script */
+#define DT_ADDR_SPR_META        0x0002 /* scratch $02/$03: the frame's metasprite */
+#define DT_ADDR_SPR_LEFT        0x0004 /* scratch: sprites left to place, minus one */
+#define DT_ADDR_SPR_OFFSETS     0x0005 /* scratch $05/$06: the dY, dX table, minus 2 */
+#define DT_ADDR_SPR_PRIORITY    0x0007 /* scratch: attribute bit 5 from $0600 bit 2 */
+#define DT_ADDR_SPR_FLIP        0x0010 /* scratch: attribute bit 6 from $0600 bit 6 */
+#define DT_ADDR_SPR_FLAGS       0x0011 /* scratch: 1 when flipped (offset-table step), then $0600 */
+#define DT_ADDR_SPR_Y           0x0012 /* scratch: the slot's screen Y */
+#define DT_ADDR_SPR_X           0x0013 /* scratch: the slot's screen X */
 
 /* ---- sound driver (bank 3, docs/audio.md) ----
  * Read by the mods' music and effect replacements (src/mods/ducktales/dt_mods_audio.c). */
@@ -184,60 +207,110 @@
  * Routines the decompilation names or calls (docs/functions.md,
  * docs/player.md, docs/decompilation.md). config/game.toml declares a
  * [[mod_function_hook]] with a content key at every one the port hooks. */
-#define DT_CODE_BG_PROBE         0xD120 /* background probes $40.. against the collision map */
-#define DT_CODE_CONTACT_H        0xD202 /* Scrooge-object contact while moving horizontally */
-#define DT_CODE_CONTACT_V        0xD291 /* Scrooge-object contact while moving vertically */
-#define DT_CODE_PROBE_POINT      0xD350 /* one background probe point of a slot, Y = probe (code) */
-#define DT_CODE_SNAP_RIGHT       0xD49A /* snap world X back after a probe hit on the right */
-#define DT_CODE_SNAP_LEFT        0xD4B2 /* snap world X back after a probe hit on the left */
-#define DT_CODE_SNAP_HEAD        0xD4C8 /* push Y down below the tile the head probe hit */
-#define DT_CODE_SNAP_FEET        0xD4D6 /* snap Y onto the tile the feet probe hit */
-#define DT_CODE_SELECT_REFILL    0xE2FE /* Select on the ground (TOTAL for a lost HP dot; hypothesis) */
-#define DT_CODE_PLAYER_UPDATE    0xE354 /* Scrooge's per-frame entry */
-#define DT_CODE_MODE_LO          0xE396 /* mode handler table, low bytes (17 entries) */
-#define DT_CODE_MODE_HI          0xE3A7 /* mode handler table, high bytes */
-#define DT_CODE_PLAYER_GROUND    0xE3B8 /* mode 0 */
-#define DT_CODE_JUMP_START       0xE3F2 /* copy the take-off velocity, mode 1, air handler */
-#define DT_CODE_PLAYER_WALK      0xE482 /* horizontal speed and movement */
-#define DT_CODE_MOVE_RIGHT       0xE593 /* move right with object and wall tests */
-#define DT_CODE_MOVE_LEFT        0xE5C3 /* move left with object and wall tests */
-#define DT_CODE_PLAYER_AIR       0xE63B /* mode 1 */
-#define DT_CODE_GRAB_CLIMB       0xE740 /* grab a climbable tile while Up is held */
-#define DT_CODE_PLAYER_POGO      0xE7EA /* mode 2 */
-#define DT_CODE_PLAYER_CLIMB     0xE806 /* mode 3 */
-#define DT_CODE_PLAYER_CANE      0xE8EB /* mode 4 */
-#define DT_CODE_PLAYER_FALL      0xE970 /* falling or standing: gravity, move, contacts, probes */
-#define DT_CODE_PLAYER_RISE      0xE9BA /* rising: jump cut, move, contacts, probes */
-#define DT_CODE_PROBE_VERTICAL   0xEA5E /* feet or head probes after a vertical move */
-#define DT_CODE_PLAYER_HURT      0xEAB9 /* mode 5 */
-#define DT_CODE_PLAYER_KNOCKBACK 0xEB00 /* mode 6 */
-#define DT_CODE_TAKE_DAMAGE      0xEB5E /* mark the last full HP dot lost */
-#define DT_CODE_PLAYER_STUCK     0xEB82 /* mode 7 */
-#define DT_CODE_PLAYER_PIT       0xEBA7 /* mode 8 */
-#define DT_CODE_PIT_DEATH        0xEBB4 /* request the respawn that costs a life */
-#define DT_CODE_PLAYER_MODE9     0xEBC9 /* mode 9 */
-#define DT_CODE_PLAYER_CARRIED   0xEBD9 /* modes 10 and 11 */
-#define DT_CODE_PLAYER_MODE12    0xEC2D /* mode 12 */
-#define DT_CODE_PLAYER_DEATH     0xEC9B /* mode 13 */
-#define DT_CODE_PLAYER_MODE14    0xECFF /* mode 14 */
-#define DT_CODE_ROW_CHANGE       0xE8C0 /* the row change: new row, camera screen, then the row scroll (code) */
-#define DT_CODE_ROW_ENTRY_Y      0xE8E7 /* Y the row change gives slot X (X = 0, or 2 with Up held) (code) */
-#define DT_CODE_ROW_CHANGE_END   0xE8DF /* after the row scroll: JMP into the frame loop at $DBE4 (code) */
-#define DT_CODE_ROW_SCROLL       0xC976 /* scroll the screen to the next row over several frames (code) */
-#define DT_CODE_MOVE_WITH_WALLS  0xF0F8 /* move horizontally with wall probes (code) */
-#define DT_CODE_CLIMB_DOWN       0xF192 /* climbing step down with probes (code) */
-#define DT_CODE_CLIMB_UP         0xF1A8 /* climbing step up with probes (code) */
-#define DT_CODE_MOVE_RIGHT_SPEED 0xF234 /* world X += speed (X = slot) */
-#define DT_CODE_MOVE_LEFT_SPEED  0xF252 /* world X -= speed (X = slot) */
-#define DT_CODE_ADD_VY           0xF270 /* Y += vertical velocity (X = slot) */
-#define DT_CODE_SUB_VY           0xF284 /* Y -= vertical velocity, the same code as $F2A1 (X = slot) */
-#define DT_CODE_APPLY_VY         0xF2A1 /* Y -= vertical velocity (X = slot) */
-#define DT_CODE_APPLY_GRAVITY    0xF2B5 /* vertical velocity -= gravity (X = slot) */
-#define DT_CODE_HITBOX_HEIGHT    0xF498 /* half-height by hitbox entry (code) */
-#define DT_CODE_HITBOX_WIDTH     0xF4B8 /* half-width by hitbox entry (code) */
-#define DT_CODE_MUSIC_REQUEST    0xF752 /* remember the music id in $C5, then queue it */
-#define DT_CODE_SOUND_REQUEST    0xF754 /* queue a sound id in the request ring */
-#define DT_CODE_HUD_REFILL_HP    0xF812 /* every HP dot full (fixed bank) */
+#define DT_CODE_BG_PROBE           0xD120 /* background probes $40.. against the collision map */
+#define DT_CODE_CONTACT_H          0xD202 /* Scrooge-object contact while moving horizontally */
+#define DT_CODE_CONTACT_V          0xD291 /* Scrooge-object contact while moving vertically */
+#define DT_CODE_PROBE_POINT        0xD350 /* one background probe point of a slot, Y = probe (code) */
+#define DT_CODE_SNAP_RIGHT         0xD49A /* snap world X back after a probe hit on the right */
+#define DT_CODE_SNAP_LEFT          0xD4B2 /* snap world X back after a probe hit on the left */
+#define DT_CODE_SNAP_HEAD          0xD4C8 /* push Y down below the tile the head probe hit */
+#define DT_CODE_SNAP_FEET          0xD4D6 /* snap Y onto the tile the feet probe hit */
+#define DT_CODE_SELECT_REFILL      0xE2FE /* Select on the ground (TOTAL for a lost HP dot; hypothesis) */
+#define DT_CODE_PLAYER_UPDATE      0xE354 /* Scrooge's per-frame entry */
+#define DT_CODE_MODE_LO            0xE396 /* mode handler table, low bytes (17 entries) */
+#define DT_CODE_MODE_HI            0xE3A7 /* mode handler table, high bytes */
+#define DT_CODE_PLAYER_GROUND      0xE3B8 /* mode 0 */
+#define DT_CODE_JUMP_START         0xE3F2 /* copy the take-off velocity, mode 1, air handler */
+#define DT_CODE_PLAYER_WALK        0xE482 /* horizontal speed and movement */
+#define DT_CODE_MOVE_RIGHT         0xE593 /* move right with object and wall tests */
+#define DT_CODE_MOVE_LEFT          0xE5C3 /* move left with object and wall tests */
+#define DT_CODE_PLAYER_AIR         0xE63B /* mode 1 */
+#define DT_CODE_GRAB_CLIMB         0xE740 /* grab a climbable tile while Up is held */
+#define DT_CODE_PLAYER_POGO        0xE7EA /* mode 2 */
+#define DT_CODE_PLAYER_CLIMB       0xE806 /* mode 3 */
+#define DT_CODE_PLAYER_CANE        0xE8EB /* mode 4 */
+#define DT_CODE_PLAYER_FALL        0xE970 /* falling or standing: gravity, move, contacts, probes */
+#define DT_CODE_PLAYER_RISE        0xE9BA /* rising: jump cut, move, contacts, probes */
+#define DT_CODE_PROBE_VERTICAL     0xEA5E /* feet or head probes after a vertical move */
+#define DT_CODE_PLAYER_HURT        0xEAB9 /* mode 5 */
+#define DT_CODE_PLAYER_KNOCKBACK   0xEB00 /* mode 6 */
+#define DT_CODE_TAKE_DAMAGE        0xEB5E /* mark the last full HP dot lost */
+#define DT_CODE_PLAYER_STUCK       0xEB82 /* mode 7 */
+#define DT_CODE_PLAYER_PIT         0xEBA7 /* mode 8 */
+#define DT_CODE_PIT_DEATH          0xEBB4 /* request the respawn that costs a life */
+#define DT_CODE_PLAYER_MODE9       0xEBC9 /* mode 9 */
+#define DT_CODE_PLAYER_CARRIED     0xEBD9 /* modes 10 and 11 */
+#define DT_CODE_PLAYER_MODE12      0xEC2D /* mode 12 */
+#define DT_CODE_PLAYER_DEATH       0xEC9B /* mode 13 */
+#define DT_CODE_PLAYER_MODE14      0xECFF /* mode 14 */
+#define DT_CODE_ROW_CHANGE         0xE8C0 /* the row change: new row, camera screen, then the row scroll (code) */
+#define DT_CODE_ROW_ENTRY_Y        0xE8E7 /* Y the row change gives slot X (X = 0, or 2 with Up held) (code) */
+#define DT_CODE_ROW_CHANGE_END     0xE8DF /* after the row scroll: JMP into the frame loop at $DBE4 (code) */
+#define DT_CODE_ROW_SCROLL         0xC976 /* scroll the screen to the next row over several frames (code) */
+#define DT_CODE_MOVE_WITH_WALLS    0xF0F8 /* move horizontally with wall probes (code) */
+#define DT_CODE_CLIMB_DOWN         0xF192 /* climbing step down with probes (code) */
+#define DT_CODE_CLIMB_UP           0xF1A8 /* climbing step up with probes (code) */
+#define DT_CODE_MOVE_RIGHT_SPEED   0xF234 /* world X += speed (X = slot) */
+#define DT_CODE_MOVE_LEFT_SPEED    0xF252 /* world X -= speed (X = slot) */
+#define DT_CODE_ADD_VY             0xF270 /* Y += vertical velocity (X = slot) */
+#define DT_CODE_SUB_VY             0xF284 /* Y -= vertical velocity, the same code as $F2A1 (X = slot) */
+#define DT_CODE_APPLY_VY           0xF2A1 /* Y -= vertical velocity (X = slot) */
+#define DT_CODE_APPLY_GRAVITY      0xF2B5 /* vertical velocity -= gravity (X = slot) */
+#define DT_CODE_HITBOX_HEIGHT      0xF498 /* half-height by hitbox entry (code) */
+#define DT_CODE_HITBOX_WIDTH       0xF4B8 /* half-width by hitbox entry (code) */
+#define DT_CODE_MUSIC_REQUEST      0xF752 /* remember the music id in $C5, then queue it */
+#define DT_CODE_SOUND_REQUEST      0xF754 /* queue a sound id in the request ring */
+#define DT_CODE_HUD_REFILL_HP      0xF812 /* every HP dot full (fixed bank) */
+#define DT_CODE_OAM_BUILD          0x8000 /* bank 5: the sprite builder */
+#define DT_CODE_READ_CONTROLLERS   0xC1AB /* read both pads into $14-$17 */
+#define DT_CODE_PALETTE_SCENE      0xF76D /* load a scene's palettes */
+#define DT_CODE_BANK_SELECT_TEMP   0xFFE0 /* map bank A without recording it */
+#define DT_CODE_DRAW_STRINGS       0xBAB0 /* bank 5: draw a string set while blanked */
+#define DT_TABLE_ROW_BASE          0xC508 /* first row entry of each land in the next two tables */
+#define DT_TABLE_ROW_PALETTE       0xC53A /* row sprite palette 3 number */
+#define DT_TABLE_ROW_LISTS_LO      0xC563 /* row CHR list pointers */
+#define DT_TABLE_ROW_LISTS_HI      0xC583
+#define DT_TABLE_ROW_PALETTES      0xC6D9 /* sprite palette 3 bytes, 4 per number */
+#define DT_TABLE_STRINGS_LO        0xBAFA /* bank 5: string set pointers */
+#define DT_TABLE_STRINGS_HI        0xBB06
+#define DT_TABLE_CHR_LIST_LO       0xC358 /* CHR list pointers by list number */
+#define DT_TABLE_CHR_LIST_HI       0xC363
+#define DT_TABLE_SCENE_BG          0xE127 /* scene background palette: index of its last byte */
+#define DT_TABLE_SCENE_SPR         0xE12D /* scene sprite palette: index of its last byte, bit 7 = palette 3 too */
+#define DT_TABLE_SCENE_PALETTES    0xE143 /* the scene palette bytes */
+#define DT_TABLE_SCENE_SPRITE_PAL3 0xE1A3 /* sprite palette 3 by $F9, 4 bytes each */
+
+/* ---- sound driver of bank 3 (docs/audio.md "Driver RAM") ---- */
+#define DT_SND_BANK               3      /* PRG bank of the driver and its data */
+#define DT_ADDR_SND_PRIORITY      0x00D0 /* high nibble playing effect, low nibble playing music (verified) */
+#define DT_ADDR_SND_OLD_MASK      0x00D1 /* previous effect channel mask while an effect starts */
+#define DT_ADDR_SND_HEADER        0x00D2 /* $D2/$D3: header being started */
+#define DT_ADDR_SND_BUSY          0x00D4 /* set while a request runs; the update skips the channels */
+#define DT_ADDR_SND_COUNT         0x00D5 /* request scratch: channel counter 4..1 */
+#define DT_ADDR_SND_REG           0x00D6 /* request scratch: APU register offset */
+#define DT_ADDR_SND_SPEED         0x00D7 /* sequencer ticks per frame, 0 or 1 = normal (verified) */
+#define DT_ADDR_SND_FADE          0x00D8 /* global fade: bits 0-6 frames per step, bit 7 out (verified) */
+#define DT_ADDR_SND_FADE_STEP     0x00D9 /* fade step 1-16 */
+#define DT_ADDR_SND_FRAME         0x00DA /* driver frame counter */
+#define DT_ADDR_SND_APU_REG       0x00DB /* APU register offset of the channel being updated */
+#define DT_ADDR_SND_RECORD        0x00DC /* $DC/$DD: record being updated ($DC alone: its offset in a request) */
+#define DT_ADDR_SND_CHANNEL       0x00DE /* channel countdown: 4 pulse 1, 3 pulse 2, 2 triangle, 1 noise */
+#define DT_ADDR_SND_EFFECT_MASK   0x00DF /* channels the effect owns, rotated during an update (verified) */
+#define DT_ADDR_SND_EFFECT_STREAM 0x00E0 /* $E0/$E1: effect stream (verified) */
+#define DT_ADDR_SND_EFFECT_WAIT   0x00E2 /* frames until the effect stream is read again (verified) */
+#define DT_ADDR_SND_EFFECT_LOOP   0x00E3 /* effect loop counter */
+#define DT_ADDR_SND_TEMP          0x00E4 /* $E4/$E5: scratch (volume, voice offset, pointers) */
+#define DT_ADDR_SND_CHANNELS      0x0370 /* four 31-byte channel records */
+#define DT_ADDR_SND_INSTRUMENTS   0x03EC /* $03EC/$03ED: the song's instrument table */
+#define DT_SND_RECORD_SIZE        0x1F
+#define DT_CODE_SOUND_UPDATE      0x8000 /* bank 3: the per-frame update (JMP $823D) */
+#define DT_CODE_SOUND_PLAY        0x8003 /* bank 3: the request handler */
+#define DT_TABLE_SOUNDS           0x8A40 /* bank 3: header pointer by id */
+#define DT_TABLE_NOTE_LENGTHS     0x896B /* bank 3: units by note length bits */
+#define DT_TABLE_DOTTED_LENGTHS   0x8973 /* bank 3: the same, dotted */
+#define DT_TABLE_PERIODS          0x897B /* bank 3: 96 NTSC periods */
+#define DT_TABLE_MUSIC_COMMANDS   0x87BB /* bank 3: music command handlers */
+#define DT_TABLE_EFFECT_COMMANDS  0x85C3 /* bank 3: effect command handlers */
 
 /* ---- game flow (docs/game-state.md, docs/levels.md, docs/rendering.md;
  * decompiled in src/decomp/flow.c) ---- */
@@ -298,6 +371,7 @@
 #define DT_CODE_OAM_CLEAR      0xC267
 #define DT_CODE_FADE_IN        0xC279
 #define DT_CODE_FADE_OUT       0xC282
+#define DT_CODE_FADE_WAIT      0xC2B2 /* the fades after their task_yield: next frame or next step */
 #define DT_CODE_RANDOM         0xC2E6 /* steps the generator at $C0 (code) */
 #define DT_CODE_CHR_LOAD       0xC301
 #define DT_CODE_ROW_CHR_STREAM 0xC42C
@@ -562,6 +636,11 @@
 #define DT_SITE_BOSS_HIT    0xF6DD
 #define DT_SITE_BOSS_HIT_ID "ducktales.event.boss-hit"
 
+/* The RTI of the NMI handler ($C000), its only exit: replace mode spends
+ * there the cycles a replaced routine still owed when the NMI came
+ * (docs/decompilation.md "Timing in replace mode"). */
+#define DT_SITE_NMI_EXIT    0xC138
+#define DT_SITE_NMI_EXIT_ID "ducktales.decomp.nmi-exit"
 /* Levels: map and screen decoding, column streaming, the VRAM queues, the
  * camera and the background probe (docs/levels.md, docs/rendering.md,
  * src/decomp/level.c and collision.c). */
