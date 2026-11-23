@@ -222,6 +222,22 @@ bank = 5
 length = 8
 crc32 = 0xEDE7D6B8
 
+# Sound_Update
+[[mod_function_hook]]
+id = "ducktales.decomp.3.8000"
+addr = 0x8000
+bank = 3
+length = 8
+crc32 = 0x70A73177
+
+# Sound_Play
+[[mod_function_hook]]
+id = "ducktales.decomp.3.8003"
+addr = 0x8003
+bank = 3
+length = 8
+crc32 = 0xD13796E4
+
 # RTI of the NMI handler: replace mode spends there the cycles a replaced
 # routine still owed when the NMI came (src/decomp/decomp.c)
 [[mod_function_hook]]

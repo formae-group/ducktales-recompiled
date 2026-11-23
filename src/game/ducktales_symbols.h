@@ -270,6 +270,38 @@
 #define DT_TABLE_SCENE_PALETTES  0xE143  /* the scene palette bytes */
 #define DT_TABLE_SCENE_SPRITE_PAL3 0xE1A3 /* sprite palette 3 by $F9, 4 bytes each */
 
+/* ---- sound driver of bank 3 (docs/audio.md "Driver RAM") ---- */
+#define DT_SND_BANK               3       /* PRG bank of the driver and its data */
+#define DT_ADDR_SND_PRIORITY      0x00D0  /* high nibble playing effect, low nibble playing music (verified) */
+#define DT_ADDR_SND_OLD_MASK      0x00D1  /* previous effect channel mask while an effect starts */
+#define DT_ADDR_SND_HEADER        0x00D2  /* $D2/$D3: header being started */
+#define DT_ADDR_SND_BUSY          0x00D4  /* set while a request runs; the update skips the channels */
+#define DT_ADDR_SND_COUNT         0x00D5  /* request scratch: channel counter 4..1 */
+#define DT_ADDR_SND_REG           0x00D6  /* request scratch: APU register offset */
+#define DT_ADDR_SND_SPEED         0x00D7  /* sequencer ticks per frame, 0 or 1 = normal (verified) */
+#define DT_ADDR_SND_FADE          0x00D8  /* global fade: bits 0-6 frames per step, bit 7 out (verified) */
+#define DT_ADDR_SND_FADE_STEP     0x00D9  /* fade step 1-16 */
+#define DT_ADDR_SND_FRAME         0x00DA  /* driver frame counter */
+#define DT_ADDR_SND_APU_REG       0x00DB  /* APU register offset of the channel being updated */
+#define DT_ADDR_SND_RECORD        0x00DC  /* $DC/$DD: record being updated ($DC alone: its offset in a request) */
+#define DT_ADDR_SND_CHANNEL       0x00DE  /* channel countdown: 4 pulse 1, 3 pulse 2, 2 triangle, 1 noise */
+#define DT_ADDR_SND_EFFECT_MASK   0x00DF  /* channels the effect owns, rotated during an update (verified) */
+#define DT_ADDR_SND_EFFECT_STREAM 0x00E0  /* $E0/$E1: effect stream (verified) */
+#define DT_ADDR_SND_EFFECT_WAIT   0x00E2  /* frames until the effect stream is read again (verified) */
+#define DT_ADDR_SND_EFFECT_LOOP   0x00E3  /* effect loop counter */
+#define DT_ADDR_SND_TEMP          0x00E4  /* $E4/$E5: scratch (volume, voice offset, pointers) */
+#define DT_ADDR_SND_CHANNELS      0x0370  /* four 31-byte channel records */
+#define DT_ADDR_SND_INSTRUMENTS   0x03EC  /* $03EC/$03ED: the song's instrument table */
+#define DT_SND_RECORD_SIZE        0x1F
+#define DT_CODE_SOUND_UPDATE      0x8000  /* bank 3: the per-frame update (JMP $823D) */
+#define DT_CODE_SOUND_PLAY        0x8003  /* bank 3: the request handler */
+#define DT_TABLE_SOUNDS           0x8A40  /* bank 3: header pointer by id */
+#define DT_TABLE_NOTE_LENGTHS     0x896B  /* bank 3: units by note length bits */
+#define DT_TABLE_DOTTED_LENGTHS   0x8973  /* bank 3: the same, dotted */
+#define DT_TABLE_PERIODS          0x897B  /* bank 3: 96 NTSC periods */
+#define DT_TABLE_MUSIC_COMMANDS   0x87BB  /* bank 3: music command handlers */
+#define DT_TABLE_EFFECT_COMMANDS  0x85C3  /* bank 3: effect command handlers */
+
 /* ---- hook sites of the event system (src/game/events.c) ----
  * config/game.toml declares each with a length/crc32 content key, so another
  * revision fails code generation instead of firing at the wrong code. */

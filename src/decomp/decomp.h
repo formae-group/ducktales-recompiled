@@ -132,3 +132,5 @@ extern const DecompRoutine gSystemRoutines[];
 extern const int gSystemRoutineCount;
 extern const DecompRoutine gSpriteRoutines[];
 extern const int gSpriteRoutineCount;
+extern const DecompRoutine gAudioRoutines[];
+extern const int gAudioRoutineCount;
