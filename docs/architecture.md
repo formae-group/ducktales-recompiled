@@ -240,7 +240,7 @@ considered:
 ### formae-ui
 
 Everything in the menu that is not DuckTales' own lives in
-[formae-ui](https://gitlab.com/formae/formae-ui), Formae's menu library, pinned as the submodule
+[formae-ui](https://github.com/formae-group/formae-ui), Formae's menu library, pinned as the submodule
 `external/formae-ui` (v0.2.0, MIT) so the next ports share the same look and behaviour. It was
 extracted from this menu without changing a pixel; v0.2.0 added the reorderable list, notes and
 inline buttons the Mod Menu uses. The split:

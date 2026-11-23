@@ -7,6 +7,9 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- The project lives on GitHub (https://github.com/formae-group/ducktales-recompiled), with releases
+  there and a GitHub Actions check of the layout and the Python syntax on every push and pull
+  request. The `external/formae-ui` submodule is fetched from github.com/formae-group/formae-ui.
 - Static recompilation of *DuckTales* (USA) on the NESRecomp cycle backend: the 6502 program is
   translated to C at build time and runs natively, with the interpreter kept as a fallback for code
   no route has reached.
@@ -70,7 +73,7 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - One code layout for every C, C++ and Python source: `.clang-format` (4 spaces, 120 columns,
   braces always, no one-line statements) and Black, applied by `tools/format.py` (`--check` to
   verify). The machine and every hash are unchanged.
-- The menu and the first-run screen are drawn by [formae-ui](https://gitlab.com/formae/formae-ui)
+- The menu and the first-run screen are drawn by [formae-ui](https://github.com/formae-group/formae-ui)
   0.1.0 (`external/formae-ui`), Formae's menu library extracted from them for the next ports. Their
   look and behaviour are unchanged: the 16 self-test PNGs are pixel-identical.
 - The application icon is now original artwork, a treasure chest.

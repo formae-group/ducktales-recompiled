@@ -6,6 +6,11 @@
 
 A native Windows port of *DuckTales* (NES, Capcom, 1989), built by static recompilation.
 
+[![CI](https://github.com/formae-group/ducktales-recompiled/actions/workflows/ci.yml/badge.svg)](https://github.com/formae-group/ducktales-recompiled/actions/workflows/ci.yml)
+[![latest release](https://img.shields.io/github/v/release/formae-group/ducktales-recompiled)](https://github.com/formae-group/ducktales-recompiled/releases)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![platform: Windows x64](https://img.shields.io/badge/platform-Windows%20x64-0078D6.svg)](#building)
+
 </div>
 
 DuckTales Recompiled translates the game's 6502 program into C at build time and compiles it into a
@@ -66,7 +71,7 @@ Requirements: Windows x64, Visual Studio 2022 (*Desktop development with C++*), 
 Python 3.11+ and Git.
 
 ```powershell
-git clone --recurse-submodules https://gitlab.com/formae/ducktales-recompiled.git
+git clone --recurse-submodules https://github.com/formae-group/ducktales-recompiled.git
 cd ducktales-recompiled
 copy "C:\path\to\DuckTales (USA).nes" roms\
 cmake -S . -B build/windows -G "Visual Studio 17 2022" -A x64
@@ -177,7 +182,7 @@ Each enhancement hooks a single, documented site in the original code, guarded b
    [native-runtime.md](docs/native-runtime.md).
 3. **Port layer.** `src/game` (typed game state, revision-specific symbols, enhancement hooks),
    `src/host` (settings, options, the sprite compositor, diagnostics) and `src/ui` (the menu, built with
-   [formae-ui](https://gitlab.com/formae/formae-ui) on Dear ImGui,
+   [formae-ui](https://github.com/formae-group/formae-ui) on Dear ImGui,
    ROM import, presentation) attach to the host through its public extension points. The NESRecomp
    submodule is never modified.
 4. **Presentation.** The window shows a picture composed from the machine's output: all sprites
@@ -241,7 +246,7 @@ build\headless\Release\ducktales.exe "roms\DuckTales (USA).nes" --input tests\ro
 
 The code in this repository is MIT licensed ([LICENSE](LICENSE)). NESRecomp is licensed under
 PolyForm Noncommercial 1.0.0 with additional permissions, so builds of this port must be distributed
-free of charge. [formae-ui](https://gitlab.com/formae/formae-ui) (MIT, Formae's menu library),
+free of charge. [formae-ui](https://github.com/formae-group/formae-ui) (MIT, Formae's menu library),
 Dear ImGui, SDL2, stb and Lua are used under their own licenses. See
 [docs/licensing.md](docs/licensing.md).
 
