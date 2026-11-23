@@ -81,6 +81,11 @@ Heavy runs (`--runtime cycle`, `decomp_test.py`, `verify_routes.py`) go through
 `py -3 -I tools/test_slot.py -- <command>`, which waits for one of 2 machine-wide slots, so the
 worktrees sharing this PC take turns instead of slowing each other down.
 
+Never run a heavy check twice on the same inputs. A merge whose tree equals the tree a branch's gate
+ran on (`git rev-parse <commit>^{tree}`) reuses that gate's numbers, and a run that failed is not
+repeated with the same build and arguments in the hope of another result. End a report with what you
+reused and what you did not run because another result covers it.
+
 Run the full `verify_routes.py` (3 h 18 min with `--jobs 3` and no oracle cache) nightly and before
 a release, not per branch per change. Code no route executes (quick_verify says "no route executes") is not
 checked by either; add a route. Oracle results are cached in `build/verify-cache/`.

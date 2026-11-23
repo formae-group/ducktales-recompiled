@@ -15,6 +15,7 @@
 #include "ducktales/events.h"
 #include "ducktales/game.h"
 #include "ducktales/hud.h"
+#include "ducktales/level.h"
 #include "ducktales/objects.h"
 #include "ducktales/player.h"
 #include "ducktales/ram.h"

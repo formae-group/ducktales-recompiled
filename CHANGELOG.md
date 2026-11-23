@@ -11,6 +11,16 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   a decompiled routine, from the golden save state before it: 32 s instead of 689 s for a routine
   the routes reach late.
 - `tools/test_slot.py` queues heavy test runs across worktrees, at most two at once.
+- `tests/decomp_test.py` names each differing RAM address with its `ducktales_symbols.h` name.
+- The camera, the column streaming, the map and block decoding, the VRAM queue uploads and the
+  background probe with its four snaps are decompiled (`src/decomp/level.c`, `src/decomp/collision.c`):
+  18 routines, checked on every call of every route and RAM-identical in replace mode.
+
+### Fixed
+
+- Replace mode made a decompiled routine's PPU writes back to back. The PPU acts on `$2006`/`$2007`
+  writes a few cycles late, so every byte of a VRAM queue landed one address off; the writes are
+  now spread over the original routine's cycles.
 
 ## [1.0.0] - 2026-11-23
 
