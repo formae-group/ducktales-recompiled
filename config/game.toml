@@ -285,6 +285,13 @@ addr = 0xD79B
 length = 8
 crc32 = 0xDACBE679
 
+# LandSelect
+[[mod_function_hook]]
+id = "ducktales.decomp.D630"
+addr = 0xD630
+length = 8
+crc32 = 0xDACBE679
+
 [[mod_function_hook]]
 id = "ducktales.decomp.stop.FFAC"
 addr = 0xFFAC
@@ -334,12 +341,6 @@ length = 8
 crc32 = 0x2CF3FD6D
 
 [[mod_function_hook]]
-id = "ducktales.decomp.stop.D630"
-addr = 0xD630
-length = 8
-crc32 = 0xDACBE679
-
-[[mod_function_hook]]
 id = "ducktales.decomp.stop.C203"
 addr = 0xC203
 length = 8
@@ -368,5 +369,23 @@ id = "ducktales.decomp.stop.E1AF"
 addr = 0xE1AF
 length = 8
 crc32 = 0xD1E4F218
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.FFA5"
+addr = 0xFFA5
+length = 8
+crc32 = 0x0FCE60E7
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.D8D9"
+addr = 0xD8D9
+length = 8
+crc32 = 0x1A01EAD2
+
+[[mod_function_hook]]
+id = "ducktales.decomp.stop.BE00.4"
+addr = 0xBE00
+length = 8
+crc32 = 0xB8A217BC
 
 # END game flow

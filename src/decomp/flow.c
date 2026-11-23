@@ -17,12 +17,14 @@
  * per-land tables and the HUD template.
  *
  * Original routines called from here: through Decomp_Call the sprite builder
- * (bank 5 $8000), the pause text (bank 5 $B580), the spawner set-up (bank 6
- * $AE60), $C267, $C2E6, $F2C7 and $F812; handed off to: task_yield,
- * the camera $EFE2, the object spawner (bank 6 $AEA0), the fades $C279/$C282, $C197/$C1A1, $C42C, $C830, the object
- * code (bank 6 $8000), Scrooge's update $E354 and the routines of this
- * subsystem that are not decompiled yet (boss trigger, Land Select, land load,
- * scenes, ending, reset).
+ * (bank 5 $8000), the pause text (bank 5 $B580), the Land Select messages
+ * (bank 5 $B800/$B81C), the spawner set-up (bank 6 $AE60), $C267, $C2E6, $F2C7
+ * and $F812; handed off to: task_yield and task_wait, the camera $EFE2, the
+ * object spawner (bank 6 $AEA0), the fades $C279/$C282, $C197/$C1A1, $C42C,
+ * $C78F, $C830, the object code (bank 6 $8000), Scrooge's update $E354, the
+ * final trip's take-off scene (bank 4 $BE00) and the routines of this
+ * subsystem that are not decompiled yet (the bank transfer $D8D9, scenes,
+ * ending, reset).
  */
 #include "decomp/decomp.h"
 #include "decomp/sound.h"
@@ -81,6 +83,15 @@
 #define TITLE_BLINK_FRAMES    0xB4
 #define SFX_CURSOR            0x2F
 #define DIFFICULTY_COUNT      3
+#define LAND_COUNT            5
+#define LAND_SELECT_SCREEN    5 /* $F6 while the Land Select screen loads */
+#define SELECT_OBJECTS        8
+#define SELECT_WAIT           0x3C
+#define SELECT_PAD_MOVE       (DT_PAD_UP | DT_PAD_DOWN)
+#define SELECT_LAND_NAME      0x6F /* action of slots 2 and 4: the land's name */
+#define SELECT_MESSAGE_PROMPT 0
+#define SELECT_MESSAGE_ALL    3 /* all five treasures held */
+#define SELECT_MESSAGE_FINAL  4
 
 #define gScratch0        RAM_U8(DT_ADDR_SCRATCH0)
 #define gStreamSteps     RAM_U8(DT_ADDR_SCRATCH4)
@@ -113,6 +124,8 @@
 #define gRowScrollAddrHi RAM_U8(DT_ADDR_ROW_SCROLL_ADDR_HI)
 #define gSprite0Y        RAM_U8(DT_ADDR_SPRITE0_Y)
 #define gHudGate         RAM_U8(DT_ADDR_HUD_GATE)
+#define gSelectMessage   RAM_U8(DT_ADDR_SELECT_MESSAGE)
+#define gSelectMove      RAM_U8(DT_ADDR_SCRATCH10)
 #define gTimeDigit(i)    RAM_U8(DT_ADDR_TIME_DIGITS + 4 * (i))
 
 static uint8_t Rom(uint16_t addr)
@@ -461,6 +474,8 @@ static void GameOver_Next(Regs *r)
     Jump(DT_CODE_RESET, 0);
 }
 
+static void LandSelect(Regs *r);
+
 static void LandExit_Frame(Regs *r, uint8_t frames)
 {
     Decomp_Push(frames);
@@ -475,7 +490,7 @@ static void LandExit(Regs *r)
 {
     Decomp_Enter(DT_CODE_LAND_EXIT, r->a, r->x, r->y);
     if (gScene) {
-        Jump(DT_CODE_LAND_SELECT, 0);
+        LandSelect(r);
         return;
     }
     LandExit_Frame(r, LAND_EXIT_FRAMES);
@@ -491,7 +506,7 @@ static void LandExit_Next(Regs *r)
         LandExit_Frame(r, frames);
         return;
     }
-    Jump(DT_CODE_LAND_SELECT, 0);
+    LandSelect(r);
 }
 
 static void Death_Fade(Regs *r);
@@ -842,6 +857,7 @@ static void FrameLoop_Yield(Regs *r)
 /* ---- title and difficulty ---- */
 
 static void Title_Loop(Regs *r);
+static void LandSelect(Regs *r);
 
 /* $D4E6: the main task starts (power-on and every reset): the title. */
 static void MainTask(Regs *r)
@@ -984,7 +1000,7 @@ static void Title_Loop(Regs *r)
     Decomp_Enter(DT_FLOW_TITLE_LOOP, r->a, r->x, r->y);
     r->a = gPadNew & DT_PAD_START;
     if (r->a) {
-        Jump(DT_CODE_LAND_SELECT, 0);
+        LandSelect(r);
         return;
     }
     r->a = gPadNew & TITLE_PAD_MOVE;
@@ -1308,6 +1324,287 @@ static void LandLoad_Done(Regs *r)
     FrameLoop(r);
 }
 
+/* ---- Land Select ---- */
+
+static void LandSelect_FinalTrip(Regs *r);
+static void LandSelect_ResultRead(Regs *r);
+static void LandSelect_FinalRead(Regs *r);
+static void LandSelect_Cursor(Regs *r);
+static void LandSelect_Loop(Regs *r);
+
+/* $D9BE: until A is pressed, a frame at a time; then X goes to $19 (the
+ * bank transfer's exit, $D9BB). */
+static void WaitA(Regs *r)
+{
+    Decomp_Enter(DT_CODE_WAIT_A, r->a, r->x, r->y);
+    r->a = gPadNew & DT_PAD_A;
+    if (r->a) {
+        gVramPending = r->x;
+        return;
+    }
+    Yield(DT_FLOW_WAIT_A_NEXT);
+}
+
+/* $D9C7 */
+static void WaitA_Next(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_WAIT_A_NEXT, r->a, r->x, r->y);
+    WaitA(r);
+}
+
+/* $D630: the Land Select screen. The picture fades out and is redrawn with
+ * rendering off from the land-5 entries of the per-land tables ($F6 is 5
+ * meanwhile, the land kept on the stack), with its eight objects. */
+static void LandSelect(Regs *r)
+{
+    Decomp_Enter(DT_CODE_LAND_SELECT, r->a, r->x, r->y);
+    Jsr(DT_CODE_FADE_OUT, DT_FLOW_SELECT_FADED, 0);
+}
+
+/* $D633 */
+static void LandSelect_Faded(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_SELECT_FADED, r->a, r->x, r->y);
+    gHudSplit = 0;
+    r->a = 0;
+    Jsr(DT_CODE_SCREEN_OFF, DT_FLOW_SELECT_SCREEN_OFF, 0);
+}
+
+/* $D63A: the screen's CHR. */
+static void LandSelect_ScreenOff(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_SELECT_SCREEN_OFF, r->a, r->x, r->y);
+    Call(r, DT_CODE_OAM_CLEAR);
+    Call(r, DT_CODE_CLEAR_OBJECTS);
+    r->a = gLand;
+    Decomp_Push(gLand);
+    r->x = LAND_SELECT_SCREEN;
+    gLand = LAND_SELECT_SCREEN;
+    Jsr(DT_CODE_CHR_LOAD, DT_FLOW_SELECT_CHR, OUT_X);
+}
+
+/* $D64A (the land on the stack): the tables and the screen. */
+static void LandSelect_Chr(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_SELECT_CHR, r->a, r->x, r->y);
+    Land_ApplyTables(r);
+    Jsr(DT_CODE_DRAW_SCREEN, DT_FLOW_SELECT_DRAWN, 0);
+}
+
+/* $D650 (the land on the stack): the land back, and the screen's objects. */
+static void LandSelect_Drawn(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_SELECT_DRAWN, r->a, r->x, r->y);
+    gLand = Decomp_Pull();
+    for (int slot = SELECT_OBJECTS - 1; slot >= 0; slot--) {
+        uint16_t e = (uint16_t)(DT_DATA_SELECT_OBJECTS + 3 * slot);
+        gObjects->state[slot] = 0x80;
+        gObjects->flags[slot] = 0x90;
+        gObjects->action[slot] = Rom(e);
+        gObjects->y[slot] = Rom((uint16_t)(e + 1));
+        gObjects->worldX[slot] = Rom((uint16_t)(e + 2));
+        gObjects->animTimer[slot] = 0;
+        gObjects->animFrame[slot] = 0;
+        gObjects->worldPage[slot] = 0;
+    }
+    r->a = 0;
+    r->x = 0xFF;
+    r->y = 0xFD;
+    Jsr(DT_CODE_SCREEN_ON, DT_FLOW_SELECT_SHOWN, 0);
+}
+
+/* $D68A: the message for the way here (after a land, its result). */
+static void LandSelect_Shown(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_SELECT_SHOWN, r->a, r->x, r->y);
+    SelectBank(r, DT_BANK_SPRITES);
+    Call(r, DT_B5_SELECT_MESSAGE);
+    Yield(DT_FLOW_SELECT_FADE_IN);
+}
+
+/* $D695 */
+static void LandSelect_FadeIn(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_SELECT_FADE_IN, r->a, r->x, r->y);
+    Jsr(DT_CODE_FADE_IN, DT_FLOW_SELECT_LIT, 0);
+}
+
+/* $D698: straight to the final trip when $5E says so; after a land, a
+ * second and the money banked into TOTAL; otherwise the cursor. */
+static void LandSelect_Lit(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_SELECT_LIT, r->a, r->x, r->y);
+    gHudGate = 0;
+    r->a = gSelectMessage;
+    if (gSelectMessage) {
+        LandSelect_FinalTrip(r);
+        return;
+    }
+    r->a = gLandLeft;
+    if (!gLandLeft) {
+        LandSelect_Cursor(r);
+        return;
+    }
+    SelectBank(r, DT_BANK_SPRITES);
+    Call(r, DT_B5_BUILD_OAM);
+    r->x = SELECT_WAIT;
+    Jsr(DT_CODE_TASK_WAIT, DT_FLOW_SELECT_WAITED, OUT_X | OUT_Y);
+}
+
+/* $D6B1 */
+static void LandSelect_Waited(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_SELECT_WAITED, r->a, r->x, r->y);
+    Jsr(DT_CODE_BANK_TRANSFER, DT_FLOW_SELECT_BANKED, 0);
+}
+
+/* $D6B4: with all five treasures held, their message and the final trip;
+ * otherwise A after the land's result, the prompt and the cursor. */
+static void LandSelect_Banked(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_SELECT_BANKED, r->a, r->x, r->y);
+    r->a = gTreasures & ALL_TREASURES;
+    if (r->a != ALL_TREASURES) {
+        if (Gosub(WaitA, r, DT_FLOW_SELECT_RESULT_READ)) {
+            LandSelect_ResultRead(r);
+        }
+        return;
+    }
+    r->x = SELECT_MESSAGE_ALL;
+    Call(r, DT_B5_MESSAGE);
+    LandSelect_FinalTrip(r);
+}
+
+/* $D6C1: a second, then the take-off scene. */
+static void LandSelect_FinalTrip(Regs *r)
+{
+    r->x = SELECT_WAIT;
+    Jsr(DT_CODE_TASK_WAIT, DT_FLOW_SELECT_FINAL_WAIT, OUT_X | OUT_Y);
+}
+
+/* $D6C6 */
+static void LandSelect_FinalWait(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_SELECT_FINAL_WAIT, r->a, r->x, r->y);
+    SelectBank(r, DT_BANK_FINAL_TRIP);
+    Jsr(DT_B4_FINAL_TRIP, DT_FLOW_SELECT_FINAL_SCENE, 0);
+}
+
+/* $D6CE: the final trip's message and A. */
+static void LandSelect_FinalScene(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_SELECT_FINAL_SCENE, r->a, r->x, r->y);
+    SelectBank(r, DT_BANK_SPRITES);
+    r->x = SELECT_MESSAGE_FINAL;
+    Call(r, DT_B5_MESSAGE);
+    if (Gosub(WaitA, r, DT_FLOW_SELECT_FINAL_READ)) {
+        LandSelect_FinalRead(r);
+    }
+}
+
+/* $D6DB: Transylvania loads, its arena counted as the final one. */
+static void LandSelect_FinalRead(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_SELECT_FINAL_READ, r->a, r->x, r->y);
+    r->a = LAND_TRANSYLVANIA;
+    gLand = LAND_TRANSYLVANIA;
+    gFinalArena++;
+    LandLoad(r);
+}
+
+/* $D6E7 */
+static void LandSelect_ResultRead(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_SELECT_RESULT_READ, r->a, r->x, r->y);
+    r->x = SELECT_MESSAGE_PROMPT;
+    Call(r, DT_B5_MESSAGE);
+    Yield(DT_FLOW_SELECT_CURSOR);
+}
+
+/* The cursor (slot 0), the land's name (slots 2 and 4) and the map marker
+ * (slot 3) on a land. */
+static void LandSelect_Mark(uint8_t land)
+{
+    gObjects->y[0] = Rom((uint16_t)(DT_DATA_SELECT_CURSOR_Y + land));
+    gObjects->action[2] = (uint8_t)(land + SELECT_LAND_NAME);
+    gObjects->action[4] = (uint8_t)(land + SELECT_LAND_NAME);
+    gObjects->y[3] = Rom((uint16_t)(DT_DATA_SELECT_MARK_Y + land));
+    gObjects->worldX[3] = Rom((uint16_t)(DT_DATA_SELECT_MARK_X + land));
+}
+
+/* $D6EF: the cursor starts on the first land whose treasure is not held. */
+static void LandSelect_Cursor(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_SELECT_CURSOR, r->a, r->x, r->y);
+    uint8_t land = 0;
+    while (gTreasures & Rom((uint16_t)(DT_DATA_LAND_BIT + land))) {
+        land++;
+        if (land == 0) {
+            break;
+        }
+    }
+    gLand = land;
+    r->y = land;
+    LandSelect_Mark(land);
+    gObjects->state[0] = 0x80;
+    gObjects->state[2] = 0x80;
+    gObjects->state[4] = 0x80;
+    gObjects->state[3] = 0x80;
+    gObjects->flags[3] = 0x90;
+    r->a = 0x90;
+    LandSelect_Loop(r);
+}
+
+/* $D784: the sprites, and the next frame. */
+static void LandSelect_Frame(Regs *r)
+{
+    Call(r, DT_CODE_OAM_CLEAR);
+    SelectBank(r, DT_BANK_SPRITES);
+    Call(r, DT_B5_BUILD_OAM);
+    Yield(DT_FLOW_SELECT_NEXT);
+}
+
+/* $D72C: Up and Down move the cursor through the five lands (wrapping),
+ * past the lands whose treasure is held; A loads the land. */
+static void LandSelect_Loop(Regs *r)
+{
+    r->a = gPadNew & SELECT_PAD_MOVE;
+    if (!r->a) {
+        r->a = gPadNew & DT_PAD_A;
+        if (r->a) {
+            LandLoad(r);
+            return;
+        }
+        LandSelect_Frame(r);
+        return;
+    }
+    gSelectMove = r->a;
+    uint8_t land;
+    do {
+        r->y = (gSelectMove >> 1) & 2;
+        land = (uint8_t)(gLand + Rom((uint16_t)(DT_DATA_SELECT_STEP + r->y)));
+        if (land >= LAND_COUNT) {
+            land = (uint8_t)(land + Rom((uint16_t)(DT_DATA_SELECT_STEP + r->y + 1)));
+        }
+        gLand = land;
+        r->y = land;
+    } while (gTreasures & Rom((uint16_t)(DT_DATA_LAND_BIT + land)));
+    LandSelect_Mark(land);
+    gObjects->animFrame[2] = 0;
+    gObjects->animTimer[2] = 0;
+    gObjects->animFrame[4] = 0;
+    gObjects->animTimer[4] = 0;
+    SoundRequest(r, SFX_CURSOR);
+    LandSelect_Frame(r);
+}
+
+/* $D792 */
+static void LandSelect_Next(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_SELECT_NEXT, r->a, r->x, r->y);
+    LandSelect_Loop(r);
+}
+
 /* ---- site adapters ---- */
 
 static void Run_LandPalette(Regs *r)
@@ -1391,6 +1688,24 @@ const DecompRoutine gFlowRoutines[] = {
     RESUME(DT_FLOW_LOAD_SHOWN, "LandLoad_Shown", LandLoad_Shown, 0),
     RESUME(DT_FLOW_LOAD_FADE_IN, "LandLoad_FadeIn", LandLoad_FadeIn, 0),
     RESUME(DT_FLOW_LOAD_DONE, "LandLoad_Done", LandLoad_Done, 0),
+    TASK(DT_CODE_LAND_SELECT, SITE("D630"), "LandSelect", LandSelect, 0),
+    RESUME(DT_FLOW_SELECT_FADED, "LandSelect_Faded", LandSelect_Faded, 0),
+    RESUME(DT_FLOW_SELECT_SCREEN_OFF, "LandSelect_ScreenOff", LandSelect_ScreenOff, 0),
+    RESUME(DT_FLOW_SELECT_CHR, "LandSelect_Chr", LandSelect_Chr, 1),
+    RESUME(DT_FLOW_SELECT_DRAWN, "LandSelect_Drawn", LandSelect_Drawn, 1),
+    RESUME(DT_FLOW_SELECT_SHOWN, "LandSelect_Shown", LandSelect_Shown, 0),
+    RESUME(DT_FLOW_SELECT_FADE_IN, "LandSelect_FadeIn", LandSelect_FadeIn, 0),
+    RESUME(DT_FLOW_SELECT_LIT, "LandSelect_Lit", LandSelect_Lit, 0),
+    RESUME(DT_FLOW_SELECT_WAITED, "LandSelect_Waited", LandSelect_Waited, 0),
+    RESUME(DT_FLOW_SELECT_BANKED, "LandSelect_Banked", LandSelect_Banked, 0),
+    RESUME(DT_FLOW_SELECT_FINAL_WAIT, "LandSelect_FinalWait", LandSelect_FinalWait, 0),
+    RESUME(DT_FLOW_SELECT_FINAL_SCENE, "LandSelect_FinalScene", LandSelect_FinalScene, 0),
+    RESUME(DT_FLOW_SELECT_FINAL_READ, "LandSelect_FinalRead", LandSelect_FinalRead, 0),
+    RESUME(DT_FLOW_SELECT_RESULT_READ, "LandSelect_ResultRead", LandSelect_ResultRead, 0),
+    RESUME(DT_FLOW_SELECT_CURSOR, "LandSelect_Cursor", LandSelect_Cursor, 0),
+    RESUME(DT_FLOW_SELECT_NEXT, "LandSelect_Next", LandSelect_Next, 0),
+    TASK(DT_CODE_WAIT_A, NULL, "WaitA", WaitA, 0),
+    RESUME(DT_FLOW_WAIT_A_NEXT, "WaitA_Next", WaitA_Next, 0),
 };
 const int gFlowRoutineCount = sizeof gFlowRoutines / sizeof gFlowRoutines[0];
 
@@ -1400,10 +1715,11 @@ const int gFlowRoutineCount = sizeof gFlowRoutines / sizeof gFlowRoutines[0];
  * ($C42C, $C71D, $C830, $EFE2 in level.c, $E354 in player.c) stop the isolated
  * runs at their own sites. */
 const DecompStop gFlowStops[] = {
-    STOP(DT_CODE_TASK_YIELD, "FFAC"), STOP(DT_CODE_RESET, "FEE0"),      STOP(DT_CODE_FADE_IN, "C279"),
-    STOP(DT_CODE_FADE_OUT, "C282"),   STOP(DT_CODE_SCREEN_OFF, "C197"), STOP(DT_CODE_SCREEN_ON, "C1A1"),
-    STOP(DT_B6_OBJECTS, "8000.6"),    STOP(DT_B6_SPAWN, "AEA0.6"),      STOP(DT_CODE_LAND_SELECT, "D630"),
-    STOP(DT_CODE_NT_FILL, "C203"),    STOP(DT_CODE_CHR_LOAD, "C301"),   STOP(DT_B5_PPU_STRINGS, "BAB0.5"),
-    STOP(DT_CODE_SCENE, "DF27"),      STOP(DT_CODE_ENDING, "E1AF"),
+    STOP(DT_CODE_TASK_YIELD, "FFAC"), STOP(DT_CODE_RESET, "FEE0"),       STOP(DT_CODE_FADE_IN, "C279"),
+    STOP(DT_CODE_FADE_OUT, "C282"),   STOP(DT_CODE_SCREEN_OFF, "C197"),  STOP(DT_CODE_SCREEN_ON, "C1A1"),
+    STOP(DT_B6_OBJECTS, "8000.6"),    STOP(DT_B6_SPAWN, "AEA0.6"),       STOP(DT_CODE_NT_FILL, "C203"),
+    STOP(DT_CODE_CHR_LOAD, "C301"),   STOP(DT_B5_PPU_STRINGS, "BAB0.5"), STOP(DT_CODE_SCENE, "DF27"),
+    STOP(DT_CODE_ENDING, "E1AF"),     STOP(DT_CODE_TASK_WAIT, "FFA5"),   STOP(DT_CODE_BANK_TRANSFER, "D8D9"),
+    STOP(DT_B4_FINAL_TRIP, "BE00.4"),
 };
 const int gFlowStopCount = sizeof gFlowStops / sizeof gFlowStops[0];

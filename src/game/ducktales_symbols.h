@@ -227,18 +227,20 @@
 
 /* ---- game flow (docs/game-state.md, docs/levels.md, docs/rendering.md;
  * decompiled in src/decomp/flow.c) ---- */
-#define DT_ADDR_SCRATCH4           0x0004 /* scratch: block steps for $C830 (verified, rendering.md) */
-#define DT_ADDR_SCRATCH5           0x0005 /* scratch: VRAM queue offset for $C830 (code) */
-#define DT_ADDR_SCRATCH10          0x0010 /* scratch: counters and pointers of the flow code (code) */
-#define DT_ADDR_SCRATCH11          0x0011 /* scratch: screens left to draw at a respawn (code) */
-#define DT_ADDR_PALETTE_REQUEST    0x0018 /* the NMI uploads $0300-$031F when set (verified) */
-#define DT_ADDR_VRAM_PENDING       0x0019 /* the NMI draws the $0400 queue when set (verified) */
-#define DT_ADDR_TILE_EDIT_PENDING  0x001A /* the NMI draws the $0440 queue when set (verified) */
-#define DT_ADDR_STREAM_PAGE        0x002C /* page of the screen being streamed (verified) */
-#define DT_ADDR_PREV_CAMERA_X      0x0025 /* previous frame's $F2 (verified) */
-#define DT_ADDR_UNK_2E             0x002E /* cleared every frame by the frame loop (code; meaning unknown) */
-#define DT_ADDR_UNK_4F             0x004F /* cleared at land load, respawn and scenes (code; meaning unknown) */
-#define DT_ADDR_ROW_CHR_STATE      0x0050 /* row sprite-CHR stream state, negative = done (verified) */
+#define DT_ADDR_SCRATCH4          0x0004 /* scratch: block steps for $C830 (verified, rendering.md) */
+#define DT_ADDR_SCRATCH5          0x0005 /* scratch: VRAM queue offset for $C830 (code) */
+#define DT_ADDR_SCRATCH10         0x0010 /* scratch: counters and pointers of the flow code (code) */
+#define DT_ADDR_SCRATCH11         0x0011 /* scratch: screens left to draw at a respawn (code) */
+#define DT_ADDR_PALETTE_REQUEST   0x0018 /* the NMI uploads $0300-$031F when set (verified) */
+#define DT_ADDR_VRAM_PENDING      0x0019 /* the NMI draws the $0400 queue when set (verified) */
+#define DT_ADDR_TILE_EDIT_PENDING 0x001A /* the NMI draws the $0440 queue when set (verified) */
+#define DT_ADDR_STREAM_PAGE       0x002C /* page of the screen being streamed (verified) */
+#define DT_ADDR_PREV_CAMERA_X     0x0025 /* previous frame's $F2 (verified) */
+#define DT_ADDR_UNK_2E            0x002E /* cleared every frame by the frame loop (code; meaning unknown) */
+#define DT_ADDR_UNK_4F            0x004F /* cleared at land load, respawn and scenes (code; meaning unknown) */
+#define DT_ADDR_ROW_CHR_STATE     0x0050 /* row sprite-CHR stream state, negative = done (verified) */
+#define DT_ADDR_SELECT_MESSAGE \
+    0x005E /* Land Select: message index; non-zero goes straight to the final trip (code; no writer found) */
 #define DT_ADDR_UNK_5B             0x005B /* cleared every frame by the frame loop (code; meaning unknown) */
 #define DT_ADDR_TILE_EDIT_OFFSET   0x005C /* write offset of the $0440 queue (verified) */
 #define DT_ADDR_LAND_LEFT          0x005D /* land left: back to Land Select (verified) */
@@ -298,6 +300,10 @@
 #define DT_B5_PAUSE_TEXT       0xB580 /* pause or message text into the VRAM queue (code) */
 #define DT_B5_PPU_STRINGS      0xBAB0 /* X = set: PPU address and data strings written to the PPU (code) */
 #define DT_B5_CONSUMED_BITS    0xB760 /* the land's consumed-record bits $0120-$013F (code) */
+#define DT_B5_SELECT_MESSAGE   0xB800 /* Land Select: the message for $5E, $5D and $78 into the VRAM queue (code) */
+#define DT_B5_MESSAGE          0xB81C /* X = Land Select message: its strings into the VRAM queue (code) */
+#define DT_BANK_FINAL_TRIP     4
+#define DT_B4_FINAL_TRIP       0xBE00 /* the final trip's take-off scene; waits for frames (code) */
 #define DT_BANK_OBJECTS        6
 #define DT_B6_OBJECTS          0x8000 /* every object's per-frame code */
 #define DT_B6_SPAWN_TABLES     0xAE20 /* the land's spawn table pointers into $60-$69 (code) */
@@ -309,6 +315,8 @@
 #define DT_CODE_MAIN_TASK     0xD4E6 /* the main task's start: the title */
 #define DT_CODE_TITLE_FRAME   0xD5D7
 #define DT_CODE_LAND_LOAD     0xD79B
+#define DT_CODE_BANK_TRANSFER 0xD8D9 /* the money counted into TOTAL; waits for frames */
+#define DT_CODE_WAIT_A        0xD9BE /* wait for a frame with A pressed */
 #define DT_CODE_LAND_TABLES   0xD9CA
 #define DT_CODE_LAND_PALETTE  0xD9F5 /* X = palette set * 16 */
 #define DT_CODE_HUD_TEMPLATE  0xD60A
@@ -364,6 +372,22 @@
 #define DT_FLOW_TITLE_FRAME_DONE   0xD609
 #define DT_FLOW_BOSS_STREAMED      0xD01E
 #define DT_FLOW_BOSS_NEXT          0xD038
+#define DT_FLOW_SELECT_FADED       0xD633
+#define DT_FLOW_SELECT_SCREEN_OFF  0xD63A
+#define DT_FLOW_SELECT_CHR         0xD64A
+#define DT_FLOW_SELECT_DRAWN       0xD650
+#define DT_FLOW_SELECT_SHOWN       0xD68A
+#define DT_FLOW_SELECT_FADE_IN     0xD695
+#define DT_FLOW_SELECT_LIT         0xD698
+#define DT_FLOW_SELECT_WAITED      0xD6B1
+#define DT_FLOW_SELECT_BANKED      0xD6B4
+#define DT_FLOW_SELECT_FINAL_WAIT  0xD6C6
+#define DT_FLOW_SELECT_FINAL_SCENE 0xD6CE
+#define DT_FLOW_SELECT_FINAL_READ  0xD6DB
+#define DT_FLOW_SELECT_RESULT_READ 0xD6E7
+#define DT_FLOW_SELECT_CURSOR      0xD6EF
+#define DT_FLOW_SELECT_NEXT        0xD792
+#define DT_FLOW_WAIT_A_NEXT        0xD9C7
 #define DT_FLOW_LOAD_FADED         0xD79E
 #define DT_FLOW_LOAD_BLACK         0xD7A5
 #define DT_FLOW_LOAD_SCREEN_OFF    0xD7A8
@@ -391,6 +415,12 @@
 #define DT_DATA_TITLE_OBJECTS     0xD621 /* the title's two objects: action, Y, X each */
 #define DT_DATA_DIFFICULTY_X      0xD629 /* X of the difficulty cursor (slot 1), per difficulty */
 #define DT_DATA_DIFFICULTY_STEP   0xD62C /* cursor step and its wrap: down, up */
+#define DT_DATA_SELECT_STEP       0xD8A6 /* Land Select cursor step and its wrap: up, down */
+#define DT_DATA_SELECT_CURSOR_Y   0xD8AA /* per land: Y of the cursor (slot 0) */
+#define DT_DATA_SELECT_OBJECTS    0xD8AF /* Land Select's eight objects: action, Y, X each */
+#define DT_DATA_LAND_BIT          0xD8C7 /* per land: its bit in $A0 */
+#define DT_DATA_SELECT_MARK_Y     0xD8CF /* per land: Y and X of the map marker (slot 3) */
+#define DT_DATA_SELECT_MARK_X     0xD8D4
 #define DT_DATA_HUD_LIVES         0xDB02 /* the HUD lives group as the title starts it */
 #define DT_HUD_LIVES_LEN          13
 #define DT_DATA_BOSS_ROW          0xD04D /* per land: map row of the boss trigger (levels.md) */

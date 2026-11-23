@@ -29,7 +29,7 @@ game logic advances once per frame per task.
      and waits for A.
    - The cursor starts on the first land whose treasure bit in `$A0` is clear. Up/Down add -1/+1
      to `$F6` with wrap-around (4 to 0 and 0 to 4) and repeat the step while the target land's
-     bit is set, so completed lands cannot be selected. Start loads the land (`$D79B`).
+     bit is set, so completed lands cannot be selected. A loads the land (`$D79B`).
 3. **Land load** (`$D79B`): blanks the screen, applies the per-land tables (`$D9CA`, see
    [levels.md](levels.md#land-load)), loads graphics, draws the starting screens, sets up the
    object spawner (bank 6 `$AE20`/`$AE60`), puts Scrooge at his start, resets the HUD, clears
