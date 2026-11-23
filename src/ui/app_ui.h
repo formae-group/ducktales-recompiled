@@ -26,10 +26,10 @@ extern "C" {
 #endif
 
 typedef struct {
-    const char *config_path;   /* --config, or NULL for the host's default (config.ini beside the program) */
-    bool hidden;               /* --hidden: never open UI */
-    bool uncapped;             /* --uncapped */
-    bool scripted_input;       /* --window-input / --virtual-pad: never remap the pads */
+    const char *config_path; /* --config, or NULL for the host's default (config.ini beside the program) */
+    bool hidden;             /* --hidden: never open UI */
+    bool uncapped;           /* --uncapped */
+    bool scripted_input;     /* --window-input / --virtual-pad: never remap the pads */
 } AppLaunch;
 
 /* Before the host starts: read config.ini as the host will. */

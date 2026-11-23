@@ -13,6 +13,7 @@ first jump (A pressed at frame 1780) from Scrooge's Y ($0640) in a frame log:
 
     py -3 -I tests/jump_experiment.py --build build/headless [--dev-build build/headless-dev] [--scale 125]
 """
+
 import argparse
 import subprocess
 import sys
@@ -31,8 +32,21 @@ SCROOGE_Y = 0x0640
 
 def run(exe, rom, tmp, name, extra):
     hashes, log = tmp / f'{name}.hash', tmp / f'{name}.bin'
-    cmd = [str(exe), rom, '--frames', str(FRAMES), '--input', str(ROUTE), '--hash-out', str(hashes),
-           '--frame-log', str(log), '--frame-log-frames', f'{LOG_FROM}:{LOG_TO}', *extra]
+    cmd = [
+        str(exe),
+        rom,
+        '--frames',
+        str(FRAMES),
+        '--input',
+        str(ROUTE),
+        '--hash-out',
+        str(hashes),
+        '--frame-log',
+        str(log),
+        '--frame-log-frames',
+        f'{LOG_FROM}:{LOG_TO}',
+        *extra,
+    ]
     p = subprocess.run(cmd, capture_output=True, text=True)
     if p.returncode:
         sys.exit(f'{name}: exit {p.returncode}\n{p.stderr[-2000:]}')
@@ -81,15 +95,23 @@ def main():
         scaled, scaled_y = run(exe, args.rom, tmp, 'scaled', ['--jump-scale', str(args.scale)])
         s0, s1, s_rise = first_jump(stock_y)
         x0, x1, x_rise = first_jump(scaled_y)
-        print(f'stock      : take-off frame {s0}, Y {stock_y[s0]} -> apex {stock_y[s1]} at frame {s1}, rise {s_rise} px')
-        print(f'scale {args.scale:3d}% : take-off frame {x0}, Y {scaled_y[x0]} -> apex {scaled_y[x1]} at frame {x1}, '
-              f'rise {x_rise} px')
+        print(
+            f'stock      : take-off frame {s0}, Y {stock_y[s0]} -> apex {stock_y[s1]} at frame {s1}, rise {s_rise} px'
+        )
+        print(
+            f'scale {args.scale:3d}% : take-off frame {x0}, Y {scaled_y[x0]} -> apex {scaled_y[x1]} at frame {x1}, '
+            f'rise {x_rise} px'
+        )
         check(stock == same, '--jump-scale 100 matches stock on every frame')
         diverge = first_difference(stock, scaled)
-        check(diverge == s0 + 1, f'--jump-scale {args.scale} identical before the jump, first difference at frame '
-              f'{diverge} (jump frame {s0 + 1})')
-        check((x_rise > s_rise) == (args.scale > 100) and x_rise != s_rise,
-              f'apex rise changed: {s_rise} -> {x_rise} px')
+        check(
+            diverge == s0 + 1,
+            f'--jump-scale {args.scale} identical before the jump, first difference at frame '
+            f'{diverge} (jump frame {s0 + 1})',
+        )
+        check(
+            (x_rise > s_rise) == (args.scale > 100) and x_rise != s_rise, f'apex rise changed: {s_rise} -> {x_rise} px'
+        )
 
         if args.dev_build:
             dev = ROOT / args.dev_build / args.config / 'ducktales.exe'

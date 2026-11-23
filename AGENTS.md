@@ -57,6 +57,7 @@ Configure with `-G "Visual Studio 17 2022" -A x64` and build with
 | Menu, settings, window | `py -3 -I tests/window_smoke.py --build build/windows` |
 | ROM identity and import | `build/headless/Release/app_rom_test.exe` |
 | Release package, install rules | `py -3 -I tests/package_test.py --build build/windows` |
+| Any source change | `py -3 tools/format.py --check` |
 
 The full `verify_routes.py` run takes most of an hour; iterate with `--routes <name> ...` and run the
 full set once at the end. Oracle results are cached in `build/verify-cache/`.
@@ -65,6 +66,8 @@ full set once at the end. Oracle results are cached in `build/verify-cache/`.
 
 - C everywhere in `src/`; C++ only in `src/ui/app_ui.cpp`. Four-space indent,
   CRLF line endings.
+- Layout is `.clang-format` (C/C++) and Black (Python, `pyproject.toml`): run `py -3 tools/format.py`
+  before committing; `py -3 tools/format.py --check` must list nothing. Never format `external/`.
 - Each source file opens with a header comment naming its purpose and the settings or options it
   owns. No comments inside function bodies.
 - Prefixes: `dt_` / `Dt` for game code, `app_` for the application layer.

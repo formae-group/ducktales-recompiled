@@ -30,6 +30,7 @@
 DUCKTALES_DECOMP=check py -3 -I tests/verify_routes.py runs the oracle comparison with
 the checks on.
 """
+
 import argparse
 import concurrent.futures
 import re
@@ -43,11 +44,13 @@ RAM = 0x800
 IDLE_S = 0xFF
 TASKS = 0x80
 MAIN_TASK_BASE = 0xBF
-STACK = 0x161      # page 1 below this is data: palette, consumed-record bits, HUD time (game-over box to $0160)
-LINE = re.compile(r'^decomp: mode=\S+ routine=(\S+) addr=\$([0-9A-F]{4}) calls=(\d+) compared=(\d+) original=(\d+)$', re.M)
+STACK = 0x161  # page 1 below this is data: palette, consumed-record bits, HUD time (game-over box to $0160)
+LINE = re.compile(
+    r'^decomp: mode=\S+ routine=(\S+) addr=\$([0-9A-F]{4}) calls=(\d+) compared=(\d+) original=(\d+)$', re.M
+)
 
 POKE_ROUTE = ROOT / 'tests' / 'routes' / 're_amazon_moves.txt'
-POKE_FRAME = 1700   # Scrooge on the ground in the Amazon
+POKE_FRAME = 1700  # Scrooge on the ground in the Amazon
 POKE_FRAMES = 220
 # name, {address: value} stored before POKE_FRAME (or {frame: {...}}), routines that must be compared
 POKES = [
@@ -86,8 +89,12 @@ def route_case(route):
 def poke_case(name, pokes, want):
     if not all(isinstance(v, dict) for v in pokes.values()):
         pokes = {POKE_FRAME: pokes}
-    extra = [arg for frame, at in pokes.items() for addr, value in at.items()
-             for arg in ('--dt-poke-at', f'{frame}:{addr:X}={value:02X}')]
+    extra = [
+        arg
+        for frame, at in pokes.items()
+        for addr, value in at.items()
+        for arg in ('--dt-poke-at', f'{frame}:{addr:X}={value:02X}')
+    ]
     return {'name': name, 'route': POKE_ROUTE, 'frames': POKE_FRAME + POKE_FRAMES, 'extra': extra, 'want': want}
 
 
@@ -169,8 +176,10 @@ def run_checks(pool, exe, rom, cases, label, failed):
 def run_replaces(pool, exe, rom, cases, label, failed):
     with tempfile.TemporaryDirectory(dir=ROOT / 'captures' if (ROOT / 'captures').is_dir() else None) as tmp:
         for name, result, frames in pool.map(lambda c: replace_case(exe, rom, c, tmp), cases):
-            print(f'{label:8s} {name:24s} {"PASS" if result is None else "FAIL"}  frames={frames}'
-                  + ('' if result is None else f'  first difference: {result}'))
+            print(
+                f'{label:8s} {name:24s} {"PASS" if result is None else "FAIL"}  frames={frames}'
+                + ('' if result is None else f'  first difference: {result}')
+            )
             if result is not None:
                 failed.append(f'{label} {name}')
 

@@ -5,6 +5,7 @@ Runs the headless build with --trace-frame/--trace-out and scans the per-cycle t
 
     py -3 -I tools/whoaccesses.py --input ROUTE --frame N ADDR[,ADDR...] [--reads]
 """
+
 import argparse
 import subprocess
 import tempfile
@@ -25,9 +26,22 @@ def main():
     want = {int(x, 16) for x in a.addrs.split(',')}
     with tempfile.TemporaryDirectory() as tmp:
         trace = Path(tmp) / 'trace.txt'
-        subprocess.run([a.exe, a.rom, '--frames', str(a.frame + 1), '--input', a.input,
-                        '--trace-frame', str(a.frame), '--trace-out', str(trace)],
-                       check=True, capture_output=True)
+        subprocess.run(
+            [
+                a.exe,
+                a.rom,
+                '--frames',
+                str(a.frame + 1),
+                '--input',
+                a.input,
+                '--trace-frame',
+                str(a.frame),
+                '--trace-out',
+                str(trace),
+            ],
+            check=True,
+            capture_output=True,
+        )
         insn, bank = '?', None
         for line in trace.read_text().splitlines():
             parts = line.split()
@@ -42,8 +56,10 @@ def main():
             if parts[1] == 'W' and addr >= 0x8000:
                 bank = int(value, 16)
             if addr in want and (parts[1] == 'W' or a.reads):
-                print('cycle %s %s %04X=%s bank=%s  %s' % (parts[0], parts[1], addr, value,
-                                                         '?' if bank is None else bank, insn))
+                print(
+                    'cycle %s %s %04X=%s bank=%s  %s'
+                    % (parts[0], parts[1], addr, value, '?' if bank is None else bank, insn)
+                )
 
 
 if __name__ == '__main__':

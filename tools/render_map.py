@@ -23,6 +23,7 @@ attributes per 32-pixel column (HUD rows of nametable 0 excluded), the attribute
 $0500, CHR RAM, the palette and, with --picture, the background pixels below the HUD.
 PNG colours come from a generated NTSC approximation; compare colour indices with 'check'.
 """
+
 import argparse
 import colorsys
 import struct
@@ -58,7 +59,7 @@ def nes_rgb(v):
 class Rom:
     def __init__(self, path):
         data = Path(path).read_bytes()
-        self.prg = data[16:16 + data[4] * 0x4000]
+        self.prg = data[16 : 16 + data[4] * 0x4000]
 
     def rd(self, addr, bank=7):
         if addr >= 0xC000:
@@ -67,7 +68,7 @@ class Rom:
 
     def blob(self, bank, addr, n):
         off = bank * 0x4000 + addr - 0x8000
-        return self.prg[off:off + n]
+        return self.prg[off : off + n]
 
     def grid(self, m):
         rows, stride = self.rd(GRID_ROWS + m), self.rd(GRID_STRIDE + m)
@@ -107,7 +108,7 @@ class Rom:
         chr_ram = bytearray(0x2000)
         lists = self.load_list(land) + (self.row_list(land, row, page) if row is not None else [])
         for bank, pages, src, dst in lists:
-            chr_ram[dst << 8:(dst + pages) << 8] = self.blob(bank, src << 8, pages * 256)
+            chr_ram[dst << 8 : (dst + pages) << 8] = self.blob(bank, src << 8, pages * 256)
         return chr_ram
 
     def palette(self, land, row=None):
@@ -144,7 +145,7 @@ def read_log(path, want=None):
     with open(path, 'rb') as f:
         if f.read(8) != b'CYCFRAME':
             raise SystemExit('not a frame log')
-        version, = struct.unpack('<I', f.read(4))
+        (version,) = struct.unpack('<I', f.read(4))
         nlen = 6 if version >= 2 else 5
         last = None
         while True:
@@ -154,8 +155,15 @@ def read_log(path, want=None):
             frame, _, _, *lens = struct.unpack('<III%dI' % nlen, head)
             pal, oam = f.read(32), f.read(256)
             blobs = [f.read(n) for n in lens]
-            last = dict(frame=frame, palette=pal, oam=oam, ram=blobs[0], ciram=blobs[1], chr=blobs[3],
-                        pic=struct.unpack('<%dH' % (256 * 240), blobs[4]))
+            last = dict(
+                frame=frame,
+                palette=pal,
+                oam=oam,
+                ram=blobs[0],
+                ciram=blobs[1],
+                chr=blobs[3],
+                pic=struct.unpack('<%dH' % (256 * 240), blobs[4]),
+            )
             if want is not None and frame == want:
                 return last
 
@@ -190,8 +198,12 @@ def write_png(path, rows, scale=1):
 
     h, w = len(rows) * scale, len(rows[0]) * scale
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    Path(path).write_bytes(b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0))
-                           + chunk(b'IDAT', zlib.compress(bytes(raw), 6)) + chunk(b'IEND', b''))
+    Path(path).write_bytes(
+        b'\x89PNG\r\n\x1a\n'
+        + chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0))
+        + chunk(b'IDAT', zlib.compress(bytes(raw), 6))
+        + chunk(b'IEND', b'')
+    )
 
 
 def cmd_check(rom, a):
@@ -200,13 +212,15 @@ def cmd_check(rom, a):
         raise SystemExit('frame not in log')
     ram = log['ram']
     land, row, cx, page, tbank = ram[0xF6], ram[0xF1], ram[0xF2], ram[0xF3], ram[0xF7]
-    print('frame %d: $F6=%d $F1=%d camera $F3:$F2=%d:%02X $2D=%02X $24=%02X $26=%02X $F7=%d (table: %d)'
-          % (log['frame'], land, row, page, cx, ram[0x2D], ram[0x24], ram[0x26], tbank, rom.rd(TILESET_BANK + land)))
+    print(
+        'frame %d: $F6=%d $F1=%d camera $F3:$F2=%d:%02X $2D=%02X $24=%02X $26=%02X $F7=%d (table: %d)'
+        % (log['frame'], land, row, page, cx, ram[0x2D], ram[0x24], ram[0x26], tbank, rom.rd(TILESET_BANK + land))
+    )
     _, stride, grid = rom.grid(land)
     cands = {p: grid[row][p] for p in range(stride) if grid[row][p] != 0xFF}
     total = [0, 0, 0, 0]
     for nt in (0, 1):
-        ci = log['ciram'][nt * 0x400:(nt + 1) * 0x400]
+        ci = log['ciram'][nt * 0x400 : (nt + 1) * 0x400]
         dec = {p: rom.screen(s, tbank) for p, s in cands.items() if p & 1 == nt}
         first = HUD_TILE_ROWS if nt == 0 else 0
         parts = []
@@ -225,16 +239,25 @@ def cmd_check(rom, a):
             total[1] += n_t
             total[3] += n_a
         print('nametable %d columns 0-7 (page: tiles, attributes): %s' % (nt, ' '.join(parts)))
-    print('tiles %d/%d, attribute bytes %d/%d equal the best-matching screen of row %d'
-          % (total[0], total[1], total[2], total[3], row))
+    print(
+        'tiles %d/%d, attribute bytes %d/%d equal the best-matching screen of row %d'
+        % (total[0], total[1], total[2], total[3], row)
+    )
     for nt in (0, 1):
-        ci = log['ciram'][nt * 0x400:(nt + 1) * 0x400]
+        ci = log['ciram'][nt * 0x400 : (nt + 1) * 0x400]
         same = sum(ram[0x500 + nt * 64 + i] == ci[0x3C0 + i] for i in range(64))
-        print('attribute shadow $%04X-$%04X = nametable %d attributes: %d/64' % (0x500 + nt * 64, 0x53F + nt * 64, nt, same))
+        print(
+            'attribute shadow $%04X-$%04X = nametable %d attributes: %d/64'
+            % (0x500 + nt * 64, 0x53F + nt * 64, nt, same)
+        )
     exp, got = rom.build_chr(land, row, page), log['chr']
-    for lo, hi, name in ((0x0000, 0x0800, 'sprite, common'), (0x0800, 0x0900, 'sprite, per land'),
-                         (0x0900, 0x1000, 'sprite, per row'), (0x1000, 0x1300, 'background, common'),
-                         (0x1300, 0x2000, 'background, per land')):
+    for lo, hi, name in (
+        (0x0000, 0x0800, 'sprite, common'),
+        (0x0800, 0x0900, 'sprite, per land'),
+        (0x0900, 0x1000, 'sprite, per row'),
+        (0x1000, 0x1300, 'background, common'),
+        (0x1300, 0x2000, 'background, per land'),
+    ):
         same = sum(exp[i] == got[i] for i in range(lo, hi))
         print('CHR $%04X-$%04X (%s): %d/%d bytes equal the ROM lists' % (lo, hi - 1, name, same, hi - lo))
     pal = rom.palette(land, row)
@@ -247,8 +270,10 @@ def cmd_check(rom, a):
         nts = []
         for nt in (0, 1):
             t = [[ci[nt * 0x400 + ty * 32 + tx] for tx in range(32)] for ty in range(30)]
-            nts.append(render_tiles(t, list(ci[nt * 0x400 + 0x3C0:nt * 0x400 + 0x400]), got, bgpal))
-        dec = {p: render_tiles(*rom.screen(s, tbank)[:2], got, bgpal) for p, s in cands.items() if p in (page, page + 1)}
+            nts.append(render_tiles(t, list(ci[nt * 0x400 + 0x3C0 : nt * 0x400 + 0x400]), got, bgpal))
+        dec = {
+            p: render_tiles(*rom.screen(s, tbank)[:2], got, bgpal) for p, s in cands.items() if p in (page, page + 1)
+        }
         top = ram[0xFA] + 9
         ok_nt = ok_rom = tot = 0
         for y in range(top, 240):
@@ -260,24 +285,44 @@ def cmd_check(rom, a):
                 ok_nt += pix == nts[((page + (wx >> 8)) & 1)][sy][wx & 255]
                 src = dec.get(page + (wx >> 8))
                 ok_rom += src is not None and pix == src[sy][wx & 255]
-        print('picture lines %d-239: %d/%d pixels equal the nametable render, %d/%d the ROM-only render'
-              ' (the rest are sprites)' % (top, ok_nt, tot, ok_rom, tot))
+        print(
+            'picture lines %d-239: %d/%d pixels equal the nametable render, %d/%d the ROM-only render'
+            ' (the rest are sprites)' % (top, ok_nt, tot, ok_rom, tot)
+        )
 
 
 def cmd_tables(rom, _a):
     for x in range(11):
-        print('$C301 list %d: %s' % (x, '; '.join('bank %d $%02X00 -> PPU $%04X x%d' % (b, s, d << 8, n)
-                                                for b, n, s, d in rom.load_list(x))))
+        print(
+            '$C301 list %d: %s'
+            % (x, '; '.join('bank %d $%02X00 -> PPU $%04X x%d' % (b, s, d << 8, n) for b, n, s, d in rom.load_list(x)))
+        )
     for land in range(5):
         for row in range(rom.grid(land)[0]):
             x, x2 = rom.row_index(land, row, 0), rom.row_index(land, row, 7)
-            lst = '; '.join('bank %d $%02X00 -> PPU $%04X x%d' % (b, s, d << 8, n) for b, n, s, d in rom.row_list(land, row, 0))
-            print('land %d row %d: $C42C list %d%s, sprite palette 3 = %s: %s' % (
-                land, row, x, ' (list %d from the split page on)' % x2 if x2 != x else '',
-                ' '.join('%02X' % v for v in rom.sprite_pal3(land, row)), lst or 'nothing'))
+            lst = '; '.join(
+                'bank %d $%02X00 -> PPU $%04X x%d' % (b, s, d << 8, n) for b, n, s, d in rom.row_list(land, row, 0)
+            )
+            print(
+                'land %d row %d: $C42C list %d%s, sprite palette 3 = %s: %s'
+                % (
+                    land,
+                    row,
+                    x,
+                    ' (list %d from the split page on)' % x2 if x2 != x else '',
+                    ' '.join('%02X' % v for v in rom.sprite_pal3(land, row)),
+                    lst or 'nothing',
+                )
+            )
     for land in range(9):
-        print('$F6=%d: tileset bank $F7=%d, BG palette %s' % (land, rom.rd(TILESET_BANK + land), ' '.join(
-            '%02X' % rom.rd(BG_PALETTES + 16 * land + i) for i in range(16))))
+        print(
+            '$F6=%d: tileset bank $F7=%d, BG palette %s'
+            % (
+                land,
+                rom.rd(TILESET_BANK + land),
+                ' '.join('%02X' % rom.rd(BG_PALETTES + 16 * land + i) for i in range(16)),
+            )
+        )
     print('sprite palette %s' % ' '.join('%02X' % rom.rd(SPR_PALETTE + i) for i in range(16)))
 
 
@@ -303,7 +348,7 @@ def cmd_land(rom, a):
             if grid[r][c] != 0xFF:
                 img = render_map_screen(rom, a.map, grid[r][c], chr_ram, pal)
                 for y in range(240):
-                    out[r * 240 + y][c * 256:(c + 1) * 256] = img[y]
+                    out[r * 240 + y][c * 256 : (c + 1) * 256] = img[y]
     write_png(a.out, out, a.scale)
     print('map %d: %d rows x %d screens -> %s' % (a.map, rows, stride, a.out))
 

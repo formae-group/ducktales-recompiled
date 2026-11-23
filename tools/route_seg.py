@@ -8,6 +8,7 @@ tiled into OUT/sheet.png.
 
     py -3 -I tools/route_seg.py ROUTE --to FRAME [--state FILE] [--save F:FILE ...] [--out DIR]
 """
+
 import argparse
 import subprocess
 import sys
@@ -53,8 +54,18 @@ def main():
     for old in out.glob('s_*.png'):
         old.unlink()
     start = 0
-    cmd = [a.exe, a.rom, '--frames', str(a.to + 1), '--input', a.route,
-           '--screenshot', str(out / 's.png'), '--shot-every', str(a.shots)]
+    cmd = [
+        a.exe,
+        a.rom,
+        '--frames',
+        str(a.to + 1),
+        '--input',
+        a.route,
+        '--screenshot',
+        str(out / 's.png'),
+        '--shot-every',
+        str(a.shots),
+    ]
     if a.state:
         cmd += ['--load-state', a.state]
         start = int(Path(a.state).stem.split('_')[-1]) if Path(a.state).stem.split('_')[-1].isdigit() else 0
@@ -69,17 +80,45 @@ def main():
         print('frame row  camX  sx sy act hp lv money')
         prev = None
         for f, ram, _, _ in frames(str(out / 'fl.bin')):
-            row = (ram[0xF3] * 256 + ram[0xF2], ram[0x650], ram[0x640], ram[0x620], hp_dots(ram), ram[0x361], money(ram))
+            row = (
+                ram[0xF3] * 256 + ram[0xF2],
+                ram[0x650],
+                ram[0x640],
+                ram[0x620],
+                hp_dots(ram),
+                ram[0x361],
+                money(ram),
+            )
             if f % a.every == 0 or (prev and (row[4], row[5]) != (prev[4], prev[5])):
-                objs = ' '.join(f'{n}:{ram[0x620 + n]:02X}@{ram[0x650 + n]:02X},{ram[0x640 + n]:02X}'
-                                for n in range(1, 16) if ram[0x600 + n]) if a.objs else ''
-                print(f'{f:5d} {ram[0xF1]:3X} {row[0]:5X}  {row[1]:02X} {row[2]:02X}  {row[3]:02X} {row[4]:2d} {row[5]:2d} {row[6]} {objs}')
+                objs = (
+                    ' '.join(
+                        f'{n}:{ram[0x620 + n]:02X}@{ram[0x650 + n]:02X},{ram[0x640 + n]:02X}'
+                        for n in range(1, 16)
+                        if ram[0x600 + n]
+                    )
+                    if a.objs
+                    else ''
+                )
+                print(
+                    f'{f:5d} {ram[0xF1]:3X} {row[0]:5X}  {row[1]:02X} {row[2]:02X}  {row[3]:02X} {row[4]:2d} {row[5]:2d} {row[6]} {objs}'
+                )
             prev = row
         (out / 'fl.bin').unlink()
     shots = sorted(out.glob('s_*.png'))
     if shots:
-        subprocess.run([sys.executable, '-I', str(ROOT / 'tools' / 'contact_sheet.py'), *map(str, shots),
-                        '--out', str(out / 'sheet.png'), '--cols', str(a.cols)], check=True)
+        subprocess.run(
+            [
+                sys.executable,
+                '-I',
+                str(ROOT / 'tools' / 'contact_sheet.py'),
+                *map(str, shots),
+                '--out',
+                str(out / 'sheet.png'),
+                '--cols',
+                str(a.cols),
+            ],
+            check=True,
+        )
 
 
 if __name__ == '__main__':

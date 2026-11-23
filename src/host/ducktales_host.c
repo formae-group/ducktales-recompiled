@@ -54,8 +54,9 @@
 /* No slowdown on this runtime: NESRecomp's extra scanlines (ducktales_host.h). */
 void ducktales_host_apply_no_slowdown(bool on)
 {
-    if (!cyc_set_extra_scanlines(on ? DT_NO_SLOWDOWN_LINES : 0))
+    if (!cyc_set_extra_scanlines(on ? DT_NO_SLOWDOWN_LINES : 0)) {
         fprintf(stderr, "[ducktales] No slowdown: the cycle host refused %u extra scanlines\n", DT_NO_SLOWDOWN_LINES);
+    }
 }
 
 static void load_setting(void *ctx, const char *key, const char *value)
@@ -75,7 +76,8 @@ static void save_settings(void *ctx, FILE *f)
 
 /* One option per enhancement, the sprites one, the decompilation's, then the
  * developer ones. */
-static const CycHostOption DIAG_OPTIONS[] = { DT_RAMHASH_OPTIONS DT_DIAG_OPTIONS NV_CHECK_OPTIONS { NULL, false, NULL } };
+static const CycHostOption DIAG_OPTIONS[] = { DT_RAMHASH_OPTIONS DT_DIAG_OPTIONS NV_CHECK_OPTIONS{ NULL, false,
+                                                                                                   NULL } };
 static CycHostOption s_options[DT_ENH_COUNT + 2 + sizeof DIAG_OPTIONS / sizeof DIAG_OPTIONS[0]];
 static bool s_decomp_option;
 static char s_option_help[DT_ENH_COUNT][160];
@@ -85,16 +87,22 @@ static size_t options_init(void)
     size_t n = 0;
     for (int e = 0; e < DT_ENH_COUNT; e++) {
         const DtEnhInfo *in = dt_enh_info((DtEnh)e);
-        const char *range = in->kind == DT_ENH_KIND_TOGGLE ? "on|off" : in->kind == DT_ENH_KIND_COUNT_OR_OFF ? "0-9|off" : "25-400";
+        const char *range = in->kind == DT_ENH_KIND_TOGGLE         ? "on|off"
+                            : in->kind == DT_ENH_KIND_COUNT_OR_OFF ? "0-9|off"
+                                                                   : "25-400";
         snprintf(s_option_help[e], sizeof s_option_help[e], "%s: %s (default %s)", range, in->help,
                  in->kind == DT_ENH_KIND_PERCENT ? "100" : "off");
         s_options[n++] = (CycHostOption){ in->option, true, s_option_help[e] };
     }
     s_options[n++] = (CycHostOption){ DT_SPRITES_OPTION, true,
                                       "on|off: present every sprite, without flicker or dropout (default on)" };
-    s_options[n++] = (CycHostOption){ "--decomp", true,
-        "off|check|replace: run the decompiled routines (check: compare with the original on every call; default off)" };
-    for (size_t i = 0; DIAG_OPTIONS[i].name; i++) s_options[n++] = DIAG_OPTIONS[i];
+    s_options[n++] = (CycHostOption){
+        "--decomp", true,
+        "off|check|replace: run the decompiled routines (check: compare with the original on every call; default off)"
+    };
+    for (size_t i = 0; DIAG_OPTIONS[i].name; i++) {
+        s_options[n++] = DIAG_OPTIONS[i];
+    }
     return n;
 }
 
@@ -107,9 +115,15 @@ static bool option(void *ctx, const char *name, const char *value)
         return Decomp_ParseMode(value, &mode) && Decomp_SetMode(mode);
     }
     bool ok;
-    if (ducktales_host_game_option(name, value, &ok)) return ok;
-    if (!strcmp(name, "--ram-hash-out")) return dt_ramhash_open(value);
-    if (!strcmp(name, "--lag-log")) return dt_laglog_open(value);
+    if (ducktales_host_game_option(name, value, &ok)) {
+        return ok;
+    }
+    if (!strcmp(name, "--ram-hash-out")) {
+        return dt_ramhash_open(value);
+    }
+    if (!strcmp(name, "--lag-log")) {
+        return dt_laglog_open(value);
+    }
     return dt_diag_option(name, value) || nv_check_option(name, value);
 }
 

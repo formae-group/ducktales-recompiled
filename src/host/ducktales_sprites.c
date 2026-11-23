@@ -47,10 +47,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define RAM_SIZE      0x800
-#define SLOT_SPRITES  64
-#define HUD_RECORDS   16
-#define LIST_MAX      (64 + 3 * HUD_RECORDS + DT_OBJ_SLOTS * SLOT_SPRITES)
+#define RAM_SIZE     0x800
+#define SLOT_SPRITES 64
+#define HUD_RECORDS  16
+#define LIST_MAX     (64 + 3 * HUD_RECORDS + DT_OBJ_SLOTS * SLOT_SPRITES)
 
 typedef struct {
     uint8_t y, tile, attr, x;
@@ -59,8 +59,8 @@ typedef struct {
 
 static bool s_on = DT_SPRITES_DEFAULT;
 static bool s_installed;
-static uint8_t s_ram[2][RAM_SIZE];   /* end of the previous frame, end of this one */
-static int s_seen;                   /* frames saved since the machine was last replaced */
+static uint8_t s_ram[2][RAM_SIZE]; /* end of the previous frame, end of this one */
+static int s_seen;                 /* frames saved since the machine was last replaced */
 static uint8_t *s_prg;
 static size_t s_prg_size;
 static DtSpritesStats s_stats;
@@ -73,11 +73,17 @@ static uint32_t s_background[256 * 240];
 
 static bool load_prg(void)
 {
-    if (s_prg) return true;
+    if (s_prg) {
+        return true;
+    }
     size_t size = cyc_mod_copy_cart_payload(NULL, 0);
-    if (size < (DT_SPR_BANK + 1) * 0x4000u) return false;
+    if (size < (DT_SPR_BANK + 1) * 0x4000u) {
+        return false;
+    }
     s_prg = malloc(size);
-    if (!s_prg) return false;
+    if (!s_prg) {
+        return false;
+    }
     if (cyc_mod_copy_cart_payload(s_prg, size) != size) {
         free(s_prg);
         s_prg = NULL;
@@ -113,11 +119,12 @@ static int hud_records(const uint8_t *ram, Sprite *out)
 {
     static const uint16_t GROUP[3] = { DT_ADDR_HUD_GROUP_HP, DT_ADDR_HUD_GROUP_LIVES, DT_ADDR_HUD_GROUP_TIME };
     int n = 0;
-    for (int g = 0; g < 3; g++)
+    for (int g = 0; g < 3; g++) {
         for (int i = 0; i < HUD_RECORDS && ram[GROUP[g] + 4 * i] != DT_HUD_RECORD_END_Y; i++) {
             const uint8_t *r = &ram[GROUP[g] + 4 * i];
             out[n++] = (Sprite){ r[0], r[1], r[2], r[3], true };
         }
+    }
     return n;
 }
 
@@ -125,15 +132,23 @@ static int hud_records(const uint8_t *ram, Sprite *out)
 static int slot_sprites(const uint8_t *ram, int n, Sprite *out)
 {
     uint8_t status = ram[DT_ROW_STATUS + n], flags = ram[DT_ROW_FLAGS + n];
-    if (!(status & 0x80) || flags == 0xFF) return -1;
+    if (!(status & 0x80) || flags == 0xFF) {
+        return -1;
+    }
     uint8_t x = ram[DT_ROW_POS_X + n];
     if (status & 0x20) {
         int borrow = ram[DT_ROW_POS_X + n] < ram[DT_ADDR_CAMERA_X];
         x = (uint8_t)(ram[DT_ROW_POS_X + n] - ram[DT_ADDR_CAMERA_X]);
-        if ((uint8_t)(ram[DT_ROW_POS_PAGE + n] - ram[DT_ADDR_CAMERA_PAGE] - borrow)) return -1;
-        if (status & 0x10) return -1;
+        if ((uint8_t)(ram[DT_ROW_POS_PAGE + n] - ram[DT_ADDR_CAMERA_PAGE] - borrow)) {
+            return -1;
+        }
+        if (status & 0x10) {
+            return -1;
+        }
     }
-    if ((flags & 0x02) && !(ram[DT_ADDR_SPR_PHASE] & 0x02)) return -1;
+    if ((flags & 0x02) && !(ram[DT_ADDR_SPR_PHASE] & 0x02)) {
+        return -1;
+    }
     bool flip = (flags & 0x40) != 0;
     uint16_t script = rd16(DT_SPR_SCRIPT_LO, DT_SPR_SCRIPT_HI, ram[DT_ROW_ACTION + n]);
     uint8_t id = rd((uint16_t)(script + 2 + (ram[DT_ROW_FRAME + n] & 0x7F)));
@@ -146,10 +161,16 @@ static int slot_sprites(const uint8_t *ram, int n, Sprite *out)
         int at = 2 + 2 * k;
         uint8_t dy = rd((uint16_t)(offsets + at)), dx = rd((uint16_t)(offsets + at + 1));
         int y = y0 + dy, xx = x + dx;
-        if ((dy < 0x80 && y > 0xFF) || (dy >= 0x80 && y <= 0xFF)) continue;
+        if ((dy < 0x80 && y > 0xFF) || (dy >= 0x80 && y <= 0xFF)) {
+            continue;
+        }
         y &= 0xFF;
-        if (n != DT_SLOT_SCROOGE && !(flags & 0x10) && y < DT_HUD_BAND_Y) continue;
-        if ((dx < 0x80 && xx > 0xFF) || (dx >= 0x80 && xx <= 0xFF)) continue;
+        if (n != DT_SLOT_SCROOGE && !(flags & 0x10) && y < DT_HUD_BAND_Y) {
+            continue;
+        }
+        if ((dx < 0x80 && xx > 0xFF) || (dx >= 0x80 && xx <= 0xFF)) {
+            continue;
+        }
         uint8_t attr = (uint8_t)((rd((uint16_t)(meta + at + 1)) ^ (flip ? 0x40 : 0)) | ((flags & 0x04) << 3));
         out[made++] = (Sprite){ (uint8_t)y, rd((uint16_t)(meta + at)), attr, (uint8_t)xx, false };
     }
@@ -170,30 +191,48 @@ static int rebuild(const uint8_t *ram, const uint8_t *oam, Sprite *list, bool *h
     Sprite hud[3 * HUD_RECORDS];
     int hud_n = hud_allowed(ram) ? hud_records(ram, hud) : 0;
     if (hud_in_oam(ram)) {
-        for (int i = 0; i < hud_n && pos < 64; i++, pos++)
+        for (int i = 0; i < hud_n && pos < 64; i++, pos++) {
             hud[i] = (Sprite){ oam[pos * 4], oam[pos * 4 + 1], oam[pos * 4 + 2], oam[pos * 4 + 3], true };
+        }
     }
     bool odd = ram[DT_ADDR_SPR_PHASE] & 1;
     for (int i = 0; i < DT_OBJ_SLOTS; i++) {
         int n = odd ? DT_OBJ_SLOTS - 1 - i : i;
         count[n] = slot_sprites(ram, n, slot[n]);
-        if (count[n] <= 0 || pos >= 64) continue;
+        if (count[n] <= 0 || pos >= 64) {
+            continue;
+        }
         int shown = count[n] < 64 - pos ? count[n] : 64 - pos, k = 0;
-        while (k < shown && same(&slot[n][k], &oam[(pos + k) * 4])) k++;
-        if (k < shown) count[n] = -1;
-        else pos += shown;
+        while (k < shown && same(&slot[n][k], &oam[(pos + k) * 4])) {
+            k++;
+        }
+        if (k < shown) {
+            count[n] = -1;
+        } else {
+            pos += shown;
+        }
     }
     int n = 0;
     list[n++] = (Sprite){ oam[0], oam[1], oam[2], oam[3], false };
-    for (int k = 0; k < count[DT_SLOT_SCROOGE]; k++) list[n++] = slot[DT_SLOT_SCROOGE][k];
-    for (int i = 0; i < hud_n; i++) list[n++] = hud[i];
+    for (int k = 0; k < count[DT_SLOT_SCROOGE]; k++) {
+        list[n++] = slot[DT_SLOT_SCROOGE][k];
+    }
+    for (int i = 0; i < hud_n; i++) {
+        list[n++] = hud[i];
+    }
     *hud_restored = hud_n > 0 && !hud_in_oam(ram);
-    for (int s = 0; s < DT_OBJ_SLOTS; s++)
-        if (s != DT_SLOT_SCROOGE)
-            for (int k = 0; k < count[s]; k++) list[n++] = slot[s][k];
+    for (int s = 0; s < DT_OBJ_SLOTS; s++) {
+        if (s != DT_SLOT_SCROOGE) {
+            for (int k = 0; k < count[s]; k++) {
+                list[n++] = slot[s][k];
+            }
+        }
+    }
     *leftover = 0;
     for (int e = pos; e < 64; e++) {
-        if (oam[e * 4] >= 0xF0) continue;
+        if (oam[e * 4] >= 0xF0) {
+            continue;
+        }
         list[n++] = (Sprite){ oam[e * 4], oam[e * 4 + 1], oam[e * 4 + 2], oam[e * 4 + 3], false };
         ++*leftover;
     }
@@ -211,7 +250,9 @@ static int draw(uint32_t *out, const Sprite *list, int n, uint16_t hud_table)
         const uint32_t *bg = &s_background[y * 256];
         memcpy(line, bg, 256 * sizeof *line);
         uint8_t mask = cyc_render_line_mask(y);
-        if (!(mask & 0x10)) continue;
+        if (!(mask & 0x10)) {
+            continue;
+        }
         bool tall = cyc_render_line_sprite16(y);
         int h = tall ? 16 : 8, on_line = 0;
         uint16_t table = cyc_render_line_sprite_table(y);
@@ -220,28 +261,40 @@ static int draw(uint32_t *out, const Sprite *list, int n, uint16_t hud_table)
         for (int i = 0; i < n; i++) {
             const Sprite *s = &list[i];
             int r = y - (s->y + 1);
-            if (s->y >= 0xEF || r < 0 || r >= h) continue;
+            if (s->y >= 0xEF || r < 0 || r >= h) {
+                continue;
+            }
             on_line++;
             int row = (s->attr & 0x80) ? h - 1 - r : r;
-            uint16_t pattern = tall ? (uint16_t)(((s->tile & 1) ? 0x1000 : 0) + (s->tile & 0xFE) * 16 + (row >= 8 ? 16 : 0))
+            uint16_t pattern = tall ? (uint16_t)(((s->tile & 1) ? 0x1000 : 0) + (s->tile & 0xFE) * 16 +
+                                                 (row >= 8 ? 16 : 0))
                                     : (uint16_t)((s->hud ? hud_table : table) + s->tile * 16);
             uint8_t lo = cyc_render_chr((uint16_t)(pattern + (row & 7)));
             uint8_t hi = cyc_render_chr((uint16_t)(pattern + (row & 7) + 8));
             for (int c = 0; c < 8; c++) {
                 int px = s->x + c;
-                if (px > 255) break;
-                if (taken[px] || (px < 8 && !(mask & 0x04))) continue;
+                if (px > 255) {
+                    break;
+                }
+                if (taken[px] || (px < 8 && !(mask & 0x04))) {
+                    continue;
+                }
                 int bit = (s->attr & 0x40) ? c : 7 - c;
                 int v = ((lo >> bit) & 1) | (((hi >> bit) & 1) << 1);
-                if (!v) continue;
+                if (!v) {
+                    continue;
+                }
                 taken[px] = 1;
                 behind[px] = (s->attr & 0x20) != 0;
                 color[px] = cyc_render_color(16 + (s->attr & 3) * 4 + v);
             }
         }
         crowded += on_line > 8;
-        for (int x = 0; x < 256; x++)
-            if (taken[x] && !(behind[x] && opaque[y * 256 + x])) line[x] = color[x];
+        for (int x = 0; x < 256; x++) {
+            if (taken[x] && !(behind[x] && opaque[y * 256 + x])) {
+                line[x] = color[x];
+            }
+        }
     }
     return crowded;
 }
@@ -253,7 +306,9 @@ static int compose(uint32_t *out, int width, int height, int native_x0, const ui
     (void)user;
     if (!s_on || width != 256 || height != 240 || !load_prg() || !cyc_render_background(s_background)) {
         s_stats.declined++;
-        if (s_log) fprintf(s_log, "frame=%lu declined\n", (unsigned long)(cyc_ring_frame - 1));
+        if (s_log) {
+            fprintf(s_log, "frame=%lu declined\n", (unsigned long)(cyc_ring_frame - 1));
+        }
         return 0;
     }
     static Sprite list[LIST_MAX];
@@ -275,20 +330,31 @@ static int compose(uint32_t *out, int width, int height, int native_x0, const ui
         n = leftover = 0;
         hud_restored = false;
         hud_table = 0x1000;
-        for (int e = 0; e < 64; e++) list[n++] = (Sprite){ oam[e * 4], oam[e * 4 + 1], oam[e * 4 + 2], oam[e * 4 + 3], false };
+        for (int e = 0; e < 64; e++) {
+            list[n++] = (Sprite){ oam[e * 4], oam[e * 4 + 1], oam[e * 4 + 2], oam[e * 4 + 3], false };
+        }
         s_stats.fallback++;
         how = "fallback";
     }
-    if (hud_restored) s_stats.hud_restored++;
-    if (leftover) s_stats.leftover++;
+    if (hud_restored) {
+        s_stats.hud_restored++;
+    }
+    if (leftover) {
+        s_stats.leftover++;
+    }
     int visible = 0;
-    for (int i = 1; i < n; i++) visible += list[i].y < 0xEF;
-    if (visible > 63) s_stats.beyond_63 += (uint64_t)(visible - 63);
+    for (int i = 1; i < n; i++) {
+        visible += list[i].y < 0xEF;
+    }
+    if (visible > 63) {
+        s_stats.beyond_63 += (uint64_t)(visible - 63);
+    }
     int crowded = draw(out, list, n, hud_table);
     s_stats.lines_over_8 += (uint64_t)crowded;
-    if (s_log)
+    if (s_log) {
         fprintf(s_log, "frame=%lu %s sprites=%d lines_over_8=%d hud_restored=%d leftover=%d\n",
                 (unsigned long)(cyc_ring_frame - 1), how, visible, crowded, hud_restored ? 1 : 0, leftover);
+    }
     return 1;
 }
 
@@ -306,50 +372,82 @@ static void apply(void)
 
 void dt_sprites_set(bool on)
 {
-    if (s_installed && on == s_on) return;
+    if (s_installed && on == s_on) {
+        return;
+    }
     s_on = on;
     apply();
 }
 
-bool dt_sprites_get(void) { return s_on; }
+bool dt_sprites_get(void)
+{
+    return s_on;
+}
 
 bool dt_sprites_parse(const char *text, bool *out)
 {
     static const char *ON[] = { "1", "on", "true", "yes" }, *OFF[] = { "0", "off", "false", "no" };
-    if (!text) return false;
-    while (*text == ' ' || *text == '\t') text++;
+    if (!text) {
+        return false;
+    }
+    while (*text == ' ' || *text == '\t') {
+        text++;
+    }
     char word[8];
     size_t n = 0;
     while (text[n] && text[n] != ' ' && text[n] != '\t' && text[n] != '\r' && text[n] != '\n') {
-        if (n + 1 >= sizeof word) return false;
+        if (n + 1 >= sizeof word) {
+            return false;
+        }
         word[n] = (char)(text[n] >= 'A' && text[n] <= 'Z' ? text[n] + 32 : text[n]);
         n++;
     }
     word[n] = 0;
-    for (const char *rest = text + n; *rest; rest++)
-        if (*rest != ' ' && *rest != '\t' && *rest != '\r' && *rest != '\n') return false;
+    for (const char *rest = text + n; *rest; rest++) {
+        if (*rest != ' ' && *rest != '\t' && *rest != '\r' && *rest != '\n') {
+            return false;
+        }
+    }
     for (int i = 0; i < 4; i++) {
-        if (!strcmp(word, ON[i])) { *out = true; return true; }
-        if (!strcmp(word, OFF[i])) { *out = false; return true; }
+        if (!strcmp(word, ON[i])) {
+            *out = true;
+            return true;
+        }
+        if (!strcmp(word, OFF[i])) {
+            *out = false;
+            return true;
+        }
     }
     return false;
 }
 
 void dt_sprites_frame_end(void)
 {
-    if (!s_installed) apply();
+    if (!s_installed) {
+        apply();
+    }
     memcpy(s_ram[0], s_ram[1], RAM_SIZE);
     memcpy(s_ram[1], cyc_cpu_ram(), RAM_SIZE);
-    if (s_seen < 2) s_seen++;
+    if (s_seen < 2) {
+        s_seen++;
+    }
 }
 
 void dt_sprites_forget(void)
 {
-    if (!s_installed) apply();
+    if (!s_installed) {
+        apply();
+    }
     s_seen = 0;
     s_last_valid = false;
 }
 
-void dt_sprites_stats(DtSpritesStats *out) { *out = s_stats; }
+void dt_sprites_stats(DtSpritesStats *out)
+{
+    *out = s_stats;
+}
 
-void dt_sprites_set_log(FILE *f) { s_log = f; }
+void dt_sprites_set_log(FILE *f)
+{
+    s_log = f;
+}

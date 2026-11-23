@@ -35,16 +35,20 @@ typedef enum {
     DT_ENH_COUNT
 } DtEnh;
 
-typedef enum { DT_ENH_KIND_PERCENT, DT_ENH_KIND_TOGGLE, DT_ENH_KIND_COUNT_OR_OFF } DtEnhKind;
+typedef enum {
+    DT_ENH_KIND_PERCENT,
+    DT_ENH_KIND_TOGGLE,
+    DT_ENH_KIND_COUNT_OR_OFF
+} DtEnhKind;
 
 typedef struct {
-    const char *key;      /* config.ini [Game] key */
-    const char *option;   /* command-line option (takes a value) */
-    const char *label;    /* menu label */
-    const char *help;     /* one line: the menu's description and the usage */
+    const char *key;    /* config.ini [Game] key */
+    const char *option; /* command-line option (takes a value) */
+    const char *label;  /* menu label */
+    const char *help;   /* one line: the menu's description and the usage */
     DtEnhKind kind;
-    int min, max, stock;  /* stock: the original game, hook disabled */
-    int step;             /* menu step */
+    int min, max, stock; /* stock: the original game, hook disabled */
+    int step;            /* menu step */
 } DtEnhInfo;
 
 const DtEnhInfo *dt_enh_info(DtEnh e);
@@ -55,7 +59,7 @@ bool dt_enh_parse(DtEnh e, const char *text, int *out);
 const char *dt_enh_format(DtEnh e, int value, char *buf, unsigned cap);
 /* False (nothing changes) outside min..max. */
 bool dt_enh_set(DtEnh e, int value);
-int  dt_enh_get(DtEnh e);
+int dt_enh_get(DtEnh e);
 /* How many times the enhancement changed the game since start. */
 uint64_t dt_enh_applied(DtEnh e);
 

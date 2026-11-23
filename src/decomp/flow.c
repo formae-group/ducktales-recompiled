@@ -35,27 +35,27 @@
 
 #define P_ PLAYER_SLOT
 
-#define SFX_PAUSE         0x15
-#define SFX_WARP          0x2D
-#define SFX_TIME_LOW      0x36
-#define MUSIC_BOSS        0x06
-#define MUSIC_GAME_OVER   0x09
-#define MUSIC_DEATH       0x0A
+#define SFX_PAUSE       0x15
+#define SFX_WARP        0x2D
+#define SFX_TIME_LOW    0x36
+#define MUSIC_BOSS      0x06
+#define MUSIC_GAME_OVER 0x09
+#define MUSIC_DEATH     0x0A
 
 #define RESPAWN_PENDING   0x80
-#define RESPAWN_LIFE      0x87    /* entries from here cost a life */
-#define RESPAWN_ARENA     0x85    /* the warp into a boss arena */
+#define RESPAWN_LIFE      0x87 /* entries from here cost a life */
+#define RESPAWN_ARENA     0x85 /* the warp into a boss arena */
 #define LAND_ARENA        5
-#define HAZARD_SPIKES     6       /* hazard mode that invulnerability ignores */
+#define HAZARD_SPIKES     6 /* hazard mode that invulnerability ignores */
 #define CHECKPOINT_SET    5
 #define TIME_LOW_TENS     3
-#define DEATH_PAUSE_FALL  0xB4    /* frames after a death */
-#define DEATH_PAUSE_WARP  0x3C    /* frames after a warp */
+#define DEATH_PAUSE_FALL  0xB4 /* frames after a death */
+#define DEATH_PAUSE_WARP  0x3C /* frames after a warp */
 #define GAME_OVER_FRAMES  0xF0
 #define LAND_EXIT_FRAMES  0xB4
 #define SPLIT_ON          0x40
 #define ROW_SCROLL_ADDR   0xC0
-#define SCROOGE_RESPAWN   0xA0    /* $0700 of Scrooge after a respawn */
+#define SCROOGE_RESPAWN   0xA0 /* $0700 of Scrooge after a respawn */
 #define RESPAWN_ENTRY_LEN 9
 
 #define gScratch0        RAM_U8(DT_ADDR_SCRATCH0)
@@ -88,7 +88,10 @@
 #define gPrevCameraX     RAM_U8(DT_ADDR_PREV_CAMERA_X)
 #define gTimeDigit(i)    RAM_U8(DT_ADDR_TIME_DIGITS + 4 * (i))
 
-static uint8_t Rom(uint16_t addr) { return Game_ReadRom(addr); }
+static uint8_t Rom(uint16_t addr)
+{
+    return Game_ReadRom(addr);
+}
 
 /* A byte of the current map's screen grid (pointer at $20). */
 static uint8_t Map_Cell(uint8_t index)
@@ -97,7 +100,10 @@ static uint8_t Map_Cell(uint8_t index)
     return addr < GAME_RAM_SIZE ? gRam[addr] : Rom(addr);
 }
 
-static void Call(Regs *r, uint16_t routine) { *r = Decomp_Call(routine, r->a, r->x, r->y); }
+static void Call(Regs *r, uint16_t routine)
+{
+    *r = Decomp_Call(routine, r->a, r->x, r->y);
+}
 
 static void SelectBank(Regs *r, uint8_t bank)
 {
@@ -105,18 +111,29 @@ static void SelectBank(Regs *r, uint8_t bank)
     r->a = r->x = bank;
 }
 
-static void Jsr(uint16_t routine, uint16_t resume, uint8_t uses) { Decomp_Handoff(routine, resume, uses); }
+static void Jsr(uint16_t routine, uint16_t resume, uint8_t uses)
+{
+    Decomp_Handoff(routine, resume, uses);
+}
 
-static void Jump(uint16_t target, uint8_t uses) { Decomp_Handoff(target, 0, uses); }
+static void Jump(uint16_t target, uint8_t uses)
+{
+    Decomp_Handoff(target, 0, uses);
+}
 
-static void Yield(uint16_t resume) { Decomp_Handoff(DT_CODE_TASK_YIELD, resume, OUT_X | OUT_Y); }
+static void Yield(uint16_t resume)
+{
+    Decomp_Handoff(DT_CODE_TASK_YIELD, resume, OUT_X | OUT_Y);
+}
 
 /* JSR from task code to task code in C: true when the callee returned. */
 static bool Gosub(void (*routine)(Regs *), Regs *r, uint16_t resume)
 {
     Decomp_PushReturn(resume);
     routine(r);
-    if (Decomp_HandedOff()) return false;
+    if (Decomp_HandedOff()) {
+        return false;
+    }
     Decomp_PullReturn();
     return true;
 }
@@ -125,7 +142,9 @@ static bool Gosub(void (*routine)(Regs *), Regs *r, uint16_t resume)
 static void BuildSprites(Regs *r, bool clear)
 {
     gNoSpriteDma++;
-    if (clear) Call(r, DT_CODE_OAM_CLEAR);
+    if (clear) {
+        Call(r, DT_CODE_OAM_CLEAR);
+    }
     SelectBank(r, DT_BANK_SPRITES);
     Call(r, DT_B5_BUILD_OAM);
     gNoSpriteDma--;
@@ -145,12 +164,16 @@ static void MusicRequest(Regs *r, uint8_t id)
 
 static void Copy(uint16_t dst, uint16_t src, uint8_t len)
 {
-    for (uint8_t i = 0; i < len; i++) gRam[dst + i] = gRam[src + i];
+    for (uint8_t i = 0; i < len; i++) {
+        gRam[dst + i] = gRam[src + i];
+    }
 }
 
 static void CopyRom(uint16_t dst, uint16_t src, uint8_t len)
 {
-    for (uint8_t i = 0; i < len; i++) gRam[dst + i] = Rom((uint16_t)(src + i));
+    for (uint8_t i = 0; i < len; i++) {
+        gRam[dst + i] = Rom((uint16_t)(src + i));
+    }
 }
 
 /* ---- HUD ---- */
@@ -162,7 +185,9 @@ static void CopyRom(uint16_t dst, uint16_t src, uint8_t len)
 static void Timer_Tick(Regs *r)
 {
     Decomp_Enter(DT_CODE_TIMER_TICK, r->a, r->x, r->y);
-    if (gPlayerMode == PLAYER_MODE_TREASURE || gPlayerMode == PLAYER_MODE_DEATH) return;
+    if (gPlayerMode == PLAYER_MODE_TREASURE || gPlayerMode == PLAYER_MODE_DEATH) {
+        return;
+    }
     if (gTimeDigit(0) == DT_TIME_TILE_UP0) {
         gPlayerMode = PLAYER_MODE_DEATH;
         gFinalArena = 0;
@@ -186,7 +211,9 @@ static void Timer_Tick(Regs *r)
             gTimeDigit(2) = DT_TIME_TILE_UP2;
         }
     }
-    if (gTimeDigit(0) == 0 && gTimeDigit(1) < TIME_LOW_TENS && !(gSpritePhase & 0x0F)) SoundRequest(r, SFX_TIME_LOW);
+    if (gTimeDigit(0) == 0 && gTimeDigit(1) < TIME_LOW_TENS && !(gSpritePhase & 0x0F)) {
+        SoundRequest(r, SFX_TIME_LOW);
+    }
 }
 
 /* $DE6C: queue the money for drawing (after a pickup changed it). Blank
@@ -195,11 +222,18 @@ static void Timer_Tick(Regs *r)
 static void Hud_RefreshMoney(Regs *r)
 {
     Decomp_Enter(DT_CODE_HUD_MONEY, r->a, r->x, r->y);
-    if (gVramPending) return;
+    if (gVramPending) {
+        return;
+    }
     uint8_t first = 0;
-    while (first < DT_MONEY_DIGIT_COUNT && gRam[DT_ADDR_MONEY_DIGITS + first] >= DT_MONEY_TILE_BLANK) first++;
-    for (uint8_t i = first; i < DT_MONEY_DIGIT_COUNT; i++)
-        if (gRam[DT_ADDR_MONEY_DIGITS + i] == DT_MONEY_TILE_BLANK) gRam[DT_ADDR_MONEY_DIGITS + i] = 0;
+    while (first < DT_MONEY_DIGIT_COUNT && gRam[DT_ADDR_MONEY_DIGITS + first] >= DT_MONEY_TILE_BLANK) {
+        first++;
+    }
+    for (uint8_t i = first; i < DT_MONEY_DIGIT_COUNT; i++) {
+        if (gRam[DT_ADDR_MONEY_DIGITS + i] == DT_MONEY_TILE_BLANK) {
+            gRam[DT_ADDR_MONEY_DIGITS + i] = 0;
+        }
+    }
     Copy(DT_ADDR_VRAM_QUEUE, DT_ADDR_HUD_MONEY_PACKET, DT_HUD_MONEY_PACKET_LEN);
     gVramPending = 0xFF;
     gHudMoneyDirty = 0;
@@ -211,7 +245,9 @@ static void Hud_RefreshMoney(Regs *r)
 static void Hud_RefreshTotal(Regs *r)
 {
     Decomp_Enter(DT_CODE_HUD_TOTAL, r->a, r->x, r->y);
-    if (gVramPending) return;
+    if (gVramPending) {
+        return;
+    }
     gHudTotalDirty = 0;
     Copy(DT_ADDR_VRAM_QUEUE, DT_ADDR_HUD_TOTAL_PACKET, DT_HUD_TOTAL_PACKET_LEN);
     gVramPending = 0xFF;
@@ -279,14 +315,18 @@ static void Respawn_DrawScreens(Regs *r)
             Jsr(DT_CODE_STREAM_BLOCK, DT_FLOW_RESPAWN_DRAWN, OUT_A | OUT_X | OUT_Y);
             return;
         }
-        if (!Respawn_Advance()) return;
+        if (!Respawn_Advance()) {
+            return;
+        }
     }
 }
 
 /* One block step drawn; false when it was the last one. */
 static bool Respawn_Advance(void)
 {
-    if ((int8_t)--gScreensLeft < 0) return false;
+    if ((int8_t)--gScreensLeft < 0) {
+        return false;
+    }
     gStreamPos = (uint8_t)((gStreamPos + 1) & 0x3F);
     if (gStreamPos == 0) {
         gStreamScreen++;
@@ -299,7 +339,9 @@ static bool Respawn_Advance(void)
 static void Respawn_Drawn(Regs *r)
 {
     Decomp_Enter(DT_FLOW_RESPAWN_DRAWN, r->a, r->x, r->y);
-    if (Respawn_Advance()) Respawn_DrawScreens(r);
+    if (Respawn_Advance()) {
+        Respawn_DrawScreens(r);
+    }
 }
 
 /* $DD52: put the camera, the map row and Scrooge at a respawn or warp entry
@@ -356,7 +398,9 @@ static void DeathPause_Next(Regs *r)
     gObjects->animTimer[P_] = 0;
     uint8_t frames = (uint8_t)(Decomp_Pull() - 1);
     r->a = frames;
-    if (frames) DeathPause_Frame(r, frames);
+    if (frames) {
+        DeathPause_Frame(r, frames);
+    }
 }
 
 static void GameOver_Frame(Regs *r, uint8_t frames)
@@ -447,7 +491,9 @@ static void DeathOrWarp(Regs *r)
         SoundRequest(r, SFX_WARP);
     }
     gPlayerInvulnerable = 1;
-    if (Gosub(DeathPause, r, DT_FLOW_DEATH_FADE)) Death_Fade(r);
+    if (Gosub(DeathPause, r, DT_FLOW_DEATH_FADE)) {
+        Death_Fade(r);
+    }
 }
 
 /* $DC68 */
@@ -464,7 +510,9 @@ static void Death_Blank(Regs *r)
     Decomp_Enter(DT_FLOW_DEATH_BLANK, r->a, r->x, r->y);
     gUnk4F = 0;
     gBossFight = 0;
-    for (int i = 0x0B; i >= 0; i--) gRam[DT_ADDR_HAZARD + i] = 0;
+    for (int i = 0x0B; i >= 0; i--) {
+        gRam[DT_ADDR_HAZARD + i] = 0;
+    }
     gRowScroll = 0;
     gRowScrollAddr = ROW_SCROLL_ADDR;
     r->a = ROW_SCROLL_ADDR;
@@ -478,7 +526,9 @@ static void Death_Placed(Regs *r);
 static void Death_Place(Regs *r)
 {
     Decomp_Enter(DT_FLOW_DEATH_PLACE, r->a, r->x, r->y);
-    if (Gosub(Respawn_Place, r, DT_FLOW_DEATH_PLACED)) Death_Placed(r);
+    if (Gosub(Respawn_Place, r, DT_FLOW_DEATH_PLACED)) {
+        Death_Placed(r);
+    }
 }
 
 /* $DC84: the land and row are kept on the stack while the row's sprite CHR
@@ -566,7 +616,9 @@ static void Death_Spawned(Regs *r)
     Decomp_Enter(DT_FLOW_DEATH_SPAWNED, r->a, r->x, r->y);
     gObjects->state[P_] = SCROOGE_RESPAWN;
     r->a = SCROOGE_RESPAWN;
-    if (Gosub(DeathPause, r, DT_FLOW_DEATH_DONE)) Death_Done(r);
+    if (Gosub(DeathPause, r, DT_FLOW_DEATH_DONE)) {
+        Death_Done(r);
+    }
 }
 
 /* $DD1C */
@@ -678,7 +730,9 @@ static void FrameLoop_AfterDeath(Regs *r);
 static void FrameLoop_Requests(Regs *r)
 {
     if (gRespawn & RESPAWN_PENDING) {
-        if (!Gosub(DeathOrWarp, r, DT_FLOW_AFTER_DEATH)) return;
+        if (!Gosub(DeathOrWarp, r, DT_FLOW_AFTER_DEATH)) {
+            return;
+        }
     }
     FrameLoop_AfterDeath(r);
 }
@@ -687,8 +741,12 @@ static void FrameLoop_Requests(Regs *r)
 static void FrameLoop_AfterDeath(Regs *r)
 {
     Decomp_Enter(DT_FLOW_AFTER_DEATH, r->a, r->x, r->y);
-    if (gHudMoneyDirty) Hud_RefreshMoney(r);
-    if (gHudTotalDirty) Hud_RefreshTotal(r);
+    if (gHudMoneyDirty) {
+        Hud_RefreshMoney(r);
+    }
+    if (gHudTotalDirty) {
+        Hud_RefreshTotal(r);
+    }
     if (gScene & 0x80) {
         Jsr(DT_CODE_SCENE, DT_FLOW_FRAME_SPRITES, 0);
         return;
@@ -720,7 +778,9 @@ static void FrameLoop_AfterSpawn(Regs *r)
     uint8_t hazard = gHazard;
     if (hazard) {
         gHazard = 0;
-        if (hazard != HAZARD_SPIKES || gPlayerInvulnerable == 0) gPlayerMode = hazard;
+        if (hazard != HAZARD_SPIKES || gPlayerInvulnerable == 0) {
+            gPlayerMode = hazard;
+        }
     }
     FrameLoop_End(r);
 }
@@ -730,8 +790,9 @@ static void FrameLoop_End(Regs *r)
 {
     uint8_t land = gLand;
     if (gMapRow == Rom((uint16_t)(DT_DATA_CHECKPOINT_ROW + land)) &&
-        gObjects->worldPage[P_] == Rom((uint16_t)(DT_DATA_CHECKPOINT_PAGE + land)))
+        gObjects->worldPage[P_] == Rom((uint16_t)(DT_DATA_CHECKPOINT_PAGE + land))) {
         gBossCheckpoint = CHECKPOINT_SET;
+    }
     if (gTileEditOffset) {
         gTileEditPending = gTileEditOffset;
         gTileEditOffset = 0;
@@ -748,13 +809,20 @@ static void FrameLoop_Yield(Regs *r)
 
 /* ---- site adapters ---- */
 
-static void Run_LandPalette(Regs *r) { Land_LoadPalette(r, r->x); }
-static void Run_RespawnEntry(Regs *r) { Respawn_PlaceAt(r, r->a); }
+static void Run_LandPalette(Regs *r)
+{
+    Land_LoadPalette(r, r->x);
+}
 
-#define SITE(id) "ducktales.decomp." id
+static void Run_RespawnEntry(Regs *r)
+{
+    Respawn_PlaceAt(r, r->a);
+}
+
+#define SITE(id)                           "ducktales.decomp." id
 #define ROUTINE(addr, site, name, fn, out) { addr, site, name, fn, out, false, 0, false }
 #define TASK(addr, site, name, fn, locals) { addr, site, name, fn, 0, true, locals, false }
-#define RESUME(addr, name, fn, locals) { addr, NULL, name, fn, 0, true, locals, true }
+#define RESUME(addr, name, fn, locals)     { addr, NULL, name, fn, 0, true, locals, true }
 
 const DecompRoutine gFlowRoutines[] = {
     ROUTINE(DT_CODE_TIMER_TICK, NULL, "Timer_Tick", Timer_Tick, 0),
@@ -797,21 +865,11 @@ const int gFlowRoutineCount = sizeof gFlowRoutines / sizeof gFlowRoutines[0];
 #define STOP(addr, id) { addr, "ducktales.decomp.stop." id }
 
 const DecompStop gFlowStops[] = {
-    STOP(DT_CODE_TASK_YIELD, "FFAC"),
-    STOP(DT_CODE_RESET, "FEE0"),
-    STOP(DT_CODE_FADE_IN, "C279"),
-    STOP(DT_CODE_FADE_OUT, "C282"),
-    STOP(DT_CODE_SCREEN_OFF, "C197"),
-    STOP(DT_CODE_SCREEN_ON, "C1A1"),
-    STOP(DT_CODE_ROW_CHR_STREAM, "C42C"),
-    STOP(DT_CODE_STREAM_BLOCK, "C830"),
-    STOP(DT_B6_OBJECTS, "8000.6"),
-    STOP(DT_B6_SPAWN, "AEA0.6"),
-    STOP(DT_CODE_CAMERA_UPDATE, "EFE2"),
-    STOP(DT_CODE_BOSS_TRIGGER, "CF93"),
-    STOP(DT_CODE_LAND_SELECT, "D630"),
-    STOP(DT_CODE_LAND_LOAD, "D79B"),
-    STOP(DT_CODE_SCENE, "DF27"),
+    STOP(DT_CODE_TASK_YIELD, "FFAC"),     STOP(DT_CODE_RESET, "FEE0"),         STOP(DT_CODE_FADE_IN, "C279"),
+    STOP(DT_CODE_FADE_OUT, "C282"),       STOP(DT_CODE_SCREEN_OFF, "C197"),    STOP(DT_CODE_SCREEN_ON, "C1A1"),
+    STOP(DT_CODE_ROW_CHR_STREAM, "C42C"), STOP(DT_CODE_STREAM_BLOCK, "C830"),  STOP(DT_B6_OBJECTS, "8000.6"),
+    STOP(DT_B6_SPAWN, "AEA0.6"),          STOP(DT_CODE_CAMERA_UPDATE, "EFE2"), STOP(DT_CODE_BOSS_TRIGGER, "CF93"),
+    STOP(DT_CODE_LAND_SELECT, "D630"),    STOP(DT_CODE_LAND_LOAD, "D79B"),     STOP(DT_CODE_SCENE, "DF27"),
     STOP(DT_CODE_ENDING, "E1AF"),
 };
 const int gFlowStopCount = sizeof gFlowStops / sizeof gFlowStops[0];
