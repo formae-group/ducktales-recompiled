@@ -37,7 +37,10 @@
 #define DT_ADDR_CLIMB_CLASS     0x0045 /* class under the climbing probe (code) */
 #define DT_ADDR_MOVE_SIDE       0x004B /* side the last horizontal move went: 1 right, 2 left (code) */
 #define DT_ADDR_EASY_HITS       0x005F /* Easy difficulty: hits taken; only every other one costs a dot (verified) */
+#define DT_ADDR_MESSAGE_TEXT    0x006A /* pointer to the message's text in bank 4, low byte first (code) */
+#define DT_ADDR_MESSAGE_AT      0x006D /* queue offset of the next letter of the box (code) */
 #define DT_ADDR_SCENE_STEP      0x006E /* message or scene step for mode $0F (hypothesis) */
+#define DT_ADDR_MESSAGE_LINE    0x006F /* line of the box being written, 0-2 (code) */
 #define DT_ADDR_HAZARD          0x0070 /* hazard request from special tiles (code) */
 #define DT_ADDR_SLIPPERY        0x0071 /* slippery floor under Scrooge this frame (hypothesis) */
 #define DT_ADDR_MOMENTUM_DIR    0x0072 /* direction of slippery-floor momentum (code) */
@@ -208,49 +211,75 @@
  * Routines the decompilation names or calls (docs/functions.md,
  * docs/player.md, docs/decompilation.md). config/game.toml declares a
  * [[mod_function_hook]] with a content key at every one the port hooks. */
-#define DT_CODE_BG_PROBE           0xD120 /* background probes $40.. against the collision map */
-#define DT_CODE_CONTACT_H          0xD202 /* Scrooge-object contact while moving horizontally */
-#define DT_CODE_CONTACT_V          0xD291 /* Scrooge-object contact while moving vertically */
-#define DT_CODE_PROBE_POINT        0xD350 /* one background probe point of a slot, Y = probe (code) */
-#define DT_CODE_SNAP_RIGHT         0xD49A /* snap world X back after a probe hit on the right */
-#define DT_CODE_SNAP_LEFT          0xD4B2 /* snap world X back after a probe hit on the left */
-#define DT_CODE_SNAP_HEAD          0xD4C8 /* push Y down below the tile the head probe hit */
-#define DT_CODE_SNAP_FEET          0xD4D6 /* snap Y onto the tile the feet probe hit */
-#define DT_CODE_SELECT_REFILL      0xE2FE /* Select on the ground (TOTAL for a lost HP dot; hypothesis) */
-#define DT_CODE_PLAYER_UPDATE      0xE354 /* Scrooge's per-frame entry */
-#define DT_CODE_MODE_LO            0xE396 /* mode handler table, low bytes (17 entries) */
-#define DT_CODE_MODE_HI            0xE3A7 /* mode handler table, high bytes */
-#define DT_CODE_PLAYER_GROUND      0xE3B8 /* mode 0 */
-#define DT_CODE_JUMP_START         0xE3F2 /* copy the take-off velocity, mode 1, air handler */
-#define DT_CODE_PLAYER_WALK        0xE482 /* horizontal speed and movement */
-#define DT_CODE_MOVE_RIGHT         0xE593 /* move right with object and wall tests */
-#define DT_CODE_MOVE_LEFT          0xE5C3 /* move left with object and wall tests */
-#define DT_CODE_PLAYER_AIR         0xE63B /* mode 1 */
-#define DT_CODE_GRAB_CLIMB         0xE740 /* grab a climbable tile while Up is held */
-#define DT_CODE_PLAYER_POGO        0xE7EA /* mode 2 */
-#define DT_CODE_PLAYER_CLIMB       0xE806 /* mode 3 */
-#define DT_CODE_PLAYER_CANE        0xE8EB /* mode 4 */
-#define DT_CODE_PLAYER_FALL        0xE970 /* falling or standing: gravity, move, contacts, probes */
-#define DT_CODE_PLAYER_RISE        0xE9BA /* rising: jump cut, move, contacts, probes */
-#define DT_CODE_PROBE_VERTICAL     0xEA5E /* feet or head probes after a vertical move */
-#define DT_CODE_PLAYER_HURT        0xEAB9 /* mode 5 */
-#define DT_CODE_PLAYER_KNOCKBACK   0xEB00 /* mode 6 */
-#define DT_CODE_TAKE_DAMAGE        0xEB5E /* mark the last full HP dot lost */
-#define DT_CODE_PLAYER_STUCK       0xEB82 /* mode 7 */
-#define DT_CODE_PLAYER_PIT         0xEBA7 /* mode 8 */
-#define DT_CODE_PIT_DEATH          0xEBB4 /* request the respawn that costs a life */
-#define DT_CODE_PLAYER_MODE9       0xEBC9 /* mode 9 */
-#define DT_CODE_PLAYER_CARRIED     0xEBD9 /* modes 10 and 11 */
-#define DT_CODE_PLAYER_MODE12      0xEC2D /* mode 12 */
-#define DT_CODE_PLAYER_DEATH       0xEC9B /* mode 13 */
-#define DT_CODE_PLAYER_MODE14      0xECFF /* mode 14 */
-#define DT_CODE_ROW_CHANGE         0xE8C0 /* the row change: new row, camera screen, then the row scroll (code) */
-#define DT_CODE_ROW_ENTRY_Y        0xE8E7 /* Y the row change gives slot X (X = 0, or 2 with Up held) (code) */
-#define DT_CODE_ROW_CHANGE_END     0xE8DF /* after the row scroll: JMP into the frame loop at $DBE4 (code) */
-#define DT_CODE_ROW_SCROLL         0xC976 /* scroll the screen to the next row over several frames (code) */
-#define DT_CODE_MOVE_WITH_WALLS    0xF0F8 /* move horizontally with wall probes (code) */
-#define DT_CODE_CLIMB_DOWN         0xF192 /* climbing step down with probes (code) */
-#define DT_CODE_CLIMB_UP           0xF1A8 /* climbing step up with probes (code) */
+#define DT_CODE_BG_PROBE         0xD120 /* background probes $40.. against the collision map */
+#define DT_CODE_CONTACT_H        0xD202 /* Scrooge-object contact while moving horizontally */
+#define DT_CODE_CONTACT_V        0xD291 /* Scrooge-object contact while moving vertically */
+#define DT_CODE_PROBE_POINT      0xD350 /* one background probe point of a slot, Y = probe (code) */
+#define DT_CODE_SNAP_RIGHT       0xD49A /* snap world X back after a probe hit on the right */
+#define DT_CODE_SNAP_LEFT        0xD4B2 /* snap world X back after a probe hit on the left */
+#define DT_CODE_SNAP_HEAD        0xD4C8 /* push Y down below the tile the head probe hit */
+#define DT_CODE_SNAP_FEET        0xD4D6 /* snap Y onto the tile the feet probe hit */
+#define DT_CODE_SELECT_REFILL    0xE2FE /* Select on the ground (TOTAL for a lost HP dot; hypothesis) */
+#define DT_CODE_PLAYER_UPDATE    0xE354 /* Scrooge's per-frame entry */
+#define DT_CODE_MODE_LO          0xE396 /* mode handler table, low bytes (17 entries) */
+#define DT_CODE_MODE_HI          0xE3A7 /* mode handler table, high bytes */
+#define DT_CODE_PLAYER_GROUND    0xE3B8 /* mode 0 */
+#define DT_CODE_JUMP_START       0xE3F2 /* copy the take-off velocity, mode 1, air handler */
+#define DT_CODE_PLAYER_WALK      0xE482 /* horizontal speed and movement */
+#define DT_CODE_MOVE_RIGHT       0xE593 /* move right with object and wall tests */
+#define DT_CODE_MOVE_LEFT        0xE5C3 /* move left with object and wall tests */
+#define DT_CODE_PLAYER_AIR       0xE63B /* mode 1 */
+#define DT_CODE_GRAB_CLIMB       0xE740 /* grab a climbable tile while Up is held */
+#define DT_CODE_PLAYER_POGO      0xE7EA /* mode 2 */
+#define DT_CODE_PLAYER_CLIMB     0xE806 /* mode 3 */
+#define DT_CODE_PLAYER_CANE      0xE8EB /* mode 4 */
+#define DT_CODE_PLAYER_FALL      0xE970 /* falling or standing: gravity, move, contacts, probes */
+#define DT_CODE_PLAYER_RISE      0xE9BA /* rising: jump cut, move, contacts, probes */
+#define DT_CODE_PROBE_VERTICAL   0xEA5E /* feet or head probes after a vertical move */
+#define DT_CODE_PLAYER_HURT      0xEAB9 /* mode 5 */
+#define DT_CODE_PLAYER_KNOCKBACK 0xEB00 /* mode 6 */
+#define DT_CODE_TAKE_DAMAGE      0xEB5E /* mark the last full HP dot lost */
+#define DT_CODE_PLAYER_STUCK     0xEB82 /* mode 7 */
+#define DT_CODE_PLAYER_PIT       0xEBA7 /* mode 8 */
+#define DT_CODE_PIT_DEATH        0xEBB4 /* request the respawn that costs a life */
+#define DT_CODE_PLAYER_MODE9     0xEBC9 /* mode 9 */
+#define DT_CODE_PLAYER_CARRIED   0xEBD9 /* modes 10 and 11 */
+#define DT_CODE_PLAYER_MODE12    0xEC2D /* mode 12 */
+#define DT_CODE_PLAYER_DEATH     0xEC9B /* mode 13 */
+#define DT_CODE_PLAYER_MODE14    0xECFF /* mode 14 */
+#define DT_CODE_PLAYER_MESSAGE   0xED05 /* mode 15: the message box, then what the message does (code) */
+#define DT_MESSAGE_OPENED        0xED0E /* after the scene draw $DFED of message $0B (code) */
+#define DT_MESSAGE_SHOWN         0xED33 /* after the frame that swaps CHR tile $12D (code) */
+#define DT_MESSAGE_DRAWN         0xED49 /* after the pause text $B580 of mode 15 (code) */
+#define DT_MESSAGE_WAIT          0xED60 /* wait for A or B once a page is written (code) */
+#define DT_MESSAGE_WAIT_NEXT     0xED69 /* after each frame of that wait (code) */
+#define DT_MESSAGE_PAGED         0xED73 /* after the next page's line, back to the wait (code) */
+#define DT_MESSAGE_CLEARED       0xED85 /* after the pause text $B580 clears the box (code) */
+#define DT_MESSAGE_CLOSED        0xEDAA /* after the frame that restores the tile (code) */
+#define DT_CODE_MESSAGE_SCROLL   0xEE8B /* scroll the box up a line for the next page (code) */
+#define DT_MESSAGE_SCROLLED      0xEEA6 /* after the frame that shows the scroll (code) */
+#define DT_CODE_MESSAGE_TEXT     0xEEAE /* write the box's lines a letter per 3 frames (code) */
+#define DT_MESSAGE_LETTER_NEXT   0xEF01 /* after a letter's 3 frames (code) */
+#define DT_CODE_MESSAGE_LINE_LO  0xEF59 /* PPU address low byte of each of the box's 3 lines, high $20 (code) */
+#define DT_CODE_MESSAGE_LINE_END 0xEF5C /* queue offset where each line's entry ends (code) */
+#define DT_CODE_MESSAGE_LINE_AT  0xEF5F /* queue offset of each line's entry (code) */
+#define DT_CODE_MESSAGE_SCENE    0xDFED /* the scene draw before message $0B; waits for frames (code; not studied) */
+#define DT_CODE_BLOCK_DRAW       0xD068 /* queue the draw of block Y of the tileset (code; not studied) */
+#define DT_B1_MESSAGE_TILE_OFF  0x82D0 /* bank 1: CHR tile $12D restored when the box closes (verified, rendering.md) */
+#define DT_B2_MESSAGE_TILE      0xA8F0 /* bank 2: CHR tile $12D while a message shows (verified, rendering.md) */
+#define DT_B4_MESSAGE_LO        0xB888 /* bank 4: text of each message id, low bytes (code) */
+#define DT_B4_MESSAGE_HI        0xB89A /* their high bytes (code) */
+#define DT_B5_PROGRESS_BITS     0xB76A /* bank 5: consumed-record bits from the progress flags (code) */
+#define DT_CODE_PLAYER_TREASURE 0xEF62 /* mode 16: the treasure's time bonus (code) */
+#define DT_TREASURE_WAITED      0xEF6B /* after 256 frames of the treasure music (code) */
+#define DT_TREASURE_DONE        0xEFDF /* after the last 60 frames, the land is left (code) */
+#define DT_CODE_ROW_CHANGE      0xE8C0 /* the row change: new row, camera screen, then the row scroll (code) */
+#define DT_CODE_ROW_ENTRY_Y     0xE8E7 /* Y the row change gives slot X (X = 0, or 2 with Up held) (code) */
+#define DT_CODE_ROW_CHANGE_END  0xE8DF /* after the row scroll: JMP into the frame loop at $DBE4 (code) */
+#define DT_CODE_ROW_SCROLL      0xC976 /* scroll the screen to the next row over several frames (code) */
+#define DT_CODE_MOVE_WITH_WALLS 0xF0F8 /* move horizontally with wall probes (code) */
+#define DT_CODE_CLIMB_DOWN      0xF192 /* climbing step down with probes (code) */
+#define DT_CODE_CLIMB_UP        0xF1A8 /* climbing step up with probes (code) */
 #define DT_CODE_MOVE_RIGHT_SPEED   0xF234 /* world X += speed (X = slot) */
 #define DT_CODE_MOVE_LEFT_SPEED    0xF252 /* world X -= speed (X = slot) */
 #define DT_CODE_ADD_VY             0xF270 /* Y += vertical velocity (X = slot) */

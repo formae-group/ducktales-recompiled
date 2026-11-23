@@ -22,7 +22,11 @@ ROM = Path(default_rom())
 TOML = ROOT / "config" / "game.toml"
 HEAD = "# Game flow (src/decomp/flow.c"
 TAIL = "# END game flow"
-NOTES = {"C976": "The row scroll the row change ($E8C0, src/decomp/player.c) hands off to."}
+NOTES = {
+    "C976": "The row scroll the row change ($E8C0, src/decomp/player.c) hands off to.",
+    "DFED": "What the message box ($ED05, src/decomp/player.c) hands off to besides task_wait:\n"
+    "the scene set-up of message $0B, the block draw of message $06 and the pause text.",
+}
 
 
 def main():
@@ -57,7 +61,7 @@ def main():
         sym, site = m.groups()
         addr = syms[sym]
         bank = int(site.split(".")[1]) if "." in site else 7
-        out += [f"# {NOTES[site]}"] if site in NOTES else []
+        out += [f"# {line}" for line in NOTES.get(site, "").splitlines()]
         out += ["[[mod_function_hook]]", f'id = "ducktales.decomp.stop.{site}"', f"addr = 0x{addr:04X}"]
         out += ["length = 8", f"crc32 = 0x{crc(bank, addr):08X}", ""]
         count += 1

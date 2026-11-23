@@ -1,7 +1,7 @@
 """Run a command in one of a few machine-wide test slots, so the heavy test runs of several
 worktrees take turns instead of all sharing the CPU at once.
 
-    py -3 -I tools/test_slot.py [--slots 2] -- COMMAND [ARGS ...]
+    py -3 -I tools/test_slot.py [--slots 3] -- COMMAND [ARGS ...]
 
 A slot is a byte-range lock on a file in %LOCALAPPDATA%\\ducktales-test-slots (DUCKTALES_SLOT_DIR
 overrides it). Windows releases the lock when the holder exits, crashed or killed included, so a
@@ -32,7 +32,7 @@ def take(folder, slots):
 
 def main():
     ap = argparse.ArgumentParser(usage='test_slot.py [--slots N] -- COMMAND ...')
-    ap.add_argument('--slots', type=int, default=2)
+    ap.add_argument('--slots', type=int, default=3)
     ap.add_argument('command', nargs=argparse.REMAINDER)
     args = ap.parse_args()
     command = args.command[1:] if args.command[:1] == ['--'] else args.command

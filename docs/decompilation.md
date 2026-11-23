@@ -13,6 +13,11 @@ port's own files and all switched off by default:
   use, written as C on the API. Each replaces the recompiled routine at its entry, and
   each is checked against the original on every call of every route.
 
+The routines run only in the cycle host (`build/headless`, and `ducktales_cycle.exe` of a window
+build). The game as players run it, `ducktales.exe` of `build/windows`, is the native runtime's
+player by default (`DUCKTALES_PLAYER=native`), which does not link `src/decomp/`
+([native-runtime.md](native-runtime.md#the-player-build)).
+
 Addresses are named only in `src/game/ducktales_symbols.h`. Status words (verified, code,
 hypothesis) are used as in [memory-map.md](memory-map.md). Code addresses are in bank 7 (the fixed
 bank).
@@ -147,14 +152,15 @@ the HP-dot work it skips, and `moon_intro` drifted from the console at frame 108
 each (`NES_MOD_MAX_FUNCTION_HOOKS` in `runner/src/mod_function_hooks.c`), so one site per routine
 would not last the whole game. A routine has a site (`site_id` in its table entry) only if
 original code reaches it; `tools/decomp_callers.py` lists, from a build's generated code, the
-instructions outside the decompiled ranges that jump to an entry. Of the 50 routines in the player,
-motion, sound, level and collision tables, 25 have
+instructions outside the decompiled ranges that jump to an entry. Of the 67 routines in the player,
+motion, sound, level and collision tables, 27 have
 one: `Player_Update` (the frame loop's `JSR` at `$DB6C`), `Player_PitDeath` (the original
-mode 15 and 16 code jumps to it at `$EDCC`), `Player_RowChange` (the original `$E878` falls into
-it), the four motion primitives and the two sound requests
+`Player_Update` jumps to it in mode 8), `Player_RowChange` (the original `$E878` falls into
+it), `Player_Message` and `Player_Treasure` (the original `Player_Update`'s mode table jumps to
+them), the four motion primitives and the two sound requests
 (object and game code everywhere), `Player_TakeDamage`, kept for replace mode's measuring call
-above, and 15 of the 18 camera, scrolling, level and background routines (all but
-`Level_ScreenPointer`, `Level_DecodeBlock` and `Level_MetatileAt`, which only decompiled code
+above, and 15 of the 19 camera, scrolling, level and background routines (all but
+`Level_ScreenPointer`, `Level_DecodeBlock`, `Level_MetatileAt` and `Bg_ProbePoint`, which only decompiled code
 calls). As more of the game is decompiled the boundary moves out and sites go away.
 
 Check mode still compares every call of every routine. The C of each routine starts with
@@ -199,7 +205,7 @@ call can do. `flow.c` decompiles that code as **task code** (`DecompRoutine.task
   enters through an RTS (`$FFAB`) whose return the observer moves to the start, at the routine's
   true S, with the isolated call's return address in place of the routine's own (at S + locals
   + 1). When the C hands off, the original stops where it reaches the same routine at the same
-  depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`, 6 of
+  depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`, 9 of
   them). Check compares RAM, the stack down to that depth, the registers the hand-off uses and the
   number of device writes.
 - Replace mode stores the C's results, makes its device writes, spends the original's cycles up to
@@ -223,13 +229,14 @@ leave the jump vector in `$00/$01` as the original's loop does.
 |---|---|---|---|
 | `Obj_ApplyVelocityY`, `Obj_ApplyGravity`, `Obj_MoveRight`, `Obj_MoveLeft`, `Obj_AddVelocityY`, `Obj_SubVelocityY` | X = slot | A, X, Y, P | callers test the flags of the last `ADC`/`SBC` (`$F298` keeps the Y move's carry across the probe) |
 | `Music_Request`, `Sound_Request` | A = id, X | A, X, Y, P | the caller's X is left in `$00` and the id in `$01` |
-| `Player_Update` | X | hardware | X goes into the power-up music request; the probe's metatile lookup switches banks; modes 15 and 16 run as the original |
+| `Player_Update` | X | none | X goes into the power-up music request; the probe's metatile lookup switches banks and back, so the call leaves no device change (as for `Level_MetatileAt`); modes 15 and 16 run as the original, which reaches `Player_Message` and `Player_Treasure` at their sites |
 | `Player_Walk`, `Player_Knockback` | X | none | X is the slot the push of `$73` moves when no direction is held, and what the sound request keeps in `$00` |
 | `Player_MoveRight`, `Player_MoveLeft`, `Player_Fall`, `Player_Rise`, `Player_ProbeVertical` | X (moves only) | X | X is what the probe or contact routine returned; callers pass it on |
 | `Player_ContactH` | none | X, C | X is the slot touched (0 for none, carry set); the cane swing reads its kind |
 | `Player_ContactV` | none | C | carry clear for a contact |
 | `Player_SelectRefill` | none | X | X goes on to `Player_Walk` |
 | `Player_RowChange` | A = row, X = 0 or 2, Y = camera screen, `$00` | hand-off | task code: pops `Player_Update`'s return address and hands off to the row scroll `$C976`, returning to `$E8DF` |
+| `Player_Message`, `Player_Treasure` and their resume points | the registers at the site or resume point | X and Y at each hand-off; `Message_Scrolled` and `Message_LetterNext` X and Y at their RTS | task code: they wait for frames (`$FFAC`, `$FFA5`), the pause text `$B580` and the scene draw `$DFED`; X and Y go on the stack in `task_yield`, and the wait `$ED60` and `$ED73` that the RTS returns to are C that keeps them |
 | every other `Player_*` | none | none | |
 | `Camera_Update` | X | X, hardware | the frame loop keeps X past `$CF93` into the code after it: X is the entry X when the camera stays, else what the column streaming leaves |
 | `Scroll_StreamBlocks` | none | X, hardware | X is the last step's collision map index (or the screen id >> 5 when its screen is missing), or where the upload stopped when the screen is blanked |
@@ -239,9 +246,11 @@ leave the jump vector in `$00/$01` as the original's loop does.
 | `Level_MetatileAt` | X = probe slot | A, X | |
 | `Map_LoadHeader` | X = map | X | X is kept |
 | `Bg_Probe` | X = slot | X, hardware | X is kept |
+| `Bg_ProbePoint` | X = slot, Y = probe point | A, C | `Player_ContactV` falls into it with its hitbox in Y and reads the carry: the page or row sum's, or the last bit the class shifts dropped |
 | `Bg_SnapRight`, `Bg_SnapLeft`, `Bg_SnapHead`, `Bg_SnapFeet` | X = slot | X | X is kept |
 | `Level_TileEdit` | X = slot | hardware | |
-| `Level_DrawStartColumns`, `Level_DrawScreen`, `Vram_FlushTileEdits`, `Chr_StreamRow` | none | hardware | |
+| `Level_DrawStartColumns`, `Level_DrawScreen`, `Vram_FlushTileEdits` | none | hardware | |
+| `Chr_StreamRow` | X | X, hardware | X is the entry X when the stream is done, 4 after the palette, else the queue index; the scene draw `$DFED` of message `$0B` pushes it in `task_yield` |
 | `Boss_CheckTrigger` | none | none | the arena start runs as the original (`Decomp_RunOriginal`): it scrolls the row |
 | `Bank_Select`, `Bank_SelectTemp` | A = bank | A, X, P, hardware | the bank is written to the bus-conflict table at `$FFE5` |
 | `Oam_Build`, `Random_Next` | none | X, Y | the frame loop yields right after them, and `task_yield` keeps X and Y on the stack |
@@ -269,7 +278,7 @@ RAM-identical in replace mode.
 | `Obj_SubVelocityY` | `$F284` | checked | 7 | - | not measured |
 | `Music_Request` | `$F752` | checked | 12 | - | none |
 | `Sound_Request` | `$F754` | checked | 12 | - | a request dropped because its ring entry is still full |
-| `Player_Update` | `$E354` | checked | 12 | invulnerable-held | none (modes 15 and 16 run as the original) |
+| `Player_Update` | `$E354` | checked | 12 | invulnerable-held | none (modes 15 and 16 go to the original, which reaches their C) |
 | `Player_Ground` | `$E3B8` | checked | 12 | select-refill, select-poor, select-full | none |
 | `Player_StartJump` | `$E3F2` | checked | 12 | - | none |
 | `Player_Walk` | `$E482` | checked | 12 | slippery | the push of `$73` with no direction held; reversing on slippery floor; momentum speed at `$0300` or more |
@@ -295,9 +304,24 @@ RAM-identical in replace mode.
 | `Player_Death` | `$EC9B` | checked | 8 | hurt-last-dot | none |
 | `Player_Mode14` | `$ECFF` | checked | 1 | - | none |
 | `Player_ContactH` | `$D202` | checked | 12 | - | not measured |
-| `Player_ContactV` | `$D291` | checked | 12 | - | not measured (the fall into `$D350` needs `$0690` to wrap under the power-up) |
+| `Player_ContactV` | `$D291` | checked | 12 | power-contact | not measured |
 | `Player_SelectRefill` | `$E2FE` | checked (pokes only) | 0 | select-refill, select-poor, select-full | not measured |
 | `Player_RowChange` | `$E8C0` | checked | 6 | - | not measured |
+| `Player_Message` | `$ED05` | checked | 5 | message-pay, message-pay-poor, message-life, message-block, message-launchpad, message-scene | not measured |
+| `Message_Opened` | `$ED0E` | checked (pokes only) | 0 | message-scene | not measured |
+| `Message_Shown` | `$ED33` | checked | 5 | message-pay, message-pay-poor, message-life, message-block, message-launchpad, message-scene | not measured |
+| `Message_Drawn` | `$ED49` | checked | 5 | message-pay, message-pay-poor, message-life, message-block, message-launchpad, message-scene | not measured |
+| `Message_Wait` | `$ED60` | checked | 5 | message-pay, message-pay-poor, message-life, message-block, message-launchpad, message-scene | not measured |
+| `Message_WaitNext` | `$ED69` | checked | 5 | message-pay, message-pay-poor, message-life, message-block, message-launchpad, message-scene | not measured |
+| `Message_Paged` | `$ED73` | checked | 5 | message-pay, message-pay-poor, message-life, message-block, message-launchpad, message-scene | not measured |
+| `Message_Cleared` | `$ED85` | checked | 5 | message-pay, message-pay-poor, message-life, message-block, message-launchpad, message-scene | not measured |
+| `Message_Closed` | `$EDAA` | checked | 5 | message-pay, message-pay-poor, message-life, message-block, message-launchpad, message-scene | not measured |
+| `Message_Scrolled` | `$EEA6` | checked | 5 | message-pay, message-pay-poor, message-life, message-block, message-launchpad, message-scene | not measured |
+| `Message_LetterNext` | `$EF01` | checked | 5 | message-pay, message-pay-poor, message-life, message-block, message-launchpad, message-scene | not measured |
+| `Player_Treasure` | `$EF62` | checked | 5 | treasure-blanks, treasure-max | not measured |
+| `Treasure_Waited` | `$EF6B` | checked | 5 | - | not measured |
+| `Treasure_Done` | `$EFDF` | checked | 5 | treasure-blanks, treasure-max | not measured |
+| `Message_Scroll`, `Message_Text` | `$EE8B`, `$EEAE` | checked in their callers | - | - | not measured; task code only C calls, compared up to the hand-off of the routine that calls it |
 | `Camera_Update` | `$EFE2` | checked | 12 | 11 of 11 | not measured |
 | `Map_LoadHeader` | `$C7B0` | checked | 12 | 11 of 11 | not measured |
 | `Level_DrawStartColumns` | `$C71D` | checked | 12 | 11 of 11 | not measured |
@@ -309,6 +333,7 @@ RAM-identical in replace mode.
 | `Vram_FlushQueue` | `$C139` | checked | 12 | 11 of 11 | not measured |
 | `Vram_FlushTileEdits` | `$C15E` | checked | 9 | - | not measured |
 | `Bg_Probe` | `$D120` | checked | 12 | 11 of 11 | not measured |
+| `Bg_ProbePoint` | `$D350` | checked (pokes only) | 0 | power-contact | not measured; one call, so one of its four carry exits |
 | `Bg_SnapRight` | `$D49A` | checked | 10 | 2 of 11 | not measured |
 | `Bg_SnapLeft` | `$D4B2` | checked | 11 | - | not measured |
 | `Bg_SnapHead` | `$D4C8` | checked | 9 | - | not measured |
@@ -371,27 +396,30 @@ take-off scene (bank 4 `$BE00-$BEAA`) with the sprites frame it waits with (`$F8
 (`$DFED-$E053`), the ending's later frames (`$E1F9-$E28B`: the credits scroll with a raster split
 polled on `$2002`, which `Ending` gives to the original) and the Select refill `$E2FE` (Scrooge's);
 the scene palette tables `$E127-$E132` and `$E143-$E1AE` are read by `Palette_LoadScene`
-(system.c). The flow has 15 sites: 9 entries that original code reaches and 6 stop sites (one for
-`Player_RowChange`'s hand-off to the row scroll `$C976`).
+(system.c). The flow has 18 sites: 9 entries that original code reaches and 9 stop sites (one for
+`Player_RowChange`'s hand-off to the row scroll `$C976`, and three for Scrooge's message box: the
+scene set-up `$DFED`, the block draw `$D068` and bank 5 `$B580`).
 
 Not decompiled yet, and still run as the original from the C:
 
-- Through `Decomp_Call`: one probe point `$D350` (where `Player_ContactV` falls through to, with
-  its own entry registers and carry result), the walls move `$F0F8` and the HP refill `$F812`. The
-  last two are decompiled with the object code (`objcommon.c`, `objects.c`). The background probe
-  `$D120` and its snaps `$D49A`/`$D4B2`/`$D4C8`/`$D4D6` are the C of `collision.c` and the
-  climbing steps `$F192`/`$F1A8` the C of `objcommon.c`, and `player.c` calls that C directly.
-- Through `Decomp_RunOriginal`: `Player_Update` in modes 15 (`$ED05`, message or item) and 16
-  (`$EF62`, treasure), and every call that reaches the row change: that call runs as the original,
-  which then reaches `Player_RowChange` at its own site.
+- Through `Decomp_Call`: the walls move `$F0F8`, decompiled with the object code (`objcommon.c`).
+  The background probe `$D120`, its snaps `$D49A`/`$D4B2`/`$D4C8`/`$D4D6` and the probe point
+  `$D350` (where `Player_ContactV` falls through to) are the C of `collision.c`, the climbing steps
+  `$F192`/`$F1A8` the C of `objcommon.c` and the HP refill `$F812` the C of `objects.c`, and
+  `player.c` calls that C directly.
+- Through `Decomp_RunOriginal`: `Player_Update` in modes 15 (`$ED05`, message box) and 16
+  (`$EF62`, treasure), and every call that reaches the row change. That call runs as the original,
+  which reaches `Player_Message`, `Player_Treasure` or `Player_RowChange` at its own site: those
+  wait for frames, so they are task code and `Player_Update` is not.
 
 **Coverage of Scrooge's code.** His own code in the fixed bank is `$E2FE-$EFE1` (3,300 bytes).
-The decompiled routines cover `$E2FE-$ED04`: 2,567 bytes or 78%. With the collision and movement
+The decompiled routines cover all of it, modes 15 and 16 included. With the collision and movement
 helpers he shares with other objects (`$D120-$D4E5` and `$F0F8-$F233`, 1,281 bytes, of which the
 probe, its snaps and the contact tests `$D120-$D4E5` and the climbing steps `$F192-$F1BD` are
-decompiled) it is 3,577 of 4,581 bytes, 78%. By routine, 44 of the 49 routines his code runs are C
-(90%): the 37 `Player_*`, motion and sound rows above, the probe with its four snaps and the two
-climbing steps, against the 5 listed as not decompiled.
+decompiled) it is 4,310 of 4,581 bytes, 94%. By routine, counting each of modes 15 and 16 as one,
+48 of the 49 routines his code runs are C (98%): the 37 `Player_*`, motion and sound rows above,
+the two modes, the probe with its four snaps, the probe point, the two climbing steps and the HP
+refill, against the walls move `$F0F8`.
 The motion (`$F234-$F2C6` but `$F298`) and sound (`$F752`) primitives are decompiled too, and they
 also serve every other object.
 
@@ -403,7 +431,7 @@ the tile edit `$F574` and the background probe with its snaps
 scroll (`$E9`), the tile-edit metatile helper `$F697` and the room transitions, which the flow's
 task code runs.
 
-**Next routines:** modes 15 and 16 with the flow's task hand-off.
+**Next routines:** `player.c` calling the walls move `$F0F8` as C once `objcommon.c` exports it.
 
 ### Objects
 
@@ -561,6 +589,33 @@ Not decompiled yet: the other 46 kinds, among them the bosses (their hit routine
 edit `$F506` (through `Decomp_Call`). The movers and the climbing steps test the
 background through the C of the probe `$D120` and its snaps (`collision.c`).
 
+### Progress
+
+`tools/decomp_progress.py` gives one number: the PRG bytes the 12 routes and the 19 poke cases
+execute on the original (quick_verify's golden coverage, and `decomp_pokes.cover` beside it, which
+`--record-pokes` writes), counted once with each instruction's length, and the share of them
+inside routines with C. A `DecompRoutine` has no end field: the script derives each routine's code
+from the ROM by following fall-through, branches and `JMP` from its entry up to `RTS`, `RTI`, an
+indirect jump or another routine's entry, and counts as C the routines only C reaches; the
+script's docstring gives every rule. `--rev` reads the C of another branch against the same
+coverage.
+
+On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **58.6%, 14,730 of 25,120 executed
+bytes**, in 234 routines (main after the player batch, 12 routes and 33 poke cases).
+
+| Group | Files | Routines | Executed bytes | Share |
+|---|---|---|---|---|
+| player | `player.c`, `motion.c`, `sound.c` | 53 | 3,569 | 14.2% |
+| objects | `objects.c`, `objcommon.c` | 62 | 4,172 | 16.6% |
+| flow | `flow.c` | 85 | 2,406 | 9.6% |
+| level | `level.c`, `collision.c` | 18 | 1,935 | 7.7% |
+| system | `system.c`, `sprites.c`, `audio.c` | 16 | 2,648 | 10.5% |
+
+317 of those bytes are also run by original routines (shared tails). `Input_ReadControllers` is
+not counted: replace mode gives every call to the original. The largest routines still original
+are the object kinds of bank 6 that `Obj_UpdateAll` hands to the original (`$A6D3` 469 bytes,
+`$A8D6` 466, `$A065` 367, `$AAE1` 342), bank 5 `$80BE` (381, under the entry `$8003`) and the NMI `$C000` (308).
+
 ### Adding a routine
 
 1. Read the routine (`tools/disasm6502.py`) and every caller (`tools/player_xref.py`), and note
@@ -645,6 +700,7 @@ the events check covers.
 
 What has not been verified:
 
-- Replace mode with the window build in real play.
+- Replace mode in long real play. One owner session on the window build's cycle host covered one
+  land, about 8,400 frames (docs/validation.md). The native player cannot run replace mode yet.
 - Paths no route or poke case reaches (table above). They are written from the code, and check mode
   will stop on any of them that is wrong, the first time a route reaches it.

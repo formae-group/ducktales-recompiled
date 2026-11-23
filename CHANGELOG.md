@@ -14,7 +14,7 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - `tests/decomp_test.py --changed <ranges> --from-state --span N` checks only the routes that run
   a decompiled routine, from the golden save state before it: 32 s instead of 689 s for a routine
   the routes reach late.
-- `tools/test_slot.py` queues heavy test runs across worktrees, at most two at once.
+- `tools/test_slot.py` queues heavy test runs across worktrees, at most three at once (two left the 16-thread PC at 47% load).
 - The system layer is decompiled (`src/decomp/system.c`, `sprites.c`, `audio.c`): bank switching,
   the controllers, PPU blanking, nametable fill, CHR uploads, the OAM clear, the random generator,
   the sprite builder (bank 5), the string drawer and the bank-3 sound driver. They use the bus
@@ -44,9 +44,21 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   its own return address before it hands off.
 - `src/decomp/player.c` calls the C of the background probe (`$D120`) and its four snaps instead
   of running their originals through `Decomp_Call`.
+- Decompiled: Scrooge's modes 15 (`$ED05`, the message box and what each message does) and 16
+  (`$EF62`, the treasure's time bonus), as task code at their own sites with 14 resume points.
+  `tests/decomp_test.py` has 8 poke cases for what no route reaches (paying, the lost life, the
+  block, the Launchpad ride, the scene draw of message `$0B`, the money's blanks and cap) and a
+  `--pokes NAME...` option.
+- `src/decomp/player.c` calls the C of the probe point `$D350` (with the carry it returns, new in
+  `collision.c`) and of the HP refill `$F812` (`objects.c`). A poke case reaches the fall into
+  `$D350` under the power-up.
+- `Player_Update`'s contract drops `OUT_HW`: the probe's bank switches are undone before it
+  returns, and check and replace pass on the 12 routes without it.
 
 ### Fixed
 
+- `Chr_StreamRow` (`$C42C`) now returns the X the original leaves. The scene draw before message
+  `$0B` pushes it in `task_yield`, so replace mode left a different byte on the task's stack.
 - Replace mode made a decompiled routine's PPU writes back to back. The PPU acts on `$2006`/`$2007`
   writes a few cycles late, so every byte of a VRAM queue landed one address off; the writes are
   now spread over the original routine's cycles.

@@ -2453,7 +2453,8 @@ const int gFlowRoutineCount = sizeof gFlowRoutines / sizeof gFlowRoutines[0];
  * 6 in objects.c, the fades, the PPU and CHR loaders and bank 5 $BAB0 in
  * system.c) stop the isolated runs at their own sites. */
 const DecompStop gFlowStops[] = {
-    STOP(DT_CODE_TASK_YIELD, "FFAC"),   STOP(DT_CODE_RESET, "FEE0"),     STOP(DT_B6_SPAWN, "AEA0.6"),
-    STOP(DT_CODE_FADE_IN_KEEP, "C27C"), STOP(DT_CODE_TASK_WAIT, "FFA5"), STOP(DT_CODE_ROW_SCROLL, "C976"),
+    STOP(DT_CODE_TASK_YIELD, "FFAC"),    STOP(DT_CODE_RESET, "FEE0"),      STOP(DT_B6_SPAWN, "AEA0.6"),
+    STOP(DT_CODE_FADE_IN_KEEP, "C27C"),  STOP(DT_CODE_TASK_WAIT, "FFA5"),  STOP(DT_CODE_ROW_SCROLL, "C976"),
+    STOP(DT_CODE_MESSAGE_SCENE, "DFED"), STOP(DT_CODE_BLOCK_DRAW, "D068"), STOP(DT_B5_PAUSE_TEXT, "B580.5"),
 };
 const int gFlowStopCount = sizeof gFlowStops / sizeof gFlowStops[0];
