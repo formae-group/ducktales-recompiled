@@ -2520,6 +2520,45 @@ static void Obj_PitJumper(uint8_t x)
     }
 }
 
+/* Kind $1B ($9A81): an enemy that bounces towards Scrooge, walking 1 px a
+ * frame and jumping again (vertical velocity $04E5) each time it lands. Off
+ * screen or hit, it is beaten. */
+static void Obj_Bouncer(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_BOUNCER, 0x22, x, gObjects->kind[x]);
+    if (Enemy_Beaten(x, 0)) {
+        return;
+    }
+    if (Step(x) == 0) {
+        Obj_SetSpeed(x, 0x0100);
+        Obj_FaceScrooge(x);
+        gObjects->state[x] |= 2;
+    }
+    (void)Obj_TouchScrooge(x);
+    if (!(gObjects->state[x] & 2)) {
+        if (gObjects->animFrame[x] != 0) {
+            gObjects->animTimer[x] = 0x80;
+        }
+        x = Obj_Rise(x, 0x21, 2);
+        if (gObjects->vy[x] & 0x80) {
+            Obj_SetVelocityY(x, 0);
+            gObjects->state[x]++;
+        }
+    } else {
+        x = Obj_Fall(x, 0x1E, 2);
+        if (gProbeHits & 1) {
+            gObjects->state[x]--;
+            ResetAnim(x);
+            Obj_SetVelocityY(x, 0x04E5);
+        }
+    }
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        (void)Obj_WalkRight(x, 0x18, 2);
+    } else {
+        (void)Obj_WalkLeft(x, 0x1B, 2);
+    }
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -2609,6 +2648,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_PIT_JUMPER:
             Obj_PitJumper(slot);
+            break;
+        case OBJ_KIND_BOUNCER:
+            Obj_Bouncer(slot);
             break;
         case OBJ_KIND_LEAPER:
             Obj_Leaper(slot);
@@ -2866,6 +2908,11 @@ static void Run_PitSplashIn(Regs *r)
     Obj_PitSplashIn(r->x);
 }
 
+static void Run_Bouncer(Regs *r)
+{
+    Obj_Bouncer(r->x);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -3035,6 +3082,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_BOUNCER, NULL, "Obj_Bouncer", Run_Bouncer, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_PIT_JUMPER, NULL, "Obj_PitJumper", Run_PitJumper, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_PIT_SPLASH_OUT, NULL, "Obj_PitSplashOut", Run_PitSplashOut, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_PIT_SPLASH_IN, NULL, "Obj_PitSplashIn", Run_PitSplashIn, 0, .bank = DT_BANK_OBJECTS },

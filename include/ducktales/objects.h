@@ -52,6 +52,7 @@ extern "C" {
 #define OBJ_KIND_PATROLLER       0x18 /* enemy: walks a ledge, turns at its edges and at walls (code) */
 #define OBJ_KIND_POUNCER         0x19 /* enemy: flies in arcs, pounces on Scrooge (code) */
 #define OBJ_KIND_PIT_JUMPER      0x1A /* enemy: jumps out of a pit with a splash (code) */
+#define OBJ_KIND_BOUNCER         0x1B /* enemy: bounces towards Scrooge (code) */
 #define OBJ_KIND_LEAPER          0x1C /* enemy: walks a ledge, turns and leaps with a puff of dust (code) */
 #define OBJ_KIND_LEDGE_WALKER    0x1E /* enemy: walks a ledge, turns at its edges (code) */
 #define OBJ_KIND_PACER           0x1F /* enemy: paces left and right (code) */
