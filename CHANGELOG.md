@@ -14,7 +14,7 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - `tests/decomp_test.py --changed <ranges> --from-state --span N` checks only the routes that run
   a decompiled routine, from the golden save state before it: 32 s instead of 689 s for a routine
   the routes reach late.
-- `tools/test_slot.py` queues heavy test runs across worktrees, at most two at once.
+- `tools/test_slot.py` queues heavy test runs across worktrees, at most three at once (two left the 16-thread PC at 47% load).
 - The system layer is decompiled (`src/decomp/system.c`, `sprites.c`, `audio.c`): bank switching,
   the controllers, PPU blanking, nametable fill, CHR uploads, the OAM clear, the random generator,
   the sprite builder (bank 5), the string drawer and the bank-3 sound driver. They use the bus

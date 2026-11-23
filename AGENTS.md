@@ -78,7 +78,7 @@ serves every worktree through `--golden <dir>`; record again when a route change
 so) or NESRecomp moves (its `trace` and `hw` hashes are its own).
 
 Heavy runs (`--runtime cycle`, `decomp_test.py`, `verify_routes.py`) go through
-`py -3 -I tools/test_slot.py -- <command>`, which waits for one of 2 machine-wide slots, so the
+`py -3 -I tools/test_slot.py -- <command>`, which waits for one of 3 machine-wide slots, so the
 worktrees sharing this PC take turns instead of slowing each other down.
 
 Never run a heavy check twice on the same inputs. A merge whose tree equals the tree a branch's gate
