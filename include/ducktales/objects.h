@@ -52,6 +52,7 @@ extern "C" {
 #define OBJ_KIND_LEAPER      0x1C /* enemy: walks a ledge, turns and leaps with a puff of dust (code) */
 #define OBJ_KIND_BOBBER      0x20 /* enemy: bobs up and down in place (code) */
 #define OBJ_KIND_RISING_SHOT 0x27 /* a shot that flies up and sideways (code) */
+#define OBJ_KIND_DROPPING    0x2B /* something that drops and breaks on the floor (code) */
 #define OBJ_KIND_DOOR        0x2F /* a door: warp request (code) */
 #define OBJ_KIND_TALKER      0x35 /* a character that shows a message (code) */
 

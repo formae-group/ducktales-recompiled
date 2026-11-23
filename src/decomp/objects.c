@@ -1818,6 +1818,19 @@ static void Obj_RisingShot(uint8_t x)
     }
 }
 
+/* Kind $2B ($AAC8): something that drops by its velocity (probe $2D),
+ * harming Scrooge on contact, and is freed when it hits the floor. */
+static void Obj_Dropping(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_DROPPING, 0x22, x, gObjects->kind[x]);
+    x = Obj_ClimbDown(x, 0x2D, 0);
+    if (gProbeHits & 1) {
+        gObjects->state[x] = 0;
+        gObjects->flags[x] = 0;
+    }
+    (void)Obj_TouchScrooge(x);
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -1907,6 +1920,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_RISING_SHOT:
             Obj_RisingShot(slot);
+            break;
+        case OBJ_KIND_DROPPING:
+            Obj_Dropping(slot);
             break;
         case OBJ_KIND_DOOR:
             Obj_Door(slot);
@@ -2052,6 +2068,11 @@ static void Run_SpawnDust(Regs *r)
 static void Run_RisingShot(Regs *r)
 {
     Obj_RisingShot(r->x);
+}
+
+static void Run_Dropping(Regs *r)
+{
+    Obj_Dropping(r->x);
 }
 
 static void Run_Swooper(Regs *r)
@@ -2223,6 +2244,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_DROPPING, NULL, "Obj_Dropping", Run_Dropping, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_RISING_SHOT, NULL, "Obj_RisingShot", Run_RisingShot, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LEAPER, NULL, "Obj_Leaper", Run_Leaper, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_LEAPER_DUST, NULL, "Obj_SpawnDust", Run_SpawnDust, 0, .bank = DT_BANK_OBJECTS },
