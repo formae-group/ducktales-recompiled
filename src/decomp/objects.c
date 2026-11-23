@@ -33,23 +33,26 @@
 
 #define OBJ_GRAVITY 0x40
 
-#define SFX_DIAMOND     0x15
-#define SFX_BREAK       0x16
-#define SFX_DEFEAT      0x35
-#define SFX_TREASURE    0x37
-#define SFX_THROW       0x1B
-#define SFX_SNAP        0x19
-#define SFX_SPIT        0x1A
-#define SFX_SWING       0x26
-#define SFX_CRAWLER     0x27
-#define SFX_WATCHER     0x2A
-#define SFX_FLYER       0x2B
-#define SFX_SWOOP       0x30
-#define SFX_CHARGE      0x31
-#define SFX_BOUNCE      0x1D
-#define SFX_LEAP        0x34
-#define SFX_HOP         0x24
-#define SFX_DWELLER_HIT 0x2C
+#define SFX_DIAMOND      0x15
+#define SFX_BREAK        0x16
+#define SFX_DEFEAT       0x35
+#define SFX_TREASURE     0x37
+#define SFX_THROW        0x1B
+#define SFX_SNAP         0x19
+#define SFX_SPIT         0x1A
+#define SFX_SWING        0x26
+#define SFX_CRAWLER      0x27
+#define SFX_WATCHER      0x2A
+#define SFX_FLYER        0x2B
+#define SFX_SWOOP        0x30
+#define SFX_CHARGE       0x31
+#define SFX_BOUNCE       0x1D
+#define SFX_LEAP         0x34
+#define SFX_HOP          0x24
+#define SFX_DWELLER_HIT  0x2C
+#define SFX_POUNCER_FLY  0x32
+#define SFX_POUNCE       0x1F
+#define SFX_POUNCER_LAND 0x20
 
 #define gObjCursor        RAM_U8(DT_ADDR_OBJ_CURSOR)
 #define gScratch0         RAM_U8(DT_ADDR_SCRATCH0)
@@ -2180,6 +2183,138 @@ static void Obj_LedgeWalker(uint8_t x)
     }
 }
 
+/* Kind $19 ($973C): an enemy that waits until Scrooge is within 12 px,
+ * drops (pose $3C, then $3B) until it lands or is 40 px above him, faces
+ * him and flies in arcs by a cycle of 14 motions (sound $32), its step
+ * moving on once it is 80 px or more above him. Within 12 px of him it
+ * pounces (vertical velocity $0280, sound $1F) and, landed, sits 120 frames
+ * in pose $39 (sound $20) before flying again. Off screen or hit, it is
+ * beaten. Each step's address in the jump table is left in $00/$01. */
+static void Obj_Pouncer(uint8_t x)
+{
+    static const uint8_t motions[14] = { 0x1F, 0x1E, 0x1D, 0x1C, 0x1B, 0x1A, 0x19,
+                                         0x17, 0x16, 0x15, 0x14, 0x13, 0x12, 0x11 };
+    static const uint16_t steps[5] = { 0x9768, 0x9787, 0x97F3, 0x97F3, 0x98C8 };
+
+    Decomp_Enter(DT_CODE_KIND_POUNCER, 0x22, x, gObjects->kind[x]);
+    if (!OnScreen(x) || gObjects->unk_0690[x] != 0) {
+        Obj_Defeat(x);
+        return;
+    }
+    if (gObjects->action[x] != 0x39) {
+        (void)Obj_TouchScrooge(x);
+    }
+    uint8_t step = Step(x);
+    gScratch(0) = (uint8_t)steps[step];
+    gScratch(1) = (uint8_t)(steps[step] >> 8);
+    switch (step) {
+        case 0:
+            if (Obj_DistanceX(x) >= 0x0C) {
+                return;
+            }
+            gObjects->state[x]++;
+            gObjects->timer[x] = 0x1E;
+            gObjects->unk_06C0[x] = 0;
+            Obj_SetVelocityY(x, 0x0280);
+            return;
+        case 1:
+            if (gObjects->timer[x] != 0) {
+                if (--gObjects->timer[x] == 0) {
+                    gObjects->action[x] = 0x3C;
+                    ResetAnim(x);
+                }
+                return;
+            }
+            if (gObjects->action[x] == 0x3C && gObjects->animTimer[x] == 8) {
+                gObjects->action[x]--;
+                ResetAnim(x);
+            }
+            x = Obj_ClimbDown(x, 0x40, 1);
+            if (!(gProbeHits & 1) && (uint8_t)(gObjects->y[P_] - gObjects->y[x]) >= 0x28) {
+                return;
+            }
+            gObjects->state[x]++;
+            Obj_FaceScrooge(x);
+            if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+                gObjects->flags[x] |= OBJ_FLAG_FACING_RIGHT;
+            }
+            gObjects->action[x] = 0x3B;
+            ResetAnim(x);
+            return;
+        case 2:
+        case 3:
+            if (gObjects->timer[x] == 0) {
+                gObjects->vdir[x] = 0;
+                Obj_SetMotionIndex(x, motions[gObjects->unk_06C0[x]]);
+                if (gObjects->speed[x] & 0x80) {
+                    Obj_SetSpeed(x, (uint16_t)-Obj_GetSpeed(x));
+                }
+                if (gObjects->vy[x] & 0x80) {
+                    gObjects->vdir[x] = 8;
+                    Obj_SetVelocityY(x, (uint16_t)-Obj_GetVelocityY(x));
+                }
+                if (++gObjects->unk_06C0[x] == 0x0E) {
+                    gObjects->unk_06C0[x] = 0;
+                }
+                gObjects->timer[x] = 3;
+            }
+            if (gObjects->vdir[x] == 0) {
+                x = Obj_ClimbDown(x, 0x40, 1);
+            } else {
+                x = Obj_ClimbUp(x, 0x42, 1);
+            }
+            if (gObjects->dir[x] & OBJ_DIR_LEFT) {
+                x = Obj_WalkLeft(x, 0x3D, 2);
+            } else {
+                x = Obj_WalkRight(x, 0x3A, 2);
+            }
+            if (gObjects->animTimer[x] == 0) {
+                Sound_Request(SFX_POUNCER_FLY, x);
+            }
+            if (gObjects->state[x] & 1) {
+                gObjects->timer[x]--;
+            } else if (gObjects->y[P_] >= gObjects->y[x] && ((gObjects->y[P_] - gObjects->y[x]) & 0xF0) >= 0x50) {
+                gObjects->state[x]++;
+                gObjects->timer[x]--;
+            }
+            if (Obj_DistanceX(x) >= 0x0C) {
+                return;
+            }
+            gObjects->action[x] = 0x3C;
+            ResetAnim(x);
+            gObjects->state[x]++;
+            Obj_SetVelocityY(x, 0x0280);
+            Sound_Request(SFX_POUNCE, x);
+            return;
+        default:
+            break;
+    }
+    if (gObjects->action[x] == 0x39) {
+        if (--gObjects->timer[x] != 0) {
+            return;
+        }
+        gObjects->action[x] = 0x3B;
+        ResetAnim(x);
+        gObjects->unk_06C0[x] = 0;
+        gObjects->state[x] = (uint8_t)((gObjects->state[x] & 0xF0) | 2);
+        gObjects->hitbox[x] &= 0x7F;
+        return;
+    }
+    if (gObjects->action[x] == 0x3C && gObjects->animTimer[x] == 8) {
+        gObjects->action[x] = 0x5C;
+        ResetAnim(x);
+    }
+    x = Obj_ClimbDown(x, 0x40, 1);
+    if (!(gProbeHits & 1)) {
+        return;
+    }
+    gObjects->action[x] = 0x39;
+    ResetAnim(x);
+    gObjects->timer[x] = 0x78;
+    gObjects->hitbox[x] |= 0x80;
+    Sound_Request(SFX_POUNCER_LAND, x);
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -2263,6 +2398,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_PATROLLER:
             Obj_Patroller(slot);
+            break;
+        case OBJ_KIND_POUNCER:
+            Obj_Pouncer(slot);
             break;
         case OBJ_KIND_LEAPER:
             Obj_Leaper(slot);
@@ -2482,6 +2620,11 @@ static void Run_LedgeWalker(Regs *r)
     Obj_LedgeWalker(r->x);
 }
 
+static void Run_Pouncer(Regs *r)
+{
+    Obj_Pouncer(r->x);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -2651,6 +2794,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_POUNCER, NULL, "Obj_Pouncer", Run_Pouncer, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LEDGE_WALKER, NULL, "Obj_LedgeWalker", Run_LedgeWalker, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_PACER, NULL, "Obj_Pacer", Run_Pacer, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_MOVING_PLATFORM, NULL, "Obj_MovingPlatform", Run_MovingPlatform, 0 },
