@@ -150,6 +150,131 @@ POKES = [
     ),
     # slot 9 made a lift (kind $0F) under Scrooge
     ('lift', {0x709: 0xA0, 0x719: 0x0F, 0x649: 0xB0, 0x729: 0x62, 0x739: 0x00, 0x609: 0x80}, ['Obj_Lift']),
+    # slot 9 made a ledge patroller (kind $18) that a blow has hit ($0690): it is beaten
+    (
+        'patroller-hit',
+        {0x709: 0xA1, 0x719: 0x18, 0x699: 0x01, 0x649: 0x90, 0x729: 0x90, 0x739: 0x00, 0x609: 0x80},
+        ['Obj_Patroller', 'Obj_Defeat'],
+    ),
+    # slot 9 made a charging enemy (kind $10, charging) on the floor that a blow has hit: it is beaten
+    (
+        'charger-hit',
+        {0x709: 0xA2, 0x719: 0x10, 0x699: 0x01, 0x649: 0xA6, 0x729: 0x90, 0x739: 0x00, 0x609: 0x80},
+        ['Obj_Charger', 'Obj_Defeat'],
+    ),
+    # slot 9 made a bobbing enemy (kind $20) that a blow has hit: it is beaten
+    (
+        'bobber-hit',
+        {0x709: 0xA1, 0x719: 0x20, 0x699: 0x01, 0x649: 0x90, 0x729: 0x90, 0x739: 0x00, 0x609: 0x80},
+        ['Obj_Bobber', 'Obj_Defeat'],
+    ),
+    # slot 9 made a leaping enemy (kind $1C) that a blow has hit: it is beaten
+    (
+        'leaper-hit',
+        {0x709: 0xA1, 0x719: 0x1C, 0x699: 0x01, 0x649: 0x90, 0x729: 0x90, 0x739: 0x00, 0x609: 0x80},
+        ['Obj_Leaper', 'Obj_Defeat'],
+    ),
+    # slot 9 made a leaping enemy (kind $1C) walking on the floor near Scrooge: it leaps after 5 frames
+    (
+        'leaper-walk',
+        {0x709: 0xA1, 0x719: 0x1C, 0x6B9: 0x05, 0x649: 0xA6, 0x729: 0x90, 0x739: 0x00, 0x609: 0x80, 0x7E9: 0x01},
+        ['Obj_Leaper', 'Obj_SpawnDust'],
+    ),
+    # kind $32 touches Scrooge with no money: the theft borrows out and blanks every digit
+    (
+        'pickpocket-broke',
+        {0x709: 0xA1, 0x719: 0x32, 0x649: 0xB4, 0x729: 0x50, 0x739: 0x00, 0x609: 0x80, 0x6B9: 0x00, 0x699: 0x00},
+        ['Obj_Pickpocket', 'Obj_StealMoney'],
+    ),
+    # kind $32 touches Scrooge holding 100,000: the theft borrows through two digits and blanks the leading zeros
+    (
+        'pickpocket-steal',
+        {
+            0x709: 0xA1,
+            0x719: 0x32,
+            0x649: 0xB4,
+            0x729: 0x50,
+            0x739: 0x00,
+            0x609: 0x80,
+            0x6B9: 0x00,
+            0x699: 0x00,
+            0x324: 0x24,
+            0x325: 0x01,
+            0x326: 0x00,
+            0x327: 0x00,
+            0x328: 0x00,
+            0x329: 0x00,
+        },
+        ['Obj_Pickpocket', 'Obj_StealMoney'],
+    ),
+    # kind $1A of variant 0 next to Scrooge: it jumps out and falls back with both splashes
+    (
+        'pit-splash',
+        {0x709: 0xA0, 0x719: 0x1A, 0x729: 0x50, 0x739: 0x00, 0x609: 0x80, 0x6B9: 0x00, 0x699: 0x00},
+        ['Obj_PitJumper', 'Obj_PitSplashOut', 'Obj_PitSplashIn'],
+    ),
+    # kind $24 by Scrooge: it rolls into a wall, walks once more and stops (kind 0)
+    (
+        'boulder-wall',
+        {0x709: 0xA0, 0x719: 0x24, 0x649: 0xB4, 0x729: 0x60, 0x739: 0x00, 0x609: 0x80, 0x699: 0x00},
+        ['Obj_Boulder', 'Obj_WalkRight'],
+    ),
+    # kind $2D dropped on Scrooge: taken, it gives an HP dot back
+    (
+        'treat-taken',
+        {
+            0x709: 0xA1,
+            0x719: 0x2D,
+            0x649: 0xB0,
+            0x729: 0x58,
+            0x739: 0x00,
+            0x609: 0x80,
+            0x7E9: 0x00,
+            0x7C9: 0x00,
+            0x7B9: 0x00,
+        },
+        ['Obj_Treat', 'Hud_RestoreDot'],
+    ),
+    # kind $30 pacing over Scrooge holding 5,000: a theft each frame of contact
+    (
+        'thief-steal',
+        {
+            0x709: 0xA0,
+            0x719: 0x30,
+            0x649: 0xB4,
+            0x729: 0x50,
+            0x739: 0x00,
+            0x609: 0x80,
+            0x699: 0x00,
+            0x324: 0x24,
+            0x325: 0x24,
+            0x326: 0x05,
+            0x327: 0x00,
+            0x328: 0x00,
+            0x329: 0x00,
+        },
+        ['Obj_Thief', 'Obj_StealMoney'],
+    ),
+    # kind $31, the same handler with the shorter span
+    (
+        'short-thief-steal',
+        {
+            0x709: 0xA0,
+            0x719: 0x31,
+            0x649: 0xB4,
+            0x729: 0x50,
+            0x739: 0x00,
+            0x609: 0x80,
+            0x699: 0x00,
+            0x324: 0x24,
+            0x325: 0x24,
+            0x326: 0x05,
+            0x327: 0x00,
+            0x328: 0x00,
+            0x329: 0x00,
+        },
+        ['Obj_Thief', 'Obj_StealMoney'],
+    ),
     # the ending flag ($AC): the frame loop starts the ending, whose first scene loads its palettes ($E08F)
     ('ending', {0xAC: 0x01}, ['Palette_LoadScene']),
     # slot 9 a harmful solid pickup on Scrooge under the power-up, its contact count about to wrap:

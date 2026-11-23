@@ -19,9 +19,8 @@
  *
  * The background probe, its snaps and the probe point $D350 (where the
  * vertical contact test can fall through to) are the C of collision.c, the
- * climbing steps $F192/$F1A8 the C of objcommon.c and the HP refill $F812
- * the C of objects.c. Called through Decomp_Call: the walls move $F0F8,
- * which every object kind shares (decompiled with the object code).
+ * walls move $F0F8 and the climbing steps $F192/$F1A8 the C of objcommon.c
+ * and the HP refill $F812 the C of objects.c.
  * Given to the original routine (Decomp_RunOriginal): Player_Update in modes
  * 15 and 16 (message box and treasure) and every call that reaches the row
  * change at $E8C0. The original then reaches their C at its own sites: it is
@@ -1086,7 +1085,7 @@ static void Player_Mode12(void)
     }
     gPlayerMoveDir = 1;
     gPlayerMoveSide = 1;
-    Decomp_Call(DT_CODE_MOVE_WITH_WALLS, 0, 0, 2);
+    (void)Obj_WalkRight(P_, 0, 2);
     if (gObjects->vdir[P_] == 0 && gObjects->worldPage[P_] == 7) {
         gObjects->vdir[P_]++;
         Obj_SetVelocityY(P_, 0);
