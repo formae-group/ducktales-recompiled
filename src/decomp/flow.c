@@ -21,11 +21,11 @@
  * (bank 5 $B800/$B81C), the spawner set-up (bank 6 $AE60), $C267, $C2E6, $F2C7,
  * $F812 and $F84A; handed off to: task_yield and task_wait, the camera $EFE2, the
  * object spawner (bank 6 $AEA0), the fades $C279/$C282, $C197/$C1A1, $C42C,
- * $C78F, $C830, the object code (bank 6 $8000), Scrooge's update $E354, the
- * final trip's take-off scene (bank 4 $BE00) and the routines of this
- * subsystem that are not decompiled yet (the ending's later frames, reset).
+ * $C78F, $C830, the object code (bank 6 $8000), Scrooge's update $E354 and
+ * the routines of this subsystem that are not decompiled yet (the ending's later frames, reset).
  */
 #include "decomp/decomp.h"
+#include "decomp/motion.h"
 #include "decomp/sound.h"
 
 #include "ducktales/events.h"
@@ -99,6 +99,19 @@
 #define SCENE_TILESET         3
 #define SCENE_PALETTE         0x70
 #define SCENE_OBJECT_STATE    0xA0
+#define TRIP_SLOT             8    /* the plane of the take-off scene */
+#define TRIP_ACTION           0x6F /* its first action; the scene ends at $74 */
+#define TRIP_ACTION_END       0x74
+#define TRIP_GRAVITY          0x40
+#define TRIP_STATE            0xA0
+#define TRIP_Y                0xC0
+#define TRIP_X                0x80
+#define TRIP_SPEED            2
+#define TRIP_VY               0x077D /* take-off velocity, whole and fraction */
+#define TRIP_FLASHES          0x10
+#define TRIP_FLASH_FRAMES     4
+#define TRIP_COLOUR_BRIGHT    0x16
+#define TRIP_COLOUR_DARK      0x0F
 #define ENDING_TOTAL_PPU      0x206C
 #define ENDING_MONEY_PPU      0x2043
 #define ENDING_WAIT           0x78
@@ -1359,6 +1372,8 @@ static void LandLoad_Done(Regs *r)
 /* ---- Land Select ---- */
 
 static void LandSelect_FinalTrip(Regs *r);
+static void LandSelect_FinalScene(Regs *r);
+static void FinalTrip(Regs *r);
 static void LandSelect_Banked(Regs *r);
 static void LandSelect_ResultRead(Regs *r);
 static void LandSelect_FinalRead(Regs *r);
@@ -1652,7 +1667,9 @@ static void LandSelect_FinalWait(Regs *r)
 {
     Decomp_Enter(DT_FLOW_SELECT_FINAL_WAIT, r->a, r->x, r->y);
     SelectBank(r, DT_BANK_FINAL_TRIP);
-    Jsr(DT_B4_FINAL_TRIP, DT_FLOW_SELECT_FINAL_SCENE, 0);
+    if (Gosub(FinalTrip, r, DT_FLOW_SELECT_FINAL_SCENE)) {
+        LandSelect_FinalScene(r);
+    }
 }
 
 /* $D6CE: the final trip's message and A. */
@@ -1886,6 +1903,143 @@ static void Scene_FadeIn(Regs *r)
 static void Scene_Done(Regs *r)
 {
     Decomp_Enter(DT_FLOW_SCENE_DONE, r->a, r->x, r->y);
+}
+
+/* ---- the final trip's take-off ---- */
+
+static void FinalTrip_Start(Regs *r);
+static void FinalTrip_Frame(Regs *r);
+static void FinalTrip_Flash(Regs *r, uint8_t flashes);
+
+/* $F855: the sprites rebuilt, a frame, and bank 4 (the scene's) mapped
+ * again. */
+static void SpritesFrame(Regs *r)
+{
+    Decomp_Enter(DT_CODE_SPRITES_FRAME, r->a, r->x, r->y);
+    Call(r, DT_CODE_OAM_CLEAR);
+    SelectBank(r, DT_BANK_SPRITES);
+    Call(r, DT_B5_BUILD_OAM);
+    Yield(DT_FLOW_SPRITES_FRAME);
+}
+
+/* $F863 */
+static void SpritesFrame_Next(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_SPRITES_FRAME, r->a, r->x, r->y);
+    SelectBank(r, DT_BANK_FINAL_TRIP);
+}
+
+/* Bank 4 $BE00: the plane (slot 8) takes off from the bottom of the screen
+ * and flies across it once per action from $6F to $73, rising then falling,
+ * leftward on odd actions; then the screen flashes 16 times. */
+static void FinalTrip(Regs *r)
+{
+    Decomp_Enter(DT_B4_FINAL_TRIP, r->a, r->x, r->y);
+    RAM_U8(DT_ADDR_GRAVITY) = TRIP_GRAVITY;
+    gObjects->action[TRIP_SLOT] = TRIP_ACTION;
+    FinalTrip_Start(r);
+}
+
+/* Bank 4 $BE09: one flight starts. */
+static void FinalTrip_Start(Regs *r)
+{
+    const int s = TRIP_SLOT;
+    gObjects->state[s] = TRIP_STATE;
+    gObjects->flags[s] = TRIP_STATE;
+    gObjects->y[s] = TRIP_Y;
+    gObjects->worldX[s] = TRIP_X;
+    gObjects->worldPage[s] = 0;
+    gObjects->animTimer[s] = 0;
+    gObjects->animFrame[s] = 0;
+    gObjects->unk_06C0[s] = 0;
+    gObjects->speedFrac[s] = 0;
+    gObjects->speed[s] = TRIP_SPEED;
+    gObjects->vyFrac[s] = (uint8_t)TRIP_VY;
+    gObjects->vy[s] = TRIP_VY >> 8;
+    r->a = TRIP_VY >> 8;
+    FinalTrip_Frame(r);
+}
+
+/* Bank 4 $BE3B: a frame of the flight: rising until the velocity turns
+ * negative ($06C8 then counts the fall), across, and the sprites. */
+static void FinalTrip_Frame(Regs *r)
+{
+    const int s = TRIP_SLOT;
+    r->x = TRIP_SLOT;
+    if (gObjects->unk_06C0[s] == 0) {
+        Obj_ApplyVelocityY(s);
+        Obj_ApplyGravity(s);
+        if (gObjects->vy[s] & 0x80) {
+            gObjects->vyFrac[s] = 0;
+            gObjects->vy[s] = 0;
+            gObjects->unk_06C0[s]++;
+        }
+    } else {
+        Obj_ApplyGravity(s);
+        Obj_ApplyVelocityY(s);
+    }
+    if (gObjects->action[s] & 1) {
+        Obj_MoveLeft(s);
+    } else {
+        Obj_MoveRight(s);
+    }
+    Gosub(SpritesFrame, r, DT_B4_FLOW_TRIP_FRAME);
+}
+
+/* Bank 4 $BE73: until the plane leaves the screen; then the next action's
+ * flight, and after the last the flashes. */
+static void FinalTrip_Next(Regs *r)
+{
+    Decomp_Enter(DT_B4_FLOW_TRIP_FRAME, r->a, r->x, r->y);
+    const int s = TRIP_SLOT;
+    r->a = gObjects->flags[s];
+    if (gObjects->flags[s] & 0x80) {
+        FinalTrip_Frame(r);
+        return;
+    }
+    r->a = ++gObjects->action[s];
+    if (r->a != TRIP_ACTION_END) {
+        FinalTrip_Start(r);
+        return;
+    }
+    gObjects->state[s] = 0;
+    FinalTrip_Flash(r, TRIP_FLASHES);
+}
+
+/* Bank 4 $BE89 (the flashes left on the stack): background colour 0 bright
+ * for 4 frames, then dark for 4. */
+static void FinalTrip_Flash(Regs *r, uint8_t flashes)
+{
+    Decomp_Push(flashes);
+    gRam[DT_ADDR_PALETTE_SHOWN + 0x10] = TRIP_COLOUR_BRIGHT;
+    RAM_U8(DT_ADDR_PALETTE_REQUEST) = TRIP_COLOUR_BRIGHT;
+    r->a = TRIP_COLOUR_BRIGHT;
+    r->x = TRIP_FLASH_FRAMES;
+    Jsr(DT_CODE_TASK_WAIT, DT_B4_FLOW_TRIP_DARK, OUT_X | OUT_Y);
+}
+
+/* Bank 4 $BE96 */
+static void FinalTrip_Dark(Regs *r)
+{
+    Decomp_Enter(DT_B4_FLOW_TRIP_DARK, r->a, r->x, r->y);
+    gRam[DT_ADDR_PALETTE_SHOWN + 0x10] = TRIP_COLOUR_DARK;
+    RAM_U8(DT_ADDR_PALETTE_REQUEST) = TRIP_COLOUR_DARK;
+    r->a = TRIP_COLOUR_DARK;
+    r->x = TRIP_FLASH_FRAMES;
+    Jsr(DT_CODE_TASK_WAIT, DT_B4_FLOW_TRIP_FLASH, OUT_X | OUT_Y);
+}
+
+/* Bank 4 $BEA2: the next flash; after the last, $5E is cleared. */
+static void FinalTrip_Flashed(Regs *r)
+{
+    Decomp_Enter(DT_B4_FLOW_TRIP_FLASH, r->a, r->x, r->y);
+    uint8_t flashes = (uint8_t)(Decomp_Pull() - 1);
+    r->a = flashes;
+    if (flashes) {
+        FinalTrip_Flash(r, flashes);
+        return;
+    }
+    gSelectMessage = 0;
 }
 
 /* ---- ending ---- */
@@ -2165,10 +2319,12 @@ static void Run_RespawnEntry(Regs *r)
     Respawn_PlaceAt(r, r->a);
 }
 
-#define SITE(id)                           "ducktales.decomp." id
-#define ROUTINE(addr, site, name, fn, out) { addr, site, name, fn, out, false, 0, false }
-#define TASK(addr, site, name, fn, locals) { addr, site, name, fn, 0, true, locals, false }
-#define RESUME(addr, name, fn, locals)     { addr, NULL, name, fn, 0, true, locals, true }
+#define SITE(id)                                "ducktales.decomp." id
+#define ROUTINE(addr, site, name, fn, out)      { addr, site, name, fn, out, false, 0, false }
+#define TASK(addr, site, name, fn, locals)      { addr, site, name, fn, 0, true, locals, false }
+#define RESUME(addr, name, fn, locals)          { addr, NULL, name, fn, 0, true, locals, true }
+#define TASK_IN(bank, addr, name, fn)           { addr, NULL, name, fn, 0, true, 0, false, bank }
+#define RESUME_IN(bank, addr, name, fn, locals) { addr, NULL, name, fn, 0, true, locals, true, bank }
 
 const DecompRoutine gFlowRoutines[] = {
     ROUTINE(DT_CODE_TIMER_TICK, NULL, "Timer_Tick", Timer_Tick, 0),
@@ -2260,6 +2416,12 @@ const DecompRoutine gFlowRoutines[] = {
     RESUME(DT_FLOW_SCENE_SHOWN, "Scene_Shown", Scene_Shown, 0),
     RESUME(DT_FLOW_SCENE_FADE_IN, "Scene_FadeIn", Scene_FadeIn, 0),
     RESUME(DT_FLOW_SCENE_DONE, "Scene_Done", Scene_Done, 0),
+    TASK(DT_CODE_SPRITES_FRAME, NULL, "SpritesFrame", SpritesFrame, 0),
+    RESUME(DT_FLOW_SPRITES_FRAME, "SpritesFrame_Next", SpritesFrame_Next, 0),
+    TASK_IN(DT_BANK_FINAL_TRIP, DT_B4_FINAL_TRIP, "FinalTrip", FinalTrip),
+    RESUME_IN(DT_BANK_FINAL_TRIP, DT_B4_FLOW_TRIP_FRAME, "FinalTrip_Next", FinalTrip_Next, 0),
+    RESUME_IN(DT_BANK_FINAL_TRIP, DT_B4_FLOW_TRIP_DARK, "FinalTrip_Dark", FinalTrip_Dark, 1),
+    RESUME_IN(DT_BANK_FINAL_TRIP, DT_B4_FLOW_TRIP_FLASH, "FinalTrip_Flashed", FinalTrip_Flashed, 1),
     TASK(DT_CODE_ENDING, SITE("E1AF"), "Ending", Ending, 0),
     TASK(DT_CODE_ENDING_BANK, NULL, "Ending_BankTransfer", Ending_BankTransfer, 0),
     RESUME(DT_FLOW_ENDING_BANKED, "Ending_Banked", Ending_Banked, 0),
@@ -2292,7 +2454,6 @@ const int gFlowRoutineCount = sizeof gFlowRoutines / sizeof gFlowRoutines[0];
  * system.c) stop the isolated runs at their own sites. */
 const DecompStop gFlowStops[] = {
     STOP(DT_CODE_TASK_YIELD, "FFAC"),   STOP(DT_CODE_RESET, "FEE0"),     STOP(DT_B6_SPAWN, "AEA0.6"),
-    STOP(DT_CODE_FADE_IN_KEEP, "C27C"), STOP(DT_CODE_TASK_WAIT, "FFA5"), STOP(DT_B4_FINAL_TRIP, "BE00.4"),
-    STOP(DT_CODE_ROW_SCROLL, "C976"),
+    STOP(DT_CODE_FADE_IN_KEEP, "C27C"), STOP(DT_CODE_TASK_WAIT, "FFA5"), STOP(DT_CODE_ROW_SCROLL, "C976"),
 };
 const int gFlowStopCount = sizeof gFlowStops / sizeof gFlowStops[0];

@@ -448,12 +448,6 @@ addr = 0xFFA5
 length = 8
 crc32 = 0x0FCE60E7
 
-[[mod_function_hook]]
-id = "ducktales.decomp.stop.BE00.4"
-addr = 0xBE00
-length = 8
-crc32 = 0xB8A217BC
-
 # The row scroll the row change ($E8C0, src/decomp/player.c) hands off to.
 [[mod_function_hook]]
 id = "ducktales.decomp.stop.C976"

@@ -260,6 +260,8 @@
 #define DT_CODE_HITBOX_HEIGHT      0xF498 /* half-height by hitbox entry (code) */
 #define DT_CODE_HITBOX_WIDTH       0xF4B8 /* half-width by hitbox entry (code) */
 #define DT_CODE_MUSIC_REQUEST      0xF752 /* remember the music id in $C5, then queue it */
+#define DT_CODE_SPRITES_FRAME      0xF855 /* the sprites, a frame, then bank 4 mapped (code) */
+#define DT_FLOW_SPRITES_FRAME      0xF863
 #define DT_CODE_TOTAL_MAX          0xF84A /* TOTAL's five digits set to 9 (code) */
 #define DT_CODE_SOUND_REQUEST      0xF754 /* queue a sound id in the request ring */
 #define DT_CODE_HUD_REFILL_HP      0xF812 /* every HP dot full (fixed bank) */
@@ -398,6 +400,9 @@
 #define DT_B5_MESSAGE          0xB81C /* X = Land Select message: its strings into the VRAM queue (code) */
 #define DT_BANK_FINAL_TRIP     4
 #define DT_B4_FINAL_TRIP       0xBE00 /* the final trip's take-off scene; waits for frames (code) */
+#define DT_B4_FLOW_TRIP_FRAME  0xBE73 /* bank 4: after the take-off scene's frame */
+#define DT_B4_FLOW_TRIP_DARK   0xBE96 /* bank 4: the flashes, after the bright frames */
+#define DT_B4_FLOW_TRIP_FLASH  0xBEA2 /* bank 4: after the dark frames */
 #define DT_BANK_OBJECTS        6
 #define DT_B6_OBJECTS          0x8000 /* every object's per-frame code */
 #define DT_B6_SPAWN_TABLES     0xAE20 /* the land's spawn table pointers into $60-$69 (code) */
