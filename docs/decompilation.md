@@ -347,6 +347,8 @@ RAM-identical in replace mode.
 | `LandSelect` (16 resume points) | `$D630-$D79A` | checked | 12 (the return from a land in 5) | final-trip, all-treasures | not measured; the take-off scene (bank 4 `$BE00`) runs as the original |
 | `BankTransfer` (1 resume point) | `$D8D9-$D9BD` | checked | 5 | all-treasures (no money), total-max (TOTAL at 99999) | not measured |
 | `Scene` (6 resume points) | `$DF27-$DFEC` | checked | 0 | scene-1, scene-2 | not measured |
+| `Ending` (3 resume points), `Ending_BankTransfer` (`$FFC7`) | `$E1AF-$E1F8` | checked (first frame; the later frames run the original) | 0 | ending | not measured |
+| `EndingScreen` (11 resume points) | `$E054-$E11A` | checked | 0 | ending | not measured |
 | `WaitA` (1 resume point) | `$D9BE` | checked | 5 | final-trip | not measured |
 | `FrameLoop` and its resume points | `$DB36-$DC3D` | checked | 12 | - | not measured; the scene request (`$DBC5`) |
 | `DeathOrWarp`, `Death_*` and `Respawn_*` | `$DC3E`, `$DD4E`, `$DD52` | checked | 10 | - | not measured |
@@ -359,12 +361,15 @@ RAM-identical in replace mode.
 (`$D4E6-$D620`), Land Select with its tables, the bank transfer of money and the wait for A
 (`$D630-$D79A`, `$D8A6-$D9C9`), the land load (`$D79B-$D8A5`), the per-land tables and palettes
 (`$D9CA-$DA0F`), the frame loop with pause, the boss checkpoint, death, warps, respawn, game over and
-land exit (`$DB36-$DF26`), the special scenes with their tables (`$DF27-$DFEC`), the HUD timer
-(`$E28C-$E2FD`) and the boss trigger with the arena scroll (`$CF93-$D04C`): 2,814 of the 3,880 bytes,
-or 73% (tables inside the ranges included). Not yet: the scene set-up that Scrooge's code calls
-(`$DFED-$E053`), the ending (`$E054-$E28B`) and the Select refill `$E2FE` (Scrooge's), which still run
-as the original: the flow hands off to them. The flow has 15 sites: 8 entries that original code
-reaches and 7 stop sites (one for `Player_RowChange`'s hand-off to the row scroll `$C976`).
+land exit (`$DB36-$DF26`), the special scenes with their tables (`$DF27-$DFEC`), the ending's screens
+and its first frame with their tables (`$E054-$E126`, `$E133-$E142`, `$E1AF-$E1F8`), the HUD timer
+(`$E28C-$E2FD`) and the boss trigger with the arena scroll (`$CF93-$D04C`): 3,115 of the 3,880 bytes,
+or 80% (tables inside the ranges included). Not yet: the scene set-up that Scrooge's code calls
+(`$DFED-$E053`), the ending's later frames (`$E1F9-$E28B`: the credits scroll with a raster split
+polled on `$2002`, which `Ending` gives to the original) and the Select refill `$E2FE` (Scrooge's);
+the scene palette tables `$E127-$E132` and `$E143-$E1AE` are read by `Palette_LoadScene`
+(system.c). The flow has 16 sites: 9 entries that original code reaches and 7 stop sites (one for
+`Player_RowChange`'s hand-off to the row scroll `$C976`).
 
 Not decompiled yet, and still run as the original from the C:
 

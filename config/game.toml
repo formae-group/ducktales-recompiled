@@ -411,6 +411,13 @@ addr = 0xD630
 length = 8
 crc32 = 0xDACBE679
 
+# Ending
+[[mod_function_hook]]
+id = "ducktales.decomp.E1AF"
+addr = 0xE1AF
+length = 8
+crc32 = 0xD1E4F218
+
 [[mod_function_hook]]
 id = "ducktales.decomp.stop.FFAC"
 addr = 0xFFAC
@@ -430,10 +437,10 @@ length = 8
 crc32 = 0x2CF3FD6D
 
 [[mod_function_hook]]
-id = "ducktales.decomp.stop.E1AF"
-addr = 0xE1AF
+id = "ducktales.decomp.stop.C27C"
+addr = 0xC27C
 length = 8
-crc32 = 0xD1E4F218
+crc32 = 0x22C37620
 
 [[mod_function_hook]]
 id = "ducktales.decomp.stop.FFA5"

@@ -23,7 +23,7 @@
  * object spawner (bank 6 $AEA0), the fades $C279/$C282, $C197/$C1A1, $C42C,
  * $C78F, $C830, the object code (bank 6 $8000), Scrooge's update $E354, the
  * final trip's take-off scene (bank 4 $BE00) and the routines of this
- * subsystem that are not decompiled yet (ending, reset).
+ * subsystem that are not decompiled yet (the ending's later frames, reset).
  */
 #include "decomp/decomp.h"
 #include "decomp/sound.h"
@@ -99,6 +99,17 @@
 #define SCENE_TILESET         3
 #define SCENE_PALETTE         0x70
 #define SCENE_OBJECT_STATE    0xA0
+#define ENDING_TOTAL_PPU      0x206C
+#define ENDING_MONEY_PPU      0x2043
+#define ENDING_WAIT           0x78
+#define ENDING_LAND           9
+#define MUSIC_ENDING          0x05
+#define ENDING_TREASURES      0x7F
+#define ENDING_SCREENS        6
+#define ENDING_SCREEN_TEXT    3 /* the first screen with strings; the earlier ones are drawn as one */
+#define ENDING_SCREEN_SPLIT   4 /* screens from here have the HUD split */
+#define ENDING_FILL           0x24
+#define ENDING_STREAM_STEPS   0x40
 #define BANK_STEPS            10 /* steps of the transfer per two frames */
 #define BANK_WAIT             2
 #define BANK_TOTAL_PPU        0x220A
@@ -139,6 +150,9 @@
 #define gSprite0Y        RAM_U8(DT_ADDR_SPRITE0_Y)
 #define gHudGate         RAM_U8(DT_ADDR_HUD_GATE)
 #define gUnk4C(i)        RAM_U8(DT_ADDR_UNK_4C + (i))
+#define gEndingScreen    RAM_U8(DT_ADDR_STREAM_SCREEN) /* $24 during the ending */
+#define gEndingVariant   RAM_U8(DT_ADDR_ENDING_VARIANT)
+#define gEndingText      RAM_U8(DT_ADDR_SCRATCH10)
 #define gSelectMessage   RAM_U8(DT_ADDR_SELECT_MESSAGE)
 #define gSelectMove      RAM_U8(DT_ADDR_SCRATCH10)
 #define gBankSteps       RAM_U8(DT_ADDR_SCRATCH10)
@@ -1358,14 +1372,13 @@ static void LandSelect_Loop(Regs *r);
  * copy of the money counts down; TOTAL's digits are kept in its packet. */
 static void BankTransfer_Steps(Regs *r);
 
-static void BankTransfer(Regs *r)
+static void BankTransfer_To(Regs *r, uint16_t total_ppu, uint16_t money_ppu)
 {
-    Decomp_Enter(DT_CODE_BANK_TRANSFER, r->a, r->x, r->y);
     uint8_t *q = &gRam[DT_ADDR_VRAM_QUEUE];
-    q[0] = BANK_TOTAL_PPU >> 8;
-    q[1] = (uint8_t)BANK_TOTAL_PPU;
-    q[BANK_PACKET] = BANK_MONEY_PPU >> 8;
-    q[BANK_PACKET + 1] = (uint8_t)BANK_MONEY_PPU;
+    q[0] = total_ppu >> 8;
+    q[1] = (uint8_t)total_ppu;
+    q[BANK_PACKET] = money_ppu >> 8;
+    q[BANK_PACKET + 1] = (uint8_t)money_ppu;
     r->a = gRam[DT_ADDR_MONEY_DIGITS + DT_MONEY_DIGIT_COUNT - 1];
     if (r->a == DT_MONEY_TILE_BLANK) {
         return;
@@ -1391,6 +1404,20 @@ static void BankTransfer(Regs *r)
     r->x = x;
     r->y = y;
     BankTransfer_Steps(r);
+}
+
+static void BankTransfer(Regs *r)
+{
+    Decomp_Enter(DT_CODE_BANK_TRANSFER, r->a, r->x, r->y);
+    BankTransfer_To(r, BANK_TOTAL_PPU, BANK_MONEY_PPU);
+}
+
+/* $FFC7: the same transfer as the ending starts, shown in the HUD (TOTAL at
+ * $206C, the money at $2043). */
+static void Ending_BankTransfer(Regs *r)
+{
+    Decomp_Enter(DT_CODE_ENDING_BANK, r->a, r->x, r->y);
+    BankTransfer_To(r, ENDING_TOTAL_PPU, ENDING_MONEY_PPU);
 }
 
 static void BankTransfer_Steps(Regs *r)
@@ -1861,6 +1888,271 @@ static void Scene_Done(Regs *r)
     Decomp_Enter(DT_FLOW_SCENE_DONE, r->a, r->x, r->y);
 }
 
+/* ---- ending ---- */
+
+static void Ending_Banked(Regs *r);
+static void Ending_Shown(Regs *r);
+static void EndingScreen(Regs *r);
+static void EndingScreen_Stream(Regs *r);
+static void EndingScreen_Strings(Regs *r);
+static void EndingScreen_Drawn(Regs *r);
+
+/* $E1AF: the ending, in place of a frame of play. The first frame banks the
+ * money into TOTAL in the HUD, waits two seconds with the ending music, picks
+ * the variant ($AD) and shows the first ending screen. After that each frame
+ * runs the original: it scrolls the credits with a raster split polled on
+ * the sprite-0 flag of $2002, which task code cannot do. */
+static void Ending(Regs *r)
+{
+    Decomp_Enter(DT_CODE_ENDING, r->a, r->x, r->y);
+    r->a = gEnding;
+    if (gEnding & 0x80) {
+        Decomp_RunOriginal();
+        return;
+    }
+    gEnding |= 0x80;
+    r->a = gEnding;
+    if (Gosub(Ending_BankTransfer, r, DT_FLOW_ENDING_BANKED)) {
+        Ending_Banked(r);
+    }
+}
+
+/* $E1BA */
+static void Ending_Banked(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_ENDING_BANKED, r->a, r->x, r->y);
+    r->x = ENDING_WAIT;
+    Jsr(DT_CODE_TASK_WAIT, DT_FLOW_ENDING_WAITED, OUT_X | OUT_Y);
+}
+
+/* $E1BF: the variant: 2 with all seven treasures and TOTAL in the millions,
+ * 1 with TOTAL blank, 0 otherwise. */
+static void Ending_Waited(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_ENDING_WAITED, r->a, r->x, r->y);
+    MusicRequest(r, MUSIC_ENDING);
+    r->x = ENDING_LAND;
+    gLand = ENDING_LAND;
+    Call(r, DT_CODE_MAP_HEADER);
+    uint8_t variant = 2;
+    bool best = false;
+    r->a = gTreasures & ENDING_TREASURES;
+    if (r->a == ENDING_TREASURES) {
+        r->a = gRam[DT_ADDR_HUD_TOTAL_PACKET + 4];
+        best = r->a != DT_MONEY_TILE_BLANK;
+    }
+    if (!best) {
+        variant = 1;
+        r->a = gRam[DT_ADDR_HUD_TOTAL_PACKET + 10];
+        if (r->a != DT_MONEY_TILE_BLANK) {
+            variant = 0;
+        }
+    }
+    r->y = variant;
+    gEndingScreen = variant;
+    gEndingVariant = variant;
+    if (Gosub(EndingScreen, r, DT_FLOW_ENDING_SHOWN)) {
+        Ending_Shown(r);
+    }
+}
+
+/* $E1EC: the next screen, after the last the first. */
+static void Ending_Shown(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_ENDING_SHOWN, r->a, r->x, r->y);
+    gEndingScreen++;
+    r->a = gEndingScreen;
+    if (gEndingScreen == ENDING_SCREENS) {
+        gEndingScreen = 0;
+        r->a = 0;
+    }
+}
+
+/* $E054: ending screen $24. The picture fades out (the objects stay for
+ * screen 3), the screen's map is streamed in with rendering off (screens 0-2
+ * are drawn on top of each other from screen 3 on), its strings, objects and
+ * CHR, and it fades in with its sprites. */
+static void EndingScreen(Regs *r)
+{
+    Decomp_Enter(DT_CODE_ENDING_SCREEN, r->a, r->x, r->y);
+    Jsr(DT_CODE_FADE_OUT, DT_FLOW_END_FADED, 0);
+}
+
+/* $E057 */
+static void EndingScreen_Faded(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_END_FADED, r->a, r->x, r->y);
+    RAM_U8(DT_ADDR_PPU_CTRL) &= 0xFE;
+    gHudSplit = 0;
+    gStreamPos = 0;
+    gStreamPage = 0;
+    r->a = gEndingScreen;
+    if (gEndingScreen != ENDING_SCREEN_TEXT) {
+        Call(r, DT_CODE_CLEAR_OBJECTS);
+        gObjects->state[0] = 0;
+        gObjects->state[1] = 0;
+        r->a = 0;
+        Call(r, DT_CODE_OAM_CLEAR);
+    }
+    Yield(DT_FLOW_END_BLACK);
+}
+
+/* $E07C */
+static void EndingScreen_Black(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_END_BLACK, r->a, r->x, r->y);
+    Jsr(DT_CODE_SCREEN_OFF, DT_FLOW_END_SCREEN_OFF, 0);
+}
+
+/* $E07F */
+static void EndingScreen_ScreenOff(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_END_SCREEN_OFF, r->a, r->x, r->y);
+    r->a = ENDING_FILL;
+    r->x = ENDING_FILL;
+    r->y = 0;
+    Jsr(DT_CODE_NT_FILL, DT_FLOW_END_FILLED, OUT_A | OUT_X | OUT_Y);
+}
+
+/* $E088: the screen's tileset and palettes. */
+static void EndingScreen_Filled(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_END_FILLED, r->a, r->x, r->y);
+    r->y = gEndingScreen;
+    r->a = Rom((uint16_t)(DT_DATA_ENDING_TILESET + r->y));
+    gRam[DT_ADDR_TILESET_BANK] = r->a;
+    Jsr(DT_CODE_PALETTE_SCENE, DT_FLOW_END_PALETTE, OUT_A | OUT_X | OUT_Y);
+}
+
+/* $E092: the screen streamed a block at a time (the screen kept on the
+ * stack). */
+static void EndingScreen_Palette(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_END_PALETTE, r->a, r->x, r->y);
+    r->a = gEndingScreen;
+    Decomp_Push(r->a);
+    EndingScreen_Stream(r);
+}
+
+static void EndingScreen_Stream(Regs *r)
+{
+    gStreamSteps = 1;
+    gStreamQueueEnd = 0;
+    r->a = 0;
+    Jsr(DT_CODE_STREAM_BLOCK, DT_FLOW_END_STREAMED, OUT_A | OUT_X | OUT_Y);
+}
+
+/* $E0A0 (the screen on the stack): before screen 3 the map is streamed again
+ * as screen 3's, from tileset 1; then the screen's strings. */
+static void EndingScreen_Streamed(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_END_STREAMED, r->a, r->x, r->y);
+    gStreamPos++;
+    r->a = gStreamPos & (ENDING_STREAM_STEPS - 1);
+    if (r->a) {
+        EndingScreen_Stream(r);
+        return;
+    }
+    r->a = gEndingScreen;
+    if (gEndingScreen < ENDING_SCREEN_TEXT) {
+        gEndingScreen = ENDING_SCREEN_TEXT;
+        gStreamPos = 0;
+        gRam[DT_ADDR_TILESET_BANK] = 1;
+        gStreamPage = 1;
+        EndingScreen_Stream(r);
+        return;
+    }
+    SelectBank(r, DT_BANK_SPRITES);
+    r->x = gEndingScreen;
+    r->y = Rom((uint16_t)(DT_DATA_ENDING_TEXT_AT + r->x));
+    gEndingText = r->y;
+    EndingScreen_Strings(r);
+}
+
+/* $E0CA: the screen's string sets; a set with bit 7 is picked by the
+ * variant, or with 8 by the difficulty. */
+static void EndingScreen_Strings(Regs *r)
+{
+    r->a = Rom((uint16_t)(DT_DATA_ENDING_TEXT + r->y));
+    if (r->a == 0) {
+        EndingScreen_Drawn(r);
+        return;
+    }
+    if (r->a & 0x80) {
+        r->a &= 0x0F;
+        bool by_difficulty = r->a == 8;
+        if (!by_difficulty) {
+            r->a = (uint8_t)(r->a + gEndingVariant);
+        }
+        if (by_difficulty || r->a == 0) {
+            r->a = (uint8_t)(r->a + gDifficulty);
+        }
+    }
+    r->x = r->a;
+    Jsr(DT_B5_PPU_STRINGS, DT_FLOW_END_STRINGS, OUT_X);
+}
+
+/* $E0E3 (the screen on the stack) */
+static void EndingScreen_NextString(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_END_STRINGS, r->a, r->x, r->y);
+    gEndingText++;
+    r->y = gEndingText;
+    if (r->y) {
+        EndingScreen_Strings(r);
+        return;
+    }
+    EndingScreen_Drawn(r);
+}
+
+/* $E0E9: the screen back from the stack, its objects and CHR. */
+static void EndingScreen_Drawn(Regs *r)
+{
+    gEndingScreen = Decomp_Pull();
+    r->a = gEndingScreen;
+    Call(r, DT_B5_ENDING_OBJECTS);
+    r->y = gEndingScreen;
+    r->x = Rom((uint16_t)(DT_DATA_ENDING_CHR + r->y));
+    Jsr(DT_CODE_CHR_LOAD, DT_FLOW_END_CHR, OUT_X);
+}
+
+/* $E0F7 */
+static void EndingScreen_Chr(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_END_CHR, r->a, r->x, r->y);
+    Jsr(DT_CODE_SCREEN_ON, DT_FLOW_END_SHOWN, 0);
+}
+
+/* $E0FA */
+static void EndingScreen_Shown(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_END_SHOWN, r->a, r->x, r->y);
+    Yield(DT_FLOW_END_NEXT);
+}
+
+/* $E0FD: screens 4 and 5 have the HUD split (sprite 0 at their Y); the
+ * picture fades in with the sprites kept. */
+static void EndingScreen_Next(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_END_NEXT, r->a, r->x, r->y);
+    r->a = gEndingScreen;
+    if (gEndingScreen >= ENDING_SCREEN_SPLIT) {
+        r->y = gEndingScreen & 1;
+        gSprite0Y = Rom((uint16_t)(DT_DATA_ENDING_SPRITE0_Y + r->y));
+        gHudSplit = SPLIT_ON;
+        gCameraPage = 1;
+        r->a = 1;
+    }
+    Jsr(DT_CODE_FADE_IN_KEEP, DT_FLOW_END_LIT, 0);
+}
+
+/* $E116: bank 5 mapped (JMP bank_select). */
+static void EndingScreen_Lit(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_END_LIT, r->a, r->x, r->y);
+    SelectBank(r, DT_BANK_SPRITES);
+}
+
 /* ---- site adapters ---- */
 
 static void Run_LandPalette(Regs *r)
@@ -1968,6 +2260,23 @@ const DecompRoutine gFlowRoutines[] = {
     RESUME(DT_FLOW_SCENE_SHOWN, "Scene_Shown", Scene_Shown, 0),
     RESUME(DT_FLOW_SCENE_FADE_IN, "Scene_FadeIn", Scene_FadeIn, 0),
     RESUME(DT_FLOW_SCENE_DONE, "Scene_Done", Scene_Done, 0),
+    TASK(DT_CODE_ENDING, SITE("E1AF"), "Ending", Ending, 0),
+    TASK(DT_CODE_ENDING_BANK, NULL, "Ending_BankTransfer", Ending_BankTransfer, 0),
+    RESUME(DT_FLOW_ENDING_BANKED, "Ending_Banked", Ending_Banked, 0),
+    RESUME(DT_FLOW_ENDING_WAITED, "Ending_Waited", Ending_Waited, 0),
+    RESUME(DT_FLOW_ENDING_SHOWN, "Ending_Shown", Ending_Shown, 0),
+    TASK(DT_CODE_ENDING_SCREEN, NULL, "EndingScreen", EndingScreen, 0),
+    RESUME(DT_FLOW_END_FADED, "EndingScreen_Faded", EndingScreen_Faded, 0),
+    RESUME(DT_FLOW_END_BLACK, "EndingScreen_Black", EndingScreen_Black, 0),
+    RESUME(DT_FLOW_END_SCREEN_OFF, "EndingScreen_ScreenOff", EndingScreen_ScreenOff, 0),
+    RESUME(DT_FLOW_END_FILLED, "EndingScreen_Filled", EndingScreen_Filled, 0),
+    RESUME(DT_FLOW_END_PALETTE, "EndingScreen_Palette", EndingScreen_Palette, 0),
+    RESUME(DT_FLOW_END_STREAMED, "EndingScreen_Streamed", EndingScreen_Streamed, 1),
+    RESUME(DT_FLOW_END_STRINGS, "EndingScreen_NextString", EndingScreen_NextString, 1),
+    RESUME(DT_FLOW_END_CHR, "EndingScreen_Chr", EndingScreen_Chr, 0),
+    RESUME(DT_FLOW_END_SHOWN, "EndingScreen_Shown", EndingScreen_Shown, 0),
+    RESUME(DT_FLOW_END_NEXT, "EndingScreen_Next", EndingScreen_Next, 0),
+    RESUME(DT_FLOW_END_LIT, "EndingScreen_Lit", EndingScreen_Lit, 0),
     TASK(DT_CODE_BANK_TRANSFER, NULL, "BankTransfer", BankTransfer, 0),
     RESUME(DT_FLOW_BANK_NEXT, "BankTransfer_Next", BankTransfer_Next, 0),
     TASK(DT_CODE_WAIT_A, NULL, "WaitA", WaitA, 0),
@@ -1982,8 +2291,8 @@ const int gFlowRoutineCount = sizeof gFlowRoutines / sizeof gFlowRoutines[0];
  * 6 in objects.c, the fades, the PPU and CHR loaders and bank 5 $BAB0 in
  * system.c) stop the isolated runs at their own sites. */
 const DecompStop gFlowStops[] = {
-    STOP(DT_CODE_TASK_YIELD, "FFAC"), STOP(DT_CODE_RESET, "FEE0"),     STOP(DT_B6_SPAWN, "AEA0.6"),
-    STOP(DT_CODE_ENDING, "E1AF"),     STOP(DT_CODE_TASK_WAIT, "FFA5"), STOP(DT_B4_FINAL_TRIP, "BE00.4"),
+    STOP(DT_CODE_TASK_YIELD, "FFAC"),   STOP(DT_CODE_RESET, "FEE0"),     STOP(DT_B6_SPAWN, "AEA0.6"),
+    STOP(DT_CODE_FADE_IN_KEEP, "C27C"), STOP(DT_CODE_TASK_WAIT, "FFA5"), STOP(DT_B4_FINAL_TRIP, "BE00.4"),
     STOP(DT_CODE_ROW_SCROLL, "C976"),
 };
 const int gFlowStopCount = sizeof gFlowStops / sizeof gFlowStops[0];

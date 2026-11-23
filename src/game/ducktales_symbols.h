@@ -154,6 +154,7 @@
 #define DT_ADDR_HUD_GATE        0x007F /* bit 7: the HUD groups may be drawn */
 #define DT_ADDR_MESSAGE         0x006C /* non-zero: a message is shown (no HUD sprites) */
 #define DT_ADDR_ENDING          0x00AC /* non-zero: no HUD sprites (ending) */
+#define DT_ADDR_ENDING_VARIANT  0x00AD /* the ending's variant: 2 all treasures and a million, 1 no money, 0 (code) */
 #define DT_ADDR_PAUSE           0x00E6 /* non-zero: no HUD sprites (pause) */
 #define DT_ADDR_MODE            0x0039 /* $0F: no HUD sprites, animations frozen */
 #define DT_MODE_FROZEN          0x0F
@@ -375,6 +376,7 @@
 #define DT_CODE_OAM_CLEAR      0xC267
 #define DT_CODE_FADE_IN        0xC279
 #define DT_CODE_FADE_OUT       0xC282
+#define DT_CODE_FADE_IN_KEEP   0xC27C /* the fade in, the sprites kept */
 #define DT_CODE_FADE_WAIT      0xC2B2 /* the fades after their task_yield: next frame or next step */
 #define DT_CODE_RANDOM         0xC2E6 /* steps the generator at $C0 (code) */
 #define DT_CODE_CHR_LOAD       0xC301
@@ -391,6 +393,7 @@
 #define DT_B5_PAUSE_TEXT       0xB580 /* pause or message text into the VRAM queue (code) */
 #define DT_B5_PPU_STRINGS      0xBAB0 /* X = set: PPU address and data strings written to the PPU (code) */
 #define DT_B5_CONSUMED_BITS    0xB760 /* the land's consumed-record bits $0120-$013F (code) */
+#define DT_B5_ENDING_OBJECTS   0xB380 /* the ending screen's objects ($24), then the sprites (code) */
 #define DT_B5_SELECT_MESSAGE   0xB800 /* Land Select: the message for $5E, $5D and $78 into the VRAM queue (code) */
 #define DT_B5_MESSAGE          0xB81C /* X = Land Select message: its strings into the VRAM queue (code) */
 #define DT_BANK_FINAL_TRIP     4
@@ -423,6 +426,8 @@
 #define DT_CODE_LAND_EXIT     0xDF08
 #define DT_CODE_SCENE         0xDF27
 #define DT_CODE_ENDING        0xE1AF
+#define DT_CODE_ENDING_SCREEN 0xE054 /* show ending screen $24 */
+#define DT_CODE_ENDING_BANK   0xFFC7 /* the money banked into TOTAL in the HUD as the ending starts */
 #define DT_CODE_TIMER_TICK    0xE28C
 
 /* Where the flow's task code resumes after a call (the address after the JSR). */
@@ -488,6 +493,20 @@
 #define DT_FLOW_SELECT_NEXT        0xD792
 #define DT_FLOW_BANK_NEXT          0xD9B8
 #define DT_FLOW_WAIT_A_NEXT        0xD9C7
+#define DT_FLOW_ENDING_BANKED      0xE1BA
+#define DT_FLOW_ENDING_WAITED      0xE1BF
+#define DT_FLOW_ENDING_SHOWN       0xE1EC
+#define DT_FLOW_END_FADED          0xE057
+#define DT_FLOW_END_BLACK          0xE07C
+#define DT_FLOW_END_SCREEN_OFF     0xE07F
+#define DT_FLOW_END_FILLED         0xE088
+#define DT_FLOW_END_PALETTE        0xE092
+#define DT_FLOW_END_STREAMED       0xE0A0
+#define DT_FLOW_END_STRINGS        0xE0E3
+#define DT_FLOW_END_CHR            0xE0F7
+#define DT_FLOW_END_SHOWN          0xE0FA
+#define DT_FLOW_END_NEXT           0xE0FD
+#define DT_FLOW_END_LIT            0xE116
 #define DT_FLOW_LOAD_FADED         0xD79E
 #define DT_FLOW_LOAD_BLACK         0xD7A5
 #define DT_FLOW_LOAD_SCREEN_OFF    0xD7A8
@@ -535,6 +554,11 @@
 #define DT_DATA_CHECKPOINT_ROW    0xDC2C /* per land: boss-checkpoint row and page */
 #define DT_DATA_CHECKPOINT_PAGE   0xDC35
 #define DT_DATA_RESPAWN           0xDDC1 /* 9-byte respawn and warp entries (levels.md) */
+#define DT_DATA_ENDING_TILESET    0xE11B /* per ending screen: tileset bank */
+#define DT_DATA_ENDING_CHR        0xE121 /* per ending screen: CHR list */
+#define DT_DATA_ENDING_TEXT_AT    0xE133 /* per ending screen: its string sets' offset from DT_DATA_ENDING_TEXT */
+#define DT_DATA_ENDING_TEXT       0xE139 /* $BAB0 sets, 0 ends; bit 7: low nibble + variant (8: + difficulty) */
+#define DT_DATA_ENDING_SPRITE0_Y  0xE141 /* sprite-0 Y of screens 4 and 5 */
 #define DT_DATA_SCENE_OBJECTS_AT  0xDFCE /* per scene: its objects' offset from DT_DATA_SCENE_OBJECTS */
 #define DT_DATA_SCENE_OBJECTS     0xDFD1 /* action, X, page, Y, kind, hitbox each; $FF ends a scene's */
 #define DT_DATA_SCENE_MODE        0xDFEA /* per scene: Scrooge's mode ($39) */
