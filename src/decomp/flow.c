@@ -1985,6 +1985,6 @@ const DecompStop gFlowStops[] = {
     STOP(DT_CODE_FADE_OUT, "C282"),    STOP(DT_CODE_SCREEN_OFF, "C197"), STOP(DT_CODE_SCREEN_ON, "C1A1"),
     STOP(DT_B6_SPAWN, "AEA0.6"),       STOP(DT_CODE_NT_FILL, "C203"),    STOP(DT_CODE_CHR_LOAD, "C301"),
     STOP(DT_B5_PPU_STRINGS, "BAB0.5"), STOP(DT_CODE_ENDING, "E1AF"),     STOP(DT_CODE_TASK_WAIT, "FFA5"),
-    STOP(DT_B4_FINAL_TRIP, "BE00.4"),
+    STOP(DT_B4_FINAL_TRIP, "BE00.4"),  STOP(DT_CODE_ROW_SCROLL, "C976"),
 };
 const int gFlowStopCount = sizeof gFlowStops / sizeof gFlowStops[0];
