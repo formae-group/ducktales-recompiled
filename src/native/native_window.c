@@ -19,6 +19,10 @@
  *                 app_ui_input; Escape (the Menu binding) opens the menu
  *                 through app_ui_event; F11 and Alt+Enter full screen, Tab
  *                 (held) fast-forward, F12 a screenshot of the picture
+ *   menu          the open menu calls menu_tick each menu frame: the game
+ *                 frames due at 60.0988 Hz run with no buttons pressed and
+ *                 their sound is queued, so the game keeps running behind the
+ *                 menu ([Game] MenuPausesGame stops it, app_ui.h)
  *   No slowdown   [Game] NoSlowdown: the runtime's lag mode
  *                 (NATIVE_LAG_NONE when on, NATIVE_LAG_FAITHFUL when off)
  *   picture       app_ui_present (ui/app_present.h) or the plain picture, in
@@ -657,6 +661,53 @@ static void stretch(int16_t *pcm, size_t n, size_t m)
     }
 }
 
+static SDL_AudioDeviceID s_dev;
+static SDL_AudioSpec s_have;
+
+static void queue_audio(bool fast)
+{
+    int16_t pcm[4096];
+    size_t n = frame_sound(pcm, sizeof pcm / sizeof pcm[0], s_dev ? s_have.freq : AUDIO_RATE);
+    size_t queued = s_dev ? SDL_GetQueuedAudioSize(s_dev) / sizeof pcm[0] : 0;
+    if (!s_dev || !n || fast || !s_set.audio_enabled || queued >= (size_t)s_have.freq / 10) {
+        return;
+    }
+    size_t low = (size_t)s_have.samples + n;
+    if (queued < low) {
+        size_t m = n + (low - queued);
+        if (m > 2 * n) {
+            m = 2 * n;
+        }
+        stretch(pcm, n, m);
+        n = m;
+    }
+    if (s_set.volume < 100) {
+        for (size_t i = 0; i < n; i++) {
+            pcm[i] = (int16_t)(pcm[i] * s_set.volume / 100);
+        }
+    }
+    app_ui_audio(pcm, n);
+    SDL_QueueAudio(s_dev, pcm, (Uint32)(n * sizeof pcm[0]));
+}
+
+static int menu_tick(void)
+{
+    static Uint64 next;
+    const Uint64 freq = SDL_GetPerformanceFrequency(), frame_ticks = (Uint64)((double)freq / FRAME_HZ);
+    const Uint64 now = SDL_GetPerformanceCounter();
+    if (next == 0 || now > next + 4 * frame_ticks) {
+        next = now;
+    }
+    int ran = 0;
+    while (next <= now) {
+        run_frame(0, 0);
+        queue_audio(false);
+        next += frame_ticks;
+        ran++;
+    }
+    return ran;
+}
+
 static int run_window(bool hidden, bool uncapped, long exit_after, const char *present_out, long present_every)
 {
     if (hidden) {
@@ -688,13 +739,15 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
     set_vsync(s_set.vsync && !uncapped);
     apply_fullscreen();
 
-    SDL_AudioSpec want = { 0 }, have;
+    SDL_AudioSpec want = { 0 };
     want.freq = AUDIO_RATE;
     want.format = AUDIO_S16SYS;
     want.channels = 1;
     want.samples = 1024;
-    SDL_AudioDeviceID dev = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
-    native_audio_reset(dev ? have.freq : AUDIO_RATE);
+    SDL_AudioDeviceID dev = SDL_OpenAudioDevice(NULL, 0, &want, &s_have, 0);
+    s_dev = dev;
+    native_audio_reset(dev ? s_have.freq : AUDIO_RATE);
+    app_ui_set_menu_tick(menu_tick);
     if (dev) {
         SDL_PauseAudioDevice(dev, 0);
     } else {
@@ -763,28 +816,7 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
         run_frame(buttons[0], buttons[1]);
         frames_done++;
         bool fast = st.shortcut[CYC_SC_FAST_FORWARD];
-
-        int16_t pcm[4096];
-        size_t n = frame_sound(pcm, sizeof pcm / sizeof pcm[0], dev ? have.freq : AUDIO_RATE);
-        size_t queued = dev ? SDL_GetQueuedAudioSize(dev) / sizeof pcm[0] : 0;
-        if (dev && n && !fast && s_set.audio_enabled && queued < (size_t)have.freq / 10) {
-            size_t low = (size_t)have.samples + n;
-            if (queued < low) {
-                size_t m = n + (low - queued);
-                if (m > 2 * n) {
-                    m = 2 * n;
-                }
-                stretch(pcm, n, m);
-                n = m;
-            }
-            if (s_set.volume < 100) {
-                for (size_t i = 0; i < n; i++) {
-                    pcm[i] = (int16_t)(pcm[i] * s_set.volume / 100);
-                }
-            }
-            app_ui_audio(pcm, n);
-            SDL_QueueAudio(dev, pcm, (Uint32)(n * sizeof pcm[0]));
-        }
+        queue_audio(fast);
 
         bool unpaced = fast || uncapped;
         set_vsync(s_set.vsync && !unpaced);
@@ -816,9 +848,11 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
         }
     }
     scheduling_end();
+    app_ui_set_menu_tick(NULL);
     save_settings();
     if (dev) {
         SDL_CloseAudioDevice(dev);
+        s_dev = 0;
     }
     if (s_tex) {
         SDL_DestroyTexture(s_tex);
