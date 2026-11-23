@@ -88,7 +88,51 @@ bool GameRam_Open(void)
     return s_depth > 0;
 }
 
+static uint8_t *s_prg;
+static size_t s_prg_size;
+static int s_view_bank = -1;
+
+static bool load_prg(void)
+{
+    if (s_prg) {
+        return true;
+    }
+    size_t size = cyc_mod_copy_cart_payload(NULL, 0);
+    if (size < 0x4000 || !(s_prg = malloc(size))) {
+        return false;
+    }
+    cyc_mod_copy_cart_payload(s_prg, size);
+    s_prg_size = size & ~(size_t)0x3FFF;
+    return true;
+}
+
 uint8_t Game_ReadRom(uint16_t addr)
 {
+    if (s_view_bank >= 0 && addr >= 0x8000 && addr < 0xC000) {
+        return s_prg[(size_t)s_view_bank * 0x4000 + (addr - 0x8000)];
+    }
     return cyc_mod_peek(addr);
+}
+
+void Game_MapperWrite(uint16_t addr, uint8_t value)
+{
+    if (addr < 0x8000 || !load_prg()) {
+        return;
+    }
+    s_view_bank = (int)((value & Game_ReadRom(addr)) % (s_prg_size / 0x4000));
+}
+
+void Game_ResetRomView(void)
+{
+    s_view_bank = -1;
+}
+
+int Game_RomView(void)
+{
+    return s_view_bank;
+}
+
+void Game_SetRomView(int bank)
+{
+    s_view_bank = bank;
 }

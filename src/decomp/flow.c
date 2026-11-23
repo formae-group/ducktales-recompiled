@@ -1064,13 +1064,13 @@ const int gFlowRoutineCount = sizeof gFlowRoutines / sizeof gFlowRoutines[0];
 
 #define STOP(addr, id) { addr, "ducktales.decomp.stop." id }
 
+/* The routines here with a decompiled C of their own ($C42C, $C71D, $C830, $EFE2,
+ * $CF93, level.c) stop the isolated runs at their own sites. */
 const DecompStop gFlowStops[] = {
-    STOP(DT_CODE_TASK_YIELD, "FFAC"),     STOP(DT_CODE_RESET, "FEE0"),         STOP(DT_CODE_FADE_IN, "C279"),
-    STOP(DT_CODE_FADE_OUT, "C282"),       STOP(DT_CODE_SCREEN_OFF, "C197"),    STOP(DT_CODE_SCREEN_ON, "C1A1"),
-    STOP(DT_CODE_ROW_CHR_STREAM, "C42C"), STOP(DT_CODE_STREAM_BLOCK, "C830"),  STOP(DT_B6_OBJECTS, "8000.6"),
-    STOP(DT_B6_SPAWN, "AEA0.6"),          STOP(DT_CODE_CAMERA_UPDATE, "EFE2"), STOP(DT_CODE_BOSS_TRIGGER, "CF93"),
-    STOP(DT_CODE_LAND_SELECT, "D630"),    STOP(DT_CODE_NT_FILL, "C203"),       STOP(DT_CODE_DRAW_START, "C71D"),
-    STOP(DT_CODE_CHR_LOAD, "C301"),       STOP(DT_B5_PPU_STRINGS, "BAB0.5"),   STOP(DT_CODE_SCENE, "DF27"),
-    STOP(DT_CODE_ENDING, "E1AF"),
+    STOP(DT_CODE_TASK_YIELD, "FFAC"), STOP(DT_CODE_RESET, "FEE0"),      STOP(DT_CODE_FADE_IN, "C279"),
+    STOP(DT_CODE_FADE_OUT, "C282"),   STOP(DT_CODE_SCREEN_OFF, "C197"), STOP(DT_CODE_SCREEN_ON, "C1A1"),
+    STOP(DT_B6_OBJECTS, "8000.6"),    STOP(DT_B6_SPAWN, "AEA0.6"),      STOP(DT_CODE_LAND_SELECT, "D630"),
+    STOP(DT_CODE_NT_FILL, "C203"),    STOP(DT_CODE_CHR_LOAD, "C301"),   STOP(DT_B5_PPU_STRINGS, "BAB0.5"),
+    STOP(DT_CODE_SCENE, "DF27"),      STOP(DT_CODE_ENDING, "E1AF"),
 };
 const int gFlowStopCount = sizeof gFlowStops / sizeof gFlowStops[0];

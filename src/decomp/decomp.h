@@ -48,6 +48,9 @@ typedef struct Regs {
 #define OUT_X 0x02
 #define OUT_Y 0x04
 #define OUT_P 0x08 /* N, V, Z and C */
+#define OUT_HW \
+    0x10 /* writes the PPU or the mapper (Decomp_BusWrite): check also compares
+                        CIRAM, palette, CHR RAM and the PRG bank, replace replays the writes */
 
 typedef struct DecompRoutine {
     uint16_t addr;
@@ -81,6 +84,14 @@ Regs Decomp_Call(uint16_t routine, uint8_t a, uint8_t x, uint8_t y);
  * the original runs from its entry. The C must return without doing anything
  * else. */
 void Decomp_RunOriginal(void);
+/* A write or a side-effect read of a device register (PPU, mapper) by a
+ * routine whose contract has OUT_HW. The C runs on RAM only, so it records
+ * them: replace mode makes them on the bus after storing the RAM, check mode
+ * makes them on an isolated copy of the machine and compares the PPU's
+ * memories and the PRG bank with the original's. A mapper write also
+ * switches the bank Game_ReadRom sees for the rest of the routine. */
+void Decomp_BusWrite(uint16_t addr, uint8_t value);
+void Decomp_BusRead(uint16_t addr);
 /* The host's frame end (replace mode gives a call that would still run at
  * the frame end to the original routine, so the RAM at every frame end is
  * the console's). */
@@ -173,6 +184,10 @@ extern const DecompRoutine gSoundRoutines[];
 extern const int gSoundRoutineCount;
 extern const DecompRoutine gPlayerRoutines[];
 extern const int gPlayerRoutineCount;
+extern const DecompRoutine gLevelRoutines[];
+extern const int gLevelRoutineCount;
+extern const DecompRoutine gCollisionRoutines[];
+extern const int gCollisionRoutineCount;
 extern const DecompRoutine gFlowRoutines[];
 extern const int gFlowRoutineCount;
 
