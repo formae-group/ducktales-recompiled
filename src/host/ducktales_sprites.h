@@ -30,6 +30,8 @@ bool dt_sprites_parse(const char *text, bool *out);
  * the frames seen so far (power on, a loaded state). */
 void dt_sprites_frame_end(void);
 void dt_sprites_forget(void);
+/* The mods were loaded: compose every picture while they paint tiles or palettes. */
+void dt_sprites_mods_changed(void);
 
 typedef struct {
     uint64_t composed;     /* pictures drawn from the rebuilt sprite list */

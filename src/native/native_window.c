@@ -70,6 +70,7 @@
 #include "game/enhancements.h"
 #include "host/ducktales_host.h"
 #include "host/ducktales_sprites.h"
+#include "mods/app_mods.h"
 #include "ui/app_ui.h"
 
 #include "cpu6502.h"
@@ -124,10 +125,14 @@ static uint8_t *read_file(const char *path, size_t *size)
     return data;
 }
 
+static uint8_t s_frame_mute;
+
 static void power_on(void)
 {
     native_power_on();
     dt_sprites_forget();
+    app_mods_reset();
+    s_frame_mute = 0;
     ducktales_host_apply_no_slowdown(ducktales_host_no_slowdown());
     if (ducktales_host_no_slowdown()) {
         printf("[ducktales] No slowdown: the native runtime holds VBlank until each frame's logic is done\n");
@@ -139,9 +144,15 @@ static void run_frame(uint8_t pad0, uint8_t pad1)
 {
     native_set_controller(0, pad0);
     native_set_controller(1, pad1);
+    uint8_t mute = app_mods_audio_mute();
     native_run_frame();
     native_present_frame(native_last_frame());
     dt_sprites_frame_end();
+    s_frame_mute = mute;
+    if (app_mods_audio_active()) {
+        app_mods_audio_frame_end(native_cpu_ram());
+    }
+    app_mods_scripts_frame();
 }
 
 /* What the window shows (ui/app_present.h, or the plain picture) for a
@@ -173,6 +184,17 @@ static void apply_voices(void)
 {
     native_audio_voices(s_voice_override[0] >= 0 ? s_voice_override[0] != 0 : ducktales_host_music_under_effects(),
                         s_voice_override[1] >= 0 ? s_voice_override[1] != 0 : ducktales_host_overlap_effects());
+}
+
+/* The frame's sound: the synth and its extra voices with the channels the
+ * mods took muted, then their files mixed in (mods/app_mods.h). */
+static size_t frame_sound(int16_t *pcm, size_t cap, int rate)
+{
+    apply_voices();
+    native_audio_set_mute(s_frame_mute);
+    size_t n = native_audio_frame(native_last_frame(), pcm, cap);
+    app_mods_audio_mix(pcm, n, rate);
+    return n;
 }
 
 static uint64_t machine_hash(void)
@@ -227,8 +249,7 @@ static int run_off_screen(long frames, const char *input, int lag, const char *p
         run_frame(held[0], held[1]);
         if (wav) {
             static int16_t pcm[NATIVE_AUDIO_MAX_FRAME_SAMPLES];
-            apply_voices();
-            size_t n = native_audio_frame(native_last_frame(), pcm, NATIVE_AUDIO_MAX_FRAME_SAMPLES);
+            size_t n = frame_sound(pcm, NATIVE_AUDIO_MAX_FRAME_SAMPLES, AUDIO_RATE);
             fwrite(pcm, sizeof pcm[0], n, wav);
             wav_samples += (uint32_t)n;
         }
@@ -394,6 +415,8 @@ static void load_state(void)
     free(data);
     if (!why[0]) {
         dt_sprites_forget();
+        app_mods_reset();
+        s_frame_mute = 0;
     }
     note(why[0] ? "STATE NOT LOADED" : "STATE LOADED", why[0] ? why : NULL);
 }
@@ -636,9 +659,7 @@ static SDL_AudioSpec s_have;
 static void queue_audio(bool fast)
 {
     int16_t pcm[4096];
-    const NativeFrame *f = native_last_frame();
-    apply_voices();
-    size_t n = native_audio_frame(f, pcm, sizeof pcm / sizeof pcm[0]);
+    size_t n = frame_sound(pcm, sizeof pcm / sizeof pcm[0], s_dev ? s_have.freq : AUDIO_RATE);
     size_t queued = s_dev ? SDL_GetQueuedAudioSize(s_dev) / sizeof pcm[0] : 0;
     if (!s_dev || !n || fast || !s_set.audio_enabled || queued >= (size_t)s_have.freq / 10) {
         return;
@@ -852,7 +873,8 @@ static int usage(const char *self)
             "       [--frames N [--input ROUTE] [--lag none|faithful] [--state-check FRAME] [--wav-out FILE]]\n"
             "       [--jump-scale N] [--no-damage on|off] [--infinite-time on|off] [--infinite-lives on|off]\n"
             "       [--start-lives 0-9|off] [--no-sprite-flicker on|off]\n"
-            "       [--music-under-effects on|off] [--overlap-effects on|off]\n",
+            "       [--music-under-effects on|off] [--overlap-effects on|off]\n"
+            "       [--mods on|off] [--mods-dir DIR] [--mods-order ID:on|off,...] [--mods-dump DIR]\n",
             self);
     return 2;
 }
@@ -862,7 +884,7 @@ int ducktales_host_main(int argc, char **argv)
     const char *rom = NULL, *present_out = NULL, *input = NULL, *config = NULL, *wav_out = NULL;
     long exit_after = -1, present_every = 1, frames = -1, state_check = -1;
     int lag = -1;
-    bool hidden = false, uncapped = false;
+    bool hidden = false, uncapped = false, mod_ok = false;
 
     struct {
         const char *name, *value;
@@ -893,6 +915,12 @@ int ducktales_host_main(int argc, char **argv)
             state_check = atol(argv[++i]);
         } else if (!strcmp(a, "--wav-out") && v) {
             wav_out = argv[++i];
+        } else if (!strncmp(a, "--mods", 6) && v && app_mods_option(a, v, &mod_ok)) {
+            i++;
+            if (!mod_ok) {
+                fprintf(stderr, "%s %s: invalid value\n", a, v);
+                return 2;
+            }
         } else if ((!strcmp(a, "--music-under-effects") || !strcmp(a, "--overlap-effects")) && v &&
                    (!strcmp(v, "on") || !strcmp(v, "off"))) {
             s_voice_override[a[2] == 'o'] = !strcmp(argv[++i], "on");
@@ -923,11 +951,16 @@ int ducktales_host_main(int argc, char **argv)
         free(image);
         return 2;
     }
+    bool off_screen = frames >= 0;
+    if (!off_screen) {
+        app_mods_use_player_folders(config ? config : cyc_settings_default_path());
+    }
+    size_t prg_at = 16 + ((image[6] & 4) ? 512 : 0), prg_size = (size_t)image[4] * 0x4000;
+    app_mods_start(prg_at + prg_size <= size ? image + prg_at : NULL, prg_at + prg_size <= size ? prg_size : 0);
     free(image);
     if (!native_hooks_init()) {
         return 2;
     }
-    bool off_screen = frames >= 0;
     if (!off_screen) {
         snprintf(s_set_path, sizeof s_set_path, "%s", config ? config : cyc_settings_default_path());
         static const CycSettingsGame GAME = { NULL, game_load, game_save };
@@ -944,6 +977,7 @@ int ducktales_host_main(int argc, char **argv)
             return 2;
         }
     }
+    dt_sprites_mods_changed();
     if (off_screen) {
         return run_off_screen(frames, input, lag, present_out, present_every, state_check, wav_out);
     }

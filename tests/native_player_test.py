@@ -30,6 +30,8 @@ import zlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'tools'))
+from romfile import default_rom  # noqa: E402
 
 
 def read_png(path):
@@ -90,7 +92,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--build', default='build/windows')
     ap.add_argument('--config', default='Release')
-    ap.add_argument('--rom', default=str(ROOT / 'roms' / 'DuckTales (USA).nes'))
+    ap.add_argument('--rom', default=default_rom())
     ap.add_argument('--native-exe', help='default: <build>/<config>/ducktales.exe')
     ap.add_argument('--cycle-exe', help='default: <build>/<config>/ducktales_cycle.exe')
     ap.add_argument('--routes', nargs='*', default=['full_amazon', 'full_moon'])

@@ -34,10 +34,16 @@
  *               left-column clip are each line's own; the HUD's sprites are
  *               fetched from $1000 as the top of the frame does when the HUD
  *               shows.
+ *   mods        the enabled mods' tiles and palettes (mods/app_mods.h) are
+ *               painted over the composed picture, drawn again natively from
+ *               the same list; with the sprites off, or before a picture can
+ *               be composed, over the machine's own picture
  */
 #include "host/ducktales_sprites.h"
 
 #include "game/ducktales_symbols.h"
+#include "mods/app_mods.h"
+#include "native/native_cycle.h"
 
 #include "cyc_core.h"
 #include "cyc_mod.h"
@@ -299,17 +305,41 @@ static int draw(uint32_t *out, const Sprite *list, int n, uint16_t hud_table)
     return crowded;
 }
 
+/* The mods' tiles and palettes over the picture, drawn from list (NULL: the OAM). */
+static void paint_mods(uint32_t *out, const Sprite *list, int n, uint16_t hud_table)
+{
+    static NvVideo video;
+    static NvSprite sprites[LIST_MAX];
+    if (!nv_cycle_fill(&video)) {
+        return;
+    }
+    NvRenderOptions options = { 8, NULL, 0 };
+    if (list) {
+        for (int i = 0; i < n; i++) {
+            sprites[i] = (NvSprite){ list[i].y, list[i].tile, list[i].attr, list[i].x,
+                                     list[i].hud ? hud_table : NV_TABLE_LINE };
+        }
+        options = (NvRenderOptions){ 0, sprites, n };
+    }
+    app_mods_video_apply(&video, &options, s_ram[1], out);
+    app_mods_draw_overlay(out, 256, 240);
+}
+
 static int compose(uint32_t *out, int width, int height, int native_x0, const uint32_t *native, void *user)
 {
     (void)native_x0;
-    (void)native;
     (void)user;
     if (!s_on || width != 256 || height != 240 || !load_prg() || !cyc_render_background(s_background)) {
         s_stats.declined++;
         if (s_log) {
             fprintf(s_log, "frame=%lu declined\n", (unsigned long)(cyc_ring_frame - 1));
         }
-        return 0;
+        if (!app_mods_video_active() || width != 256 || height != 240 || !native) {
+            return 0;
+        }
+        memcpy(out, native, 256 * 240 * sizeof *out);
+        paint_mods(out, NULL, 0, 0);
+        return 1;
     }
     static Sprite list[LIST_MAX];
     static int n, leftover;
@@ -350,6 +380,9 @@ static int compose(uint32_t *out, int width, int height, int native_x0, const ui
         s_stats.beyond_63 += (uint64_t)(visible - 63);
     }
     int crowded = draw(out, list, n, hud_table);
+    if (app_mods_video_active()) {
+        paint_mods(out, list, n, hud_table);
+    }
     s_stats.lines_over_8 += (uint64_t)crowded;
     if (s_log) {
         fprintf(s_log, "frame=%lu %s sprites=%d lines_over_8=%d hud_restored=%d leftover=%d\n",
@@ -367,7 +400,15 @@ static void apply(void)
         s_installed = true;
     }
     cyc_render_capture_background(s_on);
-    cyc_render_set_stock_compositing(s_on);
+    cyc_render_set_stock_compositing(s_on || app_mods_video_active());
+}
+
+void dt_sprites_mods_changed(void)
+{
+    if (!s_installed) {
+        apply();
+    }
+    cyc_render_set_stock_compositing(s_on || app_mods_video_active());
 }
 
 void dt_sprites_set(bool on)

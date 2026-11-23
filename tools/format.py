@@ -55,17 +55,20 @@ def main():
             if not args.check:
                 path.write_bytes(after)
 
-    black = [sys.executable, '-m', 'black', '--quiet']
-    if args.check:
+    black = [sys.executable, '-m', 'black']
+    if args.check and py_files:
         result = subprocess.run(
-            black + ['--check', '--list-different'] + [str(p) for p in py_files],
+            black + ['--check'] + [str(p) for p in py_files],
             cwd=ROOT,
             capture_output=True,
             text=True,
         )
-        changed += [Path(line) for line in result.stdout.splitlines() if line.strip()]
+        if result.returncode not in (0, 1):
+            sys.exit(result.stderr)
+        prefix = 'would reformat '
+        changed += [Path(line[len(prefix) :]) for line in result.stderr.splitlines() if line.startswith(prefix)]
     elif py_files:
-        subprocess.run(black + [str(p) for p in py_files], cwd=ROOT, check=True)
+        subprocess.run(black + ['--quiet'] + [str(p) for p in py_files], cwd=ROOT, check=True)
 
     for path in changed:
         print(path.relative_to(ROOT) if path.is_absolute() else path)

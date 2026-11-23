@@ -31,6 +31,9 @@
  * played where the driver's update starts (the frame's $4015 write), only
  * the channels a voice holds are heard, and their outputs join the console's
  * in the same mixer. With both voices off apu[0] is all there is.
+ *
+ * native_audio_set_mute drops channels from the mix only (mods that play a
+ * file in place of the driver's channels): every channel keeps running.
  */
 #include "native/native_audio.h"
 
@@ -297,16 +300,23 @@ static void accumulate(double span)
     }
 }
 
+static uint8_t s_mute;
+
+void native_audio_set_mute(uint8_t mask)
+{
+    s_mute = mask & 0x0F;
+}
+
 static int16_t emit(void)
 {
     double sum[4];
     for (int ch = 0; ch < 4; ch++) {
-        sum[ch] = s_channels >> ch & 1 ? s.apu[0].sum[ch] : 0;
+        sum[ch] = (s_channels & ~s_mute) >> ch & 1 ? s.apu[0].sum[ch] : 0;
     }
     double p = (sum[0] + sum[1]) / s.fill, t = (3 * sum[2] + 2 * sum[3]) / s.fill + s.apu[0].dmc_level;
     for (int i = 1; i < s.apus; i++) {
         for (int ch = 0; ch < 4; ch++) {
-            sum[ch] = s_channels >> ch & 1 ? s.apu[i].sum[ch] : 0;
+            sum[ch] = (s_channels & ~s_mute) >> ch & 1 ? s.apu[i].sum[ch] : 0;
         }
         p += (sum[0] + sum[1]) / s.fill;
         t += (3 * sum[2] + 2 * sum[3]) / s.fill;

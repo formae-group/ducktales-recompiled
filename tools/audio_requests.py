@@ -26,6 +26,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from framelog import frames as log_frames  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from romfile import default_rom  # noqa: E402
 
 
 def main():
@@ -37,7 +39,7 @@ def main():
     ap.add_argument('--load-state')
     ap.add_argument('--callers', action='store_true')
     ap.add_argument('--exe', default=str(ROOT / 'build' / 'headless' / 'Release' / 'ducktales.exe'))
-    ap.add_argument('--rom', default=str(ROOT / 'roms' / 'DuckTales (USA).nes'))
+    ap.add_argument('--rom', default=default_rom())
     a = ap.parse_args()
     out = ROOT / 'captures'
     out.mkdir(exist_ok=True)

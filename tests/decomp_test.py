@@ -40,6 +40,9 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'tools'))
+from romfile import default_rom  # noqa: E402
+
 RAM = 0x800
 IDLE_S = 0xFF
 TASKS = 0x80
@@ -215,7 +218,7 @@ def main():
     ap.add_argument('--build', default='build/headless')
     ap.add_argument('--dev-build', help='a -DDUCKTALES_DEV_DIAGNOSTICS=ON headless build (replace, pokes, events)')
     ap.add_argument('--config', default='Release')
-    ap.add_argument('--rom', default=str(ROOT / 'roms' / 'DuckTales (USA).nes'))
+    ap.add_argument('--rom', default=default_rom())
     ap.add_argument('--routes', nargs='*')
     ap.add_argument('--modes', nargs='+', default=['check', 'replace', 'pokes', 'events'])
     ap.add_argument('--jobs', type=int, default=2)

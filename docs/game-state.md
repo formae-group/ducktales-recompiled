@@ -177,7 +177,7 @@ with every money digit blank (variant 1).
 ## Reproducing
 
 ```sh
-E=build/headless/Release/ducktales.exe; ROM="roms/DuckTales (USA).nes"
+E=build/headless/Release/ducktales.exe; ROM=roms/baserom.nes
 mkdir -p captures && echo "0 -" > captures/idle.txt
 # base states: after the title Start press, and 1100 frames into the Amazon
 $E "$ROM" --frames 1101 --input tests/routes/amazon_intro.txt \

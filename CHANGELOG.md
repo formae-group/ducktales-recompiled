@@ -1,12 +1,24 @@
 # Changelog
 
 All notable changes to DuckTales Recompiled are recorded here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). No version has been released yet.
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-23
+
+The first release.
+
 ### Added
 
+- The ROM is found by its SHA-256 under any file name: in `roms/` for the build and the test
+  scripts, and in the first-run screen and `--import-rom` for players. The configure step refuses a
+  ROM with another hash and names both.
+- Every setting in the menu, the enhancements included, has a "(?)" after its label with a tooltip
+  saying what it does, shown to the mouse and under keyboard or controller focus (formae-ui 0.3.0).
+- The project lives on GitHub (https://github.com/formae-group/ducktales-recompiled), with releases
+  there and a GitHub Actions check of the layout and the Python syntax on every push and pull
+  request. The `external/formae-ui` submodule is fetched from github.com/formae-group/formae-ui.
 - Static recompilation of *DuckTales* (USA) on the NESRecomp cycle backend: the 6502 program is
   translated to C at build time and runs natively, with the interpreter kept as a fallback for code
   no route has reached.
@@ -28,6 +40,17 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   SDL2, a player README (ROM import, SHA-256, controls) and every third-party licence, checked by
   `tests/package_test.py`; releasing steps in CONTRIBUTING.md.
 - Native runtime prototype without the cycle-level host (`DUCKTALES_NATIVE`).
+- Mods, off by default (docs/mods.md): `.dtmod` archives and loose folders from the data folder's
+  `mods` folder replace tiles (by CHR content hash and palette), palettes (global or per land),
+  music and sound effects (OGG Vorbis or WAV, by request id); earlier mods win per asset, and none of
+  it changes the machine. `--mods`, `--mods-dir`, `--mods-order` and `--mods-dump` on both hosts.
+- Script mods: `scripts/main.lua` runs in a Lua 5.4 sandbox per mod with `dt.on` over the game
+  events and `frame`, read-only `dt.state`, an instruction limit per callback, a 16 MiB memory cap
+  and hot reload; an error or a limit stops only that mod's script. `dt.toast` notices over the
+  presented picture, a per-mod `dt.store` in `mods-data/<id>.ini`, and `dt.set` for the declared
+  writable fields (lives, hp, money, time), applied at the frame's end.
+- Mod Menu: Settings, Mods with Enable mods, a reorderable mod list (formae-ui 0.2.0), Open mods
+  folder, Rescan, a restart note and each mod's error.
 - The player build on the native runtime: `ducktales.exe` runs the recompiled game on the native
   bus, draws it with the native renderer and keeps the menu, settings, bindings, presentation, No
   sprite flicker, enhancements, fast-forward and full screen of the cycle build; F8/F9 save and load
@@ -54,12 +77,21 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - Reverse-engineering references: memory map, functions, Scrooge's movement, game state, levels,
   rendering pipeline and sound driver.
 
+- Fast verification tier, `tests/quick_verify.py`: golden per-frame hashes recorded once from a
+  verified build, the native runtime or the cycle build at alignment 0, a stop at the first
+  differing frame with the fields that differ, route selection by the PRG addresses a change
+  touches and starts from recorded save states. The full `tests/verify_routes.py` moves to nightly
+  runs and releases.
+- `ducktales_native --save-state F:FILE` and `--load-state FILE`.
+
 ### Changed
 
 - One code layout for every C, C++ and Python source: `.clang-format` (4 spaces, 120 columns,
   braces always, no one-line statements) and Black, applied by `tools/format.py` (`--check` to
   verify). The machine and every hash are unchanged.
-- The menu and the first-run screen are drawn by [formae-ui](https://gitlab.com/formae/formae-ui)
+- The cycle host's `--ram-hash-out` numbers frames on from a loaded state (`--load-state`), as
+  `--hash-out` does.
+- The menu and the first-run screen are drawn by [formae-ui](https://github.com/formae-group/formae-ui)
   0.1.0 (`external/formae-ui`), Formae's menu library extracted from them for the next ports. Their
   look and behaviour are unchanged: the 16 self-test PNGs are pixel-identical.
 - The application icon is now original artwork, a treasure chest.
@@ -75,3 +107,6 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 ### Removed
 
 - The Formae name from the application, its files and its data folder.
+
+[Unreleased]: https://github.com/formae-group/ducktales-recompiled/compare/v1.0.0...main
+[1.0.0]: https://github.com/formae-group/ducktales-recompiled/releases/tag/v1.0.0

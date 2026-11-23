@@ -22,6 +22,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'tools'))
+from romfile import default_rom  # noqa: E402
+
 COMPARE = ROOT / 'tools' / 'native_compare.py'
 # PPU memories are hashed as each runtime holds them when the frame ends. The
 # console writes a $2007 byte a few dots after the store instruction, so a
@@ -91,7 +94,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--build', default='build/headless')
     ap.add_argument('--config', default='Release')
-    ap.add_argument('--rom', default=str(ROOT / 'roms' / 'DuckTales (USA).nes'))
+    ap.add_argument('--rom', default=default_rom())
     ap.add_argument('--routes', nargs='*')
     ap.add_argument('--out', default=str(ROOT / 'build' / 'native-verify'))
     ap.add_argument('--jobs', type=int, default=2)

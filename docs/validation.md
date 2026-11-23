@@ -97,6 +97,44 @@ With the change, `tests/window_smoke.py --build build/windows` passes all 16 che
 `tests/package_test.py --build build/windows` all 12; the package now also carries
 `licenses/formae-ui-LICENSE.txt`.
 
+## Fast verification
+
+`tests/quick_verify.py` runs a build at alignment 0 against golden per-frame hashes (CONTRIBUTING.md,
+"Verification"); `tests/verify_routes.py` stays the nightly and release gate. Measured 2026-11-23 on
+the shared 16-thread PC:
+
+- **Gate behind the golden files.** `verify_routes.py --build build/headless --jobs 3` on the
+  9126ee3 merge: all 12 routes pass at the four alignments, 330,504 frames per mode (82,626 per
+  alignment), 100.0% native cycles, oracle = recompiled = interpreter on every frame and hardware
+  internals equal between recompiled and interpreter. 11,855 s (3 h 18 min) wall, with every oracle
+  run uncached (a rebuilt oracle has a new SHA-256, which keys the cache).
+- **Golden recording** (`--record`) from that build: the 82,626 frames with 16 fields each
+  (CPU RAM, nametables, palette, OAM, CHR RAM, cycles, the six registers, bus trace, memories and
+  picture, interrupt lines, hardware internals), a cycle-host save state and a native save state
+  every 500 frames, and coverage. Each of the 173 segments replayed from its cycle state with
+  `--interp-only` and each of the 161 native states replayed to the next one equal the golden
+  frames. 787 s with `--jobs 3`; 380 s with `--jobs 4` on a less loaded PC.
+- **Golden on later main.** Recorded again on the merges of main 8c88b14 and 3f86ea7 (formatting,
+  decompiled player and flow, native audio, mods): identical to the 9126ee3 recording on every
+  field of all 82,626 frames, coverage identical, so the gate result carries over.
+- **Failure detection.** A golden file altered at `full_amazon` frame 3000 (`ram` and `PC`): the
+  native run stopped there after 1.9 s and printed both fields; one altered at frame 3100 (`hw`)
+  with `--from-state 3000` on the cycle build stopped at frame 3100.
+
+| Run (all 12 routes, 82,626 frames, alignment 0) | Wall clock |
+|---|---|
+| `quick_verify.py` native, `--jobs 4` | 10.4 s |
+| `quick_verify.py` native, `--jobs 2` | 17.8 s |
+| `quick_verify.py` native, `--jobs 1` | 40.4 s |
+| `quick_verify.py --runtime cycle`, `--jobs 4` | 192.7 s |
+| `verify_routes.py`, 4 alignments x 3 runs, `--jobs 3`, oracle uncached | 11,855 s |
+
+Selection: `--routes-for 6:8B21 --from-state auto --span 600` (the pickup dispatcher) picks 10 routes
+and checks 6,000 frames in 1.1 s; `--changed 4:8000-BFFF --from-state auto --span 600` picks only
+`full_moon`, the one route that runs bank 4, from frame 7500 in 0.3 s. Coverage comes from
+`--interp-only --miss-log`, so it lists instruction starts: an address inside an instruction, or code
+no route runs (bank 6 `$BABC`, for one), selects nothing and says so.
+
 ## Native runtime
 
 `tests/native_routes.py` holds the native-runtime prototype (`ducktales_native`, faithful lag mode)
@@ -154,6 +192,9 @@ The player build (`ducktales.exe` on the native runtime, docs/native-runtime.md 
   pass on that build.
 
 ## Native synth
+
+By ear (2026-11-22): the owner played the native player in its window and reports that the sound
+plays cleanly, with no stutter or glitch, while the window is not focused.
 
 `tests/audio_compare.py` records each route twice from power-on at 48 kHz: the cycle host's APU
 (`ducktales.exe --wav-out`) and the native runtime's synth (`ducktales_native --lag faithful
@@ -317,8 +358,32 @@ in replace), plus 11 poke cases and both event cases. At default decompilation s
 and matching oracle and interpreter output. The full 12-route decompilation suite passed on
 the flow branch before integration; it has not been rerun in full on this merge.
 
+## Release 1.0.0
+
+On main `8569c86` (the release tree before its changelog and documentation commit), 2026-11-23:
+
+- `tests/quick_verify.py --build build/headless --jobs 4`: 12/12 routes pass on the native
+  runtime, 82,626 frames compared, 10.6 s; with `--runtime cycle` 12/12 routes, 82,626 frames,
+  every golden field, 206.5 s. The golden files are the 9126ee3 recording, which 3f86ea7 reproduced
+  exactly ("Fast verification"), so the full gate of 9126ee3 carries over through them; the full
+  `verify_routes.py` was not run again on this tree.
+- `tests/window_smoke.py --build build/windows`: 18/18 PASS with the help markers (formae-ui
+  0.3.0), including the game running behind the menu on the native player (76 game frames) and no
+  game frame with `MenuPausesGame = on`.
+- By eye (the owner, 2026-11-23, before publishing): the 1.0.0 window build plays normally, the game
+  keeps running behind the menu during a level, the "(?)" tooltips show with the mouse and with the
+  keyboard and controller, and the sound is right.
+- The mods branch before its merge: `tests/package_test.py` 12/12 (13 files), `tests/mods_test.py`
+  47/47, `tests/native_player_test.py` `full_amazon` 60 of 60 pictures identical.
+
 ## Not verified
 
+- The full `tests/verify_routes.py`, `tests/enhancements_test.py` and `tests/decomp_test.py` on
+  the 1.0.0 tree itself (see "Release 1.0.0").
+
+- `tests/quick_verify.py --runtime cycle` with `--from-state` on routes other than the ones above, and
+  any timing on an idle PC: every number in "Fast verification" was measured with other agents'
+  builds and tests running.
 - The release package on a clean Windows installation without the Visual C++ redistributable: the
   test checks the import tables but runs on a developer machine that has the runtime installed. A
   Debug (`/MTd`) window build and a package from a tagged commit have not been built either.
@@ -331,7 +396,7 @@ the flow branch before integration; it has not been rerun in full on this merge.
   `HudSplit = original` against the cycle build.
 - The extra voices by ear in the player's window, and `$37` (all four channels) under music; only
   off-screen runs were made.
-- The native synth by ear in the player's window (only hidden and off-screen runs were made);
+- The native synth by ear beyond the owner's check of the unfocused window ("Native synth");
   Launchpad ride music `$0B`; effects alone are covered only where routes trigger them (the
   "no music" row and the effects inside the music rows).
 - Window presentation as a person sees it on the 144 Hz monitor, gamepads, audio quality by ear,
