@@ -65,6 +65,8 @@ extern "C" {
 #define OBJ_KIND_TREAT_SPOUT     0x2C /* throws out four treats when Scrooge is near (code) */
 #define OBJ_KIND_TREAT           0x2D /* a treat that gives an HP dot back (code) */
 #define OBJ_KIND_DOOR            0x2F /* a door: warp request (code) */
+#define OBJ_KIND_THIEF           0x30 /* enemy: paces, takes money on contact (code) */
+#define OBJ_KIND_SHORT_THIEF     0x31 /* kind $30 with a shorter span (code) */
 #define OBJ_KIND_PICKPOCKET      0x32 /* enemy: walks at Scrooge, takes money on contact (code) */
 #define OBJ_KIND_TALKER          0x35 /* a character that shows a message (code) */
 #define OBJ_KIND_MOVING_PLATFORM 0x39 /* a platform that carries Scrooge (code) */

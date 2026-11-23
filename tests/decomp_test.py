@@ -206,6 +206,46 @@ POKES = [
         },
         ['Obj_Treat', 'Hud_RestoreDot'],
     ),
+    # kind $30 pacing over Scrooge holding 5,000: a theft each frame of contact
+    (
+        'thief-steal',
+        {
+            0x709: 0xA0,
+            0x719: 0x30,
+            0x649: 0xB4,
+            0x729: 0x50,
+            0x739: 0x00,
+            0x609: 0x80,
+            0x699: 0x00,
+            0x324: 0x24,
+            0x325: 0x24,
+            0x326: 0x05,
+            0x327: 0x00,
+            0x328: 0x00,
+            0x329: 0x00,
+        },
+        ['Obj_Thief', 'Obj_StealMoney'],
+    ),
+    # kind $31, the same handler with the shorter span
+    (
+        'short-thief-steal',
+        {
+            0x709: 0xA0,
+            0x719: 0x31,
+            0x649: 0xB4,
+            0x729: 0x50,
+            0x739: 0x00,
+            0x609: 0x80,
+            0x699: 0x00,
+            0x324: 0x24,
+            0x325: 0x24,
+            0x326: 0x05,
+            0x327: 0x00,
+            0x328: 0x00,
+            0x329: 0x00,
+        },
+        ['Obj_Thief', 'Obj_StealMoney'],
+    ),
 ]
 
 # name, route, options, routines that must be compared

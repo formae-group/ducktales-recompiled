@@ -2709,6 +2709,51 @@ static void Obj_Treat(uint8_t x)
     }
 }
 
+/* Kind $30 ($AC3D, also kind $31's handler): an enemy that paces 1 px a
+ * frame, right first, for its kind's span ($16 or $0B frames, doubled after
+ * the first turn), resting 120 frames at each turn and facing its way; each
+ * frame it touches Scrooge it takes 1 from the money's third digit (which
+ * also adds to its span left). A hit beats it. */
+static void Obj_Thief(uint8_t x)
+{
+    static const uint8_t spans[2] = { 0x16, 0x0B };
+
+    Decomp_Enter(DT_CODE_KIND_THIEF, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0) {
+        Obj_Defeat(x);
+        return;
+    }
+    if (Step(x) == 0) {
+        gObjects->unk_06C0[x] = 0;
+        uint8_t span = spans[(uint8_t)(gObjects->kind[x] - OBJ_KIND_THIEF)];
+        gObjects->timer[x] = span;
+        gObjects->unk_06D0[x] = span;
+        Obj_SetSpeed(x, 0x0100);
+        gObjects->dir[x] = OBJ_DIR_RIGHT;
+        gObjects->state[x]++;
+    }
+    if (gObjects->unk_06C0[x] != 0) {
+        gObjects->unk_06C0[x]--;
+        return;
+    }
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        gObjects->flags[x] |= OBJ_FLAG_FACING_RIGHT;
+        Obj_MoveRight(x);
+    } else {
+        gObjects->flags[x] &= (uint8_t)~OBJ_FLAG_FACING_RIGHT;
+        Obj_MoveLeft(x);
+    }
+    if (Obj_TouchScrooge(x)) {
+        Obj_StealMoney(x);
+    }
+    if (--gObjects->timer[x] != 0) {
+        return;
+    }
+    gObjects->dir[x] ^= 3;
+    gObjects->unk_06C0[x] = 0x78;
+    gObjects->timer[x] = (uint8_t)(gObjects->unk_06D0[x] << 1);
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -2837,6 +2882,10 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_DOOR:
             Obj_Door(slot);
+            break;
+        case OBJ_KIND_THIEF:
+        case OBJ_KIND_SHORT_THIEF:
+            Obj_Thief(slot);
             break;
         case OBJ_KIND_PICKPOCKET:
             Obj_Pickpocket(slot);
@@ -3095,6 +3144,11 @@ static void Run_Treat(Regs *r)
     Obj_Treat(r->x);
 }
 
+static void Run_Thief(Regs *r)
+{
+    Obj_Thief(r->x);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -3264,6 +3318,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_THIEF, NULL, "Obj_Thief", Run_Thief, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_TREAT, NULL, "Obj_Treat", Run_Treat, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_TREAT_SPOUT, NULL, "Obj_TreatSpout", Run_TreatSpout, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_ROLLER, NULL, "Obj_Roller", Run_Roller, 0, .bank = DT_BANK_OBJECTS },
