@@ -31,7 +31,9 @@ folder (DUCKTALES_DATA_DIR):
      MenuPausesGame) survive a run;
   9. Decompiled code ([Game] DecompiledCode) is off by default; on the native
      player, set on, the decompiled routines run with No slowdown on and not
-     with it off, and the key is kept either way.
+     with it off, and the key is kept either way; the session that ran them
+     writes decomp-session-<time>.txt (NESRECOMP_DIAGNOSTICS_DIR), the other
+     writes none.
 
     py -3 -I tests/window_smoke.py --build build/windows [--shots captures/shots] [--exe NAME]
 
@@ -170,7 +172,16 @@ def main():
         for slowdown, runs in (('on', native), ('off', False)):
             ini = tmp / f'decomp_{slowdown}.ini'
             ini.write_text(f'[Game]\nNoSlowdown = {slowdown}\nDecompiledCode = on\n')
-            code, out = run(args.rom, '--hidden', '--exit-after', '300', '--config', str(ini))
+            diag = tmp / f'diag_{slowdown}'
+            code, out = run(
+                args.rom,
+                '--hidden',
+                '--exit-after',
+                '300',
+                '--config',
+                str(ini),
+                extra_env={'NESRECOMP_DIAGNOSTICS_DIR': str(diag), 'NESRECOMP_REPLAY_DIR': ''},
+            )
             calls = sum(int(c) for c in re.findall(r'^decomp: mode=replace .* calls=(\d+) ', out, re.M))
             check(
                 code == 0
@@ -180,6 +191,20 @@ def main():
                 f'DecompiledCode = on with NoSlowdown = {slowdown}: the decompiled routines '
                 f'{"run" if runs else "do not run"} ({calls} calls)',
                 out,
+            )
+            sessions = sorted(diag.glob('decomp-session-*.txt'))
+            text = sessions[0].read_text() if sessions else ''
+            frames = re.search(r'^frames (\d+), (\d+) of them with the decompiled code on$', text, re.M)
+            listed = sum(int(c) for c in re.findall(r'^decomp: mode=replace .* calls=(\d+) ', text, re.M))
+            check(
+                (
+                    len(sessions) == 1 and 'error none' in text and frames and int(frames[2]) > 0 and listed == calls
+                    if runs
+                    else not sessions
+                ),
+                f'NoSlowdown = {slowdown}: '
+                + ('the session summary lists the frames and the calls' if runs else 'no session summary is written'),
+                text or out,
             )
 
         def png_size(path):

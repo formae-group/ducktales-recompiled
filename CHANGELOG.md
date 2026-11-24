@@ -7,6 +7,10 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- The native player writes a session summary when its Decompiled code ran: `decomp-session-<time>.txt`
+  in `diagnostics/` beside the replays, with the frames played, the decomp error that stopped the game
+  if any, and every routine's calls and calls given to the original (`decomp:` lines). None is written
+  with the option off.
 - The native player can run the decompiled C: Settings → Gameplay → Decompiled code (`[Game] DecompiledCode`,
   off by default) runs the routines decompiled to C alone in place of the recompiled ones, with No
   slowdown on only; with No slowdown off the toggle is disabled and its (?) says why. `decomp.c` is now
