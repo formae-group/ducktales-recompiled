@@ -15,6 +15,8 @@ Tools (they read your ROM locally; their output is never committed):
 - `tools/audio_requests.py ROUTE`: every request a route makes; with `--callers`, the code
   that made it.
 - `tests/audio_compare.py`: the native synth (below) against the cycle host's APU on the routes.
+- `tests/audio_output_test.py`: what the native player's audio device plays ([Output stage](#output-stage)):
+  no sample at full scale, no discontinuity, no underrun, on every route and window event.
 - `ducktales_native --sound-request FRAME:IDS`: the same ring patch on the native runtime, after
   frame FRAME of a route; with `--audio-channels` and the extra-voice options it measures them.
 
@@ -321,6 +323,39 @@ effect command leaves at the low byte of its handler's address, so the level com
 byte that is; a negative vibrato step of 0 adds `$FF00`. Not modelled: songs with `$D7` of 2 or more
 (the game never sets it), and an effect channel that starts and ends within one update, which the
 music voice does not cover since the channel belongs to the music at both frame ends.
+
+## Output stage
+
+`src/native/native_output.c` is what stands between the synth and the audio device in the native
+player (`ducktales.exe`). Each frame the window mixes the synth (`native_audio_mix`, unclamped),
+the extra voices and the mods' files (`app_mods_audio_add`) and pushes the frame; the device's
+callback pulls from a queue. Nothing here touches the machine: `--wav-out` still writes the synth's
+own samples, byte for byte as before.
+
+| Stage | What it does | Why |
+|---|---|---|
+| Volume | Master volume, followed live from the menu, ramped over 10 ms | A 5% step on a loud sample is a click |
+| Limiter | 1.3 ms look-ahead peak limiter at -1 dBFS (29,204): each sample's gain is the mean, over the look-ahead, of the running minimum of the gain its neighbours need, recovering over 50 ms | The synth peaks at -7.9 dBFS on every route, even with both extra voices, but a mod file at full scale over the game's effects reaches +6 dBFS; a hard clamp clipped it. Under -1 dBFS the gain is exactly 1 and the samples pass unchanged |
+| Pacing | The queue is kept near two device buffers and a frame: while its average (about 32 frames) is more than half a frame away, each frame is resampled by at most 0.5% (2% with under half a buffer left) | The frame clock (60.0988 Hz, or the VSync of a 60 Hz display) and the device's clock never agree exactly; the old queue stretched a frame up to 2x when low and dropped a whole frame at 100 ms, both audible |
+| Fades | Sound starts with a 5 ms fade-in once two device buffers and a frame are queued, from the newest of them; a hold or a flush fades out over 5 ms of what is queued | Starting or stopping mid-waveform is a click |
+| Holds | Nothing is queued while fast-forwarding, with sound off, while the menu pauses the game and from a click on the window's frame (Windows then runs its move/resize loop and no frame runs) until the next frame | Without a hold the device ran dry and the sound stopped with a step |
+| Underrun | If the queue runs dry anyway (the frame loop blocked with no warning), the last sample decays to silence (3 ms time constant) and the sound returns with the fade-in | A dropout without a click |
+
+F9 fades out before the queue is dropped, since the queued sound is the old state's, and closing the
+game fades out before the device closes. In the synth, a channel a mod mutes ramps out and back in
+over 5 ms, and in the mods layer a replacement fades in when it starts and out when it is stopped
+or held by the pause ([mods.md](mods.md#music-and-effects)).
+
+The synth renders straight at the device's rate (48 kHz, each sample the integral of the channels
+over its span of CPU time), so there is no rate conversion between them; mods' files at another
+rate are resampled by linear interpolation, and the pacing's resampling stays within 0.5%.
+
+`ducktales.exe ROM --frames N --input ROUTE --audio-out FILE --audio-sim SPEC` plays a route through
+this stage with the frame loop and the device on simulated clocks and writes what the device would
+play. SPEC is a comma-separated list: `refresh=HZ` (VSync; 0 for none, a minimised window),
+`period=N` (device buffer, default 1024), `drift=PPM` (device clock), `volume=N`, and the events
+`menu=F:N`, `fast=F:N`, `drag=F:MS`, `hitch=F:MS`, `off=F:N`, `load=F` and `sweep=F` (volume
+100-0-100 in steps of 5 per frame). Results: [validation.md](validation.md#presented-sound).
 
 ## Catalogue
 

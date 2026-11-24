@@ -209,8 +209,8 @@ call can do. `flow.c` decompiles that code as **task code** (`DecompRoutine.task
   enters through an RTS (`$FFAB`) whose return the observer moves to the start, at the routine's
   true S, with the isolated call's return address in place of the routine's own (at S + locals
   + 1). When the C hands off, the original stops where it reaches the same routine at the same
-  depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`, 3 of
-  them). Check compares RAM, the stack down to that depth, the registers the hand-off uses and the
+  depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`, 2 of
+  them: the scheduler `$FF35`, which `task_yield`'s C hands off to, and the reset `$FEE0`). Check compares RAM, the stack down to that depth, the registers the hand-off uses and the
   number of device writes.
 - Replace mode stores the C's results, makes its device writes, spends the original's cycles up to
   the stop (without the entry RTS) and jumps there. A call that would run into VBlank or past the
@@ -218,6 +218,25 @@ call can do. `flow.c` decompiles that code as **task code** (`DecompRoutine.task
   uses (the random generator, the scratch bytes).
 - A task routine called from another's C is not checked on its own: the caller's comparison covers
   it up to the hand-off. Its calls are counted.
+
+### Interrupt routines
+
+The NMI handler (`$C000`) is decompiled as **interrupt routines** (`DecompRoutine.interrupt`,
+`src/decomp/nmi.c`): task code whose C ends in RTI instead of RTS. When the C returns, P and the
+return address come off the stack above its last pull (S + 1 to S + 3), as is.
+
+- On the cycle host the original runs in an isolated call as task code's does, entered through an RTS
+  whose return the observer moves to the start; for an interrupt routine it also moves the return
+  address the call left on the stack one on, since an RTI returns to the address itself, so that the
+  original's RTI ends the call. Check compares as for task code, P after the RTI included.
+- Replace mode spends, with the original's cycles, the cycles a replaced routine still owed when the
+  NMI came (Timing in replace mode). The `$C138` site (`nmi-exit`) still spends them when the
+  original's RTI runs, as when the C's call goes to the original.
+- The native runtime ends the NMI at the fetch of the RTI at `$C138` (its lag and NMI-audit
+  accounting); a C that makes the RTI tells it with `native_nmi_return()`.
+
+So far the handler's exit is C: `Nmi_Return` (`$C132`, `PLA TAY PLA TAX PLA PLP RTI`, a site
+after the bank select `$FFDE` returns), with the body before it still the original's.
 
 ### Calling contract
 
@@ -264,6 +283,10 @@ leave the jump vector in `$00/$01` as the original's loop does.
 | `Land_ApplyTables`, `Land_LoadPalette` | X = palette set (palette) | X, Y | Land Select and the title read X and Y after them |
 | `Timer_Tick`, `Hud_RefreshMoney`, `Hud_RefreshTotal` | none | none | called from the frame loop's C |
 | task code (`flow.c`) | the registers at the site or resume point | at each hand-off, the registers its target reads | see Task code |
+| `Task_Create` | A = slot | none | reset reads nothing after it |
+| `Task_CurrentSlot`, `Task_SlotOffset` | none; A = slot | X | called from the task primitives' C |
+| `Task_Yield`, `Task_Wait` (task code) | X, Y (kept on the stack); X = frames | none: they hand off to the scheduler `$FF35` | `Task_WaitNext` (`$FFA8`, the resume point) returns A, X, Y and P as its RTS leaves them |
+| `Nmi_Return` (interrupt routine) | none | A, X, Y and P after the RTI | see Interrupt routines |
 
 ### On the native runtime
 
@@ -427,6 +450,13 @@ RAM-identical in replace mode.
 | `Palette_LoadScene` | `$F76D` | checked (pokes only) | 0 | ending | not measured |
 | `Bank_Select` | `$FFDE` | checked | 12 | - | not measured |
 | `Bank_SelectTemp` | `$FFE0` | checked | 12 | - | not measured |
+| `Task_Create` | `$FF7D` | checked | 12 | - | not measured |
+| `Task_CurrentSlot` | `$FF9F` | checked | 12 | - | not measured |
+| `Task_SlotOffset` | `$FFA1` | checked | 12 | - | not measured |
+| `Task_Wait` (task code) | `$FFA5` | checked | 8 | - | not measured |
+| `Task_WaitNext` (resume point after `task_yield`) | `$FFA8` | checked | 8 | - | not measured |
+| `Task_Yield` (task code) | `$FFAC` | checked | 12 | - | not measured |
+| `Nmi_Return` (interrupt routine) | `$C132` | checked | 13 | - | not measured |
 | `Oam_Build` | bank 5 `$8000` | checked | 12 | - | not measured |
 | `Oam_DrawSlot` | bank 5 `$80BE` | checked | 12 | - | not measured |
 | `Text_DrawStrings` | bank 5 `$BAB0` | checked | 12 | - | not measured |
@@ -728,20 +758,20 @@ indirect jump or another routine's entry, and counts as C the routines only C re
 script's docstring gives every rule. `--rev` reads the C of another branch against the same
 coverage.
 
-On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **97.7%, 25,197 of 25,783 executed
-bytes**, in 356 routines (main 85ed235, 13 routes and 51 poke cases).
+On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **97.8%, 25,634 of 26,217 executed
+bytes**, in 360 routines (main 51338e2, 13 routes and 58 poke cases).
 
 | Group | Files | Routines | Executed bytes | Share |
 |---|---|---|---|---|
-| player | `player.c`, `motion.c`, `sound.c` | 54 | 3,622 | 14.0% |
-| objects | `objects.c`, `objcommon.c` | 106 | 11,300 | 43.8% |
-| flow | `flow.c` | 131 | 3,312 | 12.8% |
-| level | `level.c`, `collision.c` | 40 | 3,601 | 14.0% |
-| system | `system.c`, `sprites.c`, `audio.c` | 25 | 3,363 | 13.0% |
+| player | `player.c`, `motion.c`, `sound.c` | 54 | 3,624 | 13.8% |
+| objects | `objects.c`, `objcommon.c` | 109 | 11,728 | 44.7% |
+| flow | `flow.c` | 131 | 3,312 | 12.6% |
+| level | `level.c`, `collision.c` | 40 | 3,602 | 13.7% |
+| system | `system.c`, `sprites.c`, `audio.c` | 25 | 3,363 | 12.8% |
 
 No executed byte is shared with an original routine. The routines still original are the NMI
-`$C000` (308 bytes), the reset `$FEE0` (85), the scheduler `$FF35` (72), the ending's bank-5
-objects `$B380` (71), `$B46A` (31) and `$B400` (18), and kind $00's `RTS` at bank 6 `$80B2` (1).
+`$C000` (306 bytes), the reset `$FEE0` (85), the scheduler `$FF35` (72), the ending's bank-5
+objects `$B380` (71), `$B46A` (31) and `$B400` (18). Kinds $3C, $3D and $40 have no C yet, and no route or poke reaches them.
 
 ### Adding a routine
 

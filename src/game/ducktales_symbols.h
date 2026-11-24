@@ -849,6 +849,7 @@
  * there the cycles a replaced routine still owed when the NMI came
  * (docs/decompilation.md "Timing in replace mode"). */
 #define DT_SITE_NMI_EXIT    0xC138
+#define DT_NMI_RETURN       0xC132 /* the handler's exit: PLA TAY PLA TAX PLA PLP RTI */
 #define DT_SITE_NMI_EXIT_ID "ducktales.decomp.nmi-exit"
 /* Levels: map and screen decoding, column streaming, the VRAM queues, the
  * camera and the background probe (docs/levels.md, docs/rendering.md,

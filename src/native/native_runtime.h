@@ -139,6 +139,11 @@ bool native_vblank_deferred(bool picture_on);
 bool native_vblank_poll(void);
 void native_vblank_taken(bool nmi_enabled, bool picture_on);
 
+/* ---- native_bus.c, called by decomp_native.c ---- */
+/* The NMI handler ended in the RTI of decompiled code (the fetch of the
+ * original's RTI at $C138 tells it otherwise). */
+void native_nmi_return(void);
+
 #ifdef __cplusplus
 }
 #endif

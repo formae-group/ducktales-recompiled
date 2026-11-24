@@ -55,10 +55,14 @@ void app_ui_write_game_settings(FILE *f);
 /* CycHostExtras.present: the picture the window shows (ui/app_present.h). */
 const uint32_t *app_ui_present(int *width, int *height);
 /* The host's game frames while the menu is open: the menu calls tick once per
- * menu frame unless [Game] MenuPausesGame is on or a Reset or Quit question is
- * open; tick runs the frames that are due, with no buttons pressed, and
+ * menu frame, with run false while [Game] MenuPausesGame is on or a Reset or
+ * Quit question is open (the game is paused: the host holds its sound); with
+ * run true tick runs the frames that are due, with no buttons pressed, and
  * returns how many. A host that sets none (the cycle host) pauses. */
-void app_ui_set_menu_tick(int (*tick)(void));
+void app_ui_set_menu_tick(int (*tick)(bool run));
+/* The master volume the player has set now, 0-100, or -1 before config.ini
+ * is read (the native player ramps its output to it, native_output.h). */
+int app_ui_volume(void);
 
 #ifdef __cplusplus
 }
