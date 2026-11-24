@@ -3254,27 +3254,27 @@ static void Obj_DrawBlock(uint8_t x, uint8_t a, uint8_t y)
  * pose $84, hidden). With the Amazon's treasure, the land's hidden items,
  * chests and pose-$1B blocks are not spawned again. $10 holds the record's
  * bit and $04/$05 the template's address. */
-void Obj_SpawnRecord(uint8_t y)
+uint8_t Obj_SpawnRecord(uint8_t y)
 {
     Decomp_Enter(DT_CODE_SPAWN_RECORD, 0, 0, y);
     gProbeHits = (uint8_t)(1 << (y & 7));
     if (RAM_U8(DT_ADDR_CONSUMED + (y >> 3)) & gProbeHits) {
-        return;
+        return y >> 3;
     }
     uint8_t page = Rom((uint16_t)(SpawnTable(0) + y));
     uint8_t wx = Rom((uint16_t)(SpawnTable(1) + y));
     if ((uint16_t)(page << 8 | wx) < (uint16_t)(gScratch(1) << 8 | gScratch(0))) {
-        return;
+        return y >> 3;
     }
     uint8_t x = 0x0F;
     while (x != 0 && gObjects->record[x] != y) {
         x--;
     }
     if (x != 0 && (gObjects->state[x] & OBJ_STATUS_LIVE)) {
-        return;
+        return x;
     }
     if (!Obj_FindFreeSlot(&x)) {
-        return;
+        return x;
     }
     gObjects->record[x] = y;
     gObjects->worldPage[x] = page;
@@ -3303,7 +3303,7 @@ void Obj_SpawnRecord(uint8_t y)
         uint8_t kind = gObjects->kind[x];
         if (kind == OBJ_KIND_BLOCK || kind == OBJ_KIND_DROPPER) {
             Obj_DrawBlock(x, kind, (uint8_t)(t + 3));
-            return;
+            return x;
         }
     }
     if (gBossFight & 0x80) {
@@ -3316,13 +3316,14 @@ void Obj_SpawnRecord(uint8_t y)
         }
     }
     if (gLand != 1 || !(gTreasures & 2)) {
-        return;
+        return x;
     }
     uint8_t kind = gObjects->kind[x];
     if (kind == OBJ_KIND_HIDDEN_ITEM || kind == OBJ_KIND_CHEST ||
         (kind == OBJ_KIND_BLOCK && gObjects->action[x] == 0x1B)) {
         gObjects->state[x] = 0;
     }
+    return x;
 }
 
 /* Kind $2E ($A5DB): the Amazon boss. It starts at Y $AC walking right at
@@ -4206,7 +4207,7 @@ static void Run_Launcher(Regs *r)
 
 static void Run_SpawnRecord(Regs *r)
 {
-    Obj_SpawnRecord(r->y);
+    r->x = Obj_SpawnRecord(r->y);
 }
 
 static void Run_AmazonBoss(Regs *r)
@@ -4418,7 +4419,8 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_BLOCK_KICKER, NULL, "Obj_BlockKicker", Run_BlockKicker, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_TRANSYLVANIA_BOSS, NULL, "Obj_TransylvaniaBoss", Run_TransylvaniaBoss, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_AMAZON_BOSS, NULL, "Obj_AmazonBoss", Run_AmazonBoss, 0, .bank = DT_BANK_OBJECTS },
-    { DT_CODE_SPAWN_RECORD, "ducktales.decomp.6.AF2B", "Obj_SpawnRecord", Run_SpawnRecord, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_SPAWN_RECORD, "ducktales.decomp.6.AF2B", "Obj_SpawnRecord", Run_SpawnRecord, OUT_X,
+      .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LAUNCHER, NULL, "Obj_Launcher", Run_Launcher, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_TARGET, NULL, "Obj_Target", Run_Target, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_MOON_BOSS, NULL, "Obj_MoonBoss", Run_MoonBoss, 0, .bank = DT_BANK_OBJECTS },

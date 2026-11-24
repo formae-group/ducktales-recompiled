@@ -7,6 +7,8 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- Route `difficult_himalayas` (6,200 frames): `full_himalayas` on Difficult to the LAND CLEAR tally,
+  the first route on Difficult; it passes `verify_routes` at the four alignments with 100% native cycles.
 - The native player writes a session summary when its Decompiled code ran: `decomp-session-<time>.txt`
   in `diagnostics/` beside the replays, with the frames played, the decomp error that stopped the game
   if any, and every routine's calls and calls given to the original (`decomp:` lines). None is written

@@ -200,6 +200,13 @@ static void Palette_FadeIn(Regs *r)
     Fade_Start(r, FADE_IN_LEVEL, FADE_IN_STEP);
 }
 
+/* $C27C: the fade in with the sprites kept (the ending's screens). */
+static void Palette_FadeInKeep(Regs *r)
+{
+    Decomp_Enter(DT_CODE_FADE_IN_KEEP, r->a, r->x, r->y);
+    Fade_Start(r, FADE_IN_LEVEL, FADE_IN_STEP);
+}
+
 /* $C282: from the loaded palette to black in four steps. */
 static void Palette_FadeOut(Regs *r)
 {
@@ -444,6 +451,8 @@ const DecompRoutine gSystemRoutines[] = {
     { DT_CODE_OAM_CLEAR, "ducktales.decomp.C267", "Oam_Clear", Run_OamClear, 0 },
     { DT_CODE_RANDOM, "ducktales.decomp.C2E6", "Random_Next", Run_RandomNext, OUT_X | OUT_Y },
     { DT_CODE_FADE_IN, "ducktales.decomp.C279", "Palette_FadeIn", Palette_FadeIn, FADE_RETURNS, true, 0, false },
+    { DT_CODE_FADE_IN_KEEP, "ducktales.decomp.C27C", "Palette_FadeInKeep", Palette_FadeInKeep, FADE_RETURNS, true, 0,
+      false },
     { DT_CODE_FADE_OUT, "ducktales.decomp.C282", "Palette_FadeOut", Palette_FadeOut, FADE_RETURNS, true, 0, false },
     { DT_CODE_FADE_WAIT, NULL, "Palette_FadeWait", Palette_FadeWait, FADE_RETURNS, true, 1, true },
     { DT_CODE_CHR_LOAD, "ducktales.decomp.C301", "Chr_LoadList", Run_ChrLoadList, OUT_HW },

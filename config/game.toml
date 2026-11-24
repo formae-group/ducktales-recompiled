@@ -509,6 +509,13 @@ addr = 0xDB36
 length = 8
 crc32 = 0xD74F1957
 
+# PauseText
+[[mod_function_hook]]
+id = "ducktales.decomp.5.B580"
+addr = 0xB580
+length = 8
+crc32 = 0xC9C9C1ED
+
 # Respawn_PlaceAt
 [[mod_function_hook]]
 id = "ducktales.decomp.DD52"
@@ -564,22 +571,10 @@ length = 8
 crc32 = 0x446DE306
 
 [[mod_function_hook]]
-id = "ducktales.decomp.stop.C27C"
-addr = 0xC27C
-length = 8
-crc32 = 0x22C37620
-
-[[mod_function_hook]]
 id = "ducktales.decomp.stop.FFA5"
 addr = 0xFFA5
 length = 8
 crc32 = 0x0FCE60E7
-
-[[mod_function_hook]]
-id = "ducktales.decomp.stop.B580.5"
-addr = 0xB580
-length = 8
-crc32 = 0xC9C9C1ED
 
 # END game flow
 
@@ -664,6 +659,13 @@ id = "ducktales.decomp.C279"
 addr = 0xC279
 length = 8
 crc32 = 0x4BEACFCA
+
+# Palette_FadeInKeep
+[[mod_function_hook]]
+id = "ducktales.decomp.C27C"
+addr = 0xC27C
+length = 8
+crc32 = 0x22C37620
 
 # Palette_FadeOut
 [[mod_function_hook]]
