@@ -880,7 +880,7 @@
 #define DT_SITE_BOSS_HIT    0xF6DD
 #define DT_SITE_BOSS_HIT_ID "ducktales.event.boss-hit"
 
-/* Bank 6 $8932 (Obj_Defeat, src/decomp/objects.c): the entry of the routine
+/* Bank 6 $8932 (Obj_Defeat, src/decomp/objects/enemies.c): the entry of the routine
  * the enemy kinds jump to (28 JMPs in bank 6) when an enemy is beaten; X is
  * its slot. Its 8 bytes are found in no other bank at $8932, so the content
  * key also checks that bank 6 is mapped. */

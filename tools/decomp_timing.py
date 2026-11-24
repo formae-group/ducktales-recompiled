@@ -288,7 +288,10 @@ def main():
     ap.add_argument('--bank', type=int, help='the bank at $8000 for an address below $C000')
     ap.add_argument('--rom', default=default_rom())
     ap.add_argument('--summary', action='store_true', help='every routine: timed, branches and missing DC_BR')
-    ap.add_argument('--file', help='with --summary: only the routines of this file or folder (system.c, flow, ...)')
+    ap.add_argument(
+        '--file',
+        help='with --summary: only the routines of this file or folder (system.c, player/player.c, objects/walkers.c, flow, ...)',
+    )
     args = ap.parse_args()
     rom, table = Rom(args.rom), routines()
     by_addr = {}
