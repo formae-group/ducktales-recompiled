@@ -437,6 +437,10 @@
 #define DT_B5_ENDING_OBJECTS   0xB380 /* the ending screen's objects ($24), then the sprites (code) */
 #define DT_B5_SELECT_MESSAGE   0xB800 /* Land Select: the message for $5E, $5D and $78 into the VRAM queue (code) */
 #define DT_B5_MESSAGE          0xB81C /* X = Land Select message: its strings into the VRAM queue (code) */
+#define DT_B5_MESSAGE_LIST     0xB86C /* bank 5: per message, the index of its first entry below (code) */
+#define DT_B5_MESSAGE_ENTRIES  0xB871 /* bank 5: PPU address high, low and string, up to a negative byte (code) */
+#define DT_B5_STRING_LO        0xB9C1 /* bank 5: Land Select strings (length - 1, bytes), low bytes (code) */
+#define DT_B5_STRING_HI        0xB9D8 /* their high bytes (code) */
 #define DT_BANK_FINAL_TRIP     4
 #define DT_B4_FINAL_TRIP       0xBE00 /* the final trip's take-off scene; waits for frames (code) */
 #define DT_B4_FLOW_TRIP_FRAME  0xBE73 /* bank 4: after the take-off scene's frame */

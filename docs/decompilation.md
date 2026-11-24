@@ -436,6 +436,8 @@ RAM-identical in replace mode.
 | `LandLoad` (12 resume points) | `$D79B-$D8A5` | checked | 12 | - | not measured |
 | `LandSelect` (16 resume points) | `$D630-$D79A` | checked | 12 (the return from a land in 5) | final-trip, all-treasures | not measured |
 | `FinalTrip` (3 resume points), `SpritesFrame` (1 resume point) | bank 4 `$BE00-$BEAA`, `$F855-$F868` | checked | 0 | final-trip | not measured |
+| `Select_ResultMessage`, `Select_Message` | bank 5 `$B800-$B86B` | checked | 12 | final-trip, all-treasures | not measured |
+| `Records_Consumed` (then `Records_MarkTaken`, player.c) | bank 5 `$B760-$B769` | checked | 12 | - | not measured |
 | `BankTransfer` (1 resume point) | `$D8D9-$D9BD` | checked | 5 | all-treasures (no money), total-max (TOTAL at 99999) | not measured |
 | `Scene` (6 resume points) | `$DF27-$DFEC` | checked | 0 | scene-1, scene-2 | not measured |
 | `Mode15_Redraw` (5 resume points) | `$DFED-$E053` | checked | 0 | mode15-redraw, message-scene | not measured |
@@ -458,7 +460,8 @@ of message `$0B` that Scrooge's message box calls (`$DFED-$E053`), the ending's 
 first frame with their tables (`$E054-$E126`, `$E133-$E142`, `$E1AF-$E1F8`), the HUD timer
 (`$E28C-$E2FD`) and the boss trigger with the arena scroll (`$CF93-$D04C`): 3,218 of the 3,880 bytes,
 or 83% (tables inside the ranges included). Outside these ranges the flow also has the final trip's
-take-off scene (bank 4 `$BE00-$BEAA`) with the sprites frame it waits with (`$F855-$F868`). Not
+take-off scene (bank 4 `$BE00-$BEAA`) with the sprites frame it waits with (`$F855-$F868`), and
+in bank 5 the Land Select messages (`$B800-$B86B`) and the clearing of the consumed-record bits (`$B760`). Not
 yet: the ending's later frames (`$E1F9-$E28B`: the credits scroll with a raster split polled on
 `$2002`, which `Ending` gives to the original) and the Select refill `$E2FE` (Scrooge's); the
 scene palette tables `$E127-$E132` and `$E143-$E1AE` are read by `Palette_LoadScene` (system.c).
