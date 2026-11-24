@@ -813,7 +813,6 @@
 #define DT_CODE_OBJ_SHATTER               0x88E4 /* the debris animation */
 #define DT_CODE_OBJ_DEFEAT                0x8932 /* an enemy is beaten */
 #define DT_CODE_BOSS_HIT                  0xF6D7 /* a counted hit on a boss; carry set when it beat it (code) */
-#define DT_CODE_OBJ_DRAW_BLOCK            0xF4D8 /* a spawned block's tiles into the background (code) */
 #define DT_CODE_SPAWN_RECORD              0xAF2B /* spawn one land record (code) */
 #define DT_CODE_SPAWN_TEMPLATES           0xBE16 /* 4-byte object templates by record type (code) */
 #define DT_CODE_OBJ_OPEN_BLOCK            0x8A11 /* an opened block or chest picks its item */

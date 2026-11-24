@@ -19,6 +19,10 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - Decompiled the reset `$FEE0-$FF34` as task code; only the four-vblank PPU wait `$FEEE-$FEFA` stays in
   the original. Task code in replace goes to the original when the NMI line has risen but the CPU has
   not latched the edge yet, as on a warm reset at the frame boundary.
+- Bank 6's objects no longer call original code: the tile edits `$F4D8`/`$F506` are called as C,
+  and the charger's bounce off a hidden block runs in C. `Bg_Probe` and the walks and fall now return
+  the Y the original leaves (checked), which the charger, the block kicker and the boulder pass on.
+  New poke cases `charger-hidden-block` and `kicker-hidden-block`.
 - The chest's opening, sliding block and health block handlers (kinds `$16`, `$17` and `$42`)
   are decompiled, with poke cases based on three Transylvania chest records.
 - `tests/decomp_test.py` poke cases `extra-life` (the extra life `$8BB0`), `secret-treasure` (item `$74`,
