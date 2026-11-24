@@ -5,8 +5,9 @@
  * directory, every entry's local header and its CRC-32. Encrypted entries,
  * ZIP64 and other compression methods are refused with a reason. When
  * mod.toml is not at the archive's root but in exactly one folder (a zipped
- * mod folder), that folder is the mod's root. Paths are UTF-8; Windows
- * gets them through the wide calls.
+ * mod folder), that folder is the mod's root. Names are found whatever their
+ * case, as Windows finds files. Paths are UTF-8; Windows gets them through
+ * the wide calls.
  */
 #include "mods/core/fm_mods.h"
 
@@ -68,7 +69,7 @@ static wchar_t *wide(const char *utf8)
     return w;
 }
 
-static FILE *open_utf8(const char *path, const char *mode)
+FILE *fm_open_file(const char *path, const char *mode)
 {
     wchar_t *w = wide(path), wmode[8];
     if (!w) {
@@ -95,6 +96,18 @@ bool fm_make_dir(const char *path)
 {
     if (fm_is_dir(path)) {
         return true;
+    }
+    char parent[1024];
+    snprintf(parent, sizeof parent, "%s", path);
+    char *slash = NULL;
+    for (char *c = parent; *c; c++) {
+        if ((*c == '\\' || *c == '/') && c[1]) {
+            slash = c;
+        }
+    }
+    if (slash && slash > parent && slash[-1] != ':' && slash[-1] != '\\' && slash[-1] != '/') {
+        *slash = 0;
+        fm_make_dir(parent);
     }
     wchar_t *w = wide(path);
     if (!w) {
@@ -135,7 +148,7 @@ void fm_list_dir(const char *dir, void (*fn)(void *user, const char *name, bool 
 
 uint8_t *fm_read_file(const char *path, size_t *size)
 {
-    FILE *f = open_utf8(path, "rb");
+    FILE *f = fm_open_file(path, "rb");
     if (!f) {
         return NULL;
     }
@@ -296,10 +309,10 @@ static void find_prefix(FmArchive *a)
     const char *found = NULL;
     for (int i = 0; i < a->count; i++) {
         const char *n = a->entries[i].name, *slash = strchr(n, '/');
-        if (!strcmp(n, "mod.toml")) {
+        if (!_stricmp(n, "mod.toml")) {
             return;
         }
-        if (slash && !strchr(slash + 1, '/') && !strcmp(slash + 1, "mod.toml")) {
+        if (slash && !strchr(slash + 1, '/') && !_stricmp(slash + 1, "mod.toml")) {
             if (found) {
                 return;
             }
@@ -343,14 +356,14 @@ const char *fm_archive_name(const FmArchive *a, int index)
 {
     const char *n = a->entries[index].name;
     size_t k = strlen(a->prefix);
-    return strncmp(n, a->prefix, k) ? NULL : n + k;
+    return _strnicmp(n, a->prefix, k) ? NULL : n + k;
 }
 
 int fm_archive_find(const FmArchive *a, const char *name)
 {
     for (int i = 0; i < a->count; i++) {
         const char *n = fm_archive_name(a, i);
-        if (n && !strcmp(n, name)) {
+        if (n && !_stricmp(n, name)) {
             return i;
         }
     }

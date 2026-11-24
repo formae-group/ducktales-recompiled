@@ -31,6 +31,7 @@ typedef struct {
     bool hidden;             /* --hidden: never open UI */
     bool uncapped;           /* --uncapped */
     bool scripted_input;     /* --window-input / --virtual-pad: never remap the pads */
+    bool off_screen;         /* no player Settings are written and no player mods folder is scanned */
 } AppLaunch;
 
 /* Before the host starts: read config.ini as the host will. */
