@@ -165,6 +165,14 @@ static void frame_start(void)
     f->rendered = (mask_effective(frame_dot) & 0x18) != 0;
 }
 
+/* Whether VBlank is due by the given dot: this frame's, or the next frame's
+ * at the earliest. A held VBlank is always due at the next dot. */
+bool video_vblank_due(uint64_t dot)
+{
+    uint64_t at = next_event == 0 ? frame_dot + EVENT_VBLANK : frame_dot + EVENT_WRAP - 1 + EVENT_VBLANK;
+    return at <= dot;
+}
+
 void video_advance(uint64_t dots)
 {
     while (frame_dot + EVENT_DOT[next_event] <= dots) {

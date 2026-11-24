@@ -2784,10 +2784,9 @@ const int gFlowRoutineCount = sizeof gFlowRoutines / sizeof gFlowRoutines[0];
 /* The routines the flow hands off to that have a decompiled C of their own
  * ($C42C, $C71D, $C78F, $C830, $C976, $D068, $EFE2 and bank 6 $AEA0 in level.c, $E354 in player.c, $8000 bank
  * 6 in objects.c, the fades, the PPU and CHR loaders and bank 5 $BAB0 in
- * system.c, and task_yield and task_wait there) stop the isolated runs at their
- * own sites; task_yield's C hands off to the scheduler. */
+ * system.c, and task_yield, task_wait and the scheduler there) stop the
+ * isolated runs at their own sites. */
 const DecompStop gFlowStops[] = {
-    STOP(DT_CODE_SCHEDULER, "FF35"),
     STOP(DT_CODE_RESET, "FEE0"),
 };
 const int gFlowStopCount = sizeof gFlowStops / sizeof gFlowStops[0];

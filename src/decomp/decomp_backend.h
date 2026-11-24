@@ -25,6 +25,7 @@
 #define MAX_STORES   64
 #define MAX_NESTED   32
 #define MAX_READS    16
+#define MAX_TIME     8
 
 typedef struct {
     uint64_t calls, compared, original;
@@ -81,6 +82,17 @@ extern int dc_nreads;
 extern bool dc_handoff_set;
 extern uint16_t dc_handoff;
 extern uint8_t dc_handoff_uses, dc_handoff_bank;
+
+/* The time the C stated (Decomp_Cycles, Decomp_Fetch): spans of cycles, each
+ * starting with the fetch of the instruction at fetch (0: no fetch). */
+typedef struct {
+    uint16_t fetch;
+    uint16_t cycles;
+} TimeSpan;
+
+extern TimeSpan dc_time[MAX_TIME];
+extern int dc_ntime;
+extern uint64_t dc_cycles;
 
 void dc_fail(const char *what, uint16_t routine);
 void dc_record(uint16_t addr, uint8_t value, bool write);

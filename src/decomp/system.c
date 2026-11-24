@@ -32,6 +32,7 @@
 #define gFadeLevel      RAM_U8(DT_ADDR_FADE_LEVEL)
 #define gTaskCurrent    RAM_U8(DT_ADDR_TASK_CURRENT)
 #define gTaskEntry      (&gRam[DT_ADDR_TASK_ENTRY])
+#define gSchedulerPass  RAM_U8(DT_ADDR_SCHEDULER_PASS)
 
 #define MASK_SHOWN        0x1E
 #define OAM_PARKED_Y      0xF8
@@ -56,6 +57,27 @@
 #define TASK_STACK        2 /* the saved S, or a new task's entry low byte */
 #define TASK_ENTRY_HI     3
 #define YIELD_FRAMES      1
+#define TASK_SLOTS        4
+#define TASK_SLOT_BYTES   4
+#define STACK_TOP         0xFF
+#define TASK_REGS         (OUT_A | OUT_X | OUT_Y | OUT_P)
+
+/* The scheduler's cycles (Decomp_Cycles), path by path. */
+#define SCHEDULE_CYCLES    4  /* LDX #$FF, TXS */
+#define PASS_SETUP         6  /* after the fetch at $FF38: LDX #0, STX $90, LDY #4 */
+#define SLOT_IDLE          21 /* LDA $80,X, CMP #4, BCS, four INX, DEY, BNE taken */
+#define LAST_SLOT_IDLE     20 /* the same, its BNE not taken */
+#define PASS_AGAIN         3  /* JMP $FF38 */
+#define SLOT_READY         9  /* LDA $80,X, CMP #4, BCS taken */
+#define NMI_CAME           6  /* LDA $90, BNE taken */
+#define NMI_NOT_CAME       5  /* LDA $90, BNE */
+#define SLOT_TAKEN         21 /* DEY, TYA, EOR #3, STA $91, LDY $80,X, LDA #2, STA $80,X, CPY #8 */
+#define START_LOAD         16 /* BNE, the entry into $93/$94 */
+#define START_JUMP         4  /* JMP ($93) after its fetch */
+#define RESUME_LOAD        14 /* BNE taken, LDA $82,X, TAX, TXS, LDA $91 */
+#define RESUME_CONTROLLERS 8  /* BNE, JSR $C1AB */
+#define RESUME_PULL        12 /* PLA, TAY, PLA, TAX */
+#define RESUME_RETURN      5  /* RTS after its fetch */
 
 #define TASK_BYTE(x, field) RAM_U8((uint8_t)(DT_ADDR_TASKS + (field) + (x)))
 
@@ -322,6 +344,103 @@ static void Task_WaitNext(Regs *r)
     }
 }
 
+/* ---- the scheduler (docs/functions.md), task code that states the
+ * original's cycles ---- */
+
+/* $FF35 (task_yield's and a finished task's way out): S back at the top of
+ * page 1, then a pass. */
+static void Task_Schedule(Regs *r)
+{
+    Decomp_Enter(DT_CODE_SCHEDULER, r->a, r->x, r->y);
+    r->x = STACK_TOP;
+    r->p = Flags_NZ(r->p, r->x);
+    Decomp_SetStack(r->x);
+    Decomp_Cycles(SCHEDULE_CYCLES);
+    Decomp_Handoff(DT_CODE_SCHEDULER_PASS, 0, TASK_REGS);
+}
+
+/* $FF38, one pass: the first slot whose task is ready or new runs, slot 0
+ * first. A new task starts at its entry; a waiting one goes back on its
+ * stack, after the controllers for slot 0. An NMI during the scan (its $90)
+ * starts the pass again; no slot ready makes the next pass. Only slot 0 ever
+ * holds a task: a waiting task in another slot gives the call to the
+ * original. */
+static void Task_Pass(Regs *r)
+{
+    Decomp_Enter(DT_CODE_SCHEDULER_PASS, r->a, r->x, r->y);
+    Decomp_Fetch(DT_CODE_SCHEDULER_PASS);
+    Decomp_Cycles(PASS_SETUP);
+    r->x = 0;
+    gSchedulerPass = r->x;
+    r->y = TASK_SLOTS;
+    for (;;) {
+        r->a = TASK_BYTE(r->x, TASK_STATE);
+        r->p = Flags_Cmp(r->p, r->a, DT_TASK_READY);
+        if (r->a >= DT_TASK_READY) {
+            break;
+        }
+        r->x = (uint8_t)(r->x + TASK_SLOT_BYTES);
+        r->y--;
+        r->p = Flags_NZ(r->p, r->y);
+        if (!r->y) {
+            Decomp_Cycles(LAST_SLOT_IDLE + PASS_AGAIN);
+            Decomp_Handoff(DT_CODE_SCHEDULER_PASS, 0, TASK_REGS);
+            return;
+        }
+        Decomp_Cycles(SLOT_IDLE);
+    }
+    Decomp_Cycles(SLOT_READY);
+    r->a = gSchedulerPass;
+    r->p = Flags_NZ(r->p, r->a);
+    if (r->a) {
+        Decomp_Cycles(NMI_CAME);
+        Decomp_Handoff(DT_CODE_SCHEDULER_PASS, 0, TASK_REGS);
+        return;
+    }
+    Decomp_Cycles(NMI_NOT_CAME + SLOT_TAKEN);
+    r->y--;
+    r->a = (uint8_t)(r->y ^ (TASK_SLOTS - 1));
+    gTaskCurrent = r->a;
+    r->y = TASK_BYTE(r->x, TASK_STATE);
+    TASK_BYTE(r->x, TASK_STATE) = DT_TASK_RUNNING;
+    r->p = Flags_Cmp(r->p, r->y, DT_TASK_NEW);
+    if (r->y == DT_TASK_NEW) {
+        gTaskEntry[0] = TASK_BYTE(r->x, TASK_STACK);
+        r->a = TASK_BYTE(r->x, TASK_ENTRY_HI);
+        gTaskEntry[1] = r->a;
+        r->p = Flags_NZ(r->p, r->a);
+        Decomp_Cycles(START_LOAD);
+        Decomp_Fetch(DT_CODE_SCHEDULER_JUMP);
+        Decomp_Cycles(START_JUMP);
+        Decomp_Handoff((uint16_t)(gTaskEntry[1] << 8 | gTaskEntry[0]), 0, TASK_REGS);
+        return;
+    }
+    r->x = TASK_BYTE(r->x, TASK_STACK);
+    Decomp_SetStack(r->x);
+    r->a = gTaskCurrent;
+    r->p = Flags_NZ(r->p, r->a);
+    if (r->a) {
+        Decomp_RunOriginal();
+        return;
+    }
+    Decomp_Cycles(RESUME_LOAD + RESUME_CONTROLLERS);
+    Decomp_Handoff(DT_CODE_READ_CONTROLLERS, DT_SCHEDULER_PULL, TASK_REGS);
+}
+
+/* $FF78, after the controllers: the task's Y and X off its stack, then its
+ * RTS takes it back where it yielded. */
+static void Task_Resume(Regs *r)
+{
+    Decomp_Enter(DT_SCHEDULER_PULL, r->a, r->x, r->y);
+    r->y = Decomp_Pull();
+    r->a = Decomp_Pull();
+    r->x = r->a;
+    r->p = Flags_NZ(r->p, r->x);
+    Decomp_Cycles(RESUME_PULL);
+    Decomp_Fetch(DT_CODE_SCHEDULER_RTS);
+    Decomp_Cycles(RESUME_RETURN);
+}
+
 /* $C2E6: one step of the 32-bit shift register $C0-$C3 (feedback from bit 1
  * of the two low bytes); $00 keeps the first tap. */
 static void Random_Next(void)
@@ -546,5 +665,9 @@ const DecompRoutine gSystemRoutines[] = {
     { DT_CODE_TASK_YIELD, "ducktales.decomp.FFAC", "Task_Yield", Task_Yield, 0, true, 0, false },
     { DT_CODE_TASK_WAIT, "ducktales.decomp.FFA5", "Task_Wait", Task_Wait, 0, true, 0, false },
     { DT_TASK_WAIT_NEXT, NULL, "Task_WaitNext", Task_WaitNext, OUT_A | OUT_X | OUT_Y | OUT_P, true, 0, true },
+    { DT_CODE_SCHEDULER, "ducktales.decomp.FF35", "Task_Schedule", Task_Schedule, 0, true, 0, false, .timed = true,
+      .own_stack = true },
+    { DT_CODE_SCHEDULER_PASS, "ducktales.decomp.FF38", "Task_Pass", Task_Pass, 0, true, 0, false, .timed = true },
+    { DT_SCHEDULER_PULL, NULL, "Task_Resume", Task_Resume, TASK_REGS, true, 2, true, .timed = true },
 };
 const int gSystemRoutineCount = sizeof gSystemRoutines / sizeof gSystemRoutines[0];

@@ -558,11 +558,19 @@ addr = 0xE1AF
 length = 8
 crc32 = 0xD1E4F218
 
+# Task_Schedule, the scheduler's entry
 [[mod_function_hook]]
-id = "ducktales.decomp.stop.FF35"
+id = "ducktales.decomp.FF35"
 addr = 0xFF35
 length = 8
 crc32 = 0xEB49C2BB
+
+# Task_Pass, one pass of the scheduler
+[[mod_function_hook]]
+id = "ducktales.decomp.FF38"
+addr = 0xFF38
+length = 8
+crc32 = 0xAACD8749
 
 # Task_Yield
 [[mod_function_hook]]
