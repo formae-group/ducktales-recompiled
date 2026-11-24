@@ -1241,12 +1241,14 @@ static uint8_t Spawn_Reset(void)
     return y;
 }
 
-/* bank 6 $B105: a timed object of entry y at world X $03:$02 in the
+/* bank 6 $B105: a timed object of entry *y at world X $03:$02 in the
  * highest free slot, from the type's 4-byte template at $BE16. Returns the
- * slot (0 when every one is taken, which spawns nothing). */
-static uint8_t Spawn_Timed(uint8_t y)
+ * slot (0 when every one is taken, which spawns nothing); *y is left as the
+ * original's Y, the template's last offset. */
+static uint8_t Spawn_Timed(uint8_t *yp)
 {
     uint8_t slot;
+    uint8_t y = *yp;
     if (!Obj_FindFreeSlot(&slot)) {
         return slot;
     }
@@ -1255,6 +1257,7 @@ static uint8_t Spawn_Timed(uint8_t y)
     gScratch4 = (uint8_t)DT_B6_SPAWN_TEMPLATES;
     gScratch5 = (uint8_t)((DT_B6_SPAWN_TEMPLATES >> 8) + (type >> 6 & 1));
     uint16_t t = (uint16_t)(Ram_GetU16(DT_ADDR_SCRATCH4, DT_ADDR_SCRATCH5) + (uint8_t)(type << 2));
+    *yp = (uint8_t)((type << 2) + 3);
     gObjects->state[slot] = gObjects->flags[slot] = rom(t);
     gObjects->action[slot] = rom((uint16_t)(t + 1));
     gObjects->kind[slot] = rom((uint16_t)(t + 2));
@@ -1275,9 +1278,9 @@ static uint8_t Spawn_Timed(uint8_t y)
  * bit 7) and its countdown is done, the timed object the map row has for
  * the page at the far edge of the screen (bit 7 of the entry: a pair, the
  * second at Y $C0 and X mirrored). */
-static void Spawn_TimedAtEdge(void)
+static void Spawn_TimedAtEdge(uint8_t *xp, uint8_t *yp)
 {
-    Decomp_Enter(DT_B6_SPAWN_TIMED, 0, 0, 0);
+    Decomp_Enter(DT_B6_SPAWN_TIMED, 0, *xp, *yp);
     if ((gBossFight & 0x80) || (gSpawnTimer & 0x80)) {
         return;
     }
@@ -1287,12 +1290,13 @@ static void Spawn_TimedAtEdge(void)
     }
     uint8_t row = (uint8_t)(rom((uint16_t)(DT_B6_TIMED_LAND + gLand)) + gMapRow);
     uint8_t y = rom((uint16_t)(DT_B6_TIMED_ROW + row));
-    uint8_t edge = gSpawnSide & 2;
+    uint8_t edge = *xp = gSpawnSide & 2;
     unsigned x = gCameraX + rom((uint16_t)(DT_B6_TIMED_EDGE + edge));
     gScratch2 = (uint8_t)x;
     gScratch3 = (uint8_t)(gCameraPage + rom((uint16_t)(DT_B6_TIMED_EDGE + 1 + edge)) + (x >> 8));
     for (;; y++) {
         uint8_t entry = rom((uint16_t)(DT_B6_TIMED_PAGE + y));
+        *yp = y;
         if (entry == 0xFF) {
             return;
         }
@@ -1301,23 +1305,27 @@ static void Spawn_TimedAtEdge(void)
             break;
         }
         if (y == 0xFF) {
+            *yp = 0;
             return;
         }
     }
     if (gScratch6) {
         gScratch7 = y;
-        gObjects->y[Spawn_Timed(y)] = 0xC0;
-        y = gScratch7;
+        gObjects->y[Spawn_Timed(yp)] = 0xC0;
+        *yp = gScratch7;
         gScratch2 ^= 0xF0;
     }
-    Spawn_Timed(y);
+    *xp = Spawn_Timed(yp);
 }
 
-/* bank 6 $AEA0 */
-static void Spawn_Update(void)
+/* bank 6 $AEA0. X and Y are left as the original leaves them (a caller's
+ * task_yield keeps them): X the last record spawn's or the timed spawn's, Y
+ * the right index ($4C) after a move left, the left one ($4D) after a move
+ * right, else the timed spawn's. */
+static void Spawn_Update(uint8_t *xp, uint8_t *yp)
 {
-    Decomp_Enter(DT_B6_SPAWN, 0, 0, 0);
-    Spawn_TimedAtEdge();
+    Decomp_Enter(DT_B6_SPAWN, 0, *xp, *yp);
+    Spawn_TimedAtEdge(xp, yp);
     unsigned right = (unsigned)(gCameraPage << 8 | gCameraX) + 0xFF;
     gScratch0 = gCameraX;
     gScratch1 = gCameraPage;
@@ -1331,7 +1339,7 @@ static void Spawn_Update(void)
     }
     if (!(gSpawnSide & 1)) {
         while (gSpawnLeft != gSpawnFirst && RECORD_X((uint8_t)(gSpawnLeft - 1)) >= left) {
-            Obj_SpawnRecord((uint8_t)(gSpawnLeft - 1));
+            *xp = Obj_SpawnRecord((uint8_t)(gSpawnLeft - 1));
             if (!--gSpawnLeft) {
                 break;
             }
@@ -1341,10 +1349,11 @@ static void Spawn_Update(void)
                 break;
             }
         }
+        *yp = gSpawnRight;
         return;
     }
     while (RECORD_X(gSpawnRight) <= edge) {
-        Obj_SpawnRecord(gSpawnRight);
+        *xp = Obj_SpawnRecord(gSpawnRight);
         if (!++gSpawnRight) {
             break;
         }
@@ -1352,7 +1361,7 @@ static void Spawn_Update(void)
     uint8_t y = gSpawnLeft;
     while (RECORD_X(y) <= left && ++y) {
     }
-    gSpawnLeft = y;
+    gSpawnLeft = *yp = y;
 #undef RECORD_X
 }
 
@@ -1440,14 +1449,12 @@ static void Run_SpawnReset(Regs *r)
 
 static void Run_SpawnTimedAtEdge(Regs *r)
 {
-    (void)r;
-    Spawn_TimedAtEdge();
+    Spawn_TimedAtEdge(&r->x, &r->y);
 }
 
 static void Run_SpawnUpdate(Regs *r)
 {
-    (void)r;
-    Spawn_Update();
+    Spawn_Update(&r->x, &r->y);
 }
 
 static void Run_TileEditByAction(Regs *r)
@@ -1549,8 +1556,8 @@ const DecompRoutine gLevelRoutines[] = {
       .bank = DT_BANK_OBJECTS },
     { DT_B6_SPAWN_RESET, "ducktales.decomp.6.AE60", "Spawn_Reset", Run_SpawnReset, OUT_A | OUT_Y,
       .bank = DT_BANK_OBJECTS },
-    { DT_B6_SPAWN_TIMED, NULL, "Spawn_TimedAtEdge", Run_SpawnTimedAtEdge, 0, .bank = DT_BANK_OBJECTS },
-    { DT_B6_SPAWN, "ducktales.decomp.6.AEA0", "Spawn_Update", Run_SpawnUpdate, 0, .bank = DT_BANK_OBJECTS },
+    { DT_B6_SPAWN_TIMED, NULL, "Spawn_TimedAtEdge", Run_SpawnTimedAtEdge, OUT_X | OUT_Y, .bank = DT_BANK_OBJECTS },
+    { DT_B6_SPAWN, "ducktales.decomp.6.AEA0", "Spawn_Update", Run_SpawnUpdate, OUT_X | OUT_Y, .bank = DT_BANK_OBJECTS },
     { DT_CODE_TILE_EDIT_BY_ACTION, "ducktales.decomp.F4D8", "Tile_EditByAction", Run_TileEditByAction,
       OUT_X | OUT_Y | OUT_HW },
     { DT_CODE_OBJ_EDIT_TILE, "ducktales.decomp.F506", "Tile_EditBySlot", Run_TileEditBySlot, OUT_X | OUT_Y | OUT_HW },
