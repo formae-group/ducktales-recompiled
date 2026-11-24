@@ -20,6 +20,10 @@
  *   timing     a frame's sound is mixed after its end, so what the requests
  *              start takes effect from the next mix, the frame the NMI
  *              starts them in; the mute is for the next frame's emulation
+ *   fades      a replacement fades in over 5 ms when it starts and out over
+ *              5 ms when it is stopped (from the samples it has decoded, in a
+ *              slot of its own, so the next file can start at once) or held
+ *              by the pause, so no start, stop or pause steps the waveform
  *
  * Only RAM is read: the APU keeps running every channel (the mute is the
  * host's audio-only mask), so the machine is the console's.
@@ -43,10 +47,10 @@ typedef struct {
 
 typedef struct {
     FmSound *sound;
-    bool on, loop, held;
+    bool on, loop, held, releasing;
     float buf[1024];
     size_t len, pos;
-    double frac;
+    double frac, gain;
     float a, b;
     bool primed;
 } Voice;
@@ -58,7 +62,7 @@ static uint8_t s_priority[SOUND_IDS], s_mask[SOUND_IDS];
 static int s_music = -1, s_effect = -1;
 static bool s_music_playing, s_effect_playing;
 static uint8_t s_effect_channels, s_mute;
-static Voice s_voice[2];
+static Voice s_voice[2], s_release[2];
 
 static struct {
     bool pending;
@@ -115,6 +119,11 @@ bool mods_audio_add(bool music, int id, uint8_t *file, size_t size, char *err, s
 
 static void voice_stop(Voice *v)
 {
+    if (v->on && v->sound && v->gain > 0) {
+        Voice *r = &s_release[v - s_voice];
+        *r = *v;
+        r->releasing = true;
+    }
     v->on = false;
     v->sound = NULL;
 }
@@ -132,6 +141,7 @@ void app_mods_reset(void)
 {
     voice_stop(&s_voice[0]);
     voice_stop(&s_voice[1]);
+    memset(s_release, 0, sizeof s_release);
     s_music = s_effect = -1;
     s_music_playing = s_effect_playing = false;
     s_effect_channels = s_mute = 0;
@@ -251,6 +261,9 @@ static void apply_next(void)
 
 static bool next_sample(Voice *v, float *out)
 {
+    if (v->pos >= v->len && v->releasing) {
+        return false;
+    }
     if (v->pos >= v->len) {
         v->len = fm_sound_read(v->sound, v->buf, sizeof v->buf / sizeof v->buf[0], v->loop);
         v->pos = 0;
@@ -276,11 +289,45 @@ static float voice_sample(Voice *v, double step)
         v->frac -= 1.0;
         v->a = v->b;
         if (!next_sample(v, &v->b)) {
-            v->on = false;
+            v->on = v->releasing;
             break;
         }
     }
     return out;
+}
+
+static void add_voice(Voice *v, double *samples, size_t count, int rate)
+{
+    if (!v->on || !v->sound || (v->held && v->gain <= 0)) {
+        return;
+    }
+    double step = (double)fm_sound_rate(v->sound) / rate, fade = 1.0 / (0.005 * rate);
+    for (size_t i = 0; i < count && v->on; i++) {
+        double d = (v->held || v->releasing ? 0.0 : 1.0) - v->gain;
+        v->gain += d > fade ? fade : d < -fade ? -fade : d;
+        if (v->gain <= 0 && (v->held || v->releasing)) {
+            v->on = !v->releasing;
+            break;
+        }
+        samples[i] += voice_sample(v, step) * 32767.0 * v->gain;
+    }
+}
+
+static void add_voices(double *samples, size_t count, int rate)
+{
+    for (int k = 0; k < 2; k++) {
+        add_voice(&s_release[k], samples, count, rate);
+        add_voice(&s_voice[k], samples, count, rate);
+    }
+}
+
+void app_mods_audio_add(double *samples, size_t count, int rate)
+{
+    if (!s_count || rate <= 0) {
+        return;
+    }
+    add_voices(samples, count, rate);
+    apply_next();
 }
 
 void app_mods_audio_mix(int16_t *samples, size_t count, int rate)
@@ -288,15 +335,16 @@ void app_mods_audio_mix(int16_t *samples, size_t count, int rate)
     if (!s_count || rate <= 0) {
         return;
     }
-    for (int k = 0; k < 2; k++) {
-        Voice *v = &s_voice[k];
-        if (!v->on || v->held || !v->sound) {
-            continue;
+    double mix[1024];
+    for (size_t at = 0; at < count; at += 1024) {
+        size_t n = count - at < 1024 ? count - at : 1024;
+        for (size_t i = 0; i < n; i++) {
+            mix[i] = samples[at + i];
         }
-        double step = (double)fm_sound_rate(v->sound) / rate;
-        for (size_t i = 0; i < count && v->on; i++) {
-            long mixed = samples[i] + lrintf(voice_sample(v, step) * 32767.0f);
-            samples[i] = (int16_t)(mixed > 32767 ? 32767 : mixed < -32768 ? -32768 : mixed);
+        add_voices(mix, n, rate);
+        for (size_t i = 0; i < n; i++) {
+            long v = lrint(mix[i]);
+            samples[at + i] = (int16_t)(v > 32767 ? 32767 : v < -32768 ? -32768 : v);
         }
     }
     apply_next();

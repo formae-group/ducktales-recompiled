@@ -78,8 +78,14 @@
  * Routines of the switchable window ($8000-$BFFF) match their site only with
  * their bank (DecompRoutine.bank) mapped. A replaced routine that an NMI
  * interrupts while it spends the original's cycles owes the rest; the NMI
- * handler's exit (DT_SITE_NMI_EXIT) spends it, so the interrupted code
- * resumes at the console's time.
+ * handler's RTI spends it, so the interrupted code resumes at the console's
+ * time: the RTI of an interrupt routine's C, or the original's
+ * (DT_SITE_NMI_EXIT).
+ *
+ * Interrupt routines (DecompRoutine.interrupt) are task code whose C ends in
+ * RTI. Their isolated original enters as task code's does, with the return
+ * address one on (an RTI does not add one, as an RTS does), so that its RTI
+ * ends the call.
  */
 #include "decomp/decomp_backend.h"
 
@@ -128,7 +134,7 @@ typedef struct {
     uint16_t start, stop_pc;
     uint8_t start_s, call_s, stop_s, stop_bank;
     uint8_t ret[2]; /* the isolated call's return address, where the RTS observer left it */
-    bool fixup, stop_armed, stopped, returned;
+    bool fixup, stop_armed, stopped, returned, rti;
     CycModRegs regs;
     uint64_t entry_cycles, cycles, io;
 } TaskRun;
@@ -683,6 +689,7 @@ static void run_task_original(const DecompRoutine *rt, const CycModRegs *in)
     s_run.start_s = in->s;
     s_run.call_s = (uint8_t)(in->s + rt->locals + 2);
     s_run.fixup = true;
+    s_run.rti = rt->interrupt;
     s_run.stop_armed = dc_handoff_set;
     s_run.stop_pc = dc_handoff;
     s_run.stop_s = dc_cur_s;
@@ -796,6 +803,9 @@ static void task_check(int i, const CycModRegs *in)
         return;
     }
     run_task_original(rt, in);
+    if (rt->interrupt && !dc_handoff_set) {
+        c.p = dc_image[0x100 | (uint8_t)(dc_cur_s + 1)];
+    }
     if (!task_same(rt, &c)) {
         task_report(rt, in, &c);
     }
@@ -820,7 +830,9 @@ static bool task_replace(int i, const CycModRegs *in)
     if (!s_run.returned || dc_handoff_set != s_run.stopped) {
         dc_fail("the original task routine did not end where the C does in an isolated call", rt->addr);
     }
-    if (spans_frame_end(s_run.cycles) || crosses_vblank(s_run.cycles)) {
+    bool rti = rt->interrupt && !dc_handoff_set;
+    uint64_t debt = rti ? s_nmi_debt : 0;
+    if (spans_frame_end(s_run.cycles + debt) || crosses_vblank(s_run.cycles + debt)) {
         dc_stats[i].original++;
         return false;
     }
@@ -837,12 +849,16 @@ static bool task_replace(int i, const CycModRegs *in)
     }
     uint8_t s = dc_cur_s;
     uint16_t pc = dc_handoff;
-    if (!dc_handoff_set) {
+    if (rti) {
+        c.p = ram[0x100 | (uint8_t)(s + 1)];
+        pc = (uint16_t)(ram[0x100 | (uint8_t)(s + 2)] | ram[0x100 | (uint8_t)(s + 3)] << 8);
+        s = (uint8_t)(s + 3);
+    } else if (!dc_handoff_set) {
         pc = (uint16_t)((ram[0x100 | (uint8_t)(s + 1)] | ram[0x100 | (uint8_t)(s + 2)] << 8) + 1);
         s = (uint8_t)(s + 2);
     }
     uint8_t flags = P_N | P_V | P_Z | P_C;
-    uint8_t p = dc_handoff_set ? in->p : (uint8_t)((c.p & flags) | (in->p & ~flags));
+    uint8_t p = rti ? c.p : dc_handoff_set ? in->p : (uint8_t)((c.p & flags) | (in->p & ~flags));
     CycModRegs set = { c.a, c.x, c.y, s, p, 0 };
     if (dc_handoff_set) {
         if (!(dc_handoff_uses & OUT_A)) {
@@ -859,7 +875,8 @@ static bool task_replace(int i, const CycModRegs *in)
     for (int k = 0; k < dc_stores; k++) {
         cpu_write(dc_store[k].addr, dc_store[k].value, 0);
     }
-    spend_cycles(rt->addr, s_run.cycles > (uint64_t)dc_stores ? s_run.cycles - (uint64_t)dc_stores : 1);
+    s_nmi_debt -= debt;
+    spend_cycles(rt->addr, (s_run.cycles > (uint64_t)dc_stores ? s_run.cycles - (uint64_t)dc_stores : 1) + debt);
     dc_stats[i].compared++;
     dc_nested_compared();
     cpu.pc = pc;
@@ -877,6 +894,11 @@ static void on_return(void)
             s_run.entry_cycles = hw_isolated_cycles;
             s_run.ret[0] = cyc_cpu_ram()[0x100 | (uint8_t)(s_run.call_s - 1)];
             s_run.ret[1] = cyc_cpu_ram()[0x100 | s_run.call_s];
+            if (s_run.rti) {
+                uint16_t ret = (uint16_t)((s_run.ret[0] | s_run.ret[1] << 8) + 1);
+                cyc_mod_poke((uint16_t)(0x100 | (uint8_t)(s_run.call_s - 1)), (uint8_t)ret);
+                cyc_mod_poke((uint16_t)(0x100 | s_run.call_s), (uint8_t)(ret >> 8));
+            }
             CycModRegs r;
             cyc_mod_regs(&r);
             r.s = s_run.start_s;

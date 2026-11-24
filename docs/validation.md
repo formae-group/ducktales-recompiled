@@ -357,6 +357,59 @@ then the music under `$13` is heard until `$13` gives the channel back. With `$1
 running song, the music is heard from the first frame. From frame 15 or 16 on, the rows are equal:
 the channel is the music's again.
 
+## Presented sound
+
+What the native player's audio device plays, after the output stage
+([audio.md](audio.md#output-stage)), on branch `audio/robustness` (2026-11-24).
+`tests/audio_output_test.py` runs `ducktales.exe --audio-out` (`build/windows`, off screen, no window)
+with the frame loop and the device on simulated clocks: the 12 routes at the defaults (No slowdown
+off, VSync 144 Hz, volume 100) and in the worst case (No slowdown on, both extra voices on, a mod
+replacing every music and effect with full-scale sines, volume 100, VSync 60 Hz, device clock
++300 ppm), `amazon_intro` at VSync 60 and 120 Hz and with none (a minimised window), the window
+events at the defaults and in the worst case (menu paused 180 frames, fast-forward 300 frames, a
+1.5 s window drag, a loaded state, sound off 120 frames, a volume sweep 100-0-100, a 480-sample device
+buffer), a 120 ms hitch, and `full_african_mines` with the device clock 500 ppm fast and slow: 32 runs.
+A click is a step between output samples larger than the game's own largest step around it (the
+synth's samples before the mods' files) plus 1% of full scale, including the steps from silence at
+the start and to silence at the close.
+
+**The synth's level.** `--wav-out` peaks over the 12 routes (all 48 runs: extra voices off/on, No
+slowdown off/on): -11.96 to -9.95 dBFS with the voices off, -11.96 to -7.88 dBFS with them on
+(`full_himalayas`), no sample at full scale. The console's channels cannot clip the output; with the
+voices' two extra sets of channels a full-scale sum is possible in theory (all twelve channels at
+volume 15 together), never on a route. The default output is unchanged: `ducktales.exe --wav-out` is
+byte-identical to fc462ad on `amazon_intro` and `full_moon`, voices off and on, No slowdown off and on.
+
+**Before** (the old queue in `native_output.c` at 2c483c6, the logic `queue_audio` had): 32 of 32 runs
+fail. Default runs: no sample at full scale, 1-2 clicks each (the power-on start, a step of up to
+4,633, and the device closing mid-waveform), 5 of the 12 with an underrun. Worst case: the mix peaks at
++6.02 dBFS and the 16-bit clamp hard-clips 46,619 (`re_amazon_moves`) to 1,342,521
+(`full_african_mines`) samples a route; 2-46 clicks. Window events: 6 underruns (every hold ran the
+device dry and stepped to silence), 9 clicks, 163 in the worst case. Device clock 500 ppm slow: 5 whole
+frames dropped at 100 ms queued. Steps of up to 27,910 came from mod files starting and stopping
+(measured with the output stage in place and the mods' fades out), and on `full_moon` with every
+music and effect replaced, steps of up to 4,634 where the synth's channels were cut for the mod (1,866
+with the 5 ms ramp).
+
+**After** (619ac4e): **32 of 32 pass**, 0 samples at full scale, 0 clicks, 0 underruns except the one
+in the hitch run, declicked.
+
+| Runs | Mix peak dBFS | Output peak dBFS | Largest step | Underruns | Frames dropped | Frames resampled | Queue peak ms |
+|---|---|---|---|---|---|---|---|
+| 12 routes, defaults | -11.96 to -9.95 | -11.98 to -9.95 | 7 | 0 | 0 | 194 each | 66.8 |
+| 12 routes, worst case | +5.96 to +6.02 | -1.00 | 296 | 0 | 0 | 766-2,436 | 77.5 |
+| VSync 60 / 120 / none | -10.13 | -10.13 | 0 | 0 | 0 | 594 / 285 / 147 | 77.5 / 69.5 / 63.2 |
+| Window events, defaults / worst | -10.13 / +6.02 | -10.21 / -1.00 | 9 / 266 | 0 | 0 | 887 / 2,470 | 38.5 / 48.2 |
+| Hitch 120 ms | -10.13 | -10.13 | 26 | 1 | 0 | 426 | 66.8 |
+| Device clock +500 / -500 ppm | -9.95 | -9.95 | 0 / 5 | 0 | 0 | 5,087 / 4,266 | 65.8 / 81.6 |
+
+At the defaults the limiter never acts (0 samples turned down) and the output equals the synth's
+samples except on resampled frames, which change length by at most 0.5% (the frame clock and VSync or
+the device clock disagreeing; 194 of a route's frames at the start, while the queue fills). In the
+worst case the limiter holds the output at -1.00 dBFS. `quick_verify.py` native: 12/12 routes, 82,626
+frames. The window's own audio path (the SDL callback, the holds from the menu, the window's frame,
+F9, F11 and closing) is the same `native_output.c` and was run by `tests/window_smoke.py`, not heard.
+
 ## Decompiled flow and HUD
 
 On the integrated tree, all three Release builds and the hidden window smoke test passed.
@@ -466,6 +519,10 @@ On main `8569c86` (the release tree before its changelog and documentation commi
   independent reference so far.
 - The native player's window by eye, F8/F9 by hand, and
   `HudSplit = original` against the cycle build.
+- The native player's sound on a real audio device: `tests/audio_output_test.py` simulates the
+  frame loop and the device's clock; a real device's buffer sizes, its clock and Windows' mixer,
+  a real window drag, F9 and closing were not listened to, and the loudness and pitch of the
+  limiter and the 0.5% resampling not judged by ear.
 - The extra voices by ear in the player's window, and `$37` (all four channels) under music; only
   off-screen runs were made.
 - The native synth by ear beyond the owner's check of the unfocused window ("Native synth");

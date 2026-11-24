@@ -706,16 +706,16 @@
 #define DT_CODE_SWOOPER_PATH              0x9544 /* kind $11: motion index by step, 14 entries */
 #define DT_CODE_KIND_LIFT                 0x9093 /* kind $0F */
 #define DT_CODE_KIND_TALKER               0xFDF5 /* kind $35 (fixed bank) */
-#define DT_CODE_KIND_36                   0xF869 /* kind $36 (fixed bank) */
-#define DT_CODE_KIND_37                   0xF8F2 /* kind $37 (fixed bank) */
+#define DT_CODE_KIND_LAUNCHPAD_RIDE       0xF869 /* kind $36 (fixed bank) */
+#define DT_CODE_KIND_SKY_FLYER            0xF8F2 /* kind $37 (fixed bank) */
+#define DT_CODE_KIND_SKY_ROPE             0xF9F8 /* kind $38 (fixed bank) */
 #define DT_CODE_KIND_16                   0x8DD1 /* kind $16 */
 #define DT_CODE_KIND_17                   0x8E23 /* kind $17 */
 #define DT_CODE_KIND_CART                 0x9EB3 /* kind $21 */
 #define DT_CODE_KIND_HOP_WALKER           0x9F3D /* kind $22 */
 #define DT_CODE_HOP_WALKER_WALK           0x9FC5 /* kind $22: walk, turning at walls */
-#define DT_CODE_KIND_38                   0xF9F8 /* kind $38 (fixed bank) */
-#define DT_CODE_KIND_3A                   0xFA3F /* kind $3A (fixed bank) */
-#define DT_CODE_KIND_3B                   0xFBC9 /* kind $3B (fixed bank) */
+#define DT_CODE_KIND_FINAL_STAND_IN       0xFA3F /* kind $3A (fixed bank) */
+#define DT_CODE_KIND_STAND_IN_BEATEN      0xFBC9 /* kind $3B (fixed bank) */
 #define DT_CODE_KIND_3C                   0xFB68 /* kind $3C (fixed bank) */
 #define DT_CODE_KIND_3D                   0xFBFF /* kind $3D (fixed bank) */
 #define DT_CODE_KIND_40                   0xFD9E /* kind $40 (fixed bank) */
@@ -850,6 +850,7 @@
  * there the cycles a replaced routine still owed when the NMI came
  * (docs/decompilation.md "Timing in replace mode"). */
 #define DT_SITE_NMI_EXIT    0xC138
+#define DT_NMI_RETURN       0xC132 /* the handler's exit: PLA TAY PLA TAX PLA PLP RTI */
 #define DT_SITE_NMI_EXIT_ID "ducktales.decomp.nmi-exit"
 /* Levels: map and screen decoding, column streaming, the VRAM queues, the
  * camera and the background probe (docs/levels.md, docs/rendering.md,

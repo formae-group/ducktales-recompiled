@@ -117,6 +117,7 @@ set(_ducktales_decomp
     "${CMAKE_SOURCE_DIR}/src/decomp/level.c"
     "${CMAKE_SOURCE_DIR}/src/decomp/collision.c"
     "${CMAKE_SOURCE_DIR}/src/decomp/flow.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/nmi.c"
 )
 # The port's systems layer (docs/architecture.md): typed game state, the hook
 # sites it alters behaviour at, settings and options; the typed game API and
@@ -299,6 +300,7 @@ endif()
 if(NOT DUCKTALES_HEADLESS)
     add_executable(ducktales_player
         "${CMAKE_SOURCE_DIR}/src/native/native_window.c"
+        "${CMAKE_SOURCE_DIR}/src/native/native_output.c"
         "${CMAKE_SOURCE_DIR}/src/native/native_present.c"
         "${CMAKE_SOURCE_DIR}/src/native/native_render.c"
         "${CMAKE_SOURCE_DIR}/src/native/native_cycle.c"

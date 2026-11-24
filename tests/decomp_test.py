@@ -85,6 +85,36 @@ MESSAGE_PRESSES = {
     **{POKE_FRAME + 120 + 30 * i: 'A' for i in range(19)},
     **{POKE_FRAME + 124 + 30 * i: '-' for i in range(19)},
 }
+# kind $38 in slot 3 at Scrooge's place in the Amazon at POKE_FRAME
+SKY_ROPE = {
+    0x703: 0xA0,
+    0x603: 0xA0,
+    0x623: 0x5A,
+    0x643: 0xA9,
+    0x723: 0x60,
+    0x733: 0x00,
+    0x713: 0x38,
+    0x7D3: 0x00,
+    0x633: 0x00,
+    0x613: 0x00,
+}
+# kind $3A as the spawner makes it (hidden, action $84) in slot 3
+STAND_IN = {
+    0x703: 0xB0,
+    0x603: 0xA0,
+    0x623: 0x84,
+    0x713: 0x3A,
+    0x7D3: 0x00,
+    0x693: 0x00,
+    0x6B3: 0x00,
+    0x6C3: 0x00,
+    0x6D3: 0x00,
+    0x6F3: 0x00,
+    0x733: 0x00,
+    0x723: 0x60,
+    0x633: 0x00,
+    0x613: 0x00,
+}
 # name, {address: value} stored before POKE_FRAME (or {frame: {...}}), routines that must be compared,
 # optionally {frame: buttons} pad states added to the route
 POKES = [
@@ -119,6 +149,16 @@ POKES = [
     ('hud-total', {0xAB: 0x01}, ['Hud_RefreshTotal']),
     ('scene-1', {0x78: 0x81}, ['Scene_Placed', 'Scene_Done']),
     ('scene-2', {0x78: 0x82}, ['Scene_Placed', 'Scene_Done']),
+    ('sky-rope', SKY_ROPE, ['Obj_SkyRope']),
+    ('sky-rope-dying', SKY_ROPE | {0x39: 0x0D}, ['Obj_SkyRope']),
+    ('stand-in', STAND_IN, ['Obj_FinalStandIn'], None, 520),
+    (
+        'stand-in-beaten',
+        {POKE_FRAME: STAND_IN | {0xB1: 0x02}, POKE_FRAME + 10: {0x693: 0x01}, POKE_FRAME + 200: {0x693: 0x01}},
+        ['Obj_FinalStandIn', 'Boss_Hit', 'Obj_StandInBeaten'],
+        None,
+        420,
+    ),
     ('mode15-redraw', {0x39: 0x0F, 0x6E: 0x0B}, ['Mode15_Redraw', 'Mode15_ArenaChr', 'Mode15_Spawned']),
     ('final-trip', {100: {0x5E: 0x01}}, ['LandSelect_FinalScene', 'FinalTrip_Next', 'FinalTrip_Flashed']),
     ('all-treasures', {100: {0x5D: 0x01, 0xA0: 0x1F}}, ['LandSelect_Banked', 'LandSelect_FinalWait']),
@@ -146,6 +186,36 @@ POKES = [
         'extra-dot',
         {0x709: 0xA2, 0x719: 0x13, 0x629: 0x2B, 0x649: 0xA6, 0x729: 0x62, 0x739: 0x00, 0x7D9: 0x01, 0x609: 0x80},
         ['Pickup_Take', 'Pickup_ExtraDot', 'Hud_RefillHp'],
+    ),
+    # the same pickup holding the extra life ($8BB0, a timed item, so its timer is set), and item $74, a treasure past the five lands that
+    # shows message $0D instead of the treasure pose ($8C37)
+    (
+        'extra-life',
+        {
+            0x709: 0xA2,
+            0x719: 0x13,
+            0x629: 0x27,
+            0x6B9: 0xFF,
+            0x649: 0xA6,
+            0x729: 0x62,
+            0x739: 0x00,
+            0x7D9: 0x01,
+            0x609: 0x80,
+        },
+        ['Pickup_Take'],
+    ),
+    (
+        'secret-treasure',
+        {0x709: 0xA2, 0x719: 0x13, 0x629: 0x74, 0x649: 0xA6, 0x729: 0x62, 0x739: 0x00, 0x7D9: 0x01, 0x609: 0x80},
+        ['Pickup_Take', 'Pickup_Treasure'],
+    ),
+    # the camera at the right end of Amazon row 5 ($2D = $2F) with Scrooge walking right past X $F0:
+    # the camera stays and his X is clamped to $F0 ($F08B)
+    (
+        'row-end-right',
+        {0xF2: 0x00, 0xF3: 0x07, 0x2D: 0x2F, 0x720: 0xF8, 0x730: 0x07, 0x650: 0xF8},
+        ['Camera_Update'],
+        {POKE_FRAME + 1: 'RIGHT'},
     ),
     (
         'money-max',

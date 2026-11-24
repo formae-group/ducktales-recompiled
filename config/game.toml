@@ -735,8 +735,16 @@ bank = 3
 length = 8
 crc32 = 0xD13796E4
 
+# Nmi_Return, the NMI handler's exit (an interrupt routine)
+[[mod_function_hook]]
+id = "ducktales.decomp.C132"
+addr = 0xC132
+length = 8
+crc32 = 0xCC35B61B
+
 # RTI of the NMI handler: replace mode spends there the cycles a replaced
-# routine still owed when the NMI came (src/decomp/decomp.c)
+# routine still owed when the NMI came, when the original's RTI runs
+# (src/decomp/decomp_cycle.c)
 [[mod_function_hook]]
 id = "ducktales.decomp.nmi-exit"
 addr = 0xC138

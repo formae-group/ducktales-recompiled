@@ -113,10 +113,10 @@ frame and also guards against it:
   zero state mask), registers the frame-loop thread with MMCSS in the `Games` class
   (`AvSetMmThreadCharacteristicsW`) and holds a 1 ms timer resolution (`timeBeginPeriod(1)`); all
   three are released at exit.
-- When late frames let the audio queue fall below the device buffer plus one frame, that frame's
-  samples are stretched (linear interpolation, at most twice their length) to refill it, so the
-  device never runs out; a short pitch drop replaces the crackle. The queue still holds at most
-  100 ms.
+- The audio queue is kept near two device buffers and a frame by resampling frames by at most 0.5%
+  (2% when under half a buffer is left), and the sound fades out instead of running dry when the
+  frame loop stops on purpose (the menu pausing the game, fast-forward, a window move or resize); see
+  [audio.md](audio.md#output-stage).
 
 `ducktales_cycle.exe` has neither. Not verified by ear or with an unfocused window on that machine.
 
