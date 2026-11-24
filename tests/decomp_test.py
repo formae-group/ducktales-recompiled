@@ -85,6 +85,19 @@ MESSAGE_PRESSES = {
     **{POKE_FRAME + 120 + 30 * i: 'A' for i in range(19)},
     **{POKE_FRAME + 124 + 30 * i: '-' for i in range(19)},
 }
+# kind $38 in slot 3 at Scrooge's place in the Amazon at POKE_FRAME
+SKY_ROPE = {
+    0x703: 0xA0,
+    0x603: 0xA0,
+    0x623: 0x5A,
+    0x643: 0xA9,
+    0x723: 0x60,
+    0x733: 0x00,
+    0x713: 0x38,
+    0x7D3: 0x00,
+    0x633: 0x00,
+    0x613: 0x00,
+}
 # name, {address: value} stored before POKE_FRAME (or {frame: {...}}), routines that must be compared,
 # optionally {frame: buttons} pad states added to the route
 POKES = [
@@ -119,6 +132,8 @@ POKES = [
     ('hud-total', {0xAB: 0x01}, ['Hud_RefreshTotal']),
     ('scene-1', {0x78: 0x81}, ['Scene_Placed', 'Scene_Done']),
     ('scene-2', {0x78: 0x82}, ['Scene_Placed', 'Scene_Done']),
+    ('sky-rope', SKY_ROPE, ['Obj_SkyRope']),
+    ('sky-rope-dying', SKY_ROPE | {0x39: 0x0D}, ['Obj_SkyRope']),
     ('mode15-redraw', {0x39: 0x0F, 0x6E: 0x0B}, ['Mode15_Redraw', 'Mode15_ArenaChr', 'Mode15_Spawned']),
     ('final-trip', {100: {0x5E: 0x01}}, ['LandSelect_FinalScene', 'FinalTrip_Next', 'FinalTrip_Flashed']),
     ('all-treasures', {100: {0x5D: 0x01, 0xA0: 0x1F}}, ['LandSelect_Banked', 'LandSelect_FinalWait']),

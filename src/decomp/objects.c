@@ -3756,28 +3756,32 @@ static void Obj_Visitor(uint8_t x)
     gObjects->flags[x] &= (uint8_t)~OBJ_FLAG_FACING_RIGHT;
 }
 
-/* ---- kinds $36 and $37 (fixed bank, not studied) ---- */
+/* ---- the scene objects, kinds $36 to $38 (fixed bank) ---- */
 
-#define KIND36_SCENE     0x82 /* the special scene its fall requests */
-#define KIND36_BRAKE_X   0xB0 /* below this world X it slows down */
-#define KIND36_BRAKE     4
-#define KIND36_LEAVE_X   0x10
-#define KIND36_BRAKE_DIG 7 /* the money digit $0326 that makes it brake */
-#define KIND37_WAIT      0x3C
-#define KIND37_TOP_Y     0x50
-#define KIND37_STOP_X    0x70
-#define KIND37_GONE_Y    0x10
-#define KIND37_SCROLL    0x80
-#define KIND37_NEXT_SLOT 3
+#define RIDE_SCENE      0x82 /* the special scene its fall requests */
+#define RIDE_BRAKE_X    0xB0 /* below this world X it slows down */
+#define RIDE_BRAKE      4
+#define RIDE_LEAVE_X    0x10
+#define RIDE_BRAKE_DIG  7 /* the money digit $0326 that makes it brake */
+#define FLYER_WAIT      0x3C
+#define FLYER_TOP_Y     0x50
+#define FLYER_STOP_X    0x70
+#define FLYER_GONE_Y    0x10
+#define FLYER_SCROLL    0x80
+#define FLYER_NEXT_SLOT 3
+#define ROPE_ACTION     4
+#define ROPE_RISE       2
+#define ROPE_TOP_Y      0x10
 
-/* Kind $36 ($F869): Scrooge rides it (his Y and world X are its own) and the
+/* Kind $36 ($F869), Launchpad's ride home (scene 1; the name is a hypothesis
+ * from the scene): Scrooge rides it (his Y and world X are its own) and the
  * HUD time stands still. Step 1 moves left at speed 1; while the money digit
  * $0326 is 7 it brakes by 4/256 a frame below world X $B0 and stops, going to
  * step 2, otherwise the land is left once Scrooge is left of $10. Steps 2 and
  * 3 fall with gravity, requesting scene 2 while the fall does not wrap. */
-static void Obj_Kind36(uint8_t x)
+static void Obj_LaunchpadRide(uint8_t x)
 {
-    Decomp_Enter(DT_CODE_KIND_36, 0x22, x, gObjects->kind[x]);
+    Decomp_Enter(DT_CODE_KIND_LAUNCHPAD_RIDE, 0x22, x, gObjects->kind[x]);
     gObjects->animTimer[P_] = 0;
     gTickFrames = 0;
     if ((gObjects->state[x] & 0x0F) == 0) {
@@ -3794,7 +3798,7 @@ static void Obj_Kind36(uint8_t x)
         Obj_ApplyVelocityY(x);
         gObjects->y[P_] = gObjects->y[x];
         if (carry) {
-            RAM_U8(DT_ADDR_SCENE) = KIND36_SCENE;
+            RAM_U8(DT_ADDR_SCENE) = RIDE_SCENE;
         }
         return;
     }
@@ -3802,17 +3806,17 @@ static void Obj_Kind36(uint8_t x)
     (void)Alu_Sbc(gObjects->xFrac[x], gObjects->speedFrac[x], &p);
     gObjects->worldX[P_] = gObjects->worldX[x] = Alu_Sbc(gObjects->worldX[x], gObjects->speed[x], &p);
     gObjects->worldPage[P_] = gObjects->worldPage[x] = Alu_Sbc(gObjects->worldPage[x], 0, &p);
-    if (RAM_U8(DT_ADDR_MONEY_DIGITS + 2) != KIND36_BRAKE_DIG) {
-        if (gObjects->worldX[P_] < KIND36_LEAVE_X) {
+    if (RAM_U8(DT_ADDR_MONEY_DIGITS + 2) != RIDE_BRAKE_DIG) {
+        if (gObjects->worldX[P_] < RIDE_LEAVE_X) {
             RAM_U8(DT_ADDR_LAND_LEFT)++;
         }
         return;
     }
-    if (gObjects->worldX[x] >= KIND36_BRAKE_X) {
+    if (gObjects->worldX[x] >= RIDE_BRAKE_X) {
         return;
     }
     p = P_C;
-    gObjects->speedFrac[x] = Alu_Sbc(gObjects->speedFrac[x], KIND36_BRAKE, &p);
+    gObjects->speedFrac[x] = Alu_Sbc(gObjects->speedFrac[x], RIDE_BRAKE, &p);
     gObjects->speed[x] = Alu_Sbc(gObjects->speed[x], 0, &p);
     if ((gObjects->speed[x] | gObjects->speedFrac[x]) == 0) {
         gObjects->state[x]++;
@@ -3822,7 +3826,7 @@ static void Obj_Kind36(uint8_t x)
 /* $F99C: kind $37 drops an object (kind $13, action $28) from where it is
  * into the highest free slot of 15..9, falling at 4, and waits 30, 60 or 120
  * frames for the next. With no free slot it tries again next frame. */
-static void Kind37_Drop(uint8_t x)
+static void SkyFlyer_Drop(uint8_t x)
 {
     static const uint8_t gaps[8] = { 0x1E, 0x1E, 0x1E, 0x3C, 0x3C, 0x3C, 0x78, 0x78 };
     for (uint8_t o = OBJ_SLOTS - 1; o > 8; o--) {
@@ -3847,14 +3851,14 @@ static void Kind37_Drop(uint8_t x)
     }
 }
 
-/* Kind $37 ($F8F2): with Scrooge gone (status bit 7 clear) it requests the
+/* Kind $37 ($F8F2), in scene 2 (the sky scene): with Scrooge gone (status bit 7 clear) it requests the
  * pit death. It waits 60 frames, rises at 2 to Y $50 (the scripted camera
- * then scrolls left), moves left at speed 1 dropping objects (Kind37_Drop)
+ * then scrolls left), moves left at speed 1 dropping objects (SkyFlyer_Drop)
  * until world X $70 of page 0, where it puts kind $38 into slot 3, then rises
  * off the top and starts over. */
-static void Obj_Kind37(uint8_t x)
+static void Obj_SkyFlyer(uint8_t x)
 {
-    Decomp_Enter(DT_CODE_KIND_37, 0x22, x, gObjects->kind[x]);
+    Decomp_Enter(DT_CODE_KIND_SKY_FLYER, 0x22, x, gObjects->kind[x]);
     if (!(gObjects->flags[P_] & 0x80)) {
         Player_PitDeath();
         return;
@@ -3863,7 +3867,7 @@ static void Obj_Kind37(uint8_t x)
         gObjects->speedFrac[x] = 0;
         gObjects->vyFrac[x] = 0;
         gObjects->unk_06C0[x] = 0;
-        gObjects->timer[x] = KIND37_WAIT;
+        gObjects->timer[x] = FLYER_WAIT;
         gObjects->speed[x] = 1;
         gObjects->vy[x] = 2;
         gObjects->state[x]++;
@@ -3875,21 +3879,21 @@ static void Obj_Kind37(uint8_t x)
     switch (gObjects->state[x] & 0x0F) {
         case 2: {
             if (gObjects->unk_06C0[x] == 0) {
-                Kind37_Drop(x);
+                SkyFlyer_Drop(x);
             }
             gObjects->unk_06C0[x]--;
             Obj_MoveLeft(x);
-            if (gObjects->worldPage[x] != 0 || gObjects->worldX[x] >= KIND37_STOP_X) {
+            if (gObjects->worldPage[x] != 0 || gObjects->worldX[x] >= FLYER_STOP_X) {
                 return;
             }
             gObjects->state[x]++;
-            uint8_t o = KIND37_NEXT_SLOT;
+            uint8_t o = FLYER_NEXT_SLOT;
             gObjects->state[o] = 0xA0;
             gObjects->flags[o] = 0xA0;
             gObjects->action[o] = 0x5A;
             gObjects->worldX[o] = 0x30;
             gObjects->y[o] = 0x80;
-            gObjects->kind[o] = 0x38;
+            gObjects->kind[o] = OBJ_KIND_SKY_ROPE;
             gObjects->hitbox[o] = 0;
             gObjects->animTimer[o] = 0;
             gObjects->animFrame[o] = 0;
@@ -3898,18 +3902,43 @@ static void Obj_Kind37(uint8_t x)
         }
         case 3:
             Obj_SubVelocityY(x);
-            if (gObjects->y[x] < KIND37_GONE_Y) {
+            if (gObjects->y[x] < FLYER_GONE_Y) {
                 gObjects->state[x] = 0;
             }
             return;
         default:
             Obj_AddVelocityY(x);
-            if (gObjects->y[x] < KIND37_TOP_Y) {
+            if (gObjects->y[x] < FLYER_TOP_Y) {
                 return;
             }
             gObjects->state[x]++;
-            RAM_U8(DT_ADDR_SCENE_SCROLL) = KIND37_SCROLL;
+            RAM_U8(DT_ADDR_SCENE_SCROLL) = FLYER_SCROLL;
             return;
+    }
+}
+
+/* Kind $38 ($F9F8): what kind $37 lets down into slot 3 (a rope, as a
+ * hypothesis). Once Scrooge touches it, unless he is dying (mode 13), he holds
+ * on: action 4, its world X, mode 14. From then on it rises 2 px a frame with
+ * him, and the land is left once it is above Y $10. */
+static void Obj_SkyRope(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_SKY_ROPE, 0x22, x, gObjects->kind[x]);
+    if ((gObjects->state[x] & 0x0F) == 0) {
+        if (!Obj_TouchScrooge(x) || gPlayerMode == PLAYER_MODE_DEATH) {
+            return;
+        }
+        gObjects->state[x]++;
+        gObjects->action[P_] = ROPE_ACTION;
+        gObjects->animFrame[P_] = 0;
+        gObjects->worldX[P_] = gObjects->worldX[x];
+        gObjects->worldPage[P_] = gObjects->worldPage[x];
+        gPlayerMode = PLAYER_MODE_14;
+    }
+    gObjects->animTimer[P_] = 0;
+    gObjects->y[P_] = gObjects->y[x] = (uint8_t)(gObjects->y[x] - ROPE_RISE);
+    if (gObjects->y[x] < ROPE_TOP_Y) {
+        RAM_U8(DT_ADDR_LAND_LEFT)++;
     }
 }
 
@@ -4076,11 +4105,14 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
         case OBJ_KIND_TALKER:
             Obj_Talker(slot);
             break;
-        case OBJ_KIND_36:
-            Obj_Kind36(slot);
+        case OBJ_KIND_LAUNCHPAD_RIDE:
+            Obj_LaunchpadRide(slot);
             break;
-        case OBJ_KIND_37:
-            Obj_Kind37(slot);
+        case OBJ_KIND_SKY_FLYER:
+            Obj_SkyFlyer(slot);
+            break;
+        case OBJ_KIND_SKY_ROPE:
+            Obj_SkyRope(slot);
             break;
         case OBJ_KIND_MOVING_PLATFORM:
             Obj_MovingPlatform(slot);
@@ -4259,14 +4291,19 @@ static void Run_DwellerLinkBlock(Regs *r)
     Obj_DwellerLinkBlock(r->x);
 }
 
-static void Run_Kind36(Regs *r)
+static void Run_LaunchpadRide(Regs *r)
 {
-    Obj_Kind36(r->x);
+    Obj_LaunchpadRide(r->x);
 }
 
-static void Run_Kind37(Regs *r)
+static void Run_SkyFlyer(Regs *r)
 {
-    Obj_Kind37(r->x);
+    Obj_SkyFlyer(r->x);
+}
+
+static void Run_SkyRope(Regs *r)
+{
+    Obj_SkyRope(r->x);
 }
 
 static void Run_KeySpot(Regs *r)
@@ -4617,8 +4654,9 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_PACER, NULL, "Obj_Pacer", Run_Pacer, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_MOVING_PLATFORM, NULL, "Obj_MovingPlatform", Run_MovingPlatform, 0 },
     { DT_CODE_KIND_KEY_SPOT, NULL, "Obj_KeySpot", Run_KeySpot, 0 },
-    { DT_CODE_KIND_36, NULL, "Obj_Kind36", Run_Kind36, 0 },
-    { DT_CODE_KIND_37, NULL, "Obj_Kind37", Run_Kind37, 0 },
+    { DT_CODE_KIND_LAUNCHPAD_RIDE, NULL, "Obj_LaunchpadRide", Run_LaunchpadRide, 0 },
+    { DT_CODE_KIND_SKY_FLYER, NULL, "Obj_SkyFlyer", Run_SkyFlyer, 0 },
+    { DT_CODE_KIND_SKY_ROPE, NULL, "Obj_SkyRope", Run_SkyRope, 0 },
     { DT_CODE_KIND_BLOCK_DWELLER, NULL, "Obj_BlockDweller", Run_BlockDweller, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_DWELLER_LINK_BLOCK, NULL, "Obj_DwellerLinkBlock", Run_DwellerLinkBlock, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_CEILING_HOPPER, NULL, "Obj_CeilingHopper", Run_CeilingHopper, 0, .bank = DT_BANK_OBJECTS },
