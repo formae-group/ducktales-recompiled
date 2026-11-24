@@ -295,6 +295,23 @@ static void Obj_HitBlock(uint8_t x, uint8_t y)
     Obj_ResolveBlock(x);
 }
 
+/* $869D: launch block x unless a block was already opened or launched this
+ * frame ($5B); a hidden block gets its tile uncovered first. y is the
+ * caller's Y, which the tile edit keeps. */
+static void Obj_KickBlock(uint8_t x, uint8_t y)
+{
+    Decomp_Enter(DT_CODE_OBJ_KICK_BLOCK, 0, x, y);
+    if (gBlockOpened) {
+        return;
+    }
+    gBlockOpened++;
+    if (gObjects->state[x] & OBJ_STATUS_HIDDEN) {
+        gObjects->state[x] &= (uint8_t)~OBJ_STATUS_HIDDEN;
+        x = Obj_EditTile(x, gObjects->state[x], y);
+    }
+    Obj_LaunchBlock(x);
+}
+
 /* Kind 8 ($8668): a block. Off screen it stays only in poses $1D and $1E.
  * Scrooge's cane launches it (one block a frame, $5B) or, in pose $3F,
  * opens it; a counted blow ($0690) opens or breaks it. y is the kind the
@@ -311,15 +328,7 @@ static void Obj_Block(uint8_t x, uint8_t y)
             Obj_ResolveBlock(x);
             return;
         }
-        if (gBlockOpened) {
-            return;
-        }
-        gBlockOpened++;
-        if (gObjects->state[x] & OBJ_STATUS_HIDDEN) {
-            gObjects->state[x] &= (uint8_t)~OBJ_STATUS_HIDDEN;
-            x = Obj_EditTile(x, gObjects->state[x], gObjects->hitbox[x] & 0x7F);
-        }
-        Obj_LaunchBlock(x);
+        Obj_KickBlock(x, gObjects->hitbox[x] & 0x7F);
         return;
     }
     if (gObjects->unk_0690[x] == 0) {
@@ -3566,6 +3575,100 @@ static void Obj_TransylvaniaBoss(uint8_t x)
     }
 }
 
+/* Kind $1D ($9C46): the timed enemy ($4F holds its slot). On the floor
+ * (probe $4A) it waits until Scrooge is within $50 px, then walks at him at
+ * $0100 (probes $44/$47). Hitting a wall, a block in its way (pose $59) is
+ * kicked at frame 3 of the pose ahead of it, 2 px back, and it walks on at
+ * $0200 after frame 5; another wall or object speeds it up 1 px a frame.
+ * From then on it slows by $08 a frame, flipping status bit 6, and once the
+ * speed runs out it turns round at $02FF. Off screen, or hit (pose $58), it
+ * is beaten and $4F becomes $3C. The kick passes the Y the fall leaves,
+ * the probe count, as the original has it after a plain tile. */
+static void Obj_BlockKicker(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_BLOCK_KICKER, 0x22, x, gObjects->kind[x]);
+    if (!OnScreen(x) || gObjects->unk_0690[x] != 0) {
+        if (OnScreen(x)) {
+            gObjects->action[x] = 0x58;
+        }
+        gHeldSlot = 0x3C;
+        Obj_Defeat(x);
+        return;
+    }
+    x = Obj_Fall(x, 0x4A, 2);
+    if (!(gProbeHits & 1)) {
+        return;
+    }
+    if (Step(x) == 0) {
+        gObjects->animTimer[x] = 0;
+        if (Obj_DistanceX(x) >= 0x50) {
+            return;
+        }
+        Obj_SetVelocityY(x, 0);
+        gObjects->timer[x] = 0;
+        gObjects->unk_06C0[x] = 0;
+        Obj_SetSpeed(x, 0x0100);
+        Obj_FaceScrooge(x);
+        gObjects->state[x]++;
+        return;
+    }
+    if (gObjects->state[x] & 2) {
+        if (gObjects->animFrame[x] == 5) {
+            gObjects->state[x]--;
+            gObjects->action[x]--;
+            ResetAnim(x);
+            gObjects->speed[x] = 2;
+            gObjects->unk_06C0[x]++;
+            return;
+        }
+        if (gObjects->timer[x] == 0 || gObjects->animFrame[x] != 3) {
+            return;
+        }
+        gPlayerPushDir = gObjects->dir[x];
+        Obj_KickBlock(gObjects->timer[x], gProbeCount);
+        gObjects->timer[x] = 0;
+        return;
+    }
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        x = Obj_WalkRight(x, 0x44, 2);
+    } else {
+        x = Obj_WalkLeft(x, 0x47, 2);
+    }
+    if (gObjects->unk_06C0[x] != 0) {
+        if (gObjects->timer[x] != 0) {
+            return;
+        }
+        gObjects->state[x] ^= 0x40;
+        uint16_t speed = (uint16_t)(Obj_GetSpeed(x) - 8);
+        Obj_SetSpeed(x, speed);
+        if (!(speed & 0x8000)) {
+            return;
+        }
+        gObjects->timer[x] = 0xFF;
+        Obj_SetSpeed(x, 0x02FF);
+        gObjects->dir[x] ^= 3;
+        return;
+    }
+    if (!(gProbeHits & 1)) {
+        return;
+    }
+    if (Obj_HitOthers(x)) {
+        gObjects->action[x] = 0x58;
+        uint8_t o = gContactDepth;
+        if (gObjects->kind[o] == OBJ_KIND_BLOCK) {
+            gObjects->timer[x] = o;
+            gObjects->state[x]++;
+            gObjects->action[x]++;
+            gObjects->unk_06C0[x]++;
+            ResetAnim(x);
+            Obj_SetWorldX(x, (uint16_t)(Obj_GetWorldX(x) + ((gObjects->dir[x] & OBJ_DIR_LEFT) ? 2 : 0xFFFE)));
+            return;
+        }
+    }
+    gObjects->speed[x]++;
+    gObjects->unk_06C0[x]++;
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -3661,6 +3764,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_LEAPER:
             Obj_Leaper(slot);
+            break;
+        case OBJ_KIND_BLOCK_KICKER:
+            Obj_BlockKicker(slot);
             break;
         case OBJ_KIND_LEDGE_WALKER:
             Obj_LedgeWalker(slot);
@@ -4022,6 +4128,16 @@ static void Run_TransylvaniaBoss(Regs *r)
     Obj_TransylvaniaBoss(r->x);
 }
 
+static void Run_BlockKicker(Regs *r)
+{
+    Obj_BlockKicker(r->x);
+}
+
+static void Run_KickBlock(Regs *r)
+{
+    Obj_KickBlock(r->x, r->y);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -4196,6 +4312,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_BLOCK_KICKER, NULL, "Obj_BlockKicker", Run_BlockKicker, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_TRANSYLVANIA_BOSS, NULL, "Obj_TransylvaniaBoss", Run_TransylvaniaBoss, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_AMAZON_BOSS, NULL, "Obj_AmazonBoss", Run_AmazonBoss, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_SPAWN_RECORD, "ducktales.decomp.6.AF2B", "Obj_SpawnRecord", Run_SpawnRecord, 0, .bank = DT_BANK_OBJECTS },
@@ -4242,6 +4359,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_OBJ_SET_MOTION, NULL, "Obj_SetMotionIndex", Run_SetMotionIndex, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_ENEMY_WALK, NULL, "Enemy_Walk", Run_EnemyWalk, OUT_X, .bank = DT_BANK_OBJECTS },
     { DT_CODE_OBJ_LAUNCH_BLOCK, NULL, "Obj_LaunchBlock", Run_LaunchBlock, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_KICK_BLOCK, NULL, "Obj_KickBlock", Run_KickBlock, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_OBJ_RESOLVE_BLOCK, NULL, "Obj_ResolveBlock", Run_ResolveBlock, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_OBJ_BREAK, NULL, "Obj_Break", Run_Break, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_OBJ_SHATTER, NULL, "Obj_Shatter", Run_Shatter, 0, .bank = DT_BANK_OBJECTS },

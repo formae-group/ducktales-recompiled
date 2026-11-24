@@ -698,6 +698,7 @@
 #define DT_CODE_KIND_FLYER                0x916C /* kind $0D */
 #define DT_CODE_KIND_SWING                0x9225 /* kind $0E */
 #define DT_CODE_KIND_SWOOPER              0x9430 /* kind $11 */
+#define DT_CODE_KIND_BLOCK_KICKER         0x9C46 /* kind $1D */
 #define DT_CODE_KIND_TRANSYLVANIA_BOSS    0xA335 /* kind $26 */
 #define DT_CODE_TRANSYLVANIA_BOSS_STEP_LO 0xA585 /* kind $26's code by step, low bytes (5 entries) */
 #define DT_CODE_TRANSYLVANIA_BOSS_STEP_HI 0xA58A
@@ -740,6 +741,7 @@
 #define DT_CODE_OBJ_SET_MOTION            0x818A /* vertical velocity and speed by index */
 #define DT_CODE_ENEMY_WALK                0x82F9 /* walk with probes $18 or $1B */
 #define DT_CODE_OBJ_LAUNCH_BLOCK          0x86B5 /* a block starts flying (kind 9) */
+#define DT_CODE_OBJ_KICK_BLOCK            0x869D /* launch a block, one a frame ($5B) */
 #define DT_CODE_OBJ_HIT_BLOCK             0x86F7 /* a counted blow on a block */
 #define DT_CODE_OBJ_RESOLVE_BLOCK         0x870D /* open, leave or shatter a block */
 #define DT_CODE_THROWN_FALL               0x88BC /* kind 9: fall with probe $2D */

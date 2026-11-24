@@ -54,6 +54,7 @@ extern "C" {
 #define OBJ_KIND_PIT_JUMPER        0x1A /* enemy: jumps out of a pit with a splash (code) */
 #define OBJ_KIND_BOUNCER           0x1B /* enemy: bounces towards Scrooge (code) */
 #define OBJ_KIND_LEAPER            0x1C /* enemy: walks a ledge, turns and leaps with a puff of dust (code) */
+#define OBJ_KIND_BLOCK_KICKER      0x1D /* enemy: walks at Scrooge, kicks the blocks it runs into (code) */
 #define OBJ_KIND_LEDGE_WALKER      0x1E /* enemy: walks a ledge, turns at its edges (code) */
 #define OBJ_KIND_PACER             0x1F /* enemy: paces left and right (code) */
 #define OBJ_KIND_BOBBER            0x20 /* enemy: bobs up and down in place (code) */
