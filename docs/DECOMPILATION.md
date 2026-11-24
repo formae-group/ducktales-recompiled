@@ -615,7 +615,7 @@ RAM-identical in replace mode.
 | `FinalTrip` (3 resume points), `SpritesFrame` (1 resume point) | bank 4 `$BE00-$BEAA`, `$F855-$F868` | checked | 0 | final-trip | not measured |
 | `PauseText` (1 resume point), `Text_Lines` (1 resume point) | bank 5 `$B580-$B61B` | checked | 12 | pause, message-scene, message-pay, message-block, message-life | not measured; `FrameLoop_Paused` (`$DB65`) after it |
 | `Select_ResultMessage`, `Select_Message` | bank 5 `$B800-$B86B` | checked | 12 | final-trip, all-treasures | not measured |
-| `Records_Consumed` (then `Records_MarkTaken`, player.c) | bank 5 `$B760-$B769` | checked | 12 | - | not measured |
+| `Records_Consumed` (then `Records_MarkTaken`, player/message.c) | bank 5 `$B760-$B769` | checked | 12 | - | not measured |
 | `BankTransfer` (1 resume point) | `$D8D9-$D9BD` | checked | 5 | all-treasures (no money), total-max (TOTAL at 99999) | not measured |
 | `Scene` (6 resume points) | `$DF27-$DFEC` | checked | 0 | scene-1, scene-2 | not measured |
 | `Mode15_Redraw` (5 resume points) | `$DFED-$E053` | checked | 0 | mode15-redraw, message-scene | not measured |
@@ -644,7 +644,7 @@ in bank 5 the pause and message box text (`$B580-$B61B`), the Land Select messag
 objects (`$B380-$B50C`, with tables). The credits' raster split `$E229-$E23B` is the polling resume
 point `Ending_Split`: it waits for the sprite-0 flag on `$2002` to clear and to rise, writes `$2000`
 there and goes on to the scroll. The frame loop's `$DC29` (after `task_yield`) is the resume point
-`FrameLoop_Next`. The Select refill `$E2FE` is in `player.c`;
+`FrameLoop_Next`. The Select refill `$E2FE` is in `player/modes.c`;
 the scene palette tables `$E127-$E132` and `$E143-$E1AE` are read by `Palette_LoadScene` (system.c).
 The flow has 14 sites, all entries that original code reaches (2 of them internal: `$FEEE` and
 `$FEF3`); the scheduler's sites are `system.c`'s. The reset `$FEE0-$FF34` is task code: `Reset`
@@ -659,9 +659,9 @@ Not decompiled yet, and still run as the original from the C:
 - Called as C: the background probe `$D120`, its snaps `$D49A`/`$D4B2`/`$D4C8`/`$D4D6` and the probe point
   `$D350` (where `Player_ContactV` falls through to) are the C of `collision.c`, the walls move `$F0F8` and
   the climbing steps `$F192`/`$F1A8` the C of `objcommon.c` and the HP refill `$F812` the C of `objects.c`, and
-  `player.c` calls that C directly. So does the message box with the OAM clear `$C267` (`system.c`), the
+  `player/` calls that C directly. So does the message box with the OAM clear `$C267` (`system.c`), the
   sprite builder (bank 5 `$8000`, `sprites.c`) and the consumed-record bits (bank 5 `$B76A`,
-  `Records_MarkTaken` in `player.c`).
+  `Records_MarkTaken` in `player/message.c`).
 - No call goes to the original: `Player_Update` is task code and calls the C of `Player_Message`,
   `Player_Treasure` and `Player_RowChange`, which wait for frames or leave it without returning. The
   handlers on the way to the row change (`Player_Ground`, `Player_StartJump`, `Player_Air`,
@@ -679,7 +679,7 @@ refill, against the walls move `$F0F8`.
 The motion (`$F234-$F2C6` but `$F298`) and sound (`$F752`) primitives are decompiled too, and they
 also serve every other object.
 
-**Level routines** (`level.c`, `collision.c`): the camera `$EFE2-$F0E0`, the column streaming
+**Level routines** (`level/`, `collision.c`): the camera `$EFE2-$F0E0`, the column streaming
 `$C7C5-$C969`, the map header `$C7B0`, the start and Land Select draws `$C71D-$C7AF`, the block
 decoding `$CCBD-$CE56`, the queue uploads `$C139-$C182`, the row's sprite CHR stream `$C42C-$C507`,
 the tile edit `$F574` and the background probe with its snaps
@@ -687,7 +687,7 @@ the tile edit `$F574` and the background probe with its snaps
 scroll (`$E9`), the tile-edit metatile helper `$F697` and the room transitions, which the flow's
 task code runs.
 
-**Next routines:** `player.c` calling the walls move `$F0F8` as C once `objcommon.c` exports it.
+**Next routines:** `player/move.c` calling the walls move `$F0F8` as C once `objcommon.c` exports it.
 
 ### Objects
 
@@ -900,7 +900,7 @@ through `Obj_Defeat`), the vertical moves `$F270`/`$F284`/`$F298` and the seven 
 
 All 67 entries in the object handler table are handled in C. The boss hit routine `$F6D7` emits
 `EVENT_BOSS_HIT`. The spawner that calls `Obj_SpawnRecord`
-(bank 6 `$AE20-$B163`) is in `level.c`. The movers and the climbing steps test the
+(bank 6 `$AE20-$B163`) is in `level/spawn.c`. The movers and the climbing steps test the
 background through the C of the probe `$D120` and its snaps (`collision.c`).
 
 ### Progress
@@ -919,10 +919,10 @@ bytes**, in 391 routines (main d54b09b, 13 routes and 92 poke cases).
 
 | Group | Files | Routines | Executed bytes | Share |
 |---|---|---|---|---|
-| player | `player.c`, `motion.c`, `sound.c` | 54 | 3,626 | 12.8% |
+| player | `player/`, `motion.c`, `sound.c` | 54 | 3,626 | 12.8% |
 | objects | `objects.c`, `objcommon.c` | 118 | 13,465 | 47.5% |
 | flow | `flow.c` | 149 | 3,901 | 13.7% |
-| level | `level.c`, `collision.c` | 40 | 3,643 | 12.8% |
+| level | `level/`, `collision.c` | 40 | 3,643 | 12.8% |
 | system | `system.c`, `sprites.c`, `audio.c` | 28 | 3,463 | 12.2% |
 
 No executed byte is shared with an original routine, and no original code is still reached.
@@ -954,7 +954,8 @@ unexecuted bytes in 99 blocks, all behind branches of executed routines (no tabl
 4. Add the site to `config/game.toml` with the CRC of the routine's first 8 bytes, computed locally
    from your ROM. Never commit the bytes.
 5. Run `tests/decomp_test.py` (all modes) and `tests/verify_routes.py` with
-   `DUCKTALES_DECOMP=check`. If the routes do not reach a branch, add a poke case.
+   `DUCKTALES_DECOMP=check`. If the routes do not reach a branch, add a poke case (`POKES` in
+   `tests/decomp/pokes.py`; shared object states in `tests/decomp/fixtures.py`).
 6. Time it (Timing): mark its branches, indirect jumps and crossing reads (`tools/decomp_timing.py`),
    set `.timed = true`, and run check mode until it reports no `TIMING`.
 

@@ -1,6 +1,6 @@
 """Timing marks for a decompiled routine (docs/DECOMPILATION.md "Timing").
 
-For a routine of the tables in src/decomp/*.c, walks its original code in the ROM from its entry
+For a routine of the tables in src/decomp/ (and its subfolders), walks its original code in the ROM from its entry
 (fall-through, both ways of each branch, JMP; not into the routines it calls) and lists every
 instruction with its cycles and what the routine's C must say about it to be timed:
 
@@ -100,7 +100,7 @@ def table_entries(text):
 def routines():
     """name -> dict(addr, bank, func, file, timed) from every table entry."""
     syms, found = symbols(), {}
-    for path in sorted((ROOT / 'src' / 'decomp').glob('*.c')):
+    for path in sorted((ROOT / 'src' / 'decomp').rglob('*.c')):
         for fields in table_entries(path.read_text(encoding='utf-8')):
             entry = {}
             if len(fields) < 4 or not fields[2].startswith('"'):
@@ -120,7 +120,7 @@ def routines():
                 'addr': addr,
                 'bank': int(bank, 0) if re.fullmatch(r'\d+|0x[0-9A-Fa-f]+', bank) else 0,
                 'func': entry.get('run', ''),
-                'file': path.name,
+                'file': path.relative_to(ROOT / 'src' / 'decomp').as_posix(),
                 'timed': entry.get('timed', 'false') == 'true',
             }
     return found
@@ -139,9 +139,19 @@ def function(text, func):
     return text[m.start() : i], text.count('\n', 0, m.start()) + 1
 
 
+def source_text(file):
+    """The C of file; for a file in a subfolder, the folder's files with file first."""
+    path = ROOT / 'src' / 'decomp' / file
+    if path.parent.name == 'decomp':
+        return path.read_text(encoding='utf-8')
+    others = sorted(p for p in path.parent.glob('*.c') if p != path)
+    return ''.join(p.read_text(encoding='utf-8') for p in [path, *others])
+
+
 def body(file, func):
-    """The C of func with the functions of the same file it calls, two calls deep (an adapter's helper)."""
-    text = (ROOT / 'src' / 'decomp' / file).read_text(encoding='utf-8')
+    """The C of func with the functions of the same file (or subfolder) it calls, two calls deep (an
+    adapter's helper)."""
+    text = source_text(file)
     src, line = function(text, func)
     seen, todo = {func}, [src]
     for _ in range(2):
@@ -249,9 +259,9 @@ def report(rom, name, info, table, by_addr):
 
 def summary(rom, table, only):
     entries = {r['addr'] for r in table.values()}
-    print('%-28s%-8s%-14s%-7s%9s%9s' % ('routine', 'addr', 'file', 'timed', 'branches', 'missing'))
+    print('%-28s%-8s%-18s%-7s%9s%9s' % ('routine', 'addr', 'file', 'timed', 'branches', 'missing'))
     for name, r in sorted(table.items(), key=lambda kv: (kv[1]['file'], kv[1]['addr'])):
-        if only and r['file'] != only:
+        if only and only not in (r['file'], Path(r['file']).name):
             continue
         code = walk(rom, r['bank'], r['addr'], entries)
         src, _ = body(r['file'], r['func'])
@@ -259,7 +269,7 @@ def summary(rom, table, only):
         branches = [pc for pc, c in code.items() if c[0] in BRANCHES]
         missing = len([pc for pc in branches if pc not in marked])
         timed = 'yes' if r['timed'] else 'no'
-        print('%-28s$%04X   %-14s%-7s%9d%9d' % (name, r['addr'], r['file'], timed, len(branches), missing))
+        print('%-28s$%04X   %-18s%-7s%9d%9d' % (name, r['addr'], r['file'], timed, len(branches), missing))
 
 
 def main():
@@ -268,7 +278,7 @@ def main():
     ap.add_argument('--bank', type=int, help='the bank at $8000 for an address below $C000')
     ap.add_argument('--rom', default=default_rom())
     ap.add_argument('--summary', action='store_true', help='every routine: timed, branches and missing DC_BR')
-    ap.add_argument('--file', help='with --summary: only the routines of this file (system.c, flow.c, ...)')
+    ap.add_argument('--file', help='with --summary: only the routines of this file (system.c, player/player.c, ...)')
     args = ap.parse_args()
     rom, table = Rom(args.rom), routines()
     by_addr = {}

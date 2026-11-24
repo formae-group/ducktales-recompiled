@@ -1,6 +1,6 @@
 /*
  * decomp/level.h - the level routines other decompiled files call
- * (level.c, collision.c).
+ * (level/, collision.c).
  */
 #pragma once
 #include <stdint.h>
