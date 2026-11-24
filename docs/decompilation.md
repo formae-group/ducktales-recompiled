@@ -209,7 +209,7 @@ call can do. `flow.c` decompiles that code as **task code** (`DecompRoutine.task
   enters through an RTS (`$FFAB`) whose return the observer moves to the start, at the routine's
   true S, with the isolated call's return address in place of the routine's own (at S + locals
   + 1). When the C hands off, the original stops where it reaches the same routine at the same
-  depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`, 8 of
+  depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`, 3 of
   them). Check compares RAM, the stack down to that depth, the registers the hand-off uses and the
   number of device writes.
 - Replace mode stores the C's results, makes its device writes, spends the original's cycles up to
@@ -418,6 +418,7 @@ RAM-identical in replace mode.
 | `Mem_FillPages` | `$C24F` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
 | `Oam_Clear` | `$C267` | checked | 12 | - | not measured |
 | `Palette_FadeIn` (task code) | `$C279` | checked | 12 | - | not measured |
+| `Palette_FadeInKeep` (task code) | `$C27C` | checked | 0 | ending | not measured |
 | `Palette_FadeOut` (task code) | `$C282` | checked | 12 | - | not measured |
 | `Palette_FadeWait` (resume point after `task_yield`) | `$C2B2` | checked | 12 | - | not measured |
 | `Random_Next` | `$C2E6` | checked | 12 | - | not measured |
@@ -441,6 +442,9 @@ RAM-identical in replace mode.
 | `LandLoad` (12 resume points) | `$D79B-$D8A5` | checked | 12 | - | not measured |
 | `LandSelect` (16 resume points) | `$D630-$D79A` | checked | 12 (the return from a land in 5) | final-trip, all-treasures | not measured |
 | `FinalTrip` (3 resume points), `SpritesFrame` (1 resume point) | bank 4 `$BE00-$BEAA`, `$F855-$F868` | checked | 0 | final-trip | not measured |
+| `PauseText` (1 resume point), `Text_Lines` (1 resume point) | bank 5 `$B580-$B61B` | checked | 12 | pause, message-scene, message-pay, message-block, message-life | not measured; `FrameLoop_Paused` (`$DB65`) after it |
+| `Select_ResultMessage`, `Select_Message` | bank 5 `$B800-$B86B` | checked | 12 | final-trip, all-treasures | not measured |
+| `Records_Consumed` (then `Records_MarkTaken`, player.c) | bank 5 `$B760-$B769` | checked | 12 | - | not measured |
 | `BankTransfer` (1 resume point) | `$D8D9-$D9BD` | checked | 5 | all-treasures (no money), total-max (TOTAL at 99999) | not measured |
 | `Scene` (6 resume points) | `$DF27-$DFEC` | checked | 0 | scene-1, scene-2 | not measured |
 | `Mode15_Redraw` (5 resume points) | `$DFED-$E053` | checked | 0 | mode15-redraw, message-scene | not measured |
@@ -463,13 +467,13 @@ of message `$0B` that Scrooge's message box calls (`$DFED-$E053`), the ending's 
 first frame with their tables (`$E054-$E126`, `$E133-$E142`, `$E1AF-$E1F8`), the HUD timer
 (`$E28C-$E2FD`) and the boss trigger with the arena scroll (`$CF93-$D04C`): 3,218 of the 3,880 bytes,
 or 83% (tables inside the ranges included). Outside these ranges the flow also has the final trip's
-take-off scene (bank 4 `$BE00-$BEAA`) with the sprites frame it waits with (`$F855-$F868`). Not
-yet: the ending's later frames (`$E1F9-$E28B`: the credits scroll with a raster split polled on
+take-off scene (bank 4 `$BE00-$BEAA`) with the sprites frame it waits with (`$F855-$F868`), and
+in bank 5 the pause and message box text (`$B580-$B61B`), the Land Select messages
+(`$B800-$B86B`) and the clearing of the consumed-record bits (`$B760`). Not yet: the ending's later frames (`$E1F9-$E28B`: the credits scroll with a raster split polled on
 `$2002`, which `Ending` gives to the original) and the Select refill `$E2FE` (Scrooge's); the
 scene palette tables `$E127-$E132` and `$E143-$E1AE` are read by `Palette_LoadScene` (system.c).
-The flow has 18 sites: 10 entries that original code reaches and 8 stop sites (one for
-`Player_RowChange`'s hand-off to the row scroll `$C976`, and two for Scrooge's message box: the
-block draw `$D068` and bank 5 `$B580`).
+The flow has 14 sites: 11 entries that original code reaches and 3 stop sites (`task_yield`
+`$FFAC`, `task_wait` `$FFA5` and the reset `$FEE0`).
 
 Not decompiled yet, and still run as the original from the C:
 

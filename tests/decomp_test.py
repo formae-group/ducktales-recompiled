@@ -345,6 +345,13 @@ POKES = [
     ('message-life', {0x39: 0x0F, 0x6E: 0x0C}, ['Message_Closed', 'Player_PitDeath'], MESSAGE_PRESSES, MESSAGE_FRAMES),
     ('message-block', {0x39: 0x0F, 0x6E: 0x06, 0x7A: 0x09}, ['Message_Closed'], MESSAGE_PRESSES, MESSAGE_FRAMES),
     ('message-launchpad', {0x39: 0x0F, 0x6E: 0x0F}, ['Message_Closed'], MESSAGE_PRESSES, MESSAGE_FRAMES),
+    # Start pauses (the box and PAUSE a line a frame), and 30 frames later the pause ends
+    (
+        'pause',
+        {},
+        ['PauseText', 'PauseText_Framed', 'Text_LineNext', 'FrameLoop_Paused'],
+        {1730: 'START', 1732: '-', 1760: 'START', 1762: '-'},
+    ),
     ('message-scene', {0x39: 0x0F, 0x6E: 0x0B}, ['Message_Opened', 'Message_Closed'], MESSAGE_PRESSES, MESSAGE_FRAMES),
     # mode 16 past the music: one time unit left; the money's leading blanks, then its cap
     (

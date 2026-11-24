@@ -1614,7 +1614,7 @@ static void Message_Shown(Regs *r)
  * DT_B5_PROGRESS_FIRST): the count - 1, then per record the flag's address in
  * page 0, its mask and the record's bit number in $0120. $B760 clears the bits
  * first and runs into it. */
-static void Records_MarkTaken(Regs *r)
+void Records_MarkTaken(Regs *r)
 {
     Decomp_Enter(DT_B5_PROGRESS_BITS, r->a, r->x, r->y);
     r->x = Game_ReadRom((uint16_t)(DT_B5_PROGRESS_FIRST + gLand));

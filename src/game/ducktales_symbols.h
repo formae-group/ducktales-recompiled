@@ -432,11 +432,22 @@
 #define DT_BANK_SPRITES        5
 #define DT_B5_BUILD_OAM        0x8000
 #define DT_B5_PAUSE_TEXT       0xB580 /* pause or message text into the VRAM queue (code) */
+#define DT_B5_FLOW_PAUSE_BOX   0xB585 /* bank 5: after the box */
+#define DT_B5_TEXT_LINES       0xB591 /* Y = text: its lines into the VRAM queue, a line a frame (code) */
+#define DT_B5_FLOW_TEXT_NEXT   0xB618 /* bank 5: after a line's frame */
+#define DT_B5_TEXT_FLAG        0xB617 /* bank 5: per piece of text from 5, the page-0 flag byte (code) */
+#define DT_B5_TEXT_MASK        0xB61A /* bank 5: and its mask (code) */
+#define DT_B5_TEXT_LO          0xB622 /* bank 5: the texts, low bytes (code) */
+#define DT_B5_TEXT_HI          0xB62C /* their high bytes (code) */
 #define DT_B5_PPU_STRINGS      0xBAB0 /* X = set: PPU address and data strings written to the PPU (code) */
 #define DT_B5_CONSUMED_BITS    0xB760 /* the land's consumed-record bits $0120-$013F (code) */
 #define DT_B5_ENDING_OBJECTS   0xB380 /* the ending screen's objects ($24), then the sprites (code) */
 #define DT_B5_SELECT_MESSAGE   0xB800 /* Land Select: the message for $5E, $5D and $78 into the VRAM queue (code) */
 #define DT_B5_MESSAGE          0xB81C /* X = Land Select message: its strings into the VRAM queue (code) */
+#define DT_B5_MESSAGE_LIST     0xB86C /* bank 5: per message, the index of its first entry below (code) */
+#define DT_B5_MESSAGE_ENTRIES  0xB871 /* bank 5: PPU address high, low and string, up to a negative byte (code) */
+#define DT_B5_STRING_LO        0xB9C1 /* bank 5: Land Select strings (length - 1, bytes), low bytes (code) */
+#define DT_B5_STRING_HI        0xB9D8 /* their high bytes (code) */
 #define DT_BANK_FINAL_TRIP     4
 #define DT_B4_FINAL_TRIP       0xBE00 /* the final trip's take-off scene; waits for frames (code) */
 #define DT_B4_FLOW_TRIP_FRAME  0xBE73 /* bank 4: after the take-off scene's frame */
@@ -488,6 +499,7 @@
 
 /* Where the flow's task code resumes after a call (the address after the JSR). */
 #define DT_FLOW_AFTER_ENDING       0xDB3D
+#define DT_FLOW_PAUSED             0xDB65
 #define DT_FLOW_AFTER_PLAYER       0xDB6F
 #define DT_FLOW_AFTER_OBJECTS      0xDB7B
 #define DT_FLOW_AFTER_CAMERA       0xDB8C
