@@ -820,9 +820,9 @@ code, so wrong pairings and data are refused; the script's docstring gives every
 
 It is a lower bound: refused tables and indirect jumps through RAM are not followed, a fixed-bank
 `JSR` into the window is followed only into banks that execute that address, and data that decodes
-as code can show up among the unreached runs. On main 51338e2 with 58 poke cases it finds 2,883
-unexecuted bytes in 115 blocks (1,513 behind branches, 1,370 behind table entries, among them kinds
-$16, $21, $3C, $3D, $40 and $42) and 183 unreached bytes, most of them in the ending's bank 5.
+as code can show up among the unreached runs. On main 6209080 with 88 poke cases it finds 1,135
+unexecuted bytes in 99 blocks, all behind branches of executed routines (no table entry is left), and
+183 unreached bytes, most of them in the ending's bank 5.
 
 ### Adding a routine
 
