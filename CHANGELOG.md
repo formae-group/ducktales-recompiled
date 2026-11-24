@@ -7,6 +7,8 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- Route `difficult_himalayas` (6,200 frames): `full_himalayas` on Difficult to the LAND CLEAR tally,
+  the first route on Difficult; it passes `verify_routes` at the four alignments with 100% native cycles.
 - The native player writes a session summary when its Decompiled code ran: `decomp-session-<time>.txt`
   in `diagnostics/` beside the replays, with the frames played, the decomp error that stopped the game
   if any, and every routine's calls and calls given to the original (`decomp:` lines). None is written
@@ -94,6 +96,9 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   stop. A site or stop that cannot be registered (NESRecomp's 128-hook cap) now fails at start-up.
   `tests/native_decomp_test.py` excepts and counts the NMI-counted yield (docs/decompilation.md "On the
   native runtime").
+- Decompiled: object kinds `$36` (`$F869`) and `$37` (`$F8F2`, with its drop `$F99C`) of the fixed bank,
+  reached in the Launchpad scenes. `tests/decomp_test.py` has a `clear-keep` poke case for the object
+  clear's Transylvania branch (slots 14 and 15 kept).
 - Decompiled: the boss hit `$F6D7` (`Boss_Hit`, objects.c; it raises the boss-hit event from C), the
   object clear `$F2C7` (`Obj_ClearSlots`, objcommon.c, called as C by flow.c and level.c) and the TOTAL
   cap `$F84A` (`Total_Max`, flow.c).

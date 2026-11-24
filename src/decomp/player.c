@@ -36,6 +36,7 @@
 #include "decomp/collision.h"
 #include "decomp/motion.h"
 #include "decomp/objcommon.h"
+#include "decomp/player.h"
 #include "decomp/sound.h"
 #include "decomp/system.h"
 
@@ -101,7 +102,6 @@ static void Player_Walk(uint8_t x);
 static uint8_t Player_Fall(void);
 static void Player_StartJump(void);
 static void Player_Knockback(uint8_t x);
-static void Player_PitDeath(void);
 static void Player_RowChange(Regs *r);
 static void Player_Message(Regs *r);
 static void Player_Treasure(Regs *r);
@@ -1021,7 +1021,7 @@ static void Player_Stuck(void)
 }
 
 /* $EBB4: fell into a pit: request the respawn that costs a life. */
-static void Player_PitDeath(void)
+void Player_PitDeath(void)
 {
     Decomp_Enter(DT_CODE_PIT_DEATH, 0, 0, 0);
     uint8_t p = 0;
@@ -1614,7 +1614,7 @@ static void Message_Shown(Regs *r)
  * DT_B5_PROGRESS_FIRST): the count - 1, then per record the flag's address in
  * page 0, its mask and the record's bit number in $0120. $B760 clears the bits
  * first and runs into it. */
-static void Records_MarkTaken(Regs *r)
+void Records_MarkTaken(Regs *r)
 {
     Decomp_Enter(DT_B5_PROGRESS_BITS, r->a, r->x, r->y);
     r->x = Game_ReadRom((uint16_t)(DT_B5_PROGRESS_FIRST + gLand));

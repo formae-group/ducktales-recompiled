@@ -93,6 +93,15 @@ POKES = [
     ('hurt-last-dot', {0x39: 0x05, 0x7D: 0x00, 0x346: 0x01, 0x34A: 0x01}, ['Player_Hurt', 'Player_Death']),
     ('pit-falling', {0x39: 0x08}, ['Player_Pit']),
     ('pit-death', {0x39: 0x08, 0x640: 0xD8}, ['Player_Pit', 'Player_PitDeath']),
+    (
+        'clear-keep',
+        {POKE_FRAME: {0x39: 0x08, 0x640: 0xD8, 0xF6: 0x01}}
+        | {POKE_FRAME + 20 * i: {0x7E: 0x89} for i in range(1, 16)}
+        | {POKE_FRAME + 10 + 40 * i: {0x6BE: 0x10, 0x6CE: 0x01, 0x6BF: 0x50, 0x6CF: 0x02} for i in range(8)},
+        ['Player_PitDeath', 'Obj_ClearSlots'],
+        None,
+        400,
+    ),
     ('carried-10', {0x39: 0x0A}, ['Player_Carried']),
     ('carried-11', {0x39: 0x0B}, ['Player_Carried']),
     ('mode12', {0x39: 0x0C}, ['Player_Mode12']),
@@ -336,6 +345,13 @@ POKES = [
     ('message-life', {0x39: 0x0F, 0x6E: 0x0C}, ['Message_Closed', 'Player_PitDeath'], MESSAGE_PRESSES, MESSAGE_FRAMES),
     ('message-block', {0x39: 0x0F, 0x6E: 0x06, 0x7A: 0x09}, ['Message_Closed'], MESSAGE_PRESSES, MESSAGE_FRAMES),
     ('message-launchpad', {0x39: 0x0F, 0x6E: 0x0F}, ['Message_Closed'], MESSAGE_PRESSES, MESSAGE_FRAMES),
+    # Start pauses (the box and PAUSE a line a frame), and 30 frames later the pause ends
+    (
+        'pause',
+        {},
+        ['PauseText', 'PauseText_Framed', 'Text_LineNext', 'FrameLoop_Paused'],
+        {1730: 'START', 1732: '-', 1760: 'START', 1762: '-'},
+    ),
     ('message-scene', {0x39: 0x0F, 0x6E: 0x0B}, ['Message_Opened', 'Message_Closed'], MESSAGE_PRESSES, MESSAGE_FRAMES),
     # mode 16 past the music: one time unit left; the money's leading blanks, then its cap
     (
