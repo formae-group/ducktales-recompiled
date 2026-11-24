@@ -92,7 +92,7 @@ Checks come in two tiers ([docs/validation.md](docs/validation.md#fast-verificat
   the host's hooks and enhancements, so check those with `--runtime cycle` (about 3.5 min).
   `tests/decomp_test.py` takes the same `--changed` ranges, with `--from-state` and `--span`, to
   check one decompiled routine from the golden states; the full run is the gate before a merge.
-  `tools/test_slot.py -- <command>` queues heavy runs so that at most two run at once.
+  `tools/test_slot.py -- <command>` queues heavy runs so that at most three run at once.
 - **Nightly and before a release**, not per branch per change,
   `verify_routes.py` must report native, interpreter and oracle equality on every frame of every
   route at all four alignments, with 100% of CPU cycles in recompiled code (3 h 18 min with `--jobs 3` and no oracle cache). The oracle's

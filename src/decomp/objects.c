@@ -33,18 +33,29 @@
 
 #define OBJ_GRAVITY 0x40
 
-#define SFX_DIAMOND  0x15
-#define SFX_BREAK    0x16
-#define SFX_DEFEAT   0x35
-#define SFX_TREASURE 0x37
-#define SFX_THROW    0x1B
-#define SFX_SNAP     0x19
-#define SFX_SPIT     0x1A
-#define SFX_SWING    0x26
-#define SFX_CRAWLER  0x27
-#define SFX_WATCHER  0x2A
-#define SFX_FLYER    0x2B
-#define SFX_SWOOP    0x30
+#define SFX_DIAMOND      0x15
+#define SFX_BREAK        0x16
+#define SFX_DEFEAT       0x35
+#define SFX_TREASURE     0x37
+#define SFX_THROW        0x1B
+#define SFX_SNAP         0x19
+#define SFX_SPIT         0x1A
+#define SFX_SWING        0x26
+#define SFX_CRAWLER      0x27
+#define SFX_WATCHER      0x2A
+#define SFX_FLYER        0x2B
+#define SFX_SWOOP        0x30
+#define SFX_CHARGE       0x31
+#define SFX_BOUNCE       0x1D
+#define SFX_LEAP         0x34
+#define SFX_HOP          0x24
+#define SFX_DWELLER_HIT  0x2C
+#define SFX_POUNCER_FLY  0x32
+#define SFX_POUNCE       0x1F
+#define SFX_POUNCER_LAND 0x20
+#define SFX_SPLASH       0x21
+#define SFX_ROLL         0x27
+#define SFX_SPOUT        0x25
 
 #define gObjCursor        RAM_U8(DT_ADDR_OBJ_CURSOR)
 #define gScratch0         RAM_U8(DT_ADDR_SCRATCH0)
@@ -53,6 +64,7 @@
 #define gProbeHits        RAM_U8(DT_ADDR_PROBE_HITS)
 #define gContactDepth     RAM_U8(DT_ADDR_CONTACT_DEPTH)
 #define gBlockOpened      RAM_U8(DT_ADDR_BLOCK_OPENED)
+#define gContactSlot      RAM_U8(DT_ADDR_CONTACT_SLOT)
 #define gMoneyDigit(i)    RAM_U8(DT_ADDR_MONEY_DIGITS + (i))
 #define gMoneyChanged     RAM_U8(DT_ADDR_HUD_MONEY_DIRTY)
 #define gExtraDotTaken    RAM_U8(DT_ADDR_EXTRA_DOT_TAKEN)
@@ -64,6 +76,8 @@
 #define gRandom(i)        RAM_U8(DT_ADDR_RANDOM + (i))
 #define gPaletteUpload    RAM_U8(DT_ADDR_PALETTE_REQUEST)
 #define gHeldSlot         RAM_U8(DT_ADDR_HELD_SLOT)
+#define gProbeCount       RAM_U8(DT_ADDR_PROBE_COUNT)
+#define gPaletteShown(i)  RAM_U8(DT_ADDR_PALETTE_SHOWN + (i))
 
 /* ---- shared pieces of the handlers ---- */
 
@@ -438,7 +452,7 @@ static void Obj_Thrown(uint8_t x)
 }
 
 /* $F83F: money is capped at 9,999,990 (the four high digits set to 9). */
-static void Money_Max(void)
+void Money_Max(void)
 {
     Decomp_Enter(DT_CODE_MONEY_MAX, 0, 0, 0);
     for (int i = 3; i >= 0; i--) {
@@ -476,7 +490,7 @@ static void Money_Add(uint8_t amount, uint8_t y)
 }
 
 /* $F812: every HP dot full again. */
-static void Hud_RefillHp(void)
+void Hud_RefillHp(void)
 {
     Decomp_Enter(DT_CODE_HP_REFILL, 0, 0, 0);
     gPlayerEasyHits = 0;
@@ -1552,6 +1566,1194 @@ static void Obj_Swooper(uint8_t x)
     }
 }
 
+/* Kind $18 ($96D5): an enemy that walks a ledge at $0080 a frame and turns
+ * back at its edges (no floor under probe $2D or $2E) and at walls. A hit
+ * beats it. */
+static void Obj_Patroller(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_PATROLLER, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0) {
+        Obj_Defeat(x);
+        return;
+    }
+    if (Step(x) == 0) {
+        Obj_SetVelocityY(x, 0);
+        Obj_SetSpeed(x, 0x0080);
+        gObjects->dir[x] = OBJ_DIR_RIGHT;
+        gObjects->state[x]++;
+    }
+    x = Obj_Fall(x, (uint8_t)(0x2D + (gObjects->dir[x] & OBJ_DIR_RIGHT)), 0);
+    if (!(gProbeHits & 1)) {
+        gObjects->dir[x] ^= 3;
+    }
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        x = Obj_WalkRight(x, 0x29, 0);
+    } else {
+        x = Obj_WalkLeft(x, 0x2B, 0);
+    }
+    if (gProbeHits & 1) {
+        gObjects->dir[x] ^= 3;
+    }
+}
+
+/* Kind $10 ($9313): an enemy that faces Scrooge, waits 120 frames, then
+ * charges at 2 px a frame. Against a wall or a block it turns, knocks the
+ * block ($86F7) and bounces up ($06C0 counts the bounce, negative once it
+ * falls); landing from the bounce leaves it dazed (pose $42) for 30 frames
+ * before it charges again. A hit beats it. */
+static void Obj_Charger(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_CHARGER, 0x22, x, gObjects->kind[x]);
+    if (Step(x) == 0) {
+        gObjects->state[x]++;
+        Obj_SetVelocityY(x, 0);
+        gObjects->unk_06C0[x] = 0;
+        Obj_SetSpeed(x, 0x0200);
+        gObjects->timer[x] = 0x78;
+        Obj_FaceScrooge(x);
+    }
+    if (!(gObjects->state[x] & 2)) {
+        if (gObjects->timer[x] != 0) {
+            gObjects->timer[x]--;
+            gObjects->animTimer[x] = 0;
+            return;
+        }
+        if (gObjects->animFrame[x] != 3) {
+            return;
+        }
+        ResetAnim(x);
+        gObjects->action[x] = 0x2D;
+        gObjects->hitbox[x] |= 0x80;
+        gObjects->state[x]++;
+    }
+    uint8_t bounce = gObjects->unk_06C0[x];
+    if (bounce != 0) {
+        if (gObjects->animFrame[x] == 3) {
+            gObjects->animTimer[x] = 0;
+        }
+        if (!(bounce & 0x80)) {
+            x = Obj_Rise(x, 9, 2);
+            if (!(gObjects->vy[x] & 0x80)) {
+                return;
+            }
+            gObjects->unk_06C0[x] = gObjects->vy[x];
+            Obj_SetVelocityY(x, 0);
+            return;
+        }
+    }
+    x = Obj_Fall(x, 6, 2);
+    if (!(gProbeHits & 1)) {
+        return;
+    }
+    if (gObjects->unk_06C0[x] & 0x80) {
+        ResetAnim(x);
+        gObjects->unk_06C0[x] = 0;
+        gObjects->action[x] = 0x42;
+        gObjects->timer[x] = 0x1E;
+        gObjects->state[x]--;
+        return;
+    }
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        x = Obj_WalkRight(x, 0, 2);
+    } else {
+        x = Obj_WalkLeft(x, 3, 2);
+    }
+    if (gObjects->animTimer[x] == 0) {
+        Sound_Request(SFX_CHARGE, x);
+    }
+    if (gObjects->unk_0690[x] != 0) {
+        Obj_Defeat(x);
+        return;
+    }
+    if (!(gProbeHits & 1)) {
+        return;
+    }
+    uint8_t block = gContactSlot;
+    if (gObjects->kind[block] == OBJ_KIND_BLOCK && (gObjects->state[block] & OBJ_STATUS_HIDDEN) && !gBlockOpened) {
+        /* The tile edit needs the Y the walls move left, which the C does
+         * not model: the original runs this call. */
+        Decomp_RunOriginal();
+        return;
+    }
+    gObjects->dir[x] ^= 3;
+    gObjects->action[x] = 0x2E;
+    ResetAnim(x);
+    gObjects->hitbox[x] &= 0x7F;
+    if (gObjects->kind[block] == OBJ_KIND_BLOCK) {
+        Obj_HitBlock(block, 0);
+    }
+    Sound_Request(SFX_BOUNCE, x);
+    gObjects->unk_06C0[x]++;
+    Obj_SetVelocityY(x, 0x02D4);
+}
+
+/* Kind $20 ($9E51): an enemy that bobs up and down at 1 px a frame, first
+ * for 22 frames, then turning every 44; it faces Scrooge as it appears. A
+ * hit beats it. */
+static void Obj_Bobber(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_BOBBER, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0) {
+        Obj_Defeat(x);
+        return;
+    }
+    if (Step(x) == 0) {
+        Obj_SetVelocityY(x, 0x0100);
+        gObjects->timer[x] = 0x16;
+        gObjects->state[x]++;
+        Obj_FaceScrooge(x);
+        if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+            gObjects->flags[x] |= OBJ_FLAG_FACING_RIGHT;
+        } else {
+            gObjects->flags[x] &= (uint8_t)~OBJ_FLAG_FACING_RIGHT;
+        }
+    }
+    (void)Obj_TouchScrooge(x);
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        Obj_SubVelocityY(x);
+    } else {
+        Obj_AddVelocityY(x);
+    }
+    if (--gObjects->timer[x] == 0) {
+        gObjects->dir[x] ^= 3;
+        gObjects->timer[x] = 0x2C;
+    }
+}
+
+/* $9C0A: a puff of dust (action $57, kind 0, freed when its animation
+ * ends) 4 px below the slot, in the highest free slot; none when every slot
+ * is taken. */
+static void Obj_SpawnDust(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_LEAPER_DUST, 0, x, 0);
+    uint8_t y;
+    if (!Obj_FindFreeSlotY(&y)) {
+        return;
+    }
+    gObjects->state[y] = 0xA8;
+    gObjects->flags[y] = 0xA8;
+    ResetAnim(y);
+    gObjects->kind[y] = OBJ_KIND_NONE;
+    gObjects->hitbox[y] = 0;
+    gObjects->action[y] = 0x57;
+    gObjects->y[y] = (uint8_t)(gObjects->y[x] + 4);
+    gObjects->worldX[y] = gObjects->worldX[x];
+    gObjects->worldPage[y] = gObjects->worldPage[x];
+}
+
+/* Kind $1C ($9B10): an enemy that wakes when Scrooge is within 80 px, walks
+ * a ledge at $0133 a frame, and after 80 frames, at a wall or with nothing
+ * under it turns and leaps (4 px a frame up) with a puff of dust; landing
+ * it walks again. A hit beats it (pose $56). */
+static void Obj_Leaper(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_LEAPER, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0) {
+        gObjects->action[x] = 0x56;
+        Obj_Defeat(x);
+        return;
+    }
+    if (Step(x) == 0) {
+        if (Obj_DistanceX(x) >= 0x50) {
+            return;
+        }
+        Obj_SetVelocityY(x, 0);
+        Obj_SetSpeed(x, 0x0133);
+        gObjects->timer[x] = 0x50;
+        gObjects->state[x] = (uint8_t)((gObjects->state[x] & (uint8_t)~OBJ_STATUS_HIDDEN) | 1);
+        gObjects->dir[x] = OBJ_DIR_RIGHT;
+    }
+    (void)Obj_TouchScrooge(x);
+    if (gObjects->state[x] & 2) {
+        if (!(gObjects->state[x] & 1)) {
+            x = Obj_Rise(x, 0x2F, 1);
+            if (!(gObjects->vy[x] & 0x80)) {
+                return;
+            }
+            gObjects->animFrame[x]++;
+            Obj_SetVelocityY(x, 0);
+            gObjects->state[x]++;
+            return;
+        }
+        x = Obj_Fall(x, 0x2D, 1);
+        if (!(gProbeHits & 1)) {
+            return;
+        }
+        ResetAnim(x);
+        gObjects->action[x] = 0x55;
+        gObjects->y[x]++;
+        gObjects->state[x] -= 2;
+        return;
+    }
+    x = Obj_Fall(x, (uint8_t)(0x2D + (gObjects->dir[x] & OBJ_DIR_RIGHT)), 0);
+    if (gProbeHits != 0) {
+        gObjects->y[x] += 2;
+        if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+            x = Obj_WalkRight(x, 0x29, 0);
+        } else {
+            x = Obj_WalkLeft(x, 0x2B, 0);
+        }
+        if (!(gProbeHits & 1) && --gObjects->timer[x] != 0) {
+            return;
+        }
+    }
+    gObjects->dir[x] ^= 3;
+    gObjects->timer[x] = 0x50;
+    gObjects->state[x]++;
+    Obj_SetVelocityY(x, 0x0400);
+    gObjects->action[x] = 0x56;
+    gObjects->animFrame[x] = 0;
+    gObjects->animTimer[x] = 0x80;
+    Sound_Request(SFX_LEAP, x);
+    Obj_SpawnDust(x);
+}
+
+/* Kind $27 ($A5BE): a shot that flies up and sideways by its velocity and
+ * speed, harming Scrooge on contact; it is freed when it leaves the top of
+ * the screen. */
+static void Obj_RisingShot(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_RISING_SHOT, 0x22, x, gObjects->kind[x]);
+    (void)Obj_TouchScrooge(x);
+    bool off = (uint16_t)(gObjects->y[x] << 8 | gObjects->yFrac[x]) < Obj_GetVelocityY(x);
+    Obj_SubVelocityY(x);
+    if (off) {
+        gObjects->state[x] = 0;
+        return;
+    }
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        Obj_MoveRight(x);
+    } else {
+        Obj_MoveLeft(x);
+    }
+}
+
+/* Kind $2B ($AAC8): something that drops by its velocity (probe $2D),
+ * harming Scrooge on contact, and is freed when it hits the floor. */
+static void Obj_Dropping(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_DROPPING, 0x22, x, gObjects->kind[x]);
+    x = Obj_ClimbDown(x, 0x2D, 0);
+    if (gProbeHits & 1) {
+        gObjects->state[x] = 0;
+        gObjects->flags[x] = 0;
+    }
+    (void)Obj_TouchScrooge(x);
+}
+
+/* $A1D4: the ceiling hopper's walk, in its direction with probes $18 or $1B. */
+static uint8_t Obj_CeilingWalk(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_CEILING_HOPPER_WALK, 0, x, 0);
+    if (gObjects->dir[x] & OBJ_DIR_LEFT) {
+        return Obj_WalkLeft(x, 0x1B, 2);
+    }
+    return Obj_WalkRight(x, 0x18, 2);
+}
+
+static void Obj_CeilingJump(uint8_t x)
+{
+    gObjects->vdir[x] = 8;
+    Obj_SetVelocityY(x, 0x02D4);
+    gObjects->speedFrac[x] = 0;
+}
+
+static void Obj_CeilingClimb(uint8_t x)
+{
+    gObjects->state[x]++;
+    gObjects->vdir[x] = 0;
+    ResetAnim(x);
+    gObjects->action[x] = 0x4C;
+    Obj_SetVelocityY(x, 0x01CC);
+    Obj_SetSpeed(x, 0x01CC);
+}
+
+/* Kind $25 ($A065): an enemy that waits until Scrooge is within 64 px,
+ * climbs down to the floor and hops towards him (action $4D, sound $24),
+ * walking while airborne. When he gets behind it after a landing, or a hop
+ * runs into a wall, it climbs back up to the ceiling (action $4C) and walks
+ * there. Off screen or hit, it is beaten. */
+static void Obj_CeilingHopper(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_CEILING_HOPPER, 0x22, x, gObjects->kind[x]);
+    if (Enemy_Beaten(x, 0)) {
+        return;
+    }
+    if (Step(x) == 0) {
+        gObjects->vdir[x] = 0;
+        Obj_SetSpeed(x, 0x01CC);
+        Obj_FaceScrooge(x);
+        gObjects->state[x]++;
+    }
+    if (Step(x) == 3) {
+        if (gObjects->vdir[x] == 0) {
+            x = Obj_ClimbUp(x, 0x21, 2);
+            if ((gProbeHits & 1) || gObjects->y[x] < 0x88) {
+                gObjects->vdir[x]++;
+            }
+            return;
+        }
+        x = Obj_CeilingWalk(x);
+        if (gProbeHits & 1) {
+            (void)Obj_ClimbUp(x, 0x21, 2);
+        }
+        return;
+    }
+    if (!(Step(x) & 2)) {
+        if (Obj_DistanceX(x) >= 0x40) {
+            (void)Obj_CeilingWalk(x);
+            return;
+        }
+        gObjects->state[x]++;
+        Obj_SetVelocityY(x, 0x01CC);
+    }
+    if (gObjects->vdir[x] == 0) {
+        x = Obj_ClimbDown(x, 0x1E, 2);
+        if (!(gProbeHits & 1)) {
+            return;
+        }
+        gObjects->animTimer[x] = 0;
+        gObjects->animFrame[x] = 0;
+        gObjects->action[x] = 0x4D;
+        Sound_Request(SFX_HOP, x);
+        Obj_CeilingJump(x);
+        return;
+    }
+    if (gObjects->vdir[x] & 8) {
+        if (gObjects->action[x] == 0x4D) {
+            if (gObjects->animFrame[x] != 2) {
+                return;
+            }
+            gObjects->animTimer[x] = 0x80;
+        }
+        x = Obj_CeilingWalk(x);
+        uint8_t hits = gProbeHits;
+        x = Obj_Rise(x, 0x21, 2);
+        if (!(gObjects->vy[x] & 0x80)) {
+            return;
+        }
+        if (hits & 1) {
+            Obj_CeilingClimb(x);
+            return;
+        }
+        gObjects->vdir[x] = 4;
+        Obj_SetVelocityY(x, 0);
+        return;
+    }
+    x = Obj_Fall(x, 0x1E, 2);
+    if (!(gProbeHits & 1)) {
+        (void)Obj_CeilingWalk(x);
+        return;
+    }
+    if (gObjects->action[x] != 0x4E) {
+        Sound_Request(SFX_HOP, x);
+        gObjects->action[x] = 0x4E;
+        gObjects->animFrame[x] = 0;
+        gObjects->animTimer[x] = 1;
+    }
+    if ((gObjects->animFrame[x] | gObjects->animTimer[x]) != 0) {
+        return;
+    }
+    uint8_t dir = gObjects->dir[x];
+    Obj_FaceScrooge(x);
+    bool turned = gObjects->dir[x] != dir;
+    gObjects->dir[x] = dir;
+    if (turned) {
+        Obj_CeilingClimb(x);
+        return;
+    }
+    gObjects->action[x] = 0x4D;
+    gObjects->animFrame[x] = 2;
+    gObjects->animTimer[x] = 0;
+    Obj_CeilingJump(x);
+}
+
+/* $9649: link the block the dweller sits in ($06D0): a live block in pose
+ * $1D or $1E at its world X, else a new block (kind 8, pose $1E) 8 px below
+ * it in the highest free slot, else slot 0. */
+static void Obj_DwellerLinkBlock(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_DWELLER_LINK_BLOCK, 0, x, 0);
+    for (uint8_t y = 0x0F; y != 0; y--) {
+        if (!(gObjects->state[y] & OBJ_STATUS_LIVE)) {
+            continue;
+        }
+        if (gObjects->action[y] != 0x1D && gObjects->action[y] != 0x1E) {
+            continue;
+        }
+        if (gObjects->worldPage[y] == gObjects->worldPage[x] && gObjects->worldX[y] == gObjects->worldX[x]) {
+            gObjects->unk_06D0[x] = y;
+            return;
+        }
+    }
+    uint8_t y = 0x0F;
+    while (y != 0 && (gObjects->state[y] & OBJ_STATUS_LIVE)) {
+        y--;
+    }
+    gObjects->unk_06D0[x] = y;
+    if (y == 0) {
+        return;
+    }
+    gObjects->worldX[y] = gObjects->worldX[x];
+    gObjects->worldPage[y] = gObjects->worldPage[x];
+    gObjects->y[y] = (uint8_t)(gObjects->y[x] + 8);
+    gObjects->hitbox[y] = 0x80;
+    gObjects->kind[y] = OBJ_KIND_BLOCK;
+    gObjects->state[y] = 0xA0;
+    ResetAnim(y);
+    gObjects->unk_0690[y] = 0;
+    gObjects->action[y] = 0x1E;
+}
+
+/* Kind $12 ($9552): an enemy that lives in a block. It steps out left or
+ * right (pose $2F, 32 frames) or waits (pose $30, 60 frames) by a cycle of
+ * four moves out of two ($06C0, chosen at random), the block's pose and
+ * facing following it. A hit, or its block launched, beats it: sound $2C,
+ * pose $31 for 60 frames, then pose $32. */
+static void Obj_BlockDweller(uint8_t x)
+{
+    static const uint8_t dirs[4] = { OBJ_DIR_RIGHT, OBJ_DIR_LEFT, OBJ_DIR_LEFT, OBJ_DIR_RIGHT };
+    static const uint8_t facing[4] = { OBJ_FLAG_FACING_RIGHT, 0, 0, OBJ_FLAG_FACING_RIGHT };
+    static const uint8_t cycles[2] = { 0, 4 };
+    static const uint8_t blockPoses[8] = { 0x1E, 0x1D, 0x1E, 0x1E, 0x1E, 0x1D, 0x1E, 0x1E };
+    static const uint8_t blockFacing[8] = { 0, OBJ_FLAG_FACING_RIGHT, 0, 0, 0, 0, 0, 0 };
+
+    Decomp_Enter(DT_CODE_KIND_BLOCK_DWELLER, 0x22, x, gObjects->kind[x]);
+    if (gObjects->action[x] == 0x31) {
+        if (gObjects->timer[x] == 0) {
+            gObjects->action[x] = 0x32;
+            Obj_Defeat(x);
+            return;
+        }
+        gObjects->timer[x]--;
+        return;
+    }
+    if (Step(x) == 0) {
+        Obj_DwellerLinkBlock(x);
+        gObjects->timer[x] = 0;
+        gObjects->unk_06C0[x] = 0;
+        Obj_SetSpeed(x, 0x0100);
+        gObjects->state[x]++;
+        return;
+    }
+    uint8_t block = gObjects->unk_06D0[x];
+    if (gObjects->unk_0690[x] != 0 || gObjects->kind[block] == OBJ_KIND_THROWN) {
+        Sound_Request(SFX_DWELLER_HIT, x);
+        gObjects->action[x] = 0x31;
+        gObjects->animTimer[x] = 0;
+        gObjects->hitbox[x] = 0;
+        gObjects->animFrame[x] = 0;
+        gObjects->timer[x] = 0x3C;
+        return;
+    }
+    if (gObjects->timer[x] == 0) {
+        uint8_t c = gObjects->unk_06C0[x];
+        gScratch0 = x;
+        if ((gObjects->state[block] & OBJ_STATUS_LIVE) &&
+            (gObjects->action[block] == 0x1D || gObjects->action[block] == 0x1E)) {
+            gObjects->action[block] = blockPoses[c];
+            gObjects->flags[block] = (uint8_t)((gObjects->flags[block] & (uint8_t)~OBJ_FLAG_FACING_RIGHT) |
+                                               blockFacing[c]);
+        }
+        if (c & 1) {
+            gObjects->timer[x] = 0x3C;
+            gObjects->dir[x] = 0;
+            gObjects->action[x] = 0x30;
+        } else {
+            gObjects->dir[x] = dirs[c >> 1];
+            gObjects->flags[x] = (uint8_t)((gObjects->flags[x] & (uint8_t)~OBJ_FLAG_FACING_RIGHT) | facing[c >> 1]);
+            gObjects->timer[x] = 0x20;
+            gObjects->action[x] = 0x2F;
+        }
+        ResetAnim(x);
+        if ((++gObjects->unk_06C0[x] & 3) == 0) {
+            gObjects->unk_06C0[x] = cycles[(gRandom(0) + gRandom(2) + (c & 1)) & 1];
+        }
+    }
+    gObjects->timer[x]--;
+    if (gObjects->dir[x] != 0) {
+        if (gObjects->dir[x] & OBJ_DIR_LEFT) {
+            Obj_MoveLeft(x);
+        } else {
+            Obj_MoveRight(x);
+        }
+    }
+    (void)Obj_TouchScrooge(x);
+}
+
+/* Kind $41 (fixed bank $FE50): a spot that, while Scrooge holds the key
+ * item the land asks for ($A3 & $F6), sets his special-tile bit ($0600 bit
+ * 2) when he touches it. */
+static void Obj_KeySpot(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_KEY_SPOT, 0x22, x, gObjects->kind[x]);
+    if ((gKeyItems & gLand) == 0) {
+        return;
+    }
+    gObjects->hitbox[x] = 0;
+    if (Obj_TouchScrooge(x)) {
+        gObjects->flags[P_] |= 4;
+    }
+}
+
+/* Kind $39 (fixed bank $FE69): a platform that moves 48 frames at a time
+ * by a cycle of four directions, carrying Scrooge 1 px a frame its way while
+ * he touches it (hitbox $8A for the test, $84 after). */
+static void Obj_MovingPlatform(uint8_t x)
+{
+    static const uint8_t dirs[4] = { OBJ_DIR_LEFT, OBJ_DIR_RIGHT, OBJ_DIR_RIGHT, OBJ_DIR_LEFT };
+
+    Decomp_Enter(DT_CODE_KIND_MOVING_PLATFORM, 0x22, x, gObjects->kind[x]);
+    if (Step(x) == 0) {
+        gObjects->timer[x] = 0;
+        gObjects->unk_06C0[x] = 0;
+        Obj_SetSpeed(x, 0x0100);
+        gObjects->state[x]++;
+    }
+    if (gObjects->unk_06C0[x] == 0) {
+        gObjects->dir[x] = dirs[gObjects->timer[x] & 3];
+        gObjects->unk_06C0[x] = 0x30;
+        gObjects->timer[x]++;
+    }
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        Obj_MoveRight(x);
+    } else {
+        Obj_MoveLeft(x);
+    }
+    gObjects->unk_06C0[x]--;
+    gObjects->hitbox[x] = 0x8A;
+    if (Obj_TouchScrooge(x)) {
+        Obj_SetWorldX(P_, (uint16_t)(Obj_GetWorldX(P_) + ((gObjects->dir[x] & OBJ_DIR_LEFT) ? 0xFFFF : 1)));
+    }
+    gObjects->hitbox[x] = 0x84;
+}
+
+/* Kind $1F ($9DF7): an enemy that paces 1 px a frame, right first for 22
+ * frames, then turning every 32, facing its way. A hit beats it. */
+static void Obj_Pacer(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_PACER, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0) {
+        Obj_Defeat(x);
+        return;
+    }
+    if (Step(x) == 0) {
+        Obj_SetSpeed(x, 0x0100);
+        gObjects->timer[x] = 0x16;
+        gObjects->state[x]++;
+        gObjects->dir[x] = OBJ_DIR_RIGHT;
+    }
+    (void)Obj_TouchScrooge(x);
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        gObjects->flags[x] |= OBJ_FLAG_FACING_RIGHT;
+        Obj_MoveRight(x);
+    } else {
+        gObjects->flags[x] &= (uint8_t)~OBJ_FLAG_FACING_RIGHT;
+        Obj_MoveLeft(x);
+    }
+    if (--gObjects->timer[x] == 0) {
+        gObjects->dir[x] ^= 3;
+        gObjects->timer[x] = 0x20;
+    }
+}
+
+/* Kind $1E ($9D8A): an enemy that walks a ledge at $0133 a frame, right
+ * first, turning at its edges (probe $1E or $20 finds no floor) and at
+ * walls. A hit beats it. */
+static void Obj_LedgeWalker(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_LEDGE_WALKER, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0) {
+        Obj_Defeat(x);
+        return;
+    }
+    if (Step(x) == 0) {
+        Obj_SetVelocityY(x, 0);
+        Obj_SetSpeed(x, 0x0133);
+        gObjects->dir[x] = OBJ_DIR_RIGHT;
+        gObjects->state[x]++;
+    }
+    (void)Obj_TouchScrooge(x);
+    x = Obj_Fall(x, (gObjects->dir[x] & OBJ_DIR_RIGHT) ? 0x20 : 0x1E, 0);
+    if (!(gProbeHits & 1)) {
+        gObjects->dir[x] ^= 3;
+    }
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        x = Obj_WalkRight(x, 0x19, 0);
+    } else {
+        x = Obj_WalkLeft(x, 0x1C, 0);
+    }
+    if (gProbeHits & 1) {
+        gObjects->dir[x] ^= 3;
+    }
+}
+
+/* Kind $19 ($973C): an enemy that waits until Scrooge is within 12 px,
+ * drops (pose $3C, then $3B) until it lands or is 40 px above him, faces
+ * him and flies in arcs by a cycle of 14 motions (sound $32), its step
+ * moving on once it is 80 px or more above him. Within 12 px of him it
+ * pounces (vertical velocity $0280, sound $1F) and, landed, sits 120 frames
+ * in pose $39 (sound $20) before flying again. Off screen or hit, it is
+ * beaten. Each step's address in the jump table is left in $00/$01. */
+static void Obj_Pouncer(uint8_t x)
+{
+    static const uint8_t motions[14] = { 0x1F, 0x1E, 0x1D, 0x1C, 0x1B, 0x1A, 0x19,
+                                         0x17, 0x16, 0x15, 0x14, 0x13, 0x12, 0x11 };
+    static const uint16_t steps[5] = { 0x9768, 0x9787, 0x97F3, 0x97F3, 0x98C8 };
+
+    Decomp_Enter(DT_CODE_KIND_POUNCER, 0x22, x, gObjects->kind[x]);
+    if (!OnScreen(x) || gObjects->unk_0690[x] != 0) {
+        Obj_Defeat(x);
+        return;
+    }
+    if (gObjects->action[x] != 0x39) {
+        (void)Obj_TouchScrooge(x);
+    }
+    uint8_t step = Step(x);
+    gScratch(0) = (uint8_t)steps[step];
+    gScratch(1) = (uint8_t)(steps[step] >> 8);
+    switch (step) {
+        case 0:
+            if (Obj_DistanceX(x) >= 0x0C) {
+                return;
+            }
+            gObjects->state[x]++;
+            gObjects->timer[x] = 0x1E;
+            gObjects->unk_06C0[x] = 0;
+            Obj_SetVelocityY(x, 0x0280);
+            return;
+        case 1:
+            if (gObjects->timer[x] != 0) {
+                if (--gObjects->timer[x] == 0) {
+                    gObjects->action[x] = 0x3C;
+                    ResetAnim(x);
+                }
+                return;
+            }
+            if (gObjects->action[x] == 0x3C && gObjects->animTimer[x] == 8) {
+                gObjects->action[x]--;
+                ResetAnim(x);
+            }
+            x = Obj_ClimbDown(x, 0x40, 1);
+            if (!(gProbeHits & 1) && (uint8_t)(gObjects->y[P_] - gObjects->y[x]) >= 0x28) {
+                return;
+            }
+            gObjects->state[x]++;
+            Obj_FaceScrooge(x);
+            if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+                gObjects->flags[x] |= OBJ_FLAG_FACING_RIGHT;
+            }
+            gObjects->action[x] = 0x3B;
+            ResetAnim(x);
+            return;
+        case 2:
+        case 3:
+            if (gObjects->timer[x] == 0) {
+                gObjects->vdir[x] = 0;
+                Obj_SetMotionIndex(x, motions[gObjects->unk_06C0[x]]);
+                if (gObjects->speed[x] & 0x80) {
+                    Obj_SetSpeed(x, (uint16_t)-Obj_GetSpeed(x));
+                }
+                if (gObjects->vy[x] & 0x80) {
+                    gObjects->vdir[x] = 8;
+                    Obj_SetVelocityY(x, (uint16_t)-Obj_GetVelocityY(x));
+                }
+                if (++gObjects->unk_06C0[x] == 0x0E) {
+                    gObjects->unk_06C0[x] = 0;
+                }
+                gObjects->timer[x] = 3;
+            }
+            if (gObjects->vdir[x] == 0) {
+                x = Obj_ClimbDown(x, 0x40, 1);
+            } else {
+                x = Obj_ClimbUp(x, 0x42, 1);
+            }
+            if (gObjects->dir[x] & OBJ_DIR_LEFT) {
+                x = Obj_WalkLeft(x, 0x3D, 2);
+            } else {
+                x = Obj_WalkRight(x, 0x3A, 2);
+            }
+            if (gObjects->animTimer[x] == 0) {
+                Sound_Request(SFX_POUNCER_FLY, x);
+            }
+            if (gObjects->state[x] & 1) {
+                gObjects->timer[x]--;
+            } else if (gObjects->y[P_] >= gObjects->y[x] && ((gObjects->y[P_] - gObjects->y[x]) & 0xF0) >= 0x50) {
+                gObjects->state[x]++;
+                gObjects->timer[x]--;
+            }
+            if (Obj_DistanceX(x) >= 0x0C) {
+                return;
+            }
+            gObjects->action[x] = 0x3C;
+            ResetAnim(x);
+            gObjects->state[x]++;
+            Obj_SetVelocityY(x, 0x0280);
+            Sound_Request(SFX_POUNCE, x);
+            return;
+        default:
+            break;
+    }
+    if (gObjects->action[x] == 0x39) {
+        if (--gObjects->timer[x] != 0) {
+            return;
+        }
+        gObjects->action[x] = 0x3B;
+        ResetAnim(x);
+        gObjects->unk_06C0[x] = 0;
+        gObjects->state[x] = (uint8_t)((gObjects->state[x] & 0xF0) | 2);
+        gObjects->hitbox[x] &= 0x7F;
+        return;
+    }
+    if (gObjects->action[x] == 0x3C && gObjects->animTimer[x] == 8) {
+        gObjects->action[x] = 0x5C;
+        ResetAnim(x);
+    }
+    x = Obj_ClimbDown(x, 0x40, 1);
+    if (!(gProbeHits & 1)) {
+        return;
+    }
+    gObjects->action[x] = 0x39;
+    ResetAnim(x);
+    gObjects->timer[x] = 0x78;
+    gObjects->hitbox[x] |= 0x80;
+    Sound_Request(SFX_POUNCER_LAND, x);
+}
+
+/* $AD56: the pickpocket's walk, in its direction with probes $18 or $1B. */
+static uint8_t Obj_PickpocketWalk(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_PICKPOCKET_WALK, 0, x, 0);
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        return Obj_WalkRight(x, 0x18, 2);
+    }
+    return Obj_WalkLeft(x, 0x1B, 2);
+}
+
+/* $AD6B: take 1 from the money's third digit ($06B0 counts the thefts).
+ * Blank digits count as 0; a borrow out of the top blanks all six digits,
+ * else the leading zeros are blanked again. */
+static void Obj_StealMoney(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_PICKPOCKET_STEAL, 0, x, 0);
+    gObjects->timer[x]++;
+    gScratch0 = 1;
+    bool carry = true;
+    for (int y = 2; y >= 0; y--) {
+        uint8_t d = gMoneyDigit(y) == DT_MONEY_TILE_BLANK ? 0 : gMoneyDigit(y);
+        int v = d - gScratch0 - (carry ? 0 : 1);
+        carry = v >= 0;
+        if (!carry) {
+            v += 10;
+        }
+        gMoneyDigit(y) = (uint8_t)v;
+        gScratch0 = 0;
+    }
+    if (!carry) {
+        for (int y = 5; y >= 0; y--) {
+            gMoneyDigit(y) = DT_MONEY_TILE_BLANK;
+        }
+    } else {
+        for (int y = 0; y < 6; y++) {
+            if (gMoneyDigit(y) == DT_MONEY_TILE_BLANK) {
+                continue;
+            }
+            if (gMoneyDigit(y) != 0) {
+                break;
+            }
+            gMoneyDigit(y) = DT_MONEY_TILE_BLANK;
+        }
+    }
+    gMoneyChanged++;
+}
+
+/* Kind $32 ($ACBE): an enemy that walks at Scrooge (speed index 1),
+ * jumps (4 px a frame) when it walks into a wall, and the first time it
+ * touches him takes 1 from the money's third digit. Off screen or hit, it
+ * is beaten. */
+static void Obj_Pickpocket(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_PICKPOCKET, 0x22, x, gObjects->kind[x]);
+    if (Enemy_Beaten(x, 0)) {
+        return;
+    }
+    if (Step(x) == 0) {
+        Obj_SetVelocityY(x, 0);
+        gObjects->speedFrac[x] = 0;
+        gObjects->timer[x] = 0;
+        gObjects->speed[x] = 1;
+        gObjects->state[x]++;
+        Obj_SetSpeedIndex(x, 1);
+        Obj_FaceScrooge(x);
+    }
+    bool landed = false;
+    if (gObjects->state[x] & 2) {
+        x = Obj_Rise(x, 0x21, 2);
+        if (gObjects->vy[x] & 0x80) {
+            gObjects->state[x]--;
+            Obj_SetVelocityY(x, 0);
+            x = Obj_Fall(x, 0x1E, 2);
+            landed = gProbeHits & 1;
+        }
+    } else {
+        x = Obj_Fall(x, 0x1E, 2);
+        landed = gProbeHits & 1;
+    }
+    if (!landed) {
+        gObjects->animFrame[x] = 0;
+        gObjects->animTimer[x] = 0;
+    }
+    x = Obj_PickpocketWalk(x);
+    if (gObjects->timer[x] == 0 && Obj_TouchScrooge(x)) {
+        Obj_StealMoney(x);
+    }
+    if ((gObjects->state[x] & 2) || !(gProbeHits & 1)) {
+        return;
+    }
+    if (Obj_GetVelocityY(x) != 0) {
+        return;
+    }
+    gObjects->state[x]++;
+    Obj_SetVelocityY(x, 0x0400);
+}
+
+/* The splash of kind $1A: palette entries $1E/$1F of the sprites, sound
+ * $21, a palette upload, and a splash (pose $37, kind 0, freed when its
+ * animation ends) at Y $BC in the highest free slot, if any. */
+static void Obj_PitSplash(uint8_t x, uint8_t c2, uint8_t c3)
+{
+    gPaletteShown(0x1E) = c2;
+    gPaletteShown(0x1F) = c3;
+    Sound_Request(SFX_SPLASH, x);
+    gPaletteUpload = 0xFF;
+    uint8_t y = 0x0F;
+    while (gObjects->state[y] & OBJ_STATUS_LIVE) {
+        if (--y == 0) {
+            return;
+        }
+    }
+    gObjects->state[y] = 0xA8;
+    gObjects->flags[y] = 0xA8;
+    gObjects->y[y] = 0xBC;
+    gObjects->worldX[y] = gObjects->worldX[x];
+    gObjects->worldPage[y] = gObjects->worldPage[x];
+    gObjects->action[y] = 0x37;
+    ResetAnim(y);
+    gObjects->hitbox[y] = 0;
+    gObjects->kind[y] = OBJ_KIND_NONE;
+}
+
+/* $9A1E: the splash as the jumper leaves the pit. */
+static void Obj_PitSplashOut(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_PIT_SPLASH_OUT, 0, x, 0);
+    Obj_PitSplash(x, 0x19, 0x27);
+}
+
+/* $9A2A: the splash as it falls back in. */
+static void Obj_PitSplashIn(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_PIT_SPLASH_IN, 0, x, 0);
+    Obj_PitSplash(x, 0x21, 0x17);
+}
+
+/* Kind $1A ($9956): an enemy that, once Scrooge is within 32 px, jumps out
+ * of a pit from the bottom of the screen (Y $EF) at the velocity its
+ * variant ($06B0) gives, falls back, and jumps again 120 frames after it
+ * passes Y $F0, with a splash at the frame counts ($06D0) its variant
+ * gives. It harms him (hitbox $91) only on screen above Y $D0. A hit beats
+ * it. */
+static void Obj_PitJumper(uint8_t x)
+{
+    static const uint16_t jumps[3] = { 0x0652, 0x07A5, 0x07A5 };
+    static const uint8_t splashOut[3] = { 0x08, 0x07, 0x00 };
+    static const uint8_t splashIn[3] = { 0x2A, 0x37, 0x00 };
+
+    Decomp_Enter(DT_CODE_KIND_PIT_JUMPER, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0) {
+        Obj_Defeat(x);
+        return;
+    }
+    gObjects->hitbox[x] = 0;
+    if (gObjects->y[x] != 0 && gObjects->y[x] < 0xD0) {
+        gObjects->hitbox[x] = 0x91;
+    }
+    if (Step(x) == 0) {
+        if (Obj_DistanceX(x) >= 0x20) {
+            return;
+        }
+        gObjects->vdir[x] = 0;
+        gObjects->unk_06C0[x] = 0;
+        gObjects->unk_06D0[x] = 0;
+        gObjects->y[x] = 0xEF;
+        Obj_SetVelocityY(x, jumps[gObjects->timer[x]]);
+        gObjects->animTimer[x] = 0x80;
+        gObjects->animFrame[x] = 0;
+        gObjects->state[x]++;
+    }
+    gObjects->unk_06D0[x]++;
+    uint8_t variant = gObjects->timer[x];
+    if (gObjects->vdir[x] == 0) {
+        Obj_ApplyVelocityY(x);
+        Obj_ApplyGravity(x);
+        if (gObjects->vy[x] & 0x80) {
+            gObjects->vdir[x]++;
+            Obj_SetVelocityY(x, 0);
+            gObjects->animFrame[x] = 1;
+        }
+        if (splashOut[variant] != 0 && splashOut[variant] == gObjects->unk_06D0[x]) {
+            Obj_PitSplashOut(x);
+        }
+        return;
+    }
+    if (gObjects->unk_06C0[x] == 0) {
+        Obj_ApplyGravity(x);
+        Obj_ApplyVelocityY(x);
+        if (gObjects->y[x] >= 0xF0) {
+            gObjects->yFrac[x] = 0;
+            gObjects->y[x] = 0;
+            gObjects->unk_06C0[x] = 0x78;
+        }
+    } else if (--gObjects->unk_06C0[x] == 0) {
+        gObjects->state[x] &= 0xF0;
+        return;
+    }
+    if (splashIn[variant] != 0 && splashIn[variant] == gObjects->unk_06D0[x]) {
+        Obj_PitSplashIn(x);
+    }
+}
+
+/* Kind $1B ($9A81): an enemy that bounces towards Scrooge, walking 1 px a
+ * frame and jumping again (vertical velocity $04E5) each time it lands. Off
+ * screen or hit, it is beaten. */
+static void Obj_Bouncer(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_BOUNCER, 0x22, x, gObjects->kind[x]);
+    if (Enemy_Beaten(x, 0)) {
+        return;
+    }
+    if (Step(x) == 0) {
+        Obj_SetSpeed(x, 0x0100);
+        Obj_FaceScrooge(x);
+        gObjects->state[x] |= 2;
+    }
+    (void)Obj_TouchScrooge(x);
+    if (!(gObjects->state[x] & 2)) {
+        if (gObjects->animFrame[x] != 0) {
+            gObjects->animTimer[x] = 0x80;
+        }
+        x = Obj_Rise(x, 0x21, 2);
+        if (gObjects->vy[x] & 0x80) {
+            Obj_SetVelocityY(x, 0);
+            gObjects->state[x]++;
+        }
+    } else {
+        x = Obj_Fall(x, 0x1E, 2);
+        if (gProbeHits & 1) {
+            gObjects->state[x]--;
+            ResetAnim(x);
+            Obj_SetVelocityY(x, 0x04E5);
+        }
+    }
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        (void)Obj_WalkRight(x, 0x18, 2);
+    } else {
+        (void)Obj_WalkLeft(x, 0x1B, 2);
+    }
+}
+
+/* Kind $24 ($A024): a boulder that, once Scrooge is within 4 px, rolls
+ * right at $0180 a frame with probe $35 (the walls move skips the block test
+ * for this kind). At a wall it walks once more and stops for good (kind 0).
+ * Within $15 px of him both ways it pushes him right ($73). The second walk
+ * takes probe 1 and the Y the first one left: the probes left to test, 0
+ * after a solid hit; a hit on a special tile would leave that tile's handler
+ * index instead, which the C does not model. */
+static void Obj_Boulder(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_BOULDER, 0x22, x, gObjects->kind[x]);
+    if (Step(x) == 0) {
+        if (Obj_DistanceX(x) >= 4) {
+            return;
+        }
+        Obj_SetSpeed(x, 0x0180);
+        gObjects->state[x]++;
+    }
+    x = Obj_WalkRight(x, 0x35, 0);
+    if (gProbeHits & 1) {
+        x = Obj_WalkRight(x, 1, gProbeCount);
+        gObjects->kind[x] = OBJ_KIND_NONE;
+    }
+    if (Obj_DistanceX(x) < 0x15 && Obj_DistanceY(x) < 0x15) {
+        gPlayerPushRight++;
+    }
+}
+
+/* Kind $23 ($9FEC): something that rolls left at $0180 a frame on the
+ * floor (probe $31), harming Scrooge on contact, with sound $27 at the start
+ * of each animation cycle; in the air it only falls. */
+static void Obj_Roller(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_ROLLER, 0x22, x, gObjects->kind[x]);
+    if (Step(x) == 0) {
+        Obj_SetVelocityY(x, 0);
+        Obj_SetSpeed(x, 0x0180);
+        gObjects->state[x]++;
+    }
+    (void)Obj_TouchScrooge(x);
+    x = Obj_Fall(x, 0x31, 2);
+    if (!(gProbeHits & 1)) {
+        return;
+    }
+    Obj_MoveLeft(x);
+    if (gObjects->animTimer[x] == 0) {
+        Sound_Request(SFX_ROLL, x);
+    }
+}
+
+/* Kind $2C ($A1E9): once Scrooge is within 4 px, it throws out four
+ * treats (kind $2D, pose $24, 16 px above it, vertical velocity $02D4) one
+ * every 60 frames, up, right, up and left (sound $25, pose $49 back to $48
+ * on animation frame 7). The thrower's slot is left in $00. */
+static void Obj_TreatSpout(uint8_t x)
+{
+    static const uint8_t dirs[4] = { 0, OBJ_DIR_RIGHT, 0, OBJ_DIR_LEFT };
+    static const uint16_t speeds[4] = { 0x0000, 0x0100, 0x0000, 0x0100 };
+
+    Decomp_Enter(DT_CODE_KIND_TREAT_SPOUT, 0x22, x, gObjects->kind[x]);
+    if (Step(x) == 0) {
+        if (Obj_DistanceX(x) >= 4) {
+            return;
+        }
+        gObjects->state[x]++;
+        gObjects->timer[x] = 0;
+        gObjects->unk_06C0[x] = 0;
+    }
+    if (gObjects->unk_06C0[x] == 0) {
+        uint8_t y = 0x0F;
+        while (gObjects->state[y] & OBJ_STATUS_LIVE) {
+            if (--y == 0) {
+                return;
+            }
+        }
+        Sound_Request(SFX_SPOUT, x);
+        gObjects->action[x]++;
+        gObjects->state[y] = 0xA0;
+        gObjects->flags[y] = 0xA0;
+        gObjects->action[y] = 0x24;
+        gObjects->worldPage[y] = gObjects->worldPage[x];
+        gObjects->worldX[y] = gObjects->worldX[x];
+        gObjects->y[y] = (uint8_t)(gObjects->y[x] - 0x10);
+        ResetAnim(x);
+        ResetAnim(y);
+        gObjects->hitbox[y] = 0;
+        gObjects->kind[y] = OBJ_KIND_TREAT;
+        gScratch0 = x;
+        Obj_SetVelocityY(y, 0x02D4);
+        uint8_t i = gObjects->timer[x];
+        gObjects->dir[y] = dirs[i];
+        Obj_SetSpeed(y, speeds[i]);
+        gObjects->unk_06C0[x] = ++gObjects->timer[x] == 4 ? 0xFF : 0x3C;
+        return;
+    }
+    if (!(gObjects->unk_06C0[x] & 0x80)) {
+        gObjects->unk_06C0[x]--;
+    }
+    if (gObjects->action[x] == 0x48 || gObjects->animTimer[x] != 7) {
+        return;
+    }
+    gObjects->action[x]--;
+    ResetAnim(x);
+}
+
+/* Kind $2D ($A2BA): a treat that rises, then falls at up to 3 px a frame
+ * while its sideways speed runs down by $40 a frame; touched, it is freed
+ * and Scrooge gets an HP dot back ($8B82). It is freed past Y $F0. */
+static void Obj_Treat(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_TREAT, 0x22, x, gObjects->kind[x]);
+    if (Step(x) == 0) {
+        Obj_ApplyVelocityY(x);
+        Obj_ApplyGravity(x);
+        if (gObjects->vy[x] & 0x80) {
+            Obj_SetVelocityY(x, 0);
+            gObjects->state[x]++;
+        }
+    } else {
+        if (gObjects->vy[x] != 0xFD) {
+            Obj_ApplyGravity(x);
+        }
+        Obj_ApplyVelocityY(x);
+    }
+    if (gObjects->dir[x] != 0) {
+        if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+            Obj_MoveRight(x);
+        } else {
+            Obj_MoveLeft(x);
+        }
+        if (Step(x) != 0) {
+            Obj_SetSpeed(x, (uint16_t)(Obj_GetSpeed(x) - 0x40));
+            if (Obj_GetSpeed(x) == 0) {
+                gObjects->dir[x] = 0;
+            }
+        }
+    }
+    if (Obj_TouchScrooge(x)) {
+        gObjects->state[x] = 0;
+        Hud_RestoreDot();
+        return;
+    }
+    if (gObjects->y[x] >= 0xF0) {
+        gObjects->state[x] = 0;
+        gObjects->flags[x] = 0;
+    }
+}
+
+/* Kind $30 ($AC3D, also kind $31's handler): an enemy that paces 1 px a
+ * frame, right first, for its kind's span ($16 or $0B frames, doubled after
+ * the first turn), resting 120 frames at each turn and facing its way; each
+ * frame it touches Scrooge it takes 1 from the money's third digit (which
+ * also adds to its span left). A hit beats it. */
+static void Obj_Thief(uint8_t x)
+{
+    static const uint8_t spans[2] = { 0x16, 0x0B };
+
+    Decomp_Enter(DT_CODE_KIND_THIEF, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0) {
+        Obj_Defeat(x);
+        return;
+    }
+    if (Step(x) == 0) {
+        gObjects->unk_06C0[x] = 0;
+        uint8_t span = spans[(uint8_t)(gObjects->kind[x] - OBJ_KIND_THIEF)];
+        gObjects->timer[x] = span;
+        gObjects->unk_06D0[x] = span;
+        Obj_SetSpeed(x, 0x0100);
+        gObjects->dir[x] = OBJ_DIR_RIGHT;
+        gObjects->state[x]++;
+    }
+    if (gObjects->unk_06C0[x] != 0) {
+        gObjects->unk_06C0[x]--;
+        return;
+    }
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        gObjects->flags[x] |= OBJ_FLAG_FACING_RIGHT;
+        Obj_MoveRight(x);
+    } else {
+        gObjects->flags[x] &= (uint8_t)~OBJ_FLAG_FACING_RIGHT;
+        Obj_MoveLeft(x);
+    }
+    if (Obj_TouchScrooge(x)) {
+        Obj_StealMoney(x);
+    }
+    if (--gObjects->timer[x] != 0) {
+        return;
+    }
+    gObjects->dir[x] ^= 3;
+    gObjects->unk_06C0[x] = 0x78;
+    gObjects->timer[x] = (uint8_t)(gObjects->unk_06D0[x] << 1);
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -1615,8 +2817,14 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
         case OBJ_KIND_LIFT:
             Obj_Lift(slot);
             break;
+        case OBJ_KIND_CHARGER:
+            Obj_Charger(slot);
+            break;
         case OBJ_KIND_SWOOPER:
             Obj_Swooper(slot);
+            break;
+        case OBJ_KIND_BLOCK_DWELLER:
+            Obj_BlockDweller(slot);
             break;
         case OBJ_KIND_PICKUP:
             Obj_Pickup(slot);
@@ -1627,11 +2835,69 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
         case OBJ_KIND_CHEST:
             Obj_Chest(slot);
             break;
+        case OBJ_KIND_PATROLLER:
+            Obj_Patroller(slot);
+            break;
+        case OBJ_KIND_POUNCER:
+            Obj_Pouncer(slot);
+            break;
+        case OBJ_KIND_PIT_JUMPER:
+            Obj_PitJumper(slot);
+            break;
+        case OBJ_KIND_BOUNCER:
+            Obj_Bouncer(slot);
+            break;
+        case OBJ_KIND_LEAPER:
+            Obj_Leaper(slot);
+            break;
+        case OBJ_KIND_LEDGE_WALKER:
+            Obj_LedgeWalker(slot);
+            break;
+        case OBJ_KIND_PACER:
+            Obj_Pacer(slot);
+            break;
+        case OBJ_KIND_BOBBER:
+            Obj_Bobber(slot);
+            break;
+        case OBJ_KIND_ROLLER:
+            Obj_Roller(slot);
+            break;
+        case OBJ_KIND_BOULDER:
+            Obj_Boulder(slot);
+            break;
+        case OBJ_KIND_CEILING_HOPPER:
+            Obj_CeilingHopper(slot);
+            break;
+        case OBJ_KIND_RISING_SHOT:
+            Obj_RisingShot(slot);
+            break;
+        case OBJ_KIND_DROPPING:
+            Obj_Dropping(slot);
+            break;
+        case OBJ_KIND_TREAT_SPOUT:
+            Obj_TreatSpout(slot);
+            break;
+        case OBJ_KIND_TREAT:
+            Obj_Treat(slot);
+            break;
         case OBJ_KIND_DOOR:
             Obj_Door(slot);
             break;
+        case OBJ_KIND_THIEF:
+        case OBJ_KIND_SHORT_THIEF:
+            Obj_Thief(slot);
+            break;
+        case OBJ_KIND_PICKPOCKET:
+            Obj_Pickpocket(slot);
+            break;
         case OBJ_KIND_TALKER:
             Obj_Talker(slot);
+            break;
+        case OBJ_KIND_MOVING_PLATFORM:
+            Obj_MovingPlatform(slot);
+            break;
+        case OBJ_KIND_KEY_SPOT:
+            Obj_KeySpot(slot);
             break;
         default:
             *r = Decomp_CallP((uint16_t)(gScratch1 << 8 | gScratch0), r->a, slot, r->y, r->p);
@@ -1741,6 +3007,146 @@ static void Run_Swing(Regs *r)
 static void Run_Lift(Regs *r)
 {
     Obj_Lift(r->x);
+}
+
+static void Run_Patroller(Regs *r)
+{
+    Obj_Patroller(r->x);
+}
+
+static void Run_Charger(Regs *r)
+{
+    Obj_Charger(r->x);
+}
+
+static void Run_Bobber(Regs *r)
+{
+    Obj_Bobber(r->x);
+}
+
+static void Run_Leaper(Regs *r)
+{
+    Obj_Leaper(r->x);
+}
+
+static void Run_SpawnDust(Regs *r)
+{
+    Obj_SpawnDust(r->x);
+}
+
+static void Run_RisingShot(Regs *r)
+{
+    Obj_RisingShot(r->x);
+}
+
+static void Run_Dropping(Regs *r)
+{
+    Obj_Dropping(r->x);
+}
+
+static void Run_CeilingHopper(Regs *r)
+{
+    Obj_CeilingHopper(r->x);
+}
+
+static void Run_CeilingWalk(Regs *r)
+{
+    Obj_CeilingWalk(r->x);
+}
+
+static void Run_BlockDweller(Regs *r)
+{
+    Obj_BlockDweller(r->x);
+}
+
+static void Run_DwellerLinkBlock(Regs *r)
+{
+    Obj_DwellerLinkBlock(r->x);
+}
+
+static void Run_KeySpot(Regs *r)
+{
+    Obj_KeySpot(r->x);
+}
+
+static void Run_MovingPlatform(Regs *r)
+{
+    Obj_MovingPlatform(r->x);
+}
+
+static void Run_Pacer(Regs *r)
+{
+    Obj_Pacer(r->x);
+}
+
+static void Run_LedgeWalker(Regs *r)
+{
+    Obj_LedgeWalker(r->x);
+}
+
+static void Run_Pouncer(Regs *r)
+{
+    Obj_Pouncer(r->x);
+}
+
+static void Run_Pickpocket(Regs *r)
+{
+    Obj_Pickpocket(r->x);
+}
+
+static void Run_PickpocketWalk(Regs *r)
+{
+    Obj_PickpocketWalk(r->x);
+}
+
+static void Run_StealMoney(Regs *r)
+{
+    Obj_StealMoney(r->x);
+}
+
+static void Run_PitJumper(Regs *r)
+{
+    Obj_PitJumper(r->x);
+}
+
+static void Run_PitSplashOut(Regs *r)
+{
+    Obj_PitSplashOut(r->x);
+}
+
+static void Run_PitSplashIn(Regs *r)
+{
+    Obj_PitSplashIn(r->x);
+}
+
+static void Run_Bouncer(Regs *r)
+{
+    Obj_Bouncer(r->x);
+}
+
+static void Run_Boulder(Regs *r)
+{
+    Obj_Boulder(r->x);
+}
+
+static void Run_Roller(Regs *r)
+{
+    Obj_Roller(r->x);
+}
+
+static void Run_TreatSpout(Regs *r)
+{
+    Obj_TreatSpout(r->x);
+}
+
+static void Run_Treat(Regs *r)
+{
+    Obj_Treat(r->x);
+}
+
+static void Run_Thief(Regs *r)
+{
+    Obj_Thief(r->x);
 }
 
 static void Run_Swooper(Regs *r)
@@ -1912,6 +3318,34 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_THIEF, NULL, "Obj_Thief", Run_Thief, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_TREAT, NULL, "Obj_Treat", Run_Treat, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_TREAT_SPOUT, NULL, "Obj_TreatSpout", Run_TreatSpout, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_ROLLER, NULL, "Obj_Roller", Run_Roller, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_BOULDER, NULL, "Obj_Boulder", Run_Boulder, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_BOUNCER, NULL, "Obj_Bouncer", Run_Bouncer, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_PIT_JUMPER, NULL, "Obj_PitJumper", Run_PitJumper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_PIT_SPLASH_OUT, NULL, "Obj_PitSplashOut", Run_PitSplashOut, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_PIT_SPLASH_IN, NULL, "Obj_PitSplashIn", Run_PitSplashIn, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_PICKPOCKET, NULL, "Obj_Pickpocket", Run_Pickpocket, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_PICKPOCKET_WALK, NULL, "Obj_PickpocketWalk", Run_PickpocketWalk, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_PICKPOCKET_STEAL, NULL, "Obj_StealMoney", Run_StealMoney, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_POUNCER, NULL, "Obj_Pouncer", Run_Pouncer, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_LEDGE_WALKER, NULL, "Obj_LedgeWalker", Run_LedgeWalker, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_PACER, NULL, "Obj_Pacer", Run_Pacer, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_MOVING_PLATFORM, NULL, "Obj_MovingPlatform", Run_MovingPlatform, 0 },
+    { DT_CODE_KIND_KEY_SPOT, NULL, "Obj_KeySpot", Run_KeySpot, 0 },
+    { DT_CODE_KIND_BLOCK_DWELLER, NULL, "Obj_BlockDweller", Run_BlockDweller, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_DWELLER_LINK_BLOCK, NULL, "Obj_DwellerLinkBlock", Run_DwellerLinkBlock, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_CEILING_HOPPER, NULL, "Obj_CeilingHopper", Run_CeilingHopper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_CEILING_HOPPER_WALK, NULL, "Obj_CeilingWalk", Run_CeilingWalk, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_DROPPING, NULL, "Obj_Dropping", Run_Dropping, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_RISING_SHOT, NULL, "Obj_RisingShot", Run_RisingShot, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_LEAPER, NULL, "Obj_Leaper", Run_Leaper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_LEAPER_DUST, NULL, "Obj_SpawnDust", Run_SpawnDust, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_BOBBER, NULL, "Obj_Bobber", Run_Bobber, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_CHARGER, NULL, "Obj_Charger", Run_Charger, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_PATROLLER, NULL, "Obj_Patroller", Run_Patroller, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_PICKUP, NULL, "Obj_Pickup", Run_Pickup, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_HIDDEN_ITEM, NULL, "Obj_HiddenItem", Run_HiddenItem, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_CHEST, NULL, "Obj_Chest", Run_Chest, 0, .bank = DT_BANK_OBJECTS },

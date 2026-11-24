@@ -20,7 +20,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define MAX_ROUTINES 256
+#define MAX_ROUTINES 512
 #define MAX_BUS_OPS  16384
 #define MAX_STORES   8
 

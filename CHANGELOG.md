@@ -21,7 +21,7 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - `tests/decomp_test.py --changed <ranges> --from-state --span N` checks only the routes that run
   a decompiled routine, from the golden save state before it: 32 s instead of 689 s for a routine
   the routes reach late.
-- `tools/test_slot.py` queues heavy test runs across worktrees, at most two at once.
+- `tools/test_slot.py` queues heavy test runs across worktrees, at most three at once (two left the 16-thread PC at 47% load).
 - The system layer is decompiled (`src/decomp/system.c`, `sprites.c`, `audio.c`): bank switching,
   the controllers, PPU blanking, nametable fill, CHR uploads, the OAM clear, the random generator,
   the sprite builder (bank 5), the string drawer and the bank-3 sound driver. They use the bus
@@ -40,20 +40,33 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   the vertical velocity moves (`$F270`/`$F284`). `tests/decomp_test.py` poke cases can add pad
   states to their route; three of them press Select.
 - The object system is decompiled (`src/decomp/objects.c`, `src/decomp/objcommon.c`): the per-frame
-  dispatch of bank 6, 21 of the 67 object kinds (the Amazon's enemies, the Himalayas' dangler,
-  Transylvania's swooper, blocks, pickups and what taking each item does, hidden items, chests,
-  doors, the lift and talking characters) and the shared helpers: contact with Scrooge, the movers,
-  block tests, the climbing steps, money and HP. 62 routines, each checked on its own at every call
-  (1,989,532 calls compared on the 12 routes) and RAM-identical in replace mode; poke cases cover
-  the lift, the extra HP dot and the money cap, which no route reaches. Hook sites only where
-  original code calls them.
+  dispatch of bank 6, 43 of the 67 object kinds (most enemies, none of the bosses yet, blocks,
+  pickups and what taking each item does, hidden items, chests, doors, the lift, the moving
+  platform, the key spot, the treat spout and its treats, and talking characters) and the shared
+  helpers: contact with Scrooge, the movers, block tests, the climbing steps, money and HP. 90
+  routines, each checked on its own at every call (3,185,085 calls compared on the 12 routes) and
+  RAM-identical in replace mode; poke cases cover what no route reaches: the lift, the extra HP
+  dot, the money cap, beaten enemies, thefts of money, the pit splashes, a boulder stopping at a
+  wall and a treat taken. Hook sites only where original code calls them.
 - Decompiled: the row change (`$E8C0`), as task code with its own site. A task routine may now pop
   its own return address before it hands off.
 - `src/decomp/player.c` calls the C of the background probe (`$D120`) and its four snaps instead
   of running their originals through `Decomp_Call`.
+- Decompiled: Scrooge's modes 15 (`$ED05`, the message box and what each message does) and 16
+  (`$EF62`, the treasure's time bonus), as task code at their own sites with 14 resume points.
+  `tests/decomp_test.py` has 8 poke cases for what no route reaches (paying, the lost life, the
+  block, the Launchpad ride, the scene draw of message `$0B`, the money's blanks and cap) and a
+  `--pokes NAME...` option.
+- `src/decomp/player.c` calls the C of the probe point `$D350` (with the carry it returns, new in
+  `collision.c`) and of the HP refill `$F812` (`objects.c`). A poke case reaches the fall into
+  `$D350` under the power-up.
+- `Player_Update`'s contract drops `OUT_HW`: the probe's bank switches are undone before it
+  returns, and check and replace pass on the 12 routes without it.
 
 ### Fixed
 
+- `Chr_StreamRow` (`$C42C`) now returns the X the original leaves. The scene draw before message
+  `$0B` pushes it in `task_yield`, so replace mode left a different byte on the task's stack.
 - Replace mode made a decompiled routine's PPU writes back to back. The PPU acts on `$2006`/`$2007`
   writes a few cycles late, so every byte of a VRAM queue landed one address off; the writes are
   now spread over the original routine's cycles.

@@ -72,6 +72,12 @@ NAMED = re.compile(r'\$([0-9A-F]{4})(?= original)')
 POKE_ROUTE = ROOT / 'tests' / 'routes' / 're_amazon_moves.txt'
 POKE_FRAME = 1700  # Scrooge on the ground in the Amazon
 POKE_FRAMES = 220
+MESSAGE_FRAMES = 700
+MESSAGE_PRESSES = {
+    **{frame: '-' for frame in (1780, 1788, 1930, 2000, 2008)},
+    **{POKE_FRAME + 120 + 30 * i: 'A' for i in range(19)},
+    **{POKE_FRAME + 124 + 30 * i: '-' for i in range(19)},
+}
 # name, {address: value} stored before POKE_FRAME (or {frame: {...}}), routines that must be compared,
 # optionally {frame: buttons} pad states added to the route
 POKES = [
@@ -144,8 +150,184 @@ POKES = [
     ),
     # slot 9 made a lift (kind $0F) under Scrooge
     ('lift', {0x709: 0xA0, 0x719: 0x0F, 0x649: 0xB0, 0x729: 0x62, 0x739: 0x00, 0x609: 0x80}, ['Obj_Lift']),
+    # slot 9 made a ledge patroller (kind $18) that a blow has hit ($0690): it is beaten
+    (
+        'patroller-hit',
+        {0x709: 0xA1, 0x719: 0x18, 0x699: 0x01, 0x649: 0x90, 0x729: 0x90, 0x739: 0x00, 0x609: 0x80},
+        ['Obj_Patroller', 'Obj_Defeat'],
+    ),
+    # slot 9 made a charging enemy (kind $10, charging) on the floor that a blow has hit: it is beaten
+    (
+        'charger-hit',
+        {0x709: 0xA2, 0x719: 0x10, 0x699: 0x01, 0x649: 0xA6, 0x729: 0x90, 0x739: 0x00, 0x609: 0x80},
+        ['Obj_Charger', 'Obj_Defeat'],
+    ),
+    # slot 9 made a bobbing enemy (kind $20) that a blow has hit: it is beaten
+    (
+        'bobber-hit',
+        {0x709: 0xA1, 0x719: 0x20, 0x699: 0x01, 0x649: 0x90, 0x729: 0x90, 0x739: 0x00, 0x609: 0x80},
+        ['Obj_Bobber', 'Obj_Defeat'],
+    ),
+    # slot 9 made a leaping enemy (kind $1C) that a blow has hit: it is beaten
+    (
+        'leaper-hit',
+        {0x709: 0xA1, 0x719: 0x1C, 0x699: 0x01, 0x649: 0x90, 0x729: 0x90, 0x739: 0x00, 0x609: 0x80},
+        ['Obj_Leaper', 'Obj_Defeat'],
+    ),
+    # slot 9 made a leaping enemy (kind $1C) walking on the floor near Scrooge: it leaps after 5 frames
+    (
+        'leaper-walk',
+        {0x709: 0xA1, 0x719: 0x1C, 0x6B9: 0x05, 0x649: 0xA6, 0x729: 0x90, 0x739: 0x00, 0x609: 0x80, 0x7E9: 0x01},
+        ['Obj_Leaper', 'Obj_SpawnDust'],
+    ),
+    # kind $32 touches Scrooge with no money: the theft borrows out and blanks every digit
+    (
+        'pickpocket-broke',
+        {0x709: 0xA1, 0x719: 0x32, 0x649: 0xB4, 0x729: 0x50, 0x739: 0x00, 0x609: 0x80, 0x6B9: 0x00, 0x699: 0x00},
+        ['Obj_Pickpocket', 'Obj_StealMoney'],
+    ),
+    # kind $32 touches Scrooge holding 100,000: the theft borrows through two digits and blanks the leading zeros
+    (
+        'pickpocket-steal',
+        {
+            0x709: 0xA1,
+            0x719: 0x32,
+            0x649: 0xB4,
+            0x729: 0x50,
+            0x739: 0x00,
+            0x609: 0x80,
+            0x6B9: 0x00,
+            0x699: 0x00,
+            0x324: 0x24,
+            0x325: 0x01,
+            0x326: 0x00,
+            0x327: 0x00,
+            0x328: 0x00,
+            0x329: 0x00,
+        },
+        ['Obj_Pickpocket', 'Obj_StealMoney'],
+    ),
+    # kind $1A of variant 0 next to Scrooge: it jumps out and falls back with both splashes
+    (
+        'pit-splash',
+        {0x709: 0xA0, 0x719: 0x1A, 0x729: 0x50, 0x739: 0x00, 0x609: 0x80, 0x6B9: 0x00, 0x699: 0x00},
+        ['Obj_PitJumper', 'Obj_PitSplashOut', 'Obj_PitSplashIn'],
+    ),
+    # kind $24 by Scrooge: it rolls into a wall, walks once more and stops (kind 0)
+    (
+        'boulder-wall',
+        {0x709: 0xA0, 0x719: 0x24, 0x649: 0xB4, 0x729: 0x60, 0x739: 0x00, 0x609: 0x80, 0x699: 0x00},
+        ['Obj_Boulder', 'Obj_WalkRight'],
+    ),
+    # kind $2D dropped on Scrooge: taken, it gives an HP dot back
+    (
+        'treat-taken',
+        {
+            0x709: 0xA1,
+            0x719: 0x2D,
+            0x649: 0xB0,
+            0x729: 0x58,
+            0x739: 0x00,
+            0x609: 0x80,
+            0x7E9: 0x00,
+            0x7C9: 0x00,
+            0x7B9: 0x00,
+        },
+        ['Obj_Treat', 'Hud_RestoreDot'],
+    ),
+    # kind $30 pacing over Scrooge holding 5,000: a theft each frame of contact
+    (
+        'thief-steal',
+        {
+            0x709: 0xA0,
+            0x719: 0x30,
+            0x649: 0xB4,
+            0x729: 0x50,
+            0x739: 0x00,
+            0x609: 0x80,
+            0x699: 0x00,
+            0x324: 0x24,
+            0x325: 0x24,
+            0x326: 0x05,
+            0x327: 0x00,
+            0x328: 0x00,
+            0x329: 0x00,
+        },
+        ['Obj_Thief', 'Obj_StealMoney'],
+    ),
+    # kind $31, the same handler with the shorter span
+    (
+        'short-thief-steal',
+        {
+            0x709: 0xA0,
+            0x719: 0x31,
+            0x649: 0xB4,
+            0x729: 0x50,
+            0x739: 0x00,
+            0x609: 0x80,
+            0x699: 0x00,
+            0x324: 0x24,
+            0x325: 0x24,
+            0x326: 0x05,
+            0x327: 0x00,
+            0x328: 0x00,
+            0x329: 0x00,
+        },
+        ['Obj_Thief', 'Obj_StealMoney'],
+    ),
     # the ending flag ($AC): the frame loop starts the ending, whose first scene loads its palettes ($E08F)
     ('ending', {0xAC: 0x01}, ['Palette_LoadScene']),
+    # slot 9 a harmful solid pickup on Scrooge under the power-up, its contact count about to wrap:
+    # the vertical contact test falls into the probe point $D350
+    (
+        'power-contact',
+        {
+            0x709: 0xA2,
+            0x719: 0x13,
+            0x629: 0x2B,
+            0x649: 0xA6,
+            0x729: 0x62,
+            0x739: 0x00,
+            0x7D9: 0x91,
+            0x609: 0x80,
+            0x699: 0xFF,
+            0x75: 0x01,
+            0x76: 0x10,
+            0x77: 0x00,
+        },
+        ['Player_ContactV', 'Bg_ProbePoint'],
+    ),
+    # mode 15 with a message id: the box closes with A (pressed every 30 frames once the text is out), and
+    # what the message does runs; slot 9 is the speaker
+    (
+        'message-pay',
+        {0x39: 0x0F, 0x6E: 0x0A, 0x7A: 0x09, 0x324: 0x01, 0x325: 0x05},
+        ['Message_Closed'],
+        MESSAGE_PRESSES,
+        MESSAGE_FRAMES,
+    ),
+    (
+        'message-pay-poor',
+        {0x39: 0x0F, 0x6E: 0x0A, 0x7A: 0x09, 0x324: 0x24, 0x325: 0x01},
+        ['Message_Closed'],
+        MESSAGE_PRESSES,
+        MESSAGE_FRAMES,
+    ),
+    ('message-life', {0x39: 0x0F, 0x6E: 0x0C}, ['Message_Closed', 'Player_PitDeath'], MESSAGE_PRESSES, MESSAGE_FRAMES),
+    ('message-block', {0x39: 0x0F, 0x6E: 0x06, 0x7A: 0x09}, ['Message_Closed'], MESSAGE_PRESSES, MESSAGE_FRAMES),
+    ('message-launchpad', {0x39: 0x0F, 0x6E: 0x0F}, ['Message_Closed'], MESSAGE_PRESSES, MESSAGE_FRAMES),
+    ('message-scene', {0x39: 0x0F, 0x6E: 0x0B}, ['Message_Opened', 'Message_Closed'], MESSAGE_PRESSES, MESSAGE_FRAMES),
+    # mode 16 past the music: one time unit left; the money's leading blanks, then its cap
+    (
+        'treasure-blanks',
+        {0x39: 0x10, 0xC5: 0x80, 0x151: 0x00, 0x155: 0x01, 0x324: 0x24, 0x325: 0x24, 0x326: 0x09, 0x327: 0x09},
+        ['Player_Treasure', 'Treasure_Done'],
+    ),
+    (
+        'treasure-max',
+        {0x39: 0x10, 0xC5: 0x80, 0x151: 0x00, 0x155: 0x01, 0x324: 0x09, 0x325: 0x09, 0x326: 0x09, 0x327: 0x09},
+        ['Player_Treasure', 'Money_Max'],
+    ),
 ]
 
 # name, route, options, routines that must be compared
@@ -202,7 +384,7 @@ def select_routes(routes, args):
     return selected
 
 
-def poke_case(name, pokes, want, presses=None):
+def poke_case(name, pokes, want, presses=None, frames=POKE_FRAMES):
     if not all(isinstance(v, dict) for v in pokes.values()):
         pokes = {POKE_FRAME: pokes}
     extra = [
@@ -211,7 +393,7 @@ def poke_case(name, pokes, want, presses=None):
         for addr, value in at.items()
         for arg in ('--dt-poke-at', f'{frame}:{addr:X}={value:02X}')
     ]
-    case = {'name': name, 'route': POKE_ROUTE, 'frames': POKE_FRAME + POKE_FRAMES, 'extra': extra, 'want': want}
+    case = {'name': name, 'route': POKE_ROUTE, 'frames': POKE_FRAME + frames, 'extra': extra, 'want': want}
     return case | {'presses': presses} if presses else case
 
 
@@ -332,12 +514,13 @@ def main():
     ap.add_argument('--changed', nargs='+', metavar='RANGE', help='only routes executing these PRG addresses')
     ap.add_argument('--from-state', action='store_true', help='with --changed: start from the golden state')
     ap.add_argument('--span', type=int, help='with --from-state: frames to run from the start')
+    ap.add_argument('--pokes', nargs='+', metavar='NAME', help='only these poke cases')
     args = ap.parse_args()
     if (args.from_state and not args.changed) or (args.span and not args.from_state):
         ap.error('--from-state needs --changed, --span needs --from-state')
     routes = [Path(r) for r in args.routes] if args.routes else sorted((ROOT / 'tests' / 'routes').glob('*.txt'))
     cases = select_routes(routes, args) if args.changed else [route_case(r) for r in routes]
-    pokes = [poke_case(*p) for p in POKES]
+    pokes = [poke_case(*p) for p in POKES if not args.pokes or p[0] in args.pokes]
     events = [event_case(*e) for e in EVENTS]
     exe = ROOT / args.build / args.config / 'ducktales.exe'
     dev = ROOT / args.dev_build / args.config / 'ducktales.exe' if args.dev_build else None
