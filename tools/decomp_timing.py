@@ -16,7 +16,7 @@ Reads the user's ROM locally; output is for investigation and is not committed.
 
     py -3 -I tools/decomp_timing.py Task_Pass
     py -3 -I tools/decomp_timing.py '$FF38' [--bank 0]
-    py -3 -I tools/decomp_timing.py --summary [--file system.c]
+    py -3 -I tools/decomp_timing.py --summary [--file system.c | flow | flow/flow_title.c]
 """
 
 import argparse
@@ -86,7 +86,7 @@ MACRO = re.compile(r'^#define\s+([A-Z_]+)\(([^)]*)\)\s*\{(.*)\}\s*$', re.M)
 
 
 def table_entries(text):
-    """The field lists of a file's table entries, written out or through its entry macros (flow.c's TASK, ...)."""
+    """The field lists of a file's table entries, written out or through its entry macros (flow_table.c's TASK, ...)."""
     for m in ENTRY.finditer(text):
         yield split_fields(m.group(1))
     for mac in MACRO.finditer(text):
@@ -120,7 +120,7 @@ def routines():
                 'addr': addr,
                 'bank': int(bank, 0) if re.fullmatch(r'\d+|0x[0-9A-Fa-f]+', bank) else 0,
                 'func': entry.get('run', ''),
-                'file': path.relative_to(ROOT / 'src' / 'decomp').as_posix(),
+                'file': defining_file(path, entry.get('run', '')),
                 'timed': entry.get('timed', 'false') == 'true',
             }
     return found
@@ -140,12 +140,22 @@ def function(text, func):
 
 
 def source_text(file):
-    """The C of file; for a file in a subfolder, the folder's files with file first."""
+    """The C of file; for a file in a subfolder, the folder's files with file first, then its internal headers."""
     path = ROOT / 'src' / 'decomp' / file
     if path.parent.name == 'decomp':
         return path.read_text(encoding='utf-8')
-    others = sorted(p for p in path.parent.glob('*.c') if p != path)
+    others = sorted(p for p in path.parent.glob('*.c') if p != path) + sorted(path.parent.glob('*.h'))
     return ''.join(p.read_text(encoding='utf-8') for p in [path, *others])
+
+
+def defining_file(path, func):
+    """Where func is defined, relative to src/decomp/: the table's file or another file of its subfolder."""
+    if path.parent != ROOT / 'src' / 'decomp':
+        for p in sorted(path.parent.glob('*.c')):
+            if function(p.read_text(encoding='utf-8'), func)[0]:
+                path = p
+                break
+    return path.relative_to(ROOT / 'src' / 'decomp').as_posix()
 
 
 def body(file, func):
@@ -259,9 +269,9 @@ def report(rom, name, info, table, by_addr):
 
 def summary(rom, table, only):
     entries = {r['addr'] for r in table.values()}
-    print('%-28s%-8s%-22s%-7s%9s%9s' % ('routine', 'addr', 'file', 'timed', 'branches', 'missing'))
+    print('%-28s%-8s%-24s%-7s%9s%9s' % ('routine', 'addr', 'file', 'timed', 'branches', 'missing'))
     for name, r in sorted(table.items(), key=lambda kv: (kv[1]['file'], kv[1]['addr'])):
-        if only and only not in (r['file'], Path(r['file']).name):
+        if only and only not in (r['file'], Path(r['file']).name, Path(r['file']).parts[0]):
             continue
         code = walk(rom, r['bank'], r['addr'], entries)
         src, _ = body(r['file'], r['func'])
@@ -269,7 +279,7 @@ def summary(rom, table, only):
         branches = [pc for pc, c in code.items() if c[0] in BRANCHES]
         missing = len([pc for pc in branches if pc not in marked])
         timed = 'yes' if r['timed'] else 'no'
-        print('%-28s$%04X   %-22s%-7s%9d%9d' % (name, r['addr'], r['file'], timed, len(branches), missing))
+        print('%-28s$%04X   %-24s%-7s%9d%9d' % (name, r['addr'], r['file'], timed, len(branches), missing))
 
 
 def main():
@@ -280,7 +290,7 @@ def main():
     ap.add_argument('--summary', action='store_true', help='every routine: timed, branches and missing DC_BR')
     ap.add_argument(
         '--file',
-        help='with --summary: only the routines of this file (system.c, player/player.c, objects/walkers.c, ...)',
+        help='with --summary: only the routines of this file or folder (system.c, player/player.c, objects/walkers.c, flow, ...)',
     )
     args = ap.parse_args()
     rom, table = Rom(args.rom), routines()

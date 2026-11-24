@@ -149,7 +149,15 @@ set(_ducktales_decomp
     "${CMAKE_SOURCE_DIR}/src/decomp/level/block.c"
     "${CMAKE_SOURCE_DIR}/src/decomp/level/spawn.c"
     "${CMAKE_SOURCE_DIR}/src/decomp/collision.c"
-    "${CMAKE_SOURCE_DIR}/src/decomp/flow.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/flow/flow_frame.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/flow/flow_title.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/flow/flow_select.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/flow/flow_land.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/flow/flow_hud.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/flow/flow_death.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/flow/flow_scenes.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/flow/flow_ending.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/flow/flow_table.c"
     "${CMAKE_SOURCE_DIR}/src/decomp/nmi.c"
 )
 # The port's systems layer (docs/ARCHITECTURE.md): typed game state, the hook

@@ -363,7 +363,7 @@
 #define DT_TABLE_EFFECT_COMMANDS  0x85C3 /* bank 3: effect command handlers */
 
 /* ---- game flow (docs/GAME-STATE.md, docs/LEVELS.md, docs/RENDERING.md;
- * decompiled in src/decomp/flow.c) ---- */
+ * decompiled in src/decomp/flow/) ---- */
 #define DT_ADDR_SCRATCH4          0x0004 /* scratch: block steps for $C830 (verified, RENDERING.md) */
 #define DT_ADDR_SCRATCH5          0x0005 /* scratch: VRAM queue offset for $C830 (code) */
 #define DT_ADDR_SCRATCH10         0x0010 /* scratch: counters and pointers of the flow code (code) */

@@ -262,7 +262,7 @@ too and are not counted.
 
 The game runs its main flow as a task: the title, Land Select, the land load and the frame loop
 wait for frames (`task_yield` `$FFAC`), switch banks and drive the PPU, none of which an isolated
-call can do. `flow.c` decompiles that code as **task code** (`DecompRoutine.task`):
+call can do. The game flow (`src/decomp/flow/`) decompiles that code as **task code** (`DecompRoutine.task`):
 
 - A task routine's C ends in one of two ways: it returns (RTS), or it hands off to original code
   that runs for real: `Decomp_Handoff(routine, resume, uses)` is a JSR (resume 0: a JMP), and
@@ -402,7 +402,7 @@ leave the jump vector in `$00/$01` as the original's loop does.
 | `Hud_Reset` | none | none | |
 | `Land_ApplyTables`, `Land_LoadPalette` | X = palette set (palette) | X, Y | Land Select and the title read X and Y after them |
 | `Timer_Tick`, `Hud_RefreshMoney`, `Hud_RefreshTotal` | none | none | called from the frame loop's C |
-| task code (`flow.c`) | the registers at the site or resume point | at each hand-off, the registers its target reads | see Task code |
+| task code (`src/decomp/flow/`) | the registers at the site or resume point | at each hand-off, the registers its target reads | see Task code |
 | `Task_Create` | A = slot | none | reset reads nothing after it |
 | `Task_CurrentSlot`, `Task_SlotOffset` | none; A = slot | X | called from the task primitives' C |
 | `Task_Yield`, `Task_Wait` (task code) | X, Y (kept on the stack); X = frames | none: they hand off to the scheduler `$FF35` | `Task_WaitNext` (`$FFA8`, the resume point) returns A, X, Y and P as its RTS leaves them |
@@ -678,7 +678,7 @@ RAM-identical in replace mode.
 | `GameOver` | `$DEB9` | checked | 4 | - | not measured |
 | `LandExit` | `$DF08` | checked | 5 | - | not measured; the exit after a scene |
 
-**Game flow** (branch `decomp/flow`, `src/decomp/flow.c`): the main task's flow in the fixed bank,
+**Game flow** (branch `decomp/flow`, `src/decomp/flow/`): the main task's flow in the fixed bank,
 `$D4E6-$E353`, and the boss trigger `$CF93-$D04C`. Decompiled: the title and difficulty select
 (`$D4E6-$D620`), Land Select with its tables, the bank transfer of money and the wait for A
 (`$D630-$D79A`, `$D8A6-$D9C9`), the land load (`$D79B-$D8A5`), the per-land tables and palettes
@@ -702,6 +702,14 @@ and `Reset_WaitVblankEnd` (`$FEF3`, until it ends), four times; after the fourth
 parks the sprites, fills the nametables, creates the main task and enters the scheduler. A warm
 reset at the frame boundary takes an NMI before the first store to `$2000`, so replace gives that
 call to the original (the NMI line has risen but the CPU has not latched it yet).
+
+The flow's files, one per phase: `flow_frame.c` (the reset, the frame loop, the boss trigger, the
+pause and message text), `flow_title.c` (the main task's start, the title), `flow_select.c` (Land
+Select, the bank transfer, the wait for A), `flow_land.c` (the land load and the per-land tables),
+`flow_hud.c` (the timer and the HUD refreshes), `flow_death.c` (respawn, death, warps, game over,
+the land exit), `flow_scenes.c` (the scenes, the final trip, the mode-15 redraw) and
+`flow_ending.c` (the ending and the credits); `flow_table.c` holds `gFlowRoutines` and
+`flow_internal.h` what they share.
 
 Not decompiled yet, and still run as the original from the C:
 
@@ -973,7 +981,7 @@ bytes**, in 391 routines (main d54b09b, 13 routes and 92 poke cases).
 |---|---|---|---|---|
 | player | `player/`, `motion.c`, `sound.c` | 54 | 3,626 | 12.8% |
 | objects | `objects/*.c`, `objcommon.c` | 118 | 13,465 | 47.5% |
-| flow | `flow.c` | 149 | 3,901 | 13.7% |
+| flow | `flow/` (`flow_*.c`) | 149 | 3,901 | 13.7% |
 | level | `level/`, `collision.c` | 40 | 3,643 | 12.8% |
 | system | `system.c`, `sprites.c`, `audio.c` | 28 | 3,463 | 12.2% |
 

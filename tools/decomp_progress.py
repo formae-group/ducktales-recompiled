@@ -16,7 +16,7 @@ Routine extents. A DecompRoutine has an entry and no end, so the end is derived 
 
 - Entries: the DecompRoutines (their bank from .bank, bank 7 at $C000 and above), the original
   routines the C calls or hands off to (the constant address argument of Decomp_Call,
-  Decomp_CallP, Decomp_Handoff and flow.c's Call, Jsr and Jump), the vectors, every target of an
+  Decomp_CallP, Decomp_Handoff and the game flow's Call, Jsr and Jump), the vectors, every target of an
   executed JSR and every executed instruction no executed instruction flows into (dispatch targets).
   A JSR from the fixed bank into the switchable window names an address of every bank that executes
   it; when several do, a bank where an executed instruction falls through into that address (the
