@@ -90,6 +90,9 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   original. The seven handlers on the way to the row change are task code checked with it. In task
   code the `Decomp_BusWrite` writes of the routines it calls are its device stores (up to 64), and a
   task routine reached from another one's C counts as compared with it.
+- Decompiled: object kinds `$36` (`$F869`) and `$37` (`$F8F2`, with its drop `$F99C`) of the fixed bank,
+  reached in the Launchpad scenes. `tests/decomp_test.py` has a `clear-keep` poke case for the object
+  clear's Transylvania branch (slots 14 and 15 kept).
 - Decompiled: the boss hit `$F6D7` (`Boss_Hit`, objects.c; it raises the boss-hit event from C), the
   object clear `$F2C7` (`Obj_ClearSlots`, objcommon.c, called as C by flow.c and level.c) and the TOTAL
   cap `$F84A` (`Total_Max`, flow.c).

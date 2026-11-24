@@ -77,6 +77,8 @@ extern "C" {
 #define OBJ_KIND_TARGET            0x33 /* an object only a hit affects: it is beaten (code) */
 #define OBJ_KIND_LAUNCHER          0x34 /* a launcher that throws Scrooge up (code) */
 #define OBJ_KIND_TALKER            0x35 /* a character that shows a message (code) */
+#define OBJ_KIND_36                0x36 /* carries Scrooge left, then falls (code; not studied) */
+#define OBJ_KIND_37                0x37 /* flies left dropping objects (code; not studied) */
 #define OBJ_KIND_MOVING_PLATFORM   0x39 /* a platform that carries Scrooge (code) */
 #define OBJ_KIND_FINAL_STAND_IN    0x3A /* what the spawner makes of an object in the final arena (code) */
 #define OBJ_KIND_VISITOR           0x3E /* a character that comes once, holds Scrooge and leaves a kind $3F (code) */

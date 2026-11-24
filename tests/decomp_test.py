@@ -93,6 +93,15 @@ POKES = [
     ('hurt-last-dot', {0x39: 0x05, 0x7D: 0x00, 0x346: 0x01, 0x34A: 0x01}, ['Player_Hurt', 'Player_Death']),
     ('pit-falling', {0x39: 0x08}, ['Player_Pit']),
     ('pit-death', {0x39: 0x08, 0x640: 0xD8}, ['Player_Pit', 'Player_PitDeath']),
+    (
+        'clear-keep',
+        {POKE_FRAME: {0x39: 0x08, 0x640: 0xD8, 0xF6: 0x01}}
+        | {POKE_FRAME + 20 * i: {0x7E: 0x89} for i in range(1, 16)}
+        | {POKE_FRAME + 10 + 40 * i: {0x6BE: 0x10, 0x6CE: 0x01, 0x6BF: 0x50, 0x6CF: 0x02} for i in range(8)},
+        ['Player_PitDeath', 'Obj_ClearSlots'],
+        None,
+        400,
+    ),
     ('carried-10', {0x39: 0x0A}, ['Player_Carried']),
     ('carried-11', {0x39: 0x0B}, ['Player_Carried']),
     ('mode12', {0x39: 0x0C}, ['Player_Mode12']),
