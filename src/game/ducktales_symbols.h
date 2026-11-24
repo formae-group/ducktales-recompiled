@@ -806,47 +806,51 @@
 #define DT_ROW_TILE_Y                 0x0740 /* Y of the tile an object edits (code) */
 /* The row scroll's step routines ($C976 runs one a frame through $CA2A) and
  * their tables by side ($2F: 0 or 4). */
-#define DT_ADDR_ROW_SCROLL_SIDE    0x002F /* row scroll: 0 or 4, from $16 & 4 at its start (code) */
-#define DT_ADDR_ROW_KEPT           0x0460 /* row scroll: the half of a block row queued later, 2 x 32 tiles (code) */
-#define DT_CODE_ROW_DRAW_STEP      0xCA4A /* step: draw block row $26 */
-#define DT_CODE_ROW_KEPT_STEP      0xCA4E /* step: queue the kept half, $26 to the next row */
-#define DT_CODE_ROW_LAST_STEP      0xCA8B /* step: block row 7 as the other side, else as $CA4E */
-#define DT_CODE_ROW_DRAW           0xCAA1 /* decode block row $26 of screen $2D into the queue and the kept half */
-#define DT_CODE_ROW_HEADERS        0xCB1E /* queue headers of a block row, Y = row, X = side */
-#define DT_CODE_ROW_RIGHT_STEP     0xCB5A /* step: half a block row of the screen to the right */
-#define DT_CODE_ROW_LEFT_STEP      0xCB6E /* step: half a block row of the screen to the left */
-#define DT_CODE_ROW_DRAW_HALF      0xCB94 /* 4 blocks of screen ($22) from $26 into the queue at PPU column $07 */
-#define DT_CODE_ROW_SCROLL_FRAME   0xC99D /* row scroll: a frame, after task_yield */
-#define DT_CODE_ROW_SCROLL_STEPPED 0xC9FB /* row scroll: after the step routine */
-#define DT_CODE_ROW_SCROLL_NEXT    0xCA09 /* row scroll: the next frame, after task_yield */
-#define DT_CODE_ROW_SCROLL_END     0xCA22 /* row scroll: after the object spawner */
-#define DT_ADDR_ROW_SCROLL_FRAME   0x0030 /* row scroll: frames done, to $3C (code) */
-#define DT_CODE_ROW_STEPS          0xCA2A /* step routine pointers by side base + frame & 7 */
-#define DT_CODE_ROW_FIRST_POS      0xCC85 /* first $26 */
-#define DT_CODE_ROW_POS_STEP       0xCC86 /* step of $26 after a kept half */
-#define DT_CODE_ROW_BUFFER_HALF    0xCC87 /* tile buffer offset of the half queued at once */
-#define DT_CODE_ROW_ADDR_LO        0xCC88 /* PPU address low of the half queued at once */
-#define DT_CODE_ROW_ATTR_KEEP      0xCC8E /* attribute bits kept from the shadow */
-#define DT_CODE_ROW_ATTR_NEW       0xCC8F /* attribute bits taken from the block */
-#define DT_CODE_ROW_STEP_BASE      0xCC8D /* first step pointer index of the side */
-#define DT_CODE_ROW_WRAP_FRAME     0xCC90 /* frame where the split address wraps */
-#define DT_CODE_ROW_ADDR_STEP      0xCC95 /* split address step, 16-bit */
-#define DT_CODE_ROW_ADDR_WRAP      0xCC97 /* split address after the wrap, 16-bit */
-#define DT_CODE_ROW_Y_EXTRA        0xCCA5 /* Scrooge's Y step on even frames */
-#define DT_CODE_ROW_Y_STEP         0xCCA6 /* Scrooge's Y step every frame */
-#define DT_CODE_ROW_CHR_STREAM     0xC42C
-#define DT_CODE_BLOCK_RECORDS      0xD110 /* block records: copies, PPU address high, low, metatiles, 0 */
-#define DT_CODE_BLOCK_DEBRIS_POS   0xD11C /* debris Y, world X by record bit 1 */
-#define DT_B4_BLOCK_DEBRIS         0xBD80 /* four debris pieces at ($11, $10) and the break sound */
-#define DT_B4_DEBRIS_DY            0xBDC7
-#define DT_B4_DEBRIS_DX            0xBDCB
-#define DT_B4_DEBRIS_TIMER         0xBDCF
-#define DT_CODE_ROW_CHR_BASE       0xC508 /* first entry of each land in the row tables */
-#define DT_CODE_ROW_CHR_LIST       0xC511 /* CHR list per row; bit 7: two lists chosen by camera page */
-#define DT_CODE_ROW_PALETTE        0xC53A /* sprite palette 3 per row */
-#define DT_CODE_CHR_LIST_LO        0xC563 /* CHR list pointers */
-#define DT_CODE_CHR_LIST_HI        0xC583
-#define DT_CODE_SPRITE_PALETTES    0xC6D9 /* 4-byte sprite palettes */
+#define DT_ADDR_ROW_SCROLL_SIDE     0x002F /* row scroll: 0 or 4, from $16 & 4 at its start (code) */
+#define DT_ADDR_ROW_KEPT            0x0460 /* row scroll: the half of a block row queued later, 2 x 32 tiles (code) */
+#define DT_CODE_ROW_DRAW_STEP       0xCA4A /* step: draw block row $26 */
+#define DT_CODE_ROW_KEPT_STEP       0xCA4E /* step: queue the kept half, $26 to the next row */
+#define DT_CODE_ROW_LAST_STEP       0xCA8B /* step: block row 7 as the other side, else as $CA4E */
+#define DT_CODE_ROW_DRAW            0xCAA1 /* decode block row $26 of screen $2D into the queue and the kept half */
+#define DT_CODE_ROW_HEADERS         0xCB1E /* queue headers of a block row, Y = row, X = side */
+#define DT_CODE_ROW_RIGHT_STEP      0xCB5A /* step: half a block row of the screen to the right */
+#define DT_CODE_ROW_LEFT_STEP       0xCB6E /* step: half a block row of the screen to the left */
+#define DT_CODE_ROW_DRAW_HALF       0xCB94 /* 4 blocks of screen ($22) from $26 into the queue at PPU column $07 */
+#define DT_CODE_ROW_SCROLL_FRAME    0xC99D /* row scroll: a frame, after task_yield */
+#define DT_CODE_ROW_SCROLL_STEPPED  0xC9FB /* row scroll: after the step routine */
+#define DT_CODE_ROW_SCROLL_NEXT     0xCA09 /* row scroll: the next frame, after task_yield */
+#define DT_CODE_ROW_SCROLL_END      0xCA22 /* row scroll: after the object spawner */
+#define DT_ADDR_ROW_SCROLL_FRAME    0x0030 /* row scroll: frames done, to $3C (code) */
+#define DT_CODE_ROW_STEPS           0xCA2A /* step routine pointers by side base + frame & 7 */
+#define DT_CODE_ROW_FIRST_POS       0xCC85 /* first $26 */
+#define DT_CODE_ROW_POS_STEP        0xCC86 /* step of $26 after a kept half */
+#define DT_CODE_ROW_BUFFER_HALF     0xCC87 /* tile buffer offset of the half queued at once */
+#define DT_CODE_ROW_ADDR_LO         0xCC88 /* PPU address low of the half queued at once */
+#define DT_CODE_ROW_ATTR_KEEP       0xCC8E /* attribute bits kept from the shadow */
+#define DT_CODE_ROW_ATTR_NEW        0xCC8F /* attribute bits taken from the block */
+#define DT_CODE_ROW_STEP_BASE       0xCC8D /* first step pointer index of the side */
+#define DT_CODE_ROW_WRAP_FRAME      0xCC90 /* frame where the split address wraps */
+#define DT_CODE_ROW_ADDR_STEP       0xCC95 /* split address step, 16-bit */
+#define DT_CODE_ROW_ADDR_WRAP       0xCC97 /* split address after the wrap, 16-bit */
+#define DT_CODE_ROW_Y_EXTRA         0xCCA5 /* Scrooge's Y step on even frames */
+#define DT_CODE_ROW_Y_STEP          0xCCA6 /* Scrooge's Y step every frame */
+#define DT_CODE_ROW_CHR_STREAM      0xC42C
+#define DT_CODE_TILE_EDIT_BY_ACTION 0xF4D8 /* tile edit for slot X, replacement by its action (code) */
+#define DT_CODE_TILE_EDIT_SPAWN     0xF67B /* action of the object $F506 spawns, by $06B0 */
+#define DT_ADDR_TILE_EDIT_X         0x0012 /* $F4D8/$F506: X kept across the edit (code) */
+#define DT_ADDR_TILE_EDIT_Y         0x0013 /* $F4D8/$F506: Y kept across the edit (code) */
+#define DT_CODE_BLOCK_RECORDS       0xD110 /* block records: copies, PPU address high, low, metatiles, 0 */
+#define DT_CODE_BLOCK_DEBRIS_POS    0xD11C /* debris Y, world X by record bit 1 */
+#define DT_B4_BLOCK_DEBRIS          0xBD80 /* four debris pieces at ($11, $10) and the break sound */
+#define DT_B4_DEBRIS_DY             0xBDC7
+#define DT_B4_DEBRIS_DX             0xBDCB
+#define DT_B4_DEBRIS_TIMER          0xBDCF
+#define DT_CODE_ROW_CHR_BASE        0xC508 /* first entry of each land in the row tables */
+#define DT_CODE_ROW_CHR_LIST        0xC511 /* CHR list per row; bit 7: two lists chosen by camera page */
+#define DT_CODE_ROW_PALETTE         0xC53A /* sprite palette 3 per row */
+#define DT_CODE_CHR_LIST_LO         0xC563 /* CHR list pointers */
+#define DT_CODE_CHR_LIST_HI         0xC583
+#define DT_CODE_SPRITE_PALETTES     0xC6D9 /* 4-byte sprite palettes */
 #define DT_ADDR_CHR_STREAM 0x0050 /* row CHR stream: 0 start, 1 next record, 2 in a record, negative done (verified) */
 #define DT_ADDR_CHR_BANK   0x0051 /* bank of the record being streamed (code) */
 #define DT_ADDR_CHR_LIST   0x0052 /* pointer to the CHR list (code) */

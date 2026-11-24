@@ -354,6 +354,8 @@ RAM-identical in replace mode.
 | `Row_DrawHalf` | `$CB94` | checked | 5 | - | not measured |
 | `Block_Draw` | `$D068` | checked | 1 | message-block | not measured |
 | `Block_Debris` | bank 4 `$BD80` | checked | 1 | message-block | not measured |
+| `Tile_EditByAction` | `$F4D8` | checked | 6 | - | not measured |
+| `Tile_EditBySlot` | `$F506` | checked | 1 | - | not measured |
 | `Nmi_Handler` | `$C000` | claimed (decomp/system): the NMI has no site form yet | - | - | - |
 | `Ppu_NmiOff` | `$C183` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
 | `Ppu_NmiOn` | `$C18D` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |

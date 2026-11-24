@@ -266,6 +266,19 @@ addr = 0xC42C
 length = 8
 crc32 = 0xC14ABEE7
 
+# Tile_EditByAction and Tile_EditBySlot (bank 6 calls them)
+[[mod_function_hook]]
+id = "ducktales.decomp.F4D8"
+addr = 0xF4D8
+length = 8
+crc32 = 0x61EB8A02
+
+[[mod_function_hook]]
+id = "ducktales.decomp.F506"
+addr = 0xF506
+length = 8
+crc32 = 0x0057BA6D
+
 # Block_Draw (the message box $ED05 in player.c hands off to it, and its site also
 # stops the isolated runs of that task code)
 [[mod_function_hook]]

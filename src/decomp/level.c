@@ -1106,6 +1106,77 @@ static void Block_Draw(uint8_t record)
     Block_Debris();
 }
 
+/* ---- tile edits for objects ----
+ *
+ * Bank 6 runs the tile edit $F574 for the object in slot X through these
+ * two: $F4D8 takes the replacement from the object's action, $F506 from its
+ * $06B0 and may first spawn an object of action $F67B[$06B0] at the same
+ * place. Both close the 14-byte queue entry and map the objects' bank back,
+ * and return X and Y from $12/$13: X as it came, Y as it came for $F4D8 and
+ * the slot $F506 looked at (0 when every slot was taken). */
+
+#define gEditX            RAM_U8(DT_ADDR_TILE_EDIT_X)
+#define gEditY            RAM_U8(DT_ADDR_TILE_EDIT_Y)
+#define TILE_EDIT_ENTRY   14
+#define EDIT_FIRST_ACTION 0x1A
+#define EDIT_BY_ACTION    0x13 /* entry of the first action's replacement */
+#define EDIT_SPAWNS       0x80 /* $06C0 bit 7: the edit spawns an object */
+#define EDIT_SPAWN_STATE  (OBJ_STATUS_LIVE | OBJ_STATUS_WORLD | 1)
+#define EDIT_SPAWN_KIND   0x13
+
+/* The land's replacement entry plus entry (ADC with the carry the second
+ * ASL of the land leaves), the edit, and the queue entry closed. */
+static void Tile_EditFor(uint8_t x, uint8_t entry)
+{
+    gScratch8 = (uint8_t)((gLand << 2) + entry + (gLand >> 6 & 1));
+    Level_TileEdit(x);
+    gTileEditEnd += TILE_EDIT_ENTRY;
+    Bank_Select(DT_BANK_OBJECTS);
+}
+
+/* $F4D8: entry $13 + (action - $1A) & 3, plus 1 from action $1A on. */
+static void Tile_EditByAction(uint8_t x, uint8_t y)
+{
+    Decomp_Enter(DT_CODE_TILE_EDIT_BY_ACTION, 0, x, y);
+    gEditX = x;
+    gEditY = y;
+    uint8_t action = gObjects->action[x] & 0x7F;
+    gScratch8 = (uint8_t)(((action - EDIT_FIRST_ACTION) & 3) + EDIT_BY_ACTION + (action >= EDIT_FIRST_ACTION));
+    Tile_EditFor(x, gScratch8);
+}
+
+/* $F506 */
+static void Tile_EditBySlot(uint8_t x, uint8_t y)
+{
+    Decomp_Enter(DT_CODE_OBJ_EDIT_TILE, 0, x, y);
+    if (gObjects->unk_06C0[x] & EDIT_SPAWNS) {
+        y = 0x0F;
+        while (gObjects->state[y] & OBJ_STATUS_LIVE) {
+            if (!--y) {
+                break;
+            }
+        }
+        if (y) {
+            gObjects->state[y] = EDIT_SPAWN_STATE;
+            gObjects->animTimer[y] = 0;
+            gObjects->animFrame[y] = 0;
+            gObjects->hitbox[y] = 0;
+            gObjects->vyFrac[y] = 0;
+            gObjects->vy[y] = 0;
+            gObjects->kind[y] = EDIT_SPAWN_KIND;
+            gObjects->y[y] = gObjects->y[x];
+            gObjects->worldX[y] = gObjects->worldX[x];
+            gObjects->worldPage[y] = gObjects->worldPage[x];
+            gScratch0 = y;
+            gObjects->action[y] = rom((uint16_t)(DT_CODE_TILE_EDIT_SPAWN + gObjects->timer[x]));
+        }
+    }
+    gEditX = x;
+    gEditY = y;
+    RAM_U8(DT_ADDR_BLOCK_OPENED)++;
+    Tile_EditFor(x, gObjects->timer[x]);
+}
+
 /* ---- site adapters ---- */
 
 static void Run_MapLoadHeader(Regs *r)
@@ -1169,6 +1240,20 @@ static void Run_TileEdit(Regs *r)
 static void Run_ChrStreamRow(Regs *r)
 {
     r->x = Chr_StreamRow(r->x);
+}
+
+static void Run_TileEditByAction(Regs *r)
+{
+    Tile_EditByAction(r->x, r->y);
+    r->x = gEditX;
+    r->y = gEditY;
+}
+
+static void Run_TileEditBySlot(Regs *r)
+{
+    Tile_EditBySlot(r->x, r->y);
+    r->x = gEditX;
+    r->y = gEditY;
 }
 
 static void Run_BlockDraw(Regs *r)
@@ -1250,6 +1335,9 @@ const DecompRoutine gLevelRoutines[] = {
     { DT_CODE_ROW_LAST_STEP, "ducktales.decomp.CA8B", "Row_LastStep", Run_RowLastStep, OUT_HW },
     { DT_CODE_ROW_RIGHT_STEP, "ducktales.decomp.CB5A", "Row_RightStep", Run_RowRightStep, OUT_HW },
     { DT_CODE_ROW_LEFT_STEP, "ducktales.decomp.CB6E", "Row_LeftStep", Run_RowLeftStep, OUT_HW },
+    { DT_CODE_TILE_EDIT_BY_ACTION, "ducktales.decomp.F4D8", "Tile_EditByAction", Run_TileEditByAction,
+      OUT_X | OUT_Y | OUT_HW },
+    { DT_CODE_OBJ_EDIT_TILE, "ducktales.decomp.F506", "Tile_EditBySlot", Run_TileEditBySlot, OUT_X | OUT_Y | OUT_HW },
     { DT_CODE_BLOCK_DRAW, "ducktales.decomp.D068", "Block_Draw", Run_BlockDraw, OUT_HW },
     { DT_B4_BLOCK_DEBRIS, NULL, "Block_Debris", Run_BlockDebris, 0, .bank = DEBRIS_BANK },
     { DT_CODE_ROW_SCROLL, "ducktales.decomp.C976", "Row_Scroll", Row_Scroll, 0, true, 0, false },
