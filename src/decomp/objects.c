@@ -61,6 +61,7 @@
 #define SFX_BOSS_LAND    0x1E
 #define SFX_BOSS_TURN    0x23
 #define SFX_LAUNCH       0x28
+#define SFX_BOSS_SHOTS   0x1C
 
 #define gObjCursor        RAM_U8(DT_ADDR_OBJ_CURSOR)
 #define gScratch0         RAM_U8(DT_ADDR_SCRATCH0)
@@ -3396,6 +3397,175 @@ static void Obj_AmazonBoss(uint8_t x, bool carry)
     }
 }
 
+/* The Transylvania boss rises again: step + 1, pose $2A, vertical velocity
+ * $0380. */
+static void Obj_TransylvaniaBossRise(uint8_t x)
+{
+    gObjects->state[x]++;
+    gObjects->action[x] = 0x2A;
+    ResetAnim(x);
+    Obj_SetVelocityY(x, 0x0380);
+}
+
+/* Kind $26 ($A335): the Transylvania boss, by step through $A585/$A58A
+ * (steps 0-4; the bytes past it are other tables).
+ * Step 0 waits 60 frames, then rises. Step 1 turns to pose $5E at frame 1,
+ * timer 5 of pose $2A and picks a height ($A58F) with a random step; there
+ * it picks a random world X ($A597), a wait of 60 or 150 frames and a way.
+ * Step 2 flies the 14-entry weave of $A5A0 (an entry every 3 frames, its
+ * speed made positive), walls turning it, until the wait is over and it is
+ * within 4 px of that X. Step 3 drops to the floor (probe $1E) and faces
+ * Scrooge in pose $2A. Step 4 turns to pose $5D at frame 1, timer 5 for 15
+ * frames, then at frame 2 throws three shots (kind $27, slots 8-10, sound
+ * $1C) 16 px ahead, and 30 frames later rises again. A counted hit goes to
+ * the boss hit $F6D7; the last one beats it. */
+static void Obj_TransylvaniaBoss(uint8_t x)
+{
+    static const uint8_t heights[4] = { 0x68, 0x48, 0x88, 0x68 };
+    static const uint8_t waits[2] = { 0x3C, 0x96 };
+    static const uint8_t ways[2] = { OBJ_DIR_RIGHT, OBJ_DIR_LEFT };
+    static const uint8_t targets[8] = { 0x30, 0x50, 0x80, 0xB0, 0xD0, 0x30, 0x80, 0xD0 };
+    static const uint8_t weave[14] = { 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F,
+                                       0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17 };
+    static const uint8_t ahead[2] = { 0xF0, 0x10 };
+    static const uint8_t facing[2] = { 0, OBJ_FLAG_FACING_RIGHT };
+    static const uint16_t shotVy[3] = { 0x0000, 0x016A, 0x0200 };
+    static const uint16_t shotSpeed[3] = { 0x0200, 0x016A, 0x0000 };
+
+    Decomp_Enter(DT_CODE_KIND_TRANSYLVANIA_BOSS, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0 && Boss_Hit(&x)) {
+        Obj_Defeat(x);
+        return;
+    }
+    uint8_t step = Step(x);
+    gScratch0 = Rom((uint16_t)(DT_CODE_TRANSYLVANIA_BOSS_STEP_LO + step));
+    gScratch1 = Rom((uint16_t)(DT_CODE_TRANSYLVANIA_BOSS_STEP_HI + step));
+    switch (step) {
+        case 0:
+            RAM_U8(DT_ADDR_TRANSYLVANIA_BOSS_05EF) = 0x44;
+            gObjects->animTimer[x] = 0;
+            if (++gObjects->timer[x] == 0x3C) {
+                Obj_TransylvaniaBossRise(x);
+            }
+            return;
+        case 1:
+            if (gObjects->action[x] == 0x2A) {
+                if (gObjects->animFrame[x] == 0 || gObjects->animTimer[x] != 5) {
+                    return;
+                }
+                gObjects->action[x] = 0x5E;
+                ResetAnim(x);
+                gRandom(1) = (uint8_t)(gRandom(0) + gRandom(2) + 1);
+                gObjects->timer[x] = heights[gRandom(1) & 3];
+                return;
+            }
+            Obj_SubVelocityY(x);
+            if (gObjects->y[x] >= gObjects->timer[x]) {
+                return;
+            }
+            gRandom(2) = (uint8_t)(gRandom(1) + gRandom(3));
+            {
+                uint8_t i = gRandom(2) & 7;
+                gObjects->unk_06C0[x] = targets[i];
+                gObjects->timer[x] = waits[i & 1];
+                gObjects->unk_06D0[x] = 0;
+                gObjects->unk_06E0[x] = 0;
+                gObjects->dir[x] = ways[i & 1];
+            }
+            gObjects->state[x]++;
+            return;
+        case 2: {
+            if (gObjects->timer[x] != 0) {
+                gObjects->timer[x]--;
+            }
+            if (gObjects->unk_06D0[x] == 0) {
+                Obj_SetMotionIndex(x, weave[gObjects->unk_06E0[x]]);
+                if (gObjects->speed[x] & 0x80) {
+                    Obj_SetSpeed(x, (uint16_t)-Obj_GetSpeed(x));
+                }
+                if (++gObjects->unk_06E0[x] == 0x0E) {
+                    gObjects->unk_06E0[x] = 0;
+                }
+                gObjects->unk_06D0[x] = 3;
+            }
+            gObjects->unk_06D0[x]--;
+            uint16_t y = (uint16_t)((gObjects->y[x] << 8 | gObjects->yFrac[x]) + Obj_GetVelocityY(x));
+            gObjects->yFrac[x] = (uint8_t)y;
+            gObjects->y[x] = (uint8_t)(y >> 8);
+            if (gObjects->dir[x] & OBJ_DIR_LEFT) {
+                x = Obj_WalkLeft(x, 0x1B, 2);
+            } else {
+                x = Obj_WalkRight(x, 0x18, 2);
+            }
+            if (gObjects->timer[x] == 0 && AbsDiff(gObjects->worldX[x], gObjects->unk_06C0[x]) < 4) {
+                gObjects->state[x]++;
+                Obj_SetVelocityY(x, 0x0380);
+            }
+            if (gObjects->unk_06D0[x] == 0 && (gProbeHits & 1)) {
+                gObjects->dir[x] ^= 3;
+            }
+            return;
+        }
+        case 3:
+            x = Obj_ClimbDown(x, 0x1E, 2);
+            if (!(gProbeHits & 1)) {
+                return;
+            }
+            gObjects->action[x] = 0x2A;
+            ResetAnim(x);
+            gObjects->state[x]++;
+            Obj_FaceScrooge(x);
+            gObjects->flags[x] = (uint8_t)((gObjects->flags[x] & (uint8_t)~OBJ_FLAG_FACING_RIGHT) |
+                                           facing[gObjects->dir[x] & 1]);
+            return;
+        case 4:
+            if (gObjects->action[x] == 0x2A) {
+                if (gObjects->animFrame[x] == 0 || gObjects->animTimer[x] != 5) {
+                    return;
+                }
+                gObjects->action[x] = 0x5D;
+                ResetAnim(x);
+                gObjects->unk_06C0[x] = 0;
+                gObjects->timer[x] = 0x0F;
+                return;
+            }
+            if (gObjects->timer[x] != 0) {
+                gObjects->timer[x]--;
+                gObjects->animTimer[x] = 0;
+                return;
+            }
+            if (gObjects->unk_06C0[x] != 0) {
+                gObjects->state[x] &= 0xF0;
+                Obj_TransylvaniaBossRise(x);
+                return;
+            }
+            if (gObjects->animFrame[x] != 2) {
+                return;
+            }
+            gScratch0 = (uint8_t)(gObjects->worldX[x] + ahead[gObjects->dir[x] & 1]);
+            for (int i = 2; i >= 0; i--) {
+                uint8_t s = (uint8_t)(8 + i);
+                gObjects->state[s] = 0xA0;
+                gObjects->flags[s] = 0xA0;
+                gObjects->animTimer[s] = 0;
+                gObjects->animFrame[s] = 0;
+                gObjects->action[s] = 0x5F;
+                gObjects->y[s] = gObjects->y[x];
+                gObjects->worldPage[s] = gObjects->worldPage[x];
+                gObjects->worldX[s] = gScratch0;
+                gObjects->dir[s] = gObjects->dir[x];
+                Obj_SetVelocityY(s, shotVy[i]);
+                Obj_SetSpeed(s, shotSpeed[i]);
+                gObjects->kind[s] = OBJ_KIND_RISING_SHOT;
+                gObjects->hitbox[s] = 0x1D;
+            }
+            Sound_Request(SFX_BOSS_SHOTS, x);
+            gObjects->timer[x] = 0x1E;
+            gObjects->unk_06C0[x]++;
+            return;
+    }
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -3509,6 +3679,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_CEILING_HOPPER:
             Obj_CeilingHopper(slot);
+            break;
+        case OBJ_KIND_TRANSYLVANIA_BOSS:
+            Obj_TransylvaniaBoss(slot);
             break;
         case OBJ_KIND_RISING_SHOT:
             Obj_RisingShot(slot);
@@ -3844,6 +4017,11 @@ static void Run_AmazonBoss(Regs *r)
     Obj_AmazonBoss(r->x, r->p & P_C);
 }
 
+static void Run_TransylvaniaBoss(Regs *r)
+{
+    Obj_TransylvaniaBoss(r->x);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -4018,6 +4196,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_TRANSYLVANIA_BOSS, NULL, "Obj_TransylvaniaBoss", Run_TransylvaniaBoss, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_AMAZON_BOSS, NULL, "Obj_AmazonBoss", Run_AmazonBoss, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_SPAWN_RECORD, "ducktales.decomp.6.AF2B", "Obj_SpawnRecord", Run_SpawnRecord, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LAUNCHER, NULL, "Obj_Launcher", Run_Launcher, 0, .bank = DT_BANK_OBJECTS },
