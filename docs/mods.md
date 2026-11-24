@@ -112,7 +112,11 @@ and any name: `music/07-title.ogg`, `sfx/13-swing.wav`. The ids are listed in
 file's own loop start (the OGG `LOOPSTART` comment, a WAV `smpl` loop), or from the beginning.
 
 While a replacement plays, the sound driver's channels for that request are muted in the mix. The
-APU still runs them, so the machine is unchanged.
+APU still runs them, so the machine is unchanged. A replacement fades in over 5 ms when it starts
+and out over 5 ms when it is stopped or the game pauses, and the muted channels fade the same way,
+so no file has to start or end at silence to avoid a click. The native player keeps the sum under
+full scale with its limiter ([audio.md](audio.md#output-stage)); a file at full scale over the
+game's effects is turned down there instead of clipping.
 
 ## Scripts
 

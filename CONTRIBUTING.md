@@ -80,6 +80,7 @@ Run the checks that cover what you touched before submitting:
 | Sprite presentation | `py -3 -I tests/sprites_test.py --build build/headless --dev-build build/headless-dev` |
 | Menu, settings, ROM import, window | `py -3 -I tests/window_smoke.py --build build/windows` |
 | ROM identity and import | `build\headless\Release\app_rom_test.exe` |
+| Native player sound output | `py -3 -I tests/audio_output_test.py --build build/windows` |
 
 Checks come in two tiers ([docs/validation.md](docs/validation.md#fast-verification)):
 
