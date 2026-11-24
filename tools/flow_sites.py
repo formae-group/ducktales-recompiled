@@ -51,11 +51,12 @@ def main():
         "",
     ]
     count = 0
-    for m in re.finditer(r'(?:ROUTINE|TASK)\((\w+), SITE\("(\w+)"\), "(\w+)"', src):
+    for m in re.finditer(r'(?:ROUTINE|TASK)(?:_AT\(\w+, |\()(\w+), SITE\("([\w.]+)"\), "(\w+)"', src):
         sym, site, name = m.groups()
         addr = syms[sym]
+        bank = int(site.split(".")[0]) if "." in site else 7
         out += [f"# {name}", "[[mod_function_hook]]", f'id = "ducktales.decomp.{site}"', f"addr = 0x{addr:04X}"]
-        out += ["length = 8", f"crc32 = 0x{crc(7, addr):08X}", ""]
+        out += ["length = 8", f"crc32 = 0x{crc(bank, addr):08X}", ""]
         count += 1
     for m in re.finditer(r'STOP\((\w+), "([\w.]+)"\)', src):
         sym, site = m.groups()
