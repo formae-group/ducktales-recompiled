@@ -447,6 +447,25 @@ On main `8569c86` (the release tree before its changelog and documentation commi
 - The mods branch before its merge: `tests/package_test.py` 12/12 (13 files), `tests/mods_test.py`
   47/47, `tests/native_player_test.py` `full_amazon` 60 of 60 pictures identical.
 
+## Mods polish (2026-11-24)
+
+On `mods/polish` (based on 1b91636, tree of 81e5db3), with `--jobs 2`:
+
+- `tests/mods_test.py`: 63/63 PASS on the cycle/headless host (167 s) and 42/42 on the native
+  player. Each run generates throwaway fixtures in the test itself: two good mod.toml files (byte
+  order mark, mixed case) load, and ten bad packages are refused with their reason (missing key,
+  unquoted value, key set twice, malformed `prg_sha256`, an id over 63 bytes, a NUL byte,
+  duplicate tile, palette and sound, and a refused copy with the id of a valid mod). It also checks
+  `mods.log`, script errors at start, ignored cancels, the UTF-8 toast cut, the atomic store and
+  a hot reload saved twice within one second. `--mods-dump` with mods off writes 127 templates to
+  a nested UTF-8 path, and all 30 machine hash records are identical with and without the dump.
+- `mods_catalogue_test`: 8/8.
+- `tests/window_smoke.py --build build/windows`: all passed, 15 pictures, including
+  `menu_15_settings_mods`; `--mods off` leaves `Enabled = on` in the config.
+- `tests/quick_verify.py --runtime cycle`: 13/13 routes pass, 88,826 frames, 274.3 s.
+
+Not run on this tree: the full `verify_routes.py`, `decomp_test.py` and the window by eye.
+
 ## Not verified
 
 - The full `tests/verify_routes.py`, `tests/enhancements_test.py` and `tests/decomp_test.py` on
