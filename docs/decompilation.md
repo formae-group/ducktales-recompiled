@@ -773,6 +773,23 @@ No executed byte is shared with an original routine. The routines still original
 `$C000` (306 bytes), the reset `$FEE0` (85), the scheduler `$FF35` (72), the ending's bank-5
 objects `$B380` (71), `$B46A` (31) and `$B400` (18). Kinds $3C, $3D and $40 have no C yet, and no route or poke reaches them.
 
+### Gap
+
+The meter counts only what runs. `tools/decomp_gap.py` (`--golden DIR`, same coverage) estimates
+what does not: from every executed instruction it follows branches both ways, `JMP`, `JSR` and
+the dispatch tables the code indexes (split and word tables, and the words after a dispatcher
+`JSR` that never returns), and lists the blocks of code reached that way that no route or poke
+case executes, by size, with the routine before each and whether a branch of an executed routine
+or an unexecuted table entry reaches it. It then lists unreached runs that decode as code and call
+reached code. A table counts only when two of its entries are executed and every entry starts
+code, so wrong pairings and data are refused; the script's docstring gives every rule.
+
+It is a lower bound: refused tables and indirect jumps through RAM are not followed, a fixed-bank
+`JSR` into the window is followed only into banks that execute that address, and data that decodes
+as code can show up among the unreached runs. On main 51338e2 with 58 poke cases it finds 2,883
+unexecuted bytes in 115 blocks (1,513 behind branches, 1,370 behind table entries, among them kinds
+$16, $21, $3C, $3D, $40 and $42) and 183 unreached bytes, most of them in the ending's bank 5.
+
 ### Adding a routine
 
 1. Read the routine (`tools/disasm6502.py`) and every caller (`tools/player_xref.py`), and note

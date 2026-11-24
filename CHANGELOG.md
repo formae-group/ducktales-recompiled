@@ -7,6 +7,9 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- `tools/decomp_gap.py`: the PRG code a static walk from the executed code reaches (branches, calls and
+  dispatch tables) but no route or poke case executes, by block and routine, and the unreached runs that
+  decode as code (docs/decompilation.md "Gap").
 - `tests/decomp_test.py` poke cases `extra-life` (the extra life `$8BB0`), `secret-treasure` (item `$74`,
   message `$0D` instead of the treasure pose, `$8C37`) and `row-end-right` (Scrooge's X clamped to `$F0` at a
   row's right end, `$F08B`): code no route or poke case ran before.
