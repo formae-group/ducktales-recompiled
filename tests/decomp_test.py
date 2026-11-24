@@ -467,6 +467,8 @@ POKES = [
         {0x39: 0x01, 0x640: 0xF0, 0x7C0: 0xFE},
         ['Player_Air'],
     ),
+    # opposite horizontal directions are cleared together ($C1F9)
+    ('opposed-directions', {}, ['Input_ReadControllers'], {POKE_FRAME: 'LEFT+RIGHT', POKE_FRAME + 8: 'LEFT'}),
     (
         'money-max',
         {
