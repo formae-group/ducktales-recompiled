@@ -97,6 +97,18 @@ bool fm_make_dir(const char *path)
     if (fm_is_dir(path)) {
         return true;
     }
+    char parent[1024];
+    snprintf(parent, sizeof parent, "%s", path);
+    char *slash = NULL;
+    for (char *c = parent; *c; c++) {
+        if ((*c == '\\' || *c == '/') && c[1]) {
+            slash = c;
+        }
+    }
+    if (slash && slash > parent && slash[-1] != ':' && slash[-1] != '\\' && slash[-1] != '/') {
+        *slash = 0;
+        fm_make_dir(parent);
+    }
     wchar_t *w = wide(path);
     if (!w) {
         return false;

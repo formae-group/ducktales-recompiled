@@ -90,6 +90,7 @@ uint8_t *fm_archive_read(const FmArchive *a, int index, size_t *size, char *err,
 /* UTF-8 path helpers (wide calls on Windows). */
 uint8_t *fm_read_file(const char *path, size_t *size);
 bool fm_is_dir(const char *path);
+/* Creates the folder and its missing parents; true when it is there. */
 bool fm_make_dir(const char *path);
 /* Calls fn for each entry of dir (not . or ..), with its name and whether it is a folder. */
 void fm_list_dir(const char *dir, void (*fn)(void *user, const char *name, bool folder), void *user);
@@ -133,8 +134,10 @@ typedef struct {
     char script_error[320]; /* non-empty: its script stopped (error or limit) and why */
 } FmMod;
 
-/* Adds a folder to scan, created if missing when create is set. */
-void fm_add_folder(const char *dir, bool create);
+/* Adds a folder to scan, created if missing when create is set; false when
+ * dir is empty or FM_MAX_FOLDERS are taken. */
+#define FM_MAX_FOLDERS 4
+bool fm_add_folder(const char *dir, bool create);
 /* The first folder: the one the menu opens. Empty when none. */
 const char *fm_folder(void);
 /* Moves the folders added so far after dir (the player's own folder first). */

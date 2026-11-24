@@ -24,8 +24,6 @@
 #include <windows.h>
 #endif
 
-#define MAX_FOLDERS 4
-
 typedef struct {
     char id[64];
     bool on;
@@ -33,7 +31,7 @@ typedef struct {
 
 static FmGame s_game = { "", "target_sha256", "target", ".mod", "[mods]" };
 static char s_target[65];
-static char s_folders[MAX_FOLDERS][1024];
+static char s_folders[FM_MAX_FOLDERS][1024];
 static int s_folder_count;
 static bool s_enabled = false;
 static OrderItem s_order[FM_MAX_MODS];
@@ -314,20 +312,24 @@ void fm_set_enabled(bool on)
     s_enabled = on;
 }
 
-void fm_add_folder(const char *dir, bool create)
+bool fm_add_folder(const char *dir, bool create)
 {
-    if (!dir || !*dir || s_folder_count >= MAX_FOLDERS) {
-        return;
+    if (!dir || !*dir) {
+        return false;
     }
     for (int i = 0; i < s_folder_count; i++) {
         if (!_stricmp(s_folders[i], dir)) {
-            return;
+            return true;
         }
+    }
+    if (s_folder_count >= FM_MAX_FOLDERS) {
+        return false;
     }
     if (create) {
         fm_make_dir(dir);
     }
     snprintf(s_folders[s_folder_count++], sizeof s_folders[0], "%s", dir);
+    return true;
 }
 
 const char *fm_folder(void)
@@ -337,7 +339,7 @@ const char *fm_folder(void)
 
 void fm_put_folder_first(const char *dir)
 {
-    char moved[MAX_FOLDERS][1024];
+    char moved[FM_MAX_FOLDERS][1024];
     int n = s_folder_count;
     memcpy(moved, s_folders, sizeof moved);
     s_folder_count = 0;

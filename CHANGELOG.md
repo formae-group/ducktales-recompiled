@@ -147,6 +147,10 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   character; it counts characters now. The drawn notice shows a character its font lacks as `?`
   instead of a gap, and a line wider than the picture ends in `...` instead of running past the
   panel.
+- Mods: `dt.store` files are written to a temporary file and moved into place, so a crash or a
+  full disk cannot leave half a store; a failed write is logged and tried again instead of lost.
+  `--mods-dir` with a path that is not a folder, or a fifth folder, is refused instead of ignored,
+  and `--mods-dump` creates the folder's missing parents.
 
 ## [1.0.0] - 2026-11-23
 

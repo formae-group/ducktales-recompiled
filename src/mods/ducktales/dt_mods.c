@@ -391,8 +391,18 @@ bool app_mods_option(const char *name, const char *value, bool *ok)
         return true;
     }
     if (!strcmp(name, "--mods-dir")) {
-        *ok = value && *value;
-        fm_add_folder(value, false);
+        *ok = value && fm_is_dir(value) && fm_add_folder(value, false);
+        if (!*ok) {
+            fprintf(stderr, "[ducktales] --mods-dir %s: %s\n", value ? value : "",
+                    value && fm_is_dir(value) ? "at most 4 mods folders" : "not a folder");
+        }
+        return true;
+    }
+    if (!strcmp(name, "--mods-dump")) {
+        *ok = value && app_mods_dump_dir(value);
+        if (!*ok) {
+            fprintf(stderr, "[ducktales] --mods-dump %s: the folder cannot be made\n", value ? value : "");
+        }
         return true;
     }
     if (!strcmp(name, "--mods-order")) {
@@ -400,10 +410,6 @@ bool app_mods_option(const char *name, const char *value, bool *ok)
         if (*ok) {
             fm_set_order(value);
         }
-        return true;
-    }
-    if (!strcmp(name, "--mods-dump")) {
-        *ok = value && app_mods_dump_dir(value);
         return true;
     }
     return false;

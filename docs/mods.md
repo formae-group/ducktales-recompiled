@@ -48,9 +48,9 @@ The command line selects mods without the menu, in the window and in the headles
 | Option | Meaning |
 |---|---|
 | `--mods on\|off` | Load mods or not (the window's default is `[Mods] Enabled`; headless runs default to off) |
-| `--mods-dir DIR` | Another folder to scan (repeatable) |
+| `--mods-dir DIR` | Another folder to scan (repeatable, up to 4); a path that is not a folder is an error |
 | `--mods-order ID:on\|off,...` | The order and switches, as `[Mods] Order` |
-| `--mods-dump DIR` | Writes every tile drawn, once, as the template a tile replacement starts from |
+| `--mods-dump DIR` | Writes every tile drawn, once, as the template a tile replacement starts from; `DIR` and its missing parents are created |
 
 ## Making a mod
 
@@ -225,7 +225,10 @@ written to the log.
 `A-Z`, `a-z`, `0-9`, `_`, `-` and `.`); `nil` removes it. `dt.store.get(key)` returns it, or
 `nil`. Each mod has its own store of at most 64 KiB, kept in the data folder as
 `mods-data/<id>.ini`. It is written when it changed, at most once a second and when the game
-exits, and it survives a hot reload. Scripts never see a path: the file is named by the mod's id,
+exits, and it survives a hot reload. A write goes to `<id>.ini.tmp` first and then takes the old
+file's place, so a crash or a full disk never leaves half a store; a write that fails is logged
+once and tried again a second later. Keys of a store file past 64 KiB are dropped with a line in
+the log. Scripts never see a path: the file is named by the mod's id,
 which can only hold `a-z`, `0-9`, `-`, `_` and `.`, and a mod whose id is a Windows device name
 (`con`, `nul`, `com1`, ...) has no store.
 

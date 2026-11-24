@@ -89,7 +89,7 @@ typedef struct {
     bool stopped;
     char why[300];
     uint64_t last_toast;
-    bool store_loaded, store_dirty;
+    bool store_loaded, store_dirty, store_failed;
     StoreItem *store;
     int store_count;
     size_t store_bytes;
@@ -489,6 +489,7 @@ static void store_load(Script *s)
     if (!text) {
         return;
     }
+    int dropped = 0;
     for (char *line = strtok(text, "\r\n"); line; line = strtok(NULL, "\r\n")) {
         char *eq = strstr(line, " = ");
         if (!eq) {
@@ -500,35 +501,62 @@ static void store_load(Script *s)
             char *copy = malloc(strlen(v) + 1);
             if (copy) {
                 strcpy(copy, v);
-                store_put(s, line, copy);
             }
+            dropped += !copy || !store_put(s, line, copy);
         }
     }
     free(text);
+    if (dropped) {
+        char why[100];
+        snprintf(why, sizeof why, ": %d keys past %d bytes were dropped", dropped, SCRIPT_STORE_BYTES);
+        log_line(s, path, why);
+    }
 }
 
+/* Writes the store to <id>.ini.tmp, then puts it in place of <id>.ini, so a
+ * crash or a full disk never leaves half a file; a failure keeps it dirty
+ * (tried again a second later) and is logged once. */
 static void store_write(Script *s)
 {
-    char path[1200];
+    char path[1200], tmp[1210];
     if (!s->store_dirty || !store_path(s, path, sizeof path)) {
         return;
     }
-    s->store_dirty = false;
+    snprintf(tmp, sizeof tmp, "%s.tmp", path);
     fm_make_dir(s_game.store_dir);
 #ifdef _WIN32
-    wchar_t w[1200];
-    FILE *f = MultiByteToWideChar(CP_UTF8, 0, path, -1, w, 1200) ? _wfopen(w, L"wb") : NULL;
+    wchar_t w[1210], wt[1210];
+    bool named = MultiByteToWideChar(CP_UTF8, 0, path, -1, w, 1210) &&
+                 MultiByteToWideChar(CP_UTF8, 0, tmp, -1, wt, 1210);
+    FILE *f = named ? _wfopen(wt, L"wb") : NULL;
 #else
-    FILE *f = fopen(path, "wb");
+    FILE *f = fopen(tmp, "wb");
 #endif
-    if (!f) {
-        return;
+    bool ok = f != NULL;
+    if (f) {
+        fprintf(f, "; dt.store of the mod %s\n", s->id);
+        for (int i = 0; i < s->store_count; i++) {
+            fprintf(f, "%s = %s\n", s->store[i].key, s->store[i].value);
+        }
+        ok = !ferror(f);
+        ok = fclose(f) == 0 && ok;
     }
-    fprintf(f, "; dt.store of the mod %s\n", s->id);
-    for (int i = 0; i < s->store_count; i++) {
-        fprintf(f, "%s = %s\n", s->store[i].key, s->store[i].value);
+#ifdef _WIN32
+    ok = ok && MoveFileExW(wt, w, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+    if (!ok && named) {
+        DeleteFileW(wt);
     }
-    fclose(f);
+#else
+    ok = ok && rename(tmp, path) == 0;
+    if (!ok) {
+        remove(tmp);
+    }
+#endif
+    s->store_dirty = !ok;
+    if (!ok && !s->store_failed) {
+        log_line(s, "dt.store could not be written to ", path);
+    }
+    s->store_failed = !ok;
 }
 
 static int sb_store_get(lua_State *L)
