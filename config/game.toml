@@ -417,6 +417,13 @@ addr = 0xF7F0
 length = 8
 crc32 = 0x353FCE0E
 
+# Obj_ClearSlots
+[[mod_function_hook]]
+id = "ducktales.decomp.F2C7"
+addr = 0xF2C7
+length = 8
+crc32 = 0xB0B510A3
+
 # Hud_RefillHp
 [[mod_function_hook]]
 id = "ducktales.decomp.F812"
