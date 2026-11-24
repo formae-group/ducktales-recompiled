@@ -253,8 +253,14 @@ left) gives `Nmi_Handler`'s call to the original.
   `$4000`-`$4017` (not `$4014` or `$4016`) in order: the C's from its bus operations, the original's
   from the trace's cycle observer (`cyc_trace_cycle_hook`; the trace's hash and cycle count are put
   back after). v, OAMADDR and the APU's clocked counters move with time and are not compared.
-- Replace mode on the cycle host gives `Nmi_Handler`'s call to the original until its bus operations
-  are made at the original's cycles; the native runtime runs the C.
+- Replace mode on the cycle host measures the original from a clocked snapshot up to its RTI. This
+  gives it the actual bus schedule, including the sprite-0 poll loop and the sprite DMA stalls.
+  It restores the snapshot, stores the C's RAM and replays the C's device operations at the measured
+  cycles, checking their order, values and timing. The cycles in between drive the original's bus
+  values and addresses without storing any of its RAM results; DMA reads the C's RAM. The handler
+  pays any NMI debt and returns through RTI. A handler that reaches a frame or observer boundary
+  or takes a nested interrupt in the measuring run goes to the original, so the host can stop there.
+  The native runtime runs the C without the timing probe.
 
 ### Calling contract
 

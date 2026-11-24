@@ -97,7 +97,9 @@
  * memories, the PRG bank, the device fields the NMI sets (nmi_field) and the
  * writes to $2006, $2007 and the APU in order (the C's from its bus
  * operations, the original's seen by the trace's cycle observer). Replace
- * mode gives it to the original.
+ * mode measures the original on a clocked snapshot, then runs the C's bus
+ * operations at those cycles, with the original's intervening bus traffic
+ * supplying open-bus values and DMA halt addresses.
  */
 #include "decomp/decomp_backend.h"
 #include "decomp/devices.h"
@@ -1240,6 +1242,178 @@ static void nmi_compare(void)
     dc_stats[s_nmi.routine].compared++;
 }
 
+#define NMI_CYCLE_LIMIT 32768
+
+static struct {
+    uint64_t start;
+    unsigned n;
+    bool fetch;
+
+    struct {
+        uint16_t offset, addr;
+        uint8_t value;
+        char kind;
+        bool fetch, done;
+    } cycles[NMI_CYCLE_LIMIT];
+} s_nmi_timing;
+
+static void nmi_measure_cycle(const CycTraceCycle *cycle)
+{
+    if (cycle->dma) {
+        return;
+    }
+    unsigned k = s_nmi_timing.n++;
+    if (k >= NMI_CYCLE_LIMIT || hw.cycles - s_nmi_timing.start >= NMI_CYCLE_LIMIT || cycle->kind == '-') {
+        dc_fail("cannot record an NMI bus cycle", DT_CODE_NMI);
+    }
+    s_nmi_timing.cycles[k].offset = (uint16_t)(hw.cycles - s_nmi_timing.start);
+    s_nmi_timing.cycles[k].addr = cycle->addr;
+    s_nmi_timing.cycles[k].value = cycle->value;
+    s_nmi_timing.cycles[k].kind = cycle->kind;
+    s_nmi_timing.cycles[k].fetch = s_nmi_timing.fetch;
+    s_nmi_timing.cycles[k].done = cycle->done;
+    s_nmi_timing.fetch = false;
+}
+
+/* Timing comes from the same machine and sprite-0 hit, with only the game
+ * CPU interpreting. Stop before giving up a frame/observer boundary, a
+ * nested interrupt or the RTI itself. Only the bus schedule survives. */
+static bool nmi_measure(uint8_t entry_s, uint64_t *duration)
+{
+    static CycSnapshot *snap;
+    if (!snap && !(snap = cyc_snapshot_new())) {
+        dc_fail("out of memory for the NMI timing snapshot", DT_CODE_NMI);
+    }
+    cyc_snapshot_take(snap);
+    bool traced = cyc_trace_enabled;
+    void *file = cyc_trace_file;
+    uint64_t hash = cyc_trace_hash;
+    uint32_t cycle = cyc_trace_cycle;
+    void (*observer)(const CycTraceCycle *) = cyc_trace_cycle_hook;
+    void (*return_hook)(void) = cyc_cpu_rts_observer;
+    uint8_t muted = cyc_ring_muted;
+    cyc_trace_enabled = true;
+    cyc_trace_file = NULL;
+    cyc_trace_cycle_hook = nmi_measure_cycle;
+    cyc_cpu_rts_observer = NULL;
+    cyc_ring_muted = 1;
+    s_nmi_timing.start = cyc_cycle_count();
+    s_nmi_timing.n = 0;
+    while (cpu.pc != DT_SITE_NMI_EXIT && !hw_frame_done && !cpu.jammed && !cpu.do_nmi && !cpu.do_irq && !cpu.do_reset &&
+           cyc_cycle_count() - s_nmi_timing.start < NMI_CYCLE_LIMIT - 1024) {
+        s_nmi_timing.fetch = true;
+        cpu_interp_step();
+    }
+    bool reached = cpu.pc == DT_SITE_NMI_EXIT && cpu.s == entry_s && !hw_frame_done && !cpu.do_nmi && !cpu.do_irq &&
+                   !cpu.do_reset;
+    *duration = cyc_cycle_count() - s_nmi_timing.start;
+    cyc_snapshot_restore(snap);
+    cyc_trace_enabled = traced;
+    cyc_trace_file = file;
+    cyc_trace_hash = hash;
+    cyc_trace_cycle = cycle;
+    cyc_trace_cycle_hook = observer;
+    cyc_cpu_rts_observer = return_hook;
+    cyc_ring_muted = muted;
+    return reached;
+}
+
+/* Report the first bus operation that could not be placed at its original
+ * cycle. A mismatch must not silently turn into a replace fallback. */
+static void nmi_timing_fail(unsigned k, int op)
+{
+    fprintf(stderr, "[decomp] NMI timing: original cycle %u %c $%04X=%02X, C bus operation %d of %d\n",
+            s_nmi_timing.cycles[k].offset, s_nmi_timing.cycles[k].kind, s_nmi_timing.cycles[k].addr,
+            s_nmi_timing.cycles[k].value, op, dc_nops);
+    if (op < dc_nops) {
+        fprintf(stderr, "[decomp]   C %c $%04X=%02X mask=%02X\n", dc_ops[op].write ? 'W' : 'R', dc_ops[op].addr,
+                dc_ops[op].value, dc_ops[op].wait);
+    }
+    dc_fail("NMI bus operation does not match the original", DT_CODE_NMI);
+}
+
+/* Drive the original's non-device bus traffic without storing any of its
+ * RAM results. DMA sees the C's RAM, and RDY generates the same stalls as
+ * before; each CPU access checks its offset after those stalls. A C wait
+ * consumes as many original reads as it takes to satisfy its mask. */
+static void nmi_replay(uint64_t duration)
+{
+    uint64_t start = cyc_cycle_count();
+    int op = 0;
+    for (unsigned k = 0; k < s_nmi_timing.n; k++) {
+        uint16_t addr = s_nmi_timing.cycles[k].addr;
+        uint8_t value = s_nmi_timing.cycles[k].value;
+        bool write = s_nmi_timing.cycles[k].kind == 'W';
+        bool device = addr >= 0x2000 && (write || (addr < 0x6000 && s_nmi_timing.cycles[k].done));
+        if (device) {
+            if (op == dc_nops || dc_ops[op].addr != addr || dc_ops[op].write != write ||
+                (write && dc_ops[op].value != value)) {
+                nmi_timing_fail(k, op);
+            }
+            if (write) {
+                value = dc_ops[op].value;
+            }
+        }
+        hw_cycle_start(addr, write ? HW_WRITE : s_nmi_timing.cycles[k].fetch ? HW_FETCH : HW_READ);
+        if (cyc_cycle_count() - start != s_nmi_timing.cycles[k].offset) {
+            nmi_timing_fail(k, op);
+        }
+        if (write && device) {
+            hw_write(addr, value);
+        } else if (write) {
+            hw.data_bus = hw.internal_bus = value;
+            if (cyc_trace_enabled) {
+                cyc_trace_access(addr, value, true);
+            }
+        } else if (addr < 0x2000) {
+            (void)hw_read_code_ram(addr, value);
+        } else {
+            uint8_t read = hw_read(addr);
+            if (device && read != value) {
+                nmi_timing_fail(k, op);
+            }
+            value = read;
+        }
+        if (device && (!dc_ops[op].wait || (value & dc_ops[op].wait) == dc_ops[op].value)) {
+            op++;
+        }
+        hw_cycle_finish(s_nmi_timing.cycles[k].done);
+    }
+    if (op != dc_nops || cyc_cycle_count() - start != duration) {
+        dc_fail("the NMI did not use its full bus schedule", DT_CODE_NMI);
+    }
+}
+
+static void nmi_replace(int i, const CycModRegs *in)
+{
+    const DecompRoutine *rt = dc_routine[i];
+    Regs c;
+    dc_run_c(rt, in, &c);
+    dc_stats[i].calls++;
+    uint64_t duration;
+    if (dc_run_original || !nmi_measure(in->s, &duration)) {
+        dc_stats[i].original++;
+        return;
+    }
+    const uint8_t *ram = cyc_cpu_ram();
+    for (uint16_t a = 0; a < GAME_RAM_SIZE; a++) {
+        if (ram[a] != dc_image[a]) {
+            cyc_mod_poke(a, dc_image[a]);
+        }
+    }
+    nmi_replay(duration);
+    CycModRegs set = { c.a, c.x, c.y, dc_cur_s, c.p, 0 };
+    cyc_mod_set_regs(&set);
+    uint64_t debt = s_nmi_debt;
+    s_nmi_debt = 0;
+    if (debt) {
+        spend_cycles(DT_SITE_NMI_EXIT, debt);
+    }
+    cpu.pc = DT_SITE_NMI_EXIT;
+    cpu_interp_step();
+    dc_stats[i].compared++;
+}
+
 bool dc_isolated(void)
 {
     return cyc_mod_isolated();
@@ -1263,8 +1437,7 @@ int dc_on_entry(uint16_t addr)
             if (dc_mode == DECOMP_CHECK) {
                 nmi_check(i, &in);
             } else {
-                dc_stats[i].calls++;
-                dc_stats[i].original++;
+                nmi_replace(i, &in);
             }
             return 0;
         }

@@ -108,7 +108,8 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   wait as a new bus operation, `Decomp_BusWait`. Check mode makes the C's bus operations on a clocked
   copy of the machine and compares at the original's RTI: RAM, registers, the PPU's memories and OAM,
   the PRG bank, the PPU and APU settings the NMI writes, and the writes to `$2006`/`$2007` and the APU
-  in order. The native runtime runs it; replace mode on the cycle host still gives it to the original.
+  in order. Both runtimes run the C in replace mode. The cycle host measures the original on a
+  clocked snapshot, then runs the C's device operations at the original's cycles.
 - Decompiled: the task primitives (`src/decomp/system.c`): `task_create` `$FF7D` with the slot offsets
   `$FF9F`/`$FFA1`, and `task_yield` `$FFAC` and `task_wait` `$FFA5` (resume point `$FFA8`) as task code. Their
   sites replace the flow's stops there; `task_yield`'s C hands off to the scheduler `$FF35`, which has a
