@@ -77,6 +77,14 @@ addr = 0x8B21
 length = 8
 crc32 = 0x5D6EF23E
 
+# Where Player_Update's RTS returns in the frame loop ($DB6F, LDA $6C), before
+# the objects move: once per unpaused step of play.
+[[mod_function_hook]]
+id = "ducktales.event.update"
+addr = 0xDB6F
+length = 8
+crc32 = 0x37C7B055
+
 # Decompiled routines (src/decomp/, docs/DECOMPILATION.md): a site at the
 # entry of each routine that original code calls (routines only decompiled
 # code calls have none), enabled only with --decomp check or replace.

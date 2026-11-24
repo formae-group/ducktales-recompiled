@@ -9,13 +9,22 @@
 
 #include "lua.h"
 
-#define SCRIPT_WRITES 256
-#define STORE_KEY_MAX 64
+#define SCRIPT_WRITES     256
+#define STORE_KEY_MAX     64
+#define SCRIPT_WRITE_KEYS 32
 
 typedef struct {
     char key[STORE_KEY_MAX + 1];
     char *value; /* "s:text" (escaped), "i:123", "n:1.5" or "b:true" */
 } StoreItem;
+
+/* The last value a mod wrote to one target and the identical writes since it
+ * was logged. */
+typedef struct {
+    char key[48];
+    long long value;
+    long repeats;
+} WriteLog;
 
 typedef struct {
     char id[64];
@@ -40,6 +49,8 @@ typedef struct {
     StoreItem *store;
     int store_count;
     size_t store_bytes;
+    WriteLog write_log[SCRIPT_WRITE_KEYS];
+    int write_logs;
 } Script;
 
 typedef struct {
@@ -55,6 +66,7 @@ extern int fm_script_script_count;
 extern uint64_t fm_script_frame;
 extern Write fm_script_writes[SCRIPT_WRITES];
 extern int fm_script_write_count;
+extern bool fm_script_in_event; /* a game event's handlers are running */
 Script *fm_script_of(lua_State *L);
 void fm_script_log_line(const Script *s, const char *what, const char *text);
 
@@ -63,6 +75,9 @@ int fm_script_sb_query(lua_State *L);
 int fm_script_state_index(lua_State *L);
 int fm_script_read_only(lua_State *L);
 int fm_script_sb_set(lua_State *L);
+void fm_script_apply(Script *s, const FmField *f, long long value);
+void fm_script_log_write(Script *s, const char *key, long long value, const char *text);
+void fm_script_flush_writes(Script *s);
 
 /* fm_script_show.c: dt.toast and dt.draw */
 extern int fm_script_toast_frames;

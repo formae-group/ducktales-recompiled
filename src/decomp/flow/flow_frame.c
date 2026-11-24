@@ -179,10 +179,12 @@ void FrameLoop_Paused(Regs *r)
     Jsr(DT_CODE_PLAYER_UPDATE, DT_FLOW_AFTER_PLAYER, OUT_X);
 }
 
-/* $DB6F: the objects move, unless a message is up. */
+/* $DB6F: a step of play for the mods (EVENT_UPDATE, the site there), then
+ * the objects move, unless a message is up. */
 void FrameLoop_AfterPlayer(Regs *r)
 {
     Decomp_Enter(DT_FLOW_AFTER_PLAYER, r->a, r->x, r->y);
+    Decomp_RaiseEvent(EVENT_UPDATE);
     if (gMessage) {
         FrameLoop_Requests(r);
         return;

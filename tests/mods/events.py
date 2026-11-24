@@ -26,6 +26,9 @@ for _, name in ipairs({"boss-hit", "boss-defeated", "enemy-defeated", "item-coll
         dt.log("event", dt.frame(), e.name, values(e))
     end)
 end
+dt.on("update", function()
+    local _ = dt.state.x
+end)
 dt.on("frame", function(frame)
     dt.draw.rect(8, 40, 24, 16, 0xFF00FF)
     dt.draw.text(8, 60, "draw", 0x00FF00)
@@ -149,7 +152,7 @@ def event_checks(exe, native):
             base, _ = run(exe, 'base', False, False)
             check(
                 (tmp / 'headless' / 'hash.txt').read_bytes() == (base / 'hash.txt').read_bytes(),
-                f'headless: with every event handled, dt.objects(), dt.camera() and dt.draw the per-frame '
+                f'headless: with every event handled ("update" reading dt.state included), dt.objects(), dt.camera() and dt.draw the per-frame '
                 f'machine hashes equal a run without mods (frames 0-{frames})',
             )
         if len(logs) == 2:

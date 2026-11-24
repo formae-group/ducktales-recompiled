@@ -18,7 +18,7 @@
  *   EVENT_JUMP_START      a jump copied the take-off velocity into Scrooge's; not cancelable
  *
  * The others cannot be cancelled. Two have sites of their own in bank 6, one
- * shares the boss hit's site, and four are seen at the end of a machine
+ * in the frame loop, one shares the boss hit's site, and four are seen at the end of a machine
  * frame (Events_FrameEnd) by comparing RAM with the previous frame's, so
  * they cost no site:
  *
@@ -29,6 +29,8 @@
  *   EVENT_LAND_CLEAR      the land is left with its "clear" result ($5D set with no scene in $78)
  *   EVENT_CHECKPOINT      Scrooge reached his land's boss checkpoint ($7C becomes 5)
  *   EVENT_MONEY_CHANGED   the HUD money differs from the last frame that showed it   money, delta
+ *
+ *   EVENT_UPDATE          a step of play: Player_Update returned and the objects are about to move ($DB6F)
  *
  * EVENT_BOSS_DEFEATED, EVENT_LAND_START, EVENT_LAND_CLEAR and EVENT_CHECKPOINT
  * carry the land. Events_Args gives a handler its event's values.
@@ -58,6 +60,7 @@ typedef enum EventId {
     EVENT_LAND_CLEAR,
     EVENT_CHECKPOINT,
     EVENT_MONEY_CHANGED,
+    EVENT_UPDATE,
     EVENT_COUNT
 } EventId;
 

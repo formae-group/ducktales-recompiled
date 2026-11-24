@@ -12,9 +12,14 @@
  *              game's records, read only), dt.set.<field>(v) for the fields
  *              the game declares writable, dt.toast(text), dt.draw.text/rect,
  *              dt.store.get/set, dt.log, dt.mod and dt.frame()
- *   writes     dt.set checks the value against the state when it is called
- *              and queues it; the queue is applied at the frame's end, after
- *              the "frame" handlers, inside the game's write window
+ *   writes     dt.set checks the value against the state when it is called.
+ *              In a game event's handler it writes at once, inside the
+ *              event's RAM transaction; in a "frame" handler it is queued,
+ *              and the queue is applied at the frame's end, after the
+ *              "frame" handlers, inside the game's write window. Every write
+ *              is logged; identical repeats make one line with their count,
+ *              at the next change, every SCRIPT_WRITE_FLUSH frames and at
+ *              exit
  *   toast      a notice for SCRIPT_TOAST_FRAMES frames, at most one per mod
  *              every SCRIPT_TOAST_GAP frames, SCRIPT_TOAST_CHARS characters
  *              (UTF-8 code points, control characters as spaces);
@@ -68,6 +73,7 @@
 #define SCRIPT_MEMORY       ((size_t)16 << 20)
 #define SCRIPT_EVENTS       63
 #define FRAME_BIT           63
+#define SCRIPT_WRITE_FLUSH  600
 
 FmScriptGame fm_script_game;
 Script *fm_script_scripts[FM_MAX_MODS];
@@ -78,6 +84,7 @@ uint64_t fm_script_frame;
 static time_t s_checked;
 Write fm_script_writes[SCRIPT_WRITES];
 int fm_script_write_count;
+bool fm_script_in_event;
 static bool s_exit_hooked;
 static const FmArg *s_args;
 static int s_nargs;
@@ -489,11 +496,13 @@ bool fm_scripts_event(int event, const FmArg *args, int nargs)
     bool cancel = false;
     s_args = args;
     s_nargs = nargs;
+    fm_script_in_event = true;
     for (int i = 0; i < fm_script_script_count; i++) {
         if (event >= 0 && event < fm_script_game.event_count && live(fm_script_scripts[i], event)) {
             cancel |= run(fm_script_scripts[i], event);
         }
     }
+    fm_script_in_event = false;
     s_nargs = 0;
     return cancel;
 }
@@ -507,6 +516,7 @@ static void close_script(Script *s)
     s->steps = 0;
     lua_close(s->L);
     s->L = NULL;
+    fm_script_flush_writes(s);
     s->wants = 0;
     s_dirty = true;
 }
@@ -616,6 +626,9 @@ static bool start_script(Script *s, char *err, size_t cap)
 static void flush_at_exit(void)
 {
     fm_scripts_flush();
+    for (int i = 0; i < fm_script_script_count; i++) {
+        fm_script_flush_writes(fm_script_scripts[i]);
+    }
 }
 
 void fm_scripts_configure(const FmScriptGame *game)
@@ -720,7 +733,7 @@ void fm_scripts_frame(void)
                 continue;
             }
             if (f->check(w->value, err, sizeof err)) {
-                f->set(w->value);
+                fm_script_apply(w->script, f, w->value);
             } else {
                 char text[260];
                 snprintf(text, sizeof text, "dt.set.%s(%lld) dropped at the frame's end: %s", f->name, w->value, err);
@@ -731,6 +744,9 @@ void fm_scripts_frame(void)
     }
     fm_script_write_count = 0;
     fm_script_finish_drawing();
+    for (int i = 0; i < fm_script_script_count && fm_script_frame % SCRIPT_WRITE_FLUSH == 0; i++) {
+        fm_script_flush_writes(fm_script_scripts[i]);
+    }
     time_t now = time(NULL);
     if (now != s_checked) {
         s_checked = now;

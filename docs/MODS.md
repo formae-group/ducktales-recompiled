@@ -171,7 +171,7 @@ end)
 | `dt.on(event, fn)` | Calls `fn` at every `event`, in the order handlers were added; mods higher in the list run first. A game event's `fn` gets a table: `e.name` and the event's values |
 | `dt.CANCEL` | Returned by a handler of a cancelable event: the event is cancelled. Returned for an event that cannot be cancelled, it is ignored and the log says so once |
 | `dt.state` | The game's state, read only, inside handlers (fields below) |
-| `dt.set.<field>(value)` | Sets a writable field at the frame's end, inside handlers (see [Writing the game](#writing-the-game)) |
+| `dt.set.<field>(value)` | Sets a writable field, inside handlers: at once in a game event's handler, at the frame's end in a `frame` handler (see [Writing the game](#writing-the-game)) |
 | `dt.objects()`, `dt.camera()` | The live object slots and the camera, read only, inside handlers (see [Objects and the camera](#objects-and-the-camera)) |
 | `dt.toast(text)` | Shows a short notice over the picture; returns `false` when it was refused (see [Toasts](#toasts)) |
 | `dt.draw.text(x, y, text[, color])`, `dt.draw.rect(x, y, w, h, color)` | Draws over the presented picture for one frame (see [Drawing](#drawing)) |
@@ -199,6 +199,7 @@ handler gets a table with the event's `name` and the values below (`function(e) 
 | `money-changed` | The HUD money differs from the last frame that showed it | `money`, `delta` | Not cancelable |
 | `new-game` | The title's set-up reset the HUD | | Not cancelable |
 | `jump-start` | A jump copied the take-off velocity into Scrooge's | | Not cancelable |
+| `update` | A step of play: Scrooge has moved and the objects are about to (once per step, not on paused frames, also while a message is up) | | Not cancelable |
 
 `slot` is the object's slot (1-15), `kind` its type (`$0710`), `item` the pickup's item
 (`$0620`; the land treasures are `$6F` and up, see [GAME-STATE.md](GAME-STATE.md)), `x` its world X
@@ -208,7 +209,10 @@ and the time bonus counted at the end of a land, come as one event per frame tha
 
 `land-start`, `land-clear`, `checkpoint` and `money-changed` are seen at the end of the frame,
 before the `frame` handlers; the others run at the moment the game does it, inside the frame. Every
-event fires once per occurrence with the decompiled code on or off.
+event fires once per occurrence with the decompiled code on or off. `update` is the place for a
+script that changes gameplay: it runs once per step of the game's logic, at the same point of
+the step, so a frame the console lags (where the game's step takes two frames) has none, where
+`frame` runs after every machine frame.
 
 `dt.state` fields: `land`, `lives`, `hp`, `hp_max`, `money` (`nil` while the HUD digits are
 not drawn), `time` (the HUD's 0-999), `difficulty`, `paused` (boolean), `boss_hits`,
@@ -265,13 +269,30 @@ or any hash (`tests/mods_test.py` compares the per-frame hashes with a drawing s
 | `time` | 0 to 999 | The HUD time digits |
 
 The value is checked when `dt.set` is called, and a value out of range is an error (catchable
-with `pcall`). Calls are only allowed inside handlers, and they are queued: the writes happen at
-the end of the frame, after the `frame` handlers, through the game's RAM transaction (the same
-helpers the enhancements use), so `dt.state` shows the new value from the next frame on. The
-value is checked again then, and a write the state no longer allows (the HUD stopped showing
-money) is dropped with a line in the log. **Every
-write is a gameplay change**: the machine then differs from the console's, like an enhancement
-that is on. A mod whose script stopped has its queued writes dropped.
+with `pcall`). Calls are only allowed inside handlers:
+
+- In a game event's handler (`update`, `player-damaged`, ...) the write happens at once, inside
+  the event's RAM transaction at that point of the game's code, so `dt.state` shows the new value
+  right away and the rest of the game's step sees it.
+- In a `frame` handler it is queued: the writes happen at the end of the frame, after the `frame`
+  handlers, through the game's RAM transaction (the same helpers the enhancements use), so
+  `dt.state` shows the new value from the next frame on. The value is checked again then, and a
+  write the state no longer allows (the HUD stopped showing money) is dropped with a line in the
+  log. A mod whose script stopped has its queued writes dropped.
+
+**Every write is a gameplay change**: the machine then differs from the console's, like an
+enhancement that is on. Every write is logged as `dt.set.lives(7), was 2`. A write that repeats the
+value the mod last wrote there gets no line of its own: the repeats are counted and logged as one
+line, `dt.set.lives(7) repeated 60 more times`, at the next change, every 600 frames and when the
+game closes.
+
+```lua
+dt.on("update", function()
+    if dt.state.hp < dt.state.hp_max and dt.state.pad_new & 0x20 ~= 0 then
+        dt.set.hp(dt.state.hp_max) -- Select refills the HP dots
+    end
+end)
+```
 
 ### Toasts
 
@@ -347,7 +368,9 @@ Both hosts and the native player call the same entry points:
   replacements; the mixer mutes the channels the driver gave the request and adds the decoded file.
 - **Scripts.** Each mod gets its own `lua_State` with a capped allocator and a count hook. A game
   event's hook site is on only while a handler for it exists, as the enhancements do; the events
-  seen at the frame's end read RAM only while one has a handler. At the end of each frame
+  seen at the frame's end read RAM only while one has a handler. `update` has a site where
+  `Player_Update` returns in the frame loop (`$DB6F`), and the decompiled frame loop raises it
+  itself. At the end of each frame
   (including the frames the open menu runs) those events are raised, then the `frame` handlers run,
   the queued `dt.set` writes are applied in one RAM transaction and the frame's drawings replace
   the shown ones.
