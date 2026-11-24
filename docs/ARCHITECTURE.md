@@ -386,7 +386,7 @@ player calls the same entry points as the cycle host:
 
 | Where | What it calls |
 |---|---|
-| start (cycle host `ducktales_host.c`, native player `native_window.c`) | `app_mods_use_player_folders` (window only: `[Mods]` and the data folder), `app_mods_start` with the PRG |
+| start (cycle host `ducktales_host.c`, native player `native_player.c`) | `app_mods_use_player_folders` (window only: `[Mods]` and the data folder), `app_mods_start` with the PRG |
 | power-on and state load | `app_mods_reset` (forget the sounds playing) |
 | frame end | `app_mods_audio_frame_end` (request ids from RAM), `app_mods_scripts_frame` ("frame" handlers, queued `dt.set` writes, toasts, hot reload, stores) |
 | audio | the mute mask before the synth or the APU mix, `app_mods_audio_mix` after it |

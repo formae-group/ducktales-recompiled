@@ -425,7 +425,9 @@ byte-identical to those of main 902ef07.
 
 `src/decomp/decomp.c` is the core every host shares: the routine tables, the state of the routine
 whose C runs and the calls every backend makes the same way (`decomp_backend.h`). The cycle host
-links `decomp_cycle.c`, its check and replace modes above. The native runtime links
+links `decomp_cycle.c`, its check and replace modes above (with task code in `decomp_cycle_task.c`,
+the NMI handler in `decomp_cycle_nmi.c` and the clocked original and timing check in
+`decomp_cycle_clock.c`, sharing `decomp_cycle.h`). The native runtime links
 `decomp_native.c`, which has replace mode only, and there the C runs alone:
 
 - At a routine's site its C runs on the image of RAM, as on the cycle host, and its results are

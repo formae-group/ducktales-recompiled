@@ -186,6 +186,10 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - The game flow's decompiled C is split by phase into `src/decomp/flow/` (the reset and frame loop, the
   title, Land Select, the land load, the HUD, death, the scenes, the ending, the routine table and a
   shared internal header) instead of one 3,200-line `flow.c`; no behaviour changed.
+- Source layout only: the cycle host's decompilation backend is split into `decomp_cycle.c`,
+  `decomp_cycle_task.c`, `decomp_cycle_nmi.c` and `decomp_cycle_clock.c`, and the native player's
+  `native_window.c` into `native_player.c` (entry, options, frame), `native_window.c` and
+  `native_offscreen.c`. No behaviour changes.
 - `src/decomp/player.c` and `src/decomp/level.c` are split into the modules of `src/decomp/player/`
   (contact tests, moves, modes, damage, message box) and `src/decomp/level/` (map, scroll, screen, row
   scroll, block draw, spawner), and `tests/decomp_test.py`'s case tables and builders move to

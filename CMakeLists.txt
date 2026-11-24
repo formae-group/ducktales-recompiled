@@ -113,7 +113,8 @@ string(STRIP "${_lua_notice}" _lua_notice)
 string(APPEND _lua_notice "\n")
 file(WRITE "${CMAKE_BINARY_DIR}/lua-LICENSE.txt" "${_lua_notice}")
 # The decompiled routines and the core that runs them (docs/DECOMPILATION.md);
-# each host adds its backend: decomp_cycle.c or decomp_native.c.
+# each host adds its backend: decomp_cycle.c (with decomp_cycle_task.c,
+# decomp_cycle_nmi.c and decomp_cycle_clock.c) or decomp_native.c.
 set(_ducktales_decomp
     "${CMAKE_SOURCE_DIR}/src/decomp/decomp.c"
     "${CMAKE_SOURCE_DIR}/src/decomp/decomp_timing.c"
@@ -163,6 +164,9 @@ set(_ducktales_extras
     "${CMAKE_SOURCE_DIR}/src/host/ducktales_host.c"
     ${_ducktales_decomp}
     "${CMAKE_SOURCE_DIR}/src/decomp/decomp_cycle.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/decomp_cycle_task.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/decomp_cycle_nmi.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/decomp_cycle_clock.c"
     "${CMAKE_SOURCE_DIR}/src/host/ducktales_settings.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_render.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_cycle.c"
@@ -329,14 +333,17 @@ if(DUCKTALES_NATIVE)
     ducktales_native_target(ducktales_native)
 endif()
 
-# The player build on the native runtime (src/native/native_window.c): the
+# The player build on the native runtime (src/native/native_player.c, its window
+# native_window.c and the runs with no window native_offscreen.c): the
 # window, menu, settings, presentation, enhancements and sprite compositor of
 # the cycle build over native_run_frame(), the native renderer and the native
 # synth (native_audio.c). NESRecomp contributes its settings file, input bindings, PNG writer
 # and toast font, no part of its cycle host.
 if(NOT DUCKTALES_HEADLESS)
     add_executable(ducktales_player
+        "${CMAKE_SOURCE_DIR}/src/native/native_player.c"
         "${CMAKE_SOURCE_DIR}/src/native/native_window.c"
+        "${CMAKE_SOURCE_DIR}/src/native/native_offscreen.c"
         "${CMAKE_SOURCE_DIR}/src/native/native_output.c"
         "${CMAKE_SOURCE_DIR}/src/native/native_present.c"
         "${CMAKE_SOURCE_DIR}/src/native/native_render.c"
