@@ -32,12 +32,14 @@
 #define gProbeCount    RAM_U8(DT_ADDR_PROBE_COUNT)
 #define gProbeClass(i) RAM_U8(DT_ADDR_PROBE_CLASS + (i))
 
-#define CLASS_SOLID     1
-#define CLASS_SPECIAL   3
-#define FLAG_BEHIND     0x04 /* $0600 bit 2: drawn behind the background */
-#define HAZARD_SPIKES   6    /* hypothesis: what $70 asks of Scrooge's code */
-#define HAZARD_POGO     7
-#define HAZARD_PIT      8
+#define CLASS_SOLID   1
+#define CLASS_SPECIAL 3
+#define FLAG_BEHIND   0x04 /* $0600 bit 2: drawn behind the background */
+#define HAZARD_SPIKES 6    /* hypothesis: what $70 asks of Scrooge's code */
+#define HAZARD_POGO   7
+#define HAZARD_PIT    8
+
+uint8_t gProbeExitY;
 #define PIT_Y           0xD0
 #define POINT_POGO_FEET 0x07 /* the probe points the hazards look at */
 #define POINT_POGO_TIP  0x0A
@@ -129,6 +131,7 @@ static uint8_t Bg_SlipperyTile(int slot)
 static uint8_t Bg_SpecialTile(int slot)
 {
     uint8_t kind = Level_MetatileAt((uint8_t)slot) >> 4;
+    gProbeExitY = kind;
     gScratch0 = rom((uint16_t)(DT_CODE_SPECIAL_LO + kind));
     gScratch1 = rom((uint16_t)(DT_CODE_SPECIAL_HI + kind));
     uint16_t handler = (uint16_t)(gScratch1 << 8 | gScratch0);
@@ -173,6 +176,7 @@ void Bg_Probe(int slot)
         bool carry;
         uint8_t cls = Bg_ClassAt(slot, gProbeFirst, &carry);
         gProbeClass(gProbeCount) = cls;
+        gProbeExitY = gProbeCount;
         uint8_t tested = cls == CLASS_SPECIAL ? Bg_SpecialTile(slot) : (gProbeHits |= cls);
         if (slot != PLAYER_SLOT && (tested & 1)) {
             return;
@@ -219,6 +223,7 @@ void Bg_SnapFeet(int slot)
 static void Run_Probe(Regs *r)
 {
     Bg_Probe(r->x);
+    r->y = gProbeExitY;
 }
 
 static void Run_SnapRight(Regs *r)
@@ -249,7 +254,7 @@ static void Run_ProbePoint(Regs *r)
 }
 
 const DecompRoutine gCollisionRoutines[] = {
-    { DT_CODE_BG_PROBE, "ducktales.decomp.D120", "Bg_Probe", Run_Probe, OUT_X | OUT_HW },
+    { DT_CODE_BG_PROBE, "ducktales.decomp.D120", "Bg_Probe", Run_Probe, OUT_X | OUT_Y | OUT_HW },
     { DT_CODE_SNAP_RIGHT, "ducktales.decomp.D49A", "Bg_SnapRight", Run_SnapRight, OUT_X },
     { DT_CODE_SNAP_LEFT, "ducktales.decomp.D4B2", "Bg_SnapLeft", Run_SnapLeft, OUT_X },
     { DT_CODE_SNAP_HEAD, "ducktales.decomp.D4C8", "Bg_SnapHead", Run_SnapHead, OUT_X },

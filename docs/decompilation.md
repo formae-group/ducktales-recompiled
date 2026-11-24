@@ -292,7 +292,7 @@ leave the jump vector in `$00/$01` as the original's loop does.
 | `Level_DecodeBlock` | none | X | X is the block's collision map index |
 | `Level_MetatileAt` | X = probe slot | A, X | |
 | `Map_LoadHeader` | X = map | X | X is kept |
-| `Bg_Probe` | X = slot | X, hardware | X is kept |
+| `Bg_Probe` | X = slot | X, Y, hardware | X is kept; Y is the count of the last point tested, or that point's metatile id >> 4 when it was special (`gProbeExitY`) |
 | `Bg_ProbePoint` | X = slot, Y = probe point | A, C | `Player_ContactV` falls into it with its hitbox in Y and reads the carry: the page or row sum's, or the last bit the class shifts dropped |
 | `Bg_SnapRight`, `Bg_SnapLeft`, `Bg_SnapHead`, `Bg_SnapFeet` | X = slot | X | X is kept |
 | `Level_TileEdit` | X = slot | hardware | |
@@ -601,7 +601,7 @@ nothing the dispatch uses.
 |---|---|---|---|
 | `Obj_UpdateAll` | P | X | X = 16 when it returns; the timer after it passes X to a sound request, which keeps it in `$00` |
 | `Obj_TouchScrooge` | X = slot | X, C | C clear = contact; Y = hitbox index when the slot is on screen |
-| `Obj_WalkRight`, `Obj_WalkLeft`, `Obj_Fall`, `Obj_Rise`, `Obj_ClimbDown`, `Obj_ClimbUp` | A = first probe, Y = probe count - 1, X = slot | X | X is what the probe returned |
+| `Obj_WalkRight`, `Obj_WalkLeft`, `Obj_Fall`, `Obj_Rise`, `Obj_ClimbDown`, `Obj_ClimbUp` | A = first probe, Y = probe count - 1, X = slot | X; Y for the walks and the fall | X is what the probe returned; Y is the probe's, then the hitbox index of the last block `$F332`/`$F3B7` looked at (the count when a walk despawns the slot). The charger, the block kicker and the boulder pass it on |
 | `Obj_TouchBlockH`, `Obj_TouchBlockV`, `Obj_HitOthers` | X = slot | C | C clear = a hit |
 | `Obj_FindFreeSlot`, `Obj_FindFreeSlotY` | - | X or Y, C | C set = no free slot |
 | `Obj_DistanceX`, `Obj_DistanceY`, `Obj_FaceScrooge` | X = slot | A | |
