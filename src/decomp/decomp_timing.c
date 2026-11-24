@@ -19,8 +19,34 @@
 #define WALK_LIMIT 200000
 #define MAX_DEPTH  32
 
-enum { M_IMP, M_IMM, M_ZP, M_ZPX, M_ZPY, M_IZX, M_IZY, M_REL, M_ABS, M_ABX, M_ABY, M_IND };
-enum { K_NONE, K_READ, K_STORE, K_RMW, K_BRANCH, K_JMP, K_JMPI, K_JSR, K_RTS, K_RTI, K_OTHER };
+enum {
+    M_IMP,
+    M_IMM,
+    M_ZP,
+    M_ZPX,
+    M_ZPY,
+    M_IZX,
+    M_IZY,
+    M_REL,
+    M_ABS,
+    M_ABX,
+    M_ABY,
+    M_IND
+};
+
+enum {
+    K_NONE,
+    K_READ,
+    K_STORE,
+    K_RMW,
+    K_BRANCH,
+    K_JMP,
+    K_JMPI,
+    K_JSR,
+    K_RTS,
+    K_RTI,
+    K_OTHER
+};
 
 typedef struct {
     uint8_t mode, kind, cycles;
@@ -29,156 +55,156 @@ typedef struct {
 /* The official opcodes: addressing mode, kind and cycles without the page
  * crossing of an indexed read or a taken branch. */
 static const Opcode OPCODES[256] = {
-    [0x01] = { M_IZX, K_READ, 6 }, /* ORA */
-    [0x05] = { M_ZP, K_READ, 3 }, /* ORA */
-    [0x06] = { M_ZP, K_RMW, 5 }, /* ASL */
-    [0x08] = { M_IMP, K_OTHER, 3 }, /* PHP */
-    [0x09] = { M_IMM, K_READ, 2 }, /* ORA */
-    [0x0A] = { M_IMP, K_OTHER, 2 }, /* ASL */
-    [0x0D] = { M_ABS, K_READ, 4 }, /* ORA */
-    [0x0E] = { M_ABS, K_RMW, 6 }, /* ASL */
+    [0x01] = { M_IZX, K_READ, 6 },   /* ORA */
+    [0x05] = { M_ZP, K_READ, 3 },    /* ORA */
+    [0x06] = { M_ZP, K_RMW, 5 },     /* ASL */
+    [0x08] = { M_IMP, K_OTHER, 3 },  /* PHP */
+    [0x09] = { M_IMM, K_READ, 2 },   /* ORA */
+    [0x0A] = { M_IMP, K_OTHER, 2 },  /* ASL */
+    [0x0D] = { M_ABS, K_READ, 4 },   /* ORA */
+    [0x0E] = { M_ABS, K_RMW, 6 },    /* ASL */
     [0x10] = { M_REL, K_BRANCH, 2 }, /* BPL */
-    [0x11] = { M_IZY, K_READ, 5 }, /* ORA */
-    [0x15] = { M_ZPX, K_READ, 4 }, /* ORA */
-    [0x16] = { M_ZPX, K_RMW, 6 }, /* ASL */
-    [0x18] = { M_IMP, K_OTHER, 2 }, /* CLC */
-    [0x19] = { M_ABY, K_READ, 4 }, /* ORA */
-    [0x1D] = { M_ABX, K_READ, 4 }, /* ORA */
-    [0x1E] = { M_ABX, K_RMW, 7 }, /* ASL */
-    [0x20] = { M_ABS, K_JSR, 6 }, /* JSR */
-    [0x21] = { M_IZX, K_READ, 6 }, /* AND */
-    [0x24] = { M_ZP, K_READ, 3 }, /* BIT */
-    [0x25] = { M_ZP, K_READ, 3 }, /* AND */
-    [0x26] = { M_ZP, K_RMW, 5 }, /* ROL */
-    [0x28] = { M_IMP, K_OTHER, 4 }, /* PLP */
-    [0x29] = { M_IMM, K_READ, 2 }, /* AND */
-    [0x2A] = { M_IMP, K_OTHER, 2 }, /* ROL */
-    [0x2C] = { M_ABS, K_READ, 4 }, /* BIT */
-    [0x2D] = { M_ABS, K_READ, 4 }, /* AND */
-    [0x2E] = { M_ABS, K_RMW, 6 }, /* ROL */
+    [0x11] = { M_IZY, K_READ, 5 },   /* ORA */
+    [0x15] = { M_ZPX, K_READ, 4 },   /* ORA */
+    [0x16] = { M_ZPX, K_RMW, 6 },    /* ASL */
+    [0x18] = { M_IMP, K_OTHER, 2 },  /* CLC */
+    [0x19] = { M_ABY, K_READ, 4 },   /* ORA */
+    [0x1D] = { M_ABX, K_READ, 4 },   /* ORA */
+    [0x1E] = { M_ABX, K_RMW, 7 },    /* ASL */
+    [0x20] = { M_ABS, K_JSR, 6 },    /* JSR */
+    [0x21] = { M_IZX, K_READ, 6 },   /* AND */
+    [0x24] = { M_ZP, K_READ, 3 },    /* BIT */
+    [0x25] = { M_ZP, K_READ, 3 },    /* AND */
+    [0x26] = { M_ZP, K_RMW, 5 },     /* ROL */
+    [0x28] = { M_IMP, K_OTHER, 4 },  /* PLP */
+    [0x29] = { M_IMM, K_READ, 2 },   /* AND */
+    [0x2A] = { M_IMP, K_OTHER, 2 },  /* ROL */
+    [0x2C] = { M_ABS, K_READ, 4 },   /* BIT */
+    [0x2D] = { M_ABS, K_READ, 4 },   /* AND */
+    [0x2E] = { M_ABS, K_RMW, 6 },    /* ROL */
     [0x30] = { M_REL, K_BRANCH, 2 }, /* BMI */
-    [0x31] = { M_IZY, K_READ, 5 }, /* AND */
-    [0x35] = { M_ZPX, K_READ, 4 }, /* AND */
-    [0x36] = { M_ZPX, K_RMW, 6 }, /* ROL */
-    [0x38] = { M_IMP, K_OTHER, 2 }, /* SEC */
-    [0x39] = { M_ABY, K_READ, 4 }, /* AND */
-    [0x3D] = { M_ABX, K_READ, 4 }, /* AND */
-    [0x3E] = { M_ABX, K_RMW, 7 }, /* ROL */
-    [0x40] = { M_IMP, K_RTI, 6 }, /* RTI */
-    [0x41] = { M_IZX, K_READ, 6 }, /* EOR */
-    [0x45] = { M_ZP, K_READ, 3 }, /* EOR */
-    [0x46] = { M_ZP, K_RMW, 5 }, /* LSR */
-    [0x48] = { M_IMP, K_OTHER, 3 }, /* PHA */
-    [0x49] = { M_IMM, K_READ, 2 }, /* EOR */
-    [0x4A] = { M_IMP, K_OTHER, 2 }, /* LSR */
-    [0x4C] = { M_ABS, K_JMP, 3 }, /* JMP */
-    [0x4D] = { M_ABS, K_READ, 4 }, /* EOR */
-    [0x4E] = { M_ABS, K_RMW, 6 }, /* LSR */
+    [0x31] = { M_IZY, K_READ, 5 },   /* AND */
+    [0x35] = { M_ZPX, K_READ, 4 },   /* AND */
+    [0x36] = { M_ZPX, K_RMW, 6 },    /* ROL */
+    [0x38] = { M_IMP, K_OTHER, 2 },  /* SEC */
+    [0x39] = { M_ABY, K_READ, 4 },   /* AND */
+    [0x3D] = { M_ABX, K_READ, 4 },   /* AND */
+    [0x3E] = { M_ABX, K_RMW, 7 },    /* ROL */
+    [0x40] = { M_IMP, K_RTI, 6 },    /* RTI */
+    [0x41] = { M_IZX, K_READ, 6 },   /* EOR */
+    [0x45] = { M_ZP, K_READ, 3 },    /* EOR */
+    [0x46] = { M_ZP, K_RMW, 5 },     /* LSR */
+    [0x48] = { M_IMP, K_OTHER, 3 },  /* PHA */
+    [0x49] = { M_IMM, K_READ, 2 },   /* EOR */
+    [0x4A] = { M_IMP, K_OTHER, 2 },  /* LSR */
+    [0x4C] = { M_ABS, K_JMP, 3 },    /* JMP */
+    [0x4D] = { M_ABS, K_READ, 4 },   /* EOR */
+    [0x4E] = { M_ABS, K_RMW, 6 },    /* LSR */
     [0x50] = { M_REL, K_BRANCH, 2 }, /* BVC */
-    [0x51] = { M_IZY, K_READ, 5 }, /* EOR */
-    [0x55] = { M_ZPX, K_READ, 4 }, /* EOR */
-    [0x56] = { M_ZPX, K_RMW, 6 }, /* LSR */
-    [0x58] = { M_IMP, K_OTHER, 2 }, /* CLI */
-    [0x59] = { M_ABY, K_READ, 4 }, /* EOR */
-    [0x5D] = { M_ABX, K_READ, 4 }, /* EOR */
-    [0x5E] = { M_ABX, K_RMW, 7 }, /* LSR */
-    [0x60] = { M_IMP, K_RTS, 6 }, /* RTS */
-    [0x61] = { M_IZX, K_READ, 6 }, /* ADC */
-    [0x65] = { M_ZP, K_READ, 3 }, /* ADC */
-    [0x66] = { M_ZP, K_RMW, 5 }, /* ROR */
-    [0x68] = { M_IMP, K_OTHER, 4 }, /* PLA */
-    [0x69] = { M_IMM, K_READ, 2 }, /* ADC */
-    [0x6A] = { M_IMP, K_OTHER, 2 }, /* ROR */
-    [0x6C] = { M_IND, K_JMPI, 5 }, /* JMP */
-    [0x6D] = { M_ABS, K_READ, 4 }, /* ADC */
-    [0x6E] = { M_ABS, K_RMW, 6 }, /* ROR */
+    [0x51] = { M_IZY, K_READ, 5 },   /* EOR */
+    [0x55] = { M_ZPX, K_READ, 4 },   /* EOR */
+    [0x56] = { M_ZPX, K_RMW, 6 },    /* LSR */
+    [0x58] = { M_IMP, K_OTHER, 2 },  /* CLI */
+    [0x59] = { M_ABY, K_READ, 4 },   /* EOR */
+    [0x5D] = { M_ABX, K_READ, 4 },   /* EOR */
+    [0x5E] = { M_ABX, K_RMW, 7 },    /* LSR */
+    [0x60] = { M_IMP, K_RTS, 6 },    /* RTS */
+    [0x61] = { M_IZX, K_READ, 6 },   /* ADC */
+    [0x65] = { M_ZP, K_READ, 3 },    /* ADC */
+    [0x66] = { M_ZP, K_RMW, 5 },     /* ROR */
+    [0x68] = { M_IMP, K_OTHER, 4 },  /* PLA */
+    [0x69] = { M_IMM, K_READ, 2 },   /* ADC */
+    [0x6A] = { M_IMP, K_OTHER, 2 },  /* ROR */
+    [0x6C] = { M_IND, K_JMPI, 5 },   /* JMP */
+    [0x6D] = { M_ABS, K_READ, 4 },   /* ADC */
+    [0x6E] = { M_ABS, K_RMW, 6 },    /* ROR */
     [0x70] = { M_REL, K_BRANCH, 2 }, /* BVS */
-    [0x71] = { M_IZY, K_READ, 5 }, /* ADC */
-    [0x75] = { M_ZPX, K_READ, 4 }, /* ADC */
-    [0x76] = { M_ZPX, K_RMW, 6 }, /* ROR */
-    [0x78] = { M_IMP, K_OTHER, 2 }, /* SEI */
-    [0x79] = { M_ABY, K_READ, 4 }, /* ADC */
-    [0x7D] = { M_ABX, K_READ, 4 }, /* ADC */
-    [0x7E] = { M_ABX, K_RMW, 7 }, /* ROR */
-    [0x81] = { M_IZX, K_STORE, 6 }, /* STA */
-    [0x84] = { M_ZP, K_STORE, 3 }, /* STY */
-    [0x85] = { M_ZP, K_STORE, 3 }, /* STA */
-    [0x86] = { M_ZP, K_STORE, 3 }, /* STX */
-    [0x88] = { M_IMP, K_OTHER, 2 }, /* DEY */
-    [0x8A] = { M_IMP, K_OTHER, 2 }, /* TXA */
-    [0x8C] = { M_ABS, K_STORE, 4 }, /* STY */
-    [0x8D] = { M_ABS, K_STORE, 4 }, /* STA */
-    [0x8E] = { M_ABS, K_STORE, 4 }, /* STX */
+    [0x71] = { M_IZY, K_READ, 5 },   /* ADC */
+    [0x75] = { M_ZPX, K_READ, 4 },   /* ADC */
+    [0x76] = { M_ZPX, K_RMW, 6 },    /* ROR */
+    [0x78] = { M_IMP, K_OTHER, 2 },  /* SEI */
+    [0x79] = { M_ABY, K_READ, 4 },   /* ADC */
+    [0x7D] = { M_ABX, K_READ, 4 },   /* ADC */
+    [0x7E] = { M_ABX, K_RMW, 7 },    /* ROR */
+    [0x81] = { M_IZX, K_STORE, 6 },  /* STA */
+    [0x84] = { M_ZP, K_STORE, 3 },   /* STY */
+    [0x85] = { M_ZP, K_STORE, 3 },   /* STA */
+    [0x86] = { M_ZP, K_STORE, 3 },   /* STX */
+    [0x88] = { M_IMP, K_OTHER, 2 },  /* DEY */
+    [0x8A] = { M_IMP, K_OTHER, 2 },  /* TXA */
+    [0x8C] = { M_ABS, K_STORE, 4 },  /* STY */
+    [0x8D] = { M_ABS, K_STORE, 4 },  /* STA */
+    [0x8E] = { M_ABS, K_STORE, 4 },  /* STX */
     [0x90] = { M_REL, K_BRANCH, 2 }, /* BCC */
-    [0x91] = { M_IZY, K_STORE, 6 }, /* STA */
-    [0x94] = { M_ZPX, K_STORE, 4 }, /* STY */
-    [0x95] = { M_ZPX, K_STORE, 4 }, /* STA */
-    [0x96] = { M_ZPY, K_STORE, 4 }, /* STX */
-    [0x98] = { M_IMP, K_OTHER, 2 }, /* TYA */
-    [0x99] = { M_ABY, K_STORE, 5 }, /* STA */
-    [0x9A] = { M_IMP, K_OTHER, 2 }, /* TXS */
-    [0x9D] = { M_ABX, K_STORE, 5 }, /* STA */
-    [0xA0] = { M_IMM, K_READ, 2 }, /* LDY */
-    [0xA1] = { M_IZX, K_READ, 6 }, /* LDA */
-    [0xA2] = { M_IMM, K_READ, 2 }, /* LDX */
-    [0xA4] = { M_ZP, K_READ, 3 }, /* LDY */
-    [0xA5] = { M_ZP, K_READ, 3 }, /* LDA */
-    [0xA6] = { M_ZP, K_READ, 3 }, /* LDX */
-    [0xA8] = { M_IMP, K_OTHER, 2 }, /* TAY */
-    [0xA9] = { M_IMM, K_READ, 2 }, /* LDA */
-    [0xAA] = { M_IMP, K_OTHER, 2 }, /* TAX */
-    [0xAC] = { M_ABS, K_READ, 4 }, /* LDY */
-    [0xAD] = { M_ABS, K_READ, 4 }, /* LDA */
-    [0xAE] = { M_ABS, K_READ, 4 }, /* LDX */
+    [0x91] = { M_IZY, K_STORE, 6 },  /* STA */
+    [0x94] = { M_ZPX, K_STORE, 4 },  /* STY */
+    [0x95] = { M_ZPX, K_STORE, 4 },  /* STA */
+    [0x96] = { M_ZPY, K_STORE, 4 },  /* STX */
+    [0x98] = { M_IMP, K_OTHER, 2 },  /* TYA */
+    [0x99] = { M_ABY, K_STORE, 5 },  /* STA */
+    [0x9A] = { M_IMP, K_OTHER, 2 },  /* TXS */
+    [0x9D] = { M_ABX, K_STORE, 5 },  /* STA */
+    [0xA0] = { M_IMM, K_READ, 2 },   /* LDY */
+    [0xA1] = { M_IZX, K_READ, 6 },   /* LDA */
+    [0xA2] = { M_IMM, K_READ, 2 },   /* LDX */
+    [0xA4] = { M_ZP, K_READ, 3 },    /* LDY */
+    [0xA5] = { M_ZP, K_READ, 3 },    /* LDA */
+    [0xA6] = { M_ZP, K_READ, 3 },    /* LDX */
+    [0xA8] = { M_IMP, K_OTHER, 2 },  /* TAY */
+    [0xA9] = { M_IMM, K_READ, 2 },   /* LDA */
+    [0xAA] = { M_IMP, K_OTHER, 2 },  /* TAX */
+    [0xAC] = { M_ABS, K_READ, 4 },   /* LDY */
+    [0xAD] = { M_ABS, K_READ, 4 },   /* LDA */
+    [0xAE] = { M_ABS, K_READ, 4 },   /* LDX */
     [0xB0] = { M_REL, K_BRANCH, 2 }, /* BCS */
-    [0xB1] = { M_IZY, K_READ, 5 }, /* LDA */
-    [0xB4] = { M_ZPX, K_READ, 4 }, /* LDY */
-    [0xB5] = { M_ZPX, K_READ, 4 }, /* LDA */
-    [0xB6] = { M_ZPY, K_READ, 4 }, /* LDX */
-    [0xB8] = { M_IMP, K_OTHER, 2 }, /* CLV */
-    [0xB9] = { M_ABY, K_READ, 4 }, /* LDA */
-    [0xBA] = { M_IMP, K_OTHER, 2 }, /* TSX */
-    [0xBC] = { M_ABX, K_READ, 4 }, /* LDY */
-    [0xBD] = { M_ABX, K_READ, 4 }, /* LDA */
-    [0xBE] = { M_ABY, K_READ, 4 }, /* LDX */
-    [0xC0] = { M_IMM, K_READ, 2 }, /* CPY */
-    [0xC1] = { M_IZX, K_READ, 6 }, /* CMP */
-    [0xC4] = { M_ZP, K_READ, 3 }, /* CPY */
-    [0xC5] = { M_ZP, K_READ, 3 }, /* CMP */
-    [0xC6] = { M_ZP, K_RMW, 5 }, /* DEC */
-    [0xC8] = { M_IMP, K_OTHER, 2 }, /* INY */
-    [0xC9] = { M_IMM, K_READ, 2 }, /* CMP */
-    [0xCA] = { M_IMP, K_OTHER, 2 }, /* DEX */
-    [0xCC] = { M_ABS, K_READ, 4 }, /* CPY */
-    [0xCD] = { M_ABS, K_READ, 4 }, /* CMP */
-    [0xCE] = { M_ABS, K_RMW, 6 }, /* DEC */
+    [0xB1] = { M_IZY, K_READ, 5 },   /* LDA */
+    [0xB4] = { M_ZPX, K_READ, 4 },   /* LDY */
+    [0xB5] = { M_ZPX, K_READ, 4 },   /* LDA */
+    [0xB6] = { M_ZPY, K_READ, 4 },   /* LDX */
+    [0xB8] = { M_IMP, K_OTHER, 2 },  /* CLV */
+    [0xB9] = { M_ABY, K_READ, 4 },   /* LDA */
+    [0xBA] = { M_IMP, K_OTHER, 2 },  /* TSX */
+    [0xBC] = { M_ABX, K_READ, 4 },   /* LDY */
+    [0xBD] = { M_ABX, K_READ, 4 },   /* LDA */
+    [0xBE] = { M_ABY, K_READ, 4 },   /* LDX */
+    [0xC0] = { M_IMM, K_READ, 2 },   /* CPY */
+    [0xC1] = { M_IZX, K_READ, 6 },   /* CMP */
+    [0xC4] = { M_ZP, K_READ, 3 },    /* CPY */
+    [0xC5] = { M_ZP, K_READ, 3 },    /* CMP */
+    [0xC6] = { M_ZP, K_RMW, 5 },     /* DEC */
+    [0xC8] = { M_IMP, K_OTHER, 2 },  /* INY */
+    [0xC9] = { M_IMM, K_READ, 2 },   /* CMP */
+    [0xCA] = { M_IMP, K_OTHER, 2 },  /* DEX */
+    [0xCC] = { M_ABS, K_READ, 4 },   /* CPY */
+    [0xCD] = { M_ABS, K_READ, 4 },   /* CMP */
+    [0xCE] = { M_ABS, K_RMW, 6 },    /* DEC */
     [0xD0] = { M_REL, K_BRANCH, 2 }, /* BNE */
-    [0xD1] = { M_IZY, K_READ, 5 }, /* CMP */
-    [0xD5] = { M_ZPX, K_READ, 4 }, /* CMP */
-    [0xD6] = { M_ZPX, K_RMW, 6 }, /* DEC */
-    [0xD8] = { M_IMP, K_OTHER, 2 }, /* CLD */
-    [0xD9] = { M_ABY, K_READ, 4 }, /* CMP */
-    [0xDD] = { M_ABX, K_READ, 4 }, /* CMP */
-    [0xDE] = { M_ABX, K_RMW, 7 }, /* DEC */
-    [0xE0] = { M_IMM, K_READ, 2 }, /* CPX */
-    [0xE1] = { M_IZX, K_READ, 6 }, /* SBC */
-    [0xE4] = { M_ZP, K_READ, 3 }, /* CPX */
-    [0xE5] = { M_ZP, K_READ, 3 }, /* SBC */
-    [0xE6] = { M_ZP, K_RMW, 5 }, /* INC */
-    [0xE8] = { M_IMP, K_OTHER, 2 }, /* INX */
-    [0xE9] = { M_IMM, K_READ, 2 }, /* SBC */
-    [0xEA] = { M_IMP, K_OTHER, 2 }, /* NOP */
-    [0xEC] = { M_ABS, K_READ, 4 }, /* CPX */
-    [0xED] = { M_ABS, K_READ, 4 }, /* SBC */
-    [0xEE] = { M_ABS, K_RMW, 6 }, /* INC */
+    [0xD1] = { M_IZY, K_READ, 5 },   /* CMP */
+    [0xD5] = { M_ZPX, K_READ, 4 },   /* CMP */
+    [0xD6] = { M_ZPX, K_RMW, 6 },    /* DEC */
+    [0xD8] = { M_IMP, K_OTHER, 2 },  /* CLD */
+    [0xD9] = { M_ABY, K_READ, 4 },   /* CMP */
+    [0xDD] = { M_ABX, K_READ, 4 },   /* CMP */
+    [0xDE] = { M_ABX, K_RMW, 7 },    /* DEC */
+    [0xE0] = { M_IMM, K_READ, 2 },   /* CPX */
+    [0xE1] = { M_IZX, K_READ, 6 },   /* SBC */
+    [0xE4] = { M_ZP, K_READ, 3 },    /* CPX */
+    [0xE5] = { M_ZP, K_READ, 3 },    /* SBC */
+    [0xE6] = { M_ZP, K_RMW, 5 },     /* INC */
+    [0xE8] = { M_IMP, K_OTHER, 2 },  /* INX */
+    [0xE9] = { M_IMM, K_READ, 2 },   /* SBC */
+    [0xEA] = { M_IMP, K_OTHER, 2 },  /* NOP */
+    [0xEC] = { M_ABS, K_READ, 4 },   /* CPX */
+    [0xED] = { M_ABS, K_READ, 4 },   /* SBC */
+    [0xEE] = { M_ABS, K_RMW, 6 },    /* INC */
     [0xF0] = { M_REL, K_BRANCH, 2 }, /* BEQ */
-    [0xF1] = { M_IZY, K_READ, 5 }, /* SBC */
-    [0xF5] = { M_ZPX, K_READ, 4 }, /* SBC */
-    [0xF6] = { M_ZPX, K_RMW, 6 }, /* INC */
-    [0xF8] = { M_IMP, K_OTHER, 2 }, /* SED */
-    [0xF9] = { M_ABY, K_READ, 4 }, /* SBC */
-    [0xFD] = { M_ABX, K_READ, 4 }, /* SBC */
-    [0xFE] = { M_ABX, K_RMW, 7 }, /* INC */
+    [0xF1] = { M_IZY, K_READ, 5 },   /* SBC */
+    [0xF5] = { M_ZPX, K_READ, 4 },   /* SBC */
+    [0xF6] = { M_ZPX, K_RMW, 6 },    /* INC */
+    [0xF8] = { M_IMP, K_OTHER, 2 },  /* SED */
+    [0xF9] = { M_ABY, K_READ, 4 },   /* SBC */
+    [0xFD] = { M_ABX, K_READ, 4 },   /* SBC */
+    [0xFE] = { M_ABX, K_RMW, 7 },    /* INC */
 };
 
 static const uint8_t LENGTH[] = { 1, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3 };

@@ -229,7 +229,11 @@ def report(rom, name, info, table, by_addr):
             note = 'bus operation'
         elif mn == 'JSR':
             callee = by_addr.get(arg)
-            note = 'calls %s (%s)' % (callee, 'timed' if table[callee]['timed'] else 'not timed') if callee else 'calls original code'
+            note = (
+                'calls %s (%s)' % (callee, 'timed' if table[callee]['timed'] else 'not timed')
+                if callee
+                else 'calls original code'
+            )
         elif mn == 'JMP' and arg in entries and arg != info['addr']:
             note = 'continues into %s' % by_addr.get(arg, '?')
         cyc = cycles(mn, mode) if mn != '???' else 0
