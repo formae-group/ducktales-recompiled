@@ -208,7 +208,7 @@ static uint64_t machine_hash(void)
 }
 
 int player_run_off_screen(long frames, const char *input, int lag, const char *present_out, long present_every,
-                   long state_check, const char *wav_out, const char *audio_out, const AudioSim *sim)
+                          long state_check, const char *wav_out, const char *audio_out, const AudioSim *sim)
 {
     enum {
         CHECK_FRAMES = 300

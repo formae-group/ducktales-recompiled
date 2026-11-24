@@ -367,7 +367,6 @@ NES_MOD_CONSTRUCTOR(dt_register_decomp_nmi_exit)
     nes_mod_register_function_entry_plugin(DT_SITE_NMI_EXIT_ID, DT_SITE_NMI_EXIT, on_nmi_exit);
 }
 
-
 void dc_nmi_disarm(void)
 {
     s_nmi.armed = false;

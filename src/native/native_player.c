@@ -304,7 +304,8 @@ int ducktales_host_main(int argc, char **argv)
         return 2;
     }
     if (!off_screen) {
-        snprintf(player_settings_path, sizeof player_settings_path, "%s", config ? config : cyc_settings_default_path());
+        snprintf(player_settings_path, sizeof player_settings_path, "%s",
+                 config ? config : cyc_settings_default_path());
         static const CycSettingsGame GAME = { NULL, game_load, player_game_save };
         cyc_settings_default(&player_settings);
         cyc_settings_load(&player_settings, player_settings_path, stderr, &GAME);
@@ -327,7 +328,8 @@ int ducktales_host_main(int argc, char **argv)
             fprintf(stderr, "--wav-out and --audio-out cannot be used together\n");
             return 2;
         }
-        return player_run_off_screen(frames, input, lag, present_out, present_every, state_check, wav_out, audio_out, &sim);
+        return player_run_off_screen(frames, input, lag, present_out, present_every, state_check, wav_out, audio_out,
+                                     &sim);
     }
     player_power_on();
     return player_run_window(hidden, uncapped, exit_after, present_out, present_every);

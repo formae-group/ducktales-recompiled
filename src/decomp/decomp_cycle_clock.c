@@ -68,7 +68,7 @@ static void clock_measure_cycle(const CycTraceCycle *cycle)
  * schedule survives, and the original's registers and RAM at the end when
  * asked for. */
 ClockEnd dc_clock_measure(uint16_t routine, uint16_t stop_pc, uint8_t stop_s, int frame_ends, uint64_t *duration,
-                       CycModRegs *regs, uint8_t *ram)
+                          CycModRegs *regs, uint8_t *ram)
 {
     static CycSnapshot *snap;
     if (!snap && !(snap = cyc_snapshot_new())) {
