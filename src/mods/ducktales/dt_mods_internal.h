@@ -11,11 +11,11 @@
 
 /* The palettes loaded (dt_mods.c), and the one used for each land and,
  * at LANDS, everywhere else: the first mod's that has one wins. */
-extern int s_palette_count;
-extern const uint32_t *s_palette_for[LANDS + 1];
+extern int dt_mods_palette_count;
+extern const uint32_t *dt_mods_palette_for[LANDS + 1];
 
 /* Tells the core about this game and its scripts, once (dt_mods_script.c). */
-void configure(void);
+void dt_mods_configure(void);
 
 /* Forgets every replacement. */
 void mods_audio_clear(void);

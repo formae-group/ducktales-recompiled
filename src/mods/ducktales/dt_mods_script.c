@@ -2,7 +2,7 @@
  * dt_mods_script.c - what the mods core (src/mods/core) is told about
  * DuckTales, and the game's side of the dt table its scripts get
  * (docs/MODS.md "Scripts"), told once, before the first folder, setting or
- * option is read (configure).
+ * option is read (dt_mods_configure).
  *
  *   events     include/ducktales/events.h, with their values (Events_Args);
  *              a game event's site is on while a script handles it
@@ -310,7 +310,7 @@ static void listen(int event, bool on)
     }
 }
 
-void configure(void)
+void dt_mods_configure(void)
 {
     if (s_configured) {
         return;

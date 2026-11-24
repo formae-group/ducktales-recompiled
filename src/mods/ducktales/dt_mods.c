@@ -48,8 +48,8 @@
 
 static bool s_started;
 static uint32_t *s_palettes[FM_MAX_MODS * (LANDS + 1)];
-int s_palette_count;
-const uint32_t *s_palette_for[LANDS + 1];
+int dt_mods_palette_count;
+const uint32_t *dt_mods_palette_for[LANDS + 1];
 static char s_log_path[1100];
 
 static const char *const LAND_NAMES[LANDS] = { "amazon", "transylvania", "african-mines", "himalayas", "moon" };
@@ -58,7 +58,7 @@ static const char *const LAND_NAMES[LANDS] = { "amazon", "transylvania", "africa
 
 void app_mods_add_folder(const char *dir, bool create)
 {
-    configure();
+    dt_mods_configure();
     fm_add_folder(dir, create);
 }
 
@@ -74,13 +74,13 @@ const char *app_mods_log_path(void)
 
 bool app_mods_setting(const char *key, const char *value)
 {
-    configure();
+    dt_mods_configure();
     return fm_setting(key, value);
 }
 
 void app_mods_read_config(const char *path)
 {
-    configure();
+    dt_mods_configure();
     fm_read_config(path);
 }
 
@@ -101,7 +101,7 @@ void app_mods_set_enabled(bool on)
 
 void app_mods_use_player_folders(const char *config_path)
 {
-    configure();
+    dt_mods_configure();
     char dir[1024];
     if (config_path) {
         fm_read_config(config_path);
@@ -132,7 +132,7 @@ const char *app_mods_option_help(int index)
 
 bool app_mods_option(const char *name, const char *value, bool *ok)
 {
-    configure();
+    dt_mods_configure();
     if (!strcmp(name, "--mods")) {
         bool on = false;
         *ok = value && fm_word_on(value, &on);
@@ -451,16 +451,16 @@ static bool load_mod(AppMod *m, bool use, char *err, size_t cap)
         }
         for (int l = 0; l <= LANDS; l++) {
             if (pals[l]) {
-                s_palettes[s_palette_count++] = pals[l];
+                s_palettes[dt_mods_palette_count++] = pals[l];
             }
         }
         for (int l = 0; l < LANDS; l++) {
-            if (!s_palette_for[l] && (pals[l] || pals[LANDS])) {
-                s_palette_for[l] = pals[l] ? pals[l] : pals[LANDS];
+            if (!dt_mods_palette_for[l] && (pals[l] || pals[LANDS])) {
+                dt_mods_palette_for[l] = pals[l] ? pals[l] : pals[LANDS];
             }
         }
-        if (!s_palette_for[LANDS] && pals[LANDS]) {
-            s_palette_for[LANDS] = pals[LANDS];
+        if (!dt_mods_palette_for[LANDS] && pals[LANDS]) {
+            dt_mods_palette_for[LANDS] = pals[LANDS];
         }
         for (int i = 0; i < sound_n; i++) {
             char why[160];
@@ -503,7 +503,7 @@ static void log_catalogue(void)
 
 void app_mods_start(const uint8_t *prg, size_t prg_size)
 {
-    configure();
+    dt_mods_configure();
     if (s_started) {
         return;
     }
@@ -542,7 +542,7 @@ void app_mods_start(const uint8_t *prg, size_t prg_size)
     }
     fm_mark_loaded_set();
     fm_log("Mods: %s, %d found, %d loaded (%zu tiles, %d palettes, sounds %s, %d scripts)", fm_enabled() ? "on" : "off",
-           fm_count(), used, fm_nes_tile_count(), s_palette_count, app_mods_audio_active() ? "replaced" : "none",
+           fm_count(), used, fm_nes_tile_count(), dt_mods_palette_count, app_mods_audio_active() ? "replaced" : "none",
            scripts);
     log_catalogue();
     for (int i = 0; i < fm_count(); i++) {

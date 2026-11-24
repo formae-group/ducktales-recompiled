@@ -39,10 +39,10 @@ static bool device_name(const char *id)
 
 static bool store_path(const Script *s, char *out, size_t cap)
 {
-    if (!s_game.store_dir || !s_game.store_dir[0] || !fm_valid_id(s->id) || device_name(s->id)) {
+    if (!fm_script_game.store_dir || !fm_script_game.store_dir[0] || !fm_valid_id(s->id) || device_name(s->id)) {
         return false;
     }
-    snprintf(out, cap, "%s/%s.ini", s_game.store_dir, s->id);
+    snprintf(out, cap, "%s/%s.ini", fm_script_game.store_dir, s->id);
     return true;
 }
 
@@ -138,21 +138,21 @@ static void store_load(Script *s)
     if (dropped) {
         char why[100];
         snprintf(why, sizeof why, ": %d keys past %d bytes were dropped", dropped, SCRIPT_STORE_BYTES);
-        log_line(s, path, why);
+        fm_script_log_line(s, path, why);
     }
 }
 
 /* Writes the store to <id>.ini.tmp, then puts it in place of <id>.ini, so a
  * crash or a full disk never leaves half a file; a failure keeps it dirty
  * (tried again a second later) and is logged once. */
-void store_write(Script *s)
+void fm_script_store_write(Script *s)
 {
     char path[1200], tmp[1210];
     if (!s->store_dirty || !store_path(s, path, sizeof path)) {
         return;
     }
     snprintf(tmp, sizeof tmp, "%s.tmp", path);
-    fm_make_dir(s_game.store_dir);
+    fm_make_dir(fm_script_game.store_dir);
 #ifdef _WIN32
     wchar_t w[1210], wt[1210];
     bool named = MultiByteToWideChar(CP_UTF8, 0, path, -1, w, 1210) &&
@@ -183,15 +183,15 @@ void store_write(Script *s)
 #endif
     s->store_dirty = !ok;
     if (!ok && !s->store_failed) {
-        log_line(s, "dt.store could not be written to ", path);
+        fm_script_log_line(s, "dt.store could not be written to ", path);
     }
     s->store_failed = !ok;
 }
 
-int sb_store_get(lua_State *L)
+int fm_script_sb_store_get(lua_State *L)
 {
     const char *key = luaL_checkstring(L, 1);
-    Script *s = script_of(L);
+    Script *s = fm_script_of(L);
     store_load(s);
     StoreItem *it = store_find(s, key);
     if (!it) {
@@ -221,10 +221,10 @@ int sb_store_get(lua_State *L)
     return 1;
 }
 
-int sb_store_set(lua_State *L)
+int fm_script_sb_store_set(lua_State *L)
 {
     const char *key = luaL_checkstring(L, 1);
-    Script *s = script_of(L);
+    Script *s = fm_script_of(L);
     if (!valid_key(key)) {
         return luaL_error(L, "dt.store: a key is 1-%d characters of A-Z, a-z, 0-9, '_', '-' and '.'", STORE_KEY_MAX);
     }

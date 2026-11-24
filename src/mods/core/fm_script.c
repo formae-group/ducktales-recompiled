@@ -69,20 +69,20 @@
 #define SCRIPT_EVENTS       63
 #define FRAME_BIT           63
 
-FmScriptGame s_game;
-Script *s_scripts[FM_MAX_MODS];
-int s_script_count;
+FmScriptGame fm_script_game;
+Script *fm_script_scripts[FM_MAX_MODS];
+int fm_script_script_count;
 static bool s_registered[SCRIPT_EVENTS];
 static bool s_dirty;
-uint64_t s_frame;
+uint64_t fm_script_frame;
 static time_t s_checked;
-Write s_writes[SCRIPT_WRITES];
-int s_write_count;
+Write fm_script_writes[SCRIPT_WRITES];
+int fm_script_write_count;
 static bool s_exit_hooked;
 static const FmArg *s_args;
 static int s_nargs;
 
-Script *script_of(lua_State *L)
+Script *fm_script_of(lua_State *L)
 {
     void *ud = NULL;
     lua_getallocf(L, &ud);
@@ -136,7 +136,7 @@ static void *script_alloc(void *ud, void *ptr, size_t osize, size_t nsize)
 static void count_hook(lua_State *L, lua_Debug *ar)
 {
     (void)ar;
-    Script *s = script_of(L);
+    Script *s = fm_script_of(L);
     if (--s->steps > 0 && !s->stopped) {
         return;
     }
@@ -146,7 +146,7 @@ static void count_hook(lua_State *L, lua_Debug *ar)
     luaL_error(L, "%s", s->why);
 }
 
-void log_line(const Script *s, const char *what, const char *text)
+void fm_script_log_line(const Script *s, const char *what, const char *text)
 {
     fm_log("Mod %s: %s%.1000s", s->id, what, text);
 }
@@ -156,7 +156,7 @@ void log_line(const Script *s, const char *what, const char *text)
 static int finish_pcall(lua_State *L, int status, lua_KContext extra)
 {
     if (status != LUA_OK && status != LUA_YIELD) {
-        Script *s = script_of(L);
+        Script *s = fm_script_of(L);
         stop_if_over(s);
         if (s->stopped) {
             return lua_error(L);
@@ -195,7 +195,7 @@ static int sb_checked(lua_State *L)
     lua_pushvalue(L, lua_upvalueindex(1));
     lua_insert(L, 1);
     lua_call(L, n, LUA_MULTRET);
-    Script *s = script_of(L);
+    Script *s = fm_script_of(L);
     stop_if_over(s);
     if (s->stopped) {
         return luaL_error(L, "%s", s->why);
@@ -232,7 +232,7 @@ static int sb_log(lua_State *L)
         luaL_addvalue(&b);
     }
     luaL_pushresult(&b);
-    log_line(script_of(L), "", lua_tostring(L, -1));
+    fm_script_log_line(fm_script_of(L), "", lua_tostring(L, -1));
     return 0;
 }
 
@@ -241,8 +241,8 @@ static int event_of(const char *name)
     if (!strcmp(name, "frame")) {
         return FRAME_BIT;
     }
-    for (int e = 0; e < s_game.event_count; e++) {
-        if (!strcmp(name, s_game.events[e].name)) {
+    for (int e = 0; e < fm_script_game.event_count; e++) {
+        if (!strcmp(name, fm_script_game.events[e].name)) {
             return e;
         }
     }
@@ -258,14 +258,14 @@ static int sb_on(lua_State *L)
         luaL_Buffer b;
         luaL_buffinit(L, &b);
         luaL_addstring(&b, "frame");
-        for (int i = 0; i < s_game.event_count; i++) {
+        for (int i = 0; i < fm_script_game.event_count; i++) {
             luaL_addstring(&b, ", ");
-            luaL_addstring(&b, s_game.events[i].name);
+            luaL_addstring(&b, fm_script_game.events[i].name);
         }
         luaL_pushresult(&b);
         return luaL_error(L, "dt.on: no event \"%s\" (%s)", name, lua_tostring(L, -1));
     }
-    Script *s = script_of(L);
+    Script *s = fm_script_of(L);
     lua_rawgeti(L, LUA_REGISTRYINDEX, s->handlers);
     if (lua_rawgeti(L, -1, e + 1) != LUA_TTABLE) {
         lua_pop(L, 1);
@@ -282,7 +282,7 @@ static int sb_on(lua_State *L)
 
 static int sb_frame(lua_State *L)
 {
-    lua_pushinteger(L, (lua_Integer)s_frame);
+    lua_pushinteger(L, (lua_Integer)fm_script_frame);
     return 1;
 }
 
@@ -307,7 +307,7 @@ static void seal(lua_State *L, const char *name)
 {
     lua_newtable(L);
     lua_pushstring(L, name);
-    lua_pushcclosure(L, read_only, 1);
+    lua_pushcclosure(L, fm_script_read_only, 1);
     lua_setfield(L, -2, "__newindex");
     lua_pushstring(L, name);
     lua_setfield(L, -2, "__metatable");
@@ -346,17 +346,17 @@ static int setup(lua_State *L)
     set_function(L, "on", sb_on);
     set_function(L, "log", sb_log);
     set_function(L, "frame", sb_frame);
-    set_function(L, "toast", sb_toast);
+    set_function(L, "toast", fm_script_sb_toast);
     lua_pushliteral(L, "cancel");
     lua_setfield(L, -2, "CANCEL");
-    lua_pushstring(L, script_of(L)->id);
+    lua_pushstring(L, fm_script_of(L)->id);
     lua_setfield(L, -2, "mod");
 
     lua_newtable(L);
     lua_newtable(L);
-    set_function(L, "__index", state_index);
+    set_function(L, "__index", fm_script_state_index);
     lua_pushliteral(L, "dt.state");
-    lua_pushcclosure(L, read_only, 1);
+    lua_pushcclosure(L, fm_script_read_only, 1);
     lua_setfield(L, -2, "__newindex");
     lua_pushliteral(L, "dt.state");
     lua_setfield(L, -2, "__metatable");
@@ -364,38 +364,38 @@ static int setup(lua_State *L)
     lua_setfield(L, -2, "state");
 
     lua_newtable(L);
-    for (int i = 0; i < s_game.field_count; i++) {
-        if (s_game.fields[i].check && s_game.fields[i].set) {
+    for (int i = 0; i < fm_script_game.field_count; i++) {
+        if (fm_script_game.fields[i].check && fm_script_game.fields[i].set) {
             lua_pushinteger(L, i);
-            lua_pushcclosure(L, sb_set, 1);
-            lua_setfield(L, -2, s_game.fields[i].name);
+            lua_pushcclosure(L, fm_script_sb_set, 1);
+            lua_setfield(L, -2, fm_script_game.fields[i].name);
         }
     }
     seal(L, "dt.set");
     lua_setfield(L, -2, "set");
 
     lua_newtable(L);
-    set_function(L, "get", sb_store_get);
-    set_function(L, "set", sb_store_set);
+    set_function(L, "get", fm_script_sb_store_get);
+    set_function(L, "set", fm_script_sb_store_set);
     seal(L, "dt.store");
     lua_setfield(L, -2, "store");
 
     lua_newtable(L);
-    set_function(L, "text", sb_draw_text);
-    set_function(L, "rect", sb_draw_rect);
+    set_function(L, "text", fm_script_sb_draw_text);
+    set_function(L, "rect", fm_script_sb_draw_rect);
     seal(L, "dt.draw");
     lua_setfield(L, -2, "draw");
 
-    for (int i = 0; i < s_game.query_count; i++) {
+    for (int i = 0; i < fm_script_game.query_count; i++) {
         lua_pushinteger(L, i);
-        lua_pushcclosure(L, sb_query, 1);
-        lua_setfield(L, -2, s_game.queries[i].name);
+        lua_pushcclosure(L, fm_script_sb_query, 1);
+        lua_setfield(L, -2, fm_script_game.queries[i].name);
     }
     lua_setfield(L, -2, "dt");
     lua_pop(L, 1);
 
     lua_newtable(L);
-    script_of(L)->handlers = luaL_ref(L, LUA_REGISTRYINDEX);
+    fm_script_of(L)->handlers = luaL_ref(L, LUA_REGISTRYINDEX);
     return 0;
 }
 
@@ -404,7 +404,7 @@ static int setup(lua_State *L)
 /* (event, frame) -> whether a handler returned dt.CANCEL; in protected mode. */
 static int dispatch(lua_State *L)
 {
-    Script *s = script_of(L);
+    Script *s = fm_script_of(L);
     int e = (int)lua_tointeger(L, 1);
     lua_Integer frame = lua_tointeger(L, 2);
     lua_settop(L, 0);
@@ -418,7 +418,7 @@ static int dispatch(lua_State *L)
             lua_pushinteger(L, frame);
         } else {
             lua_createtable(L, 0, s_nargs + 1);
-            lua_pushstring(L, s_game.events[e].name);
+            lua_pushstring(L, fm_script_game.events[e].name);
             lua_setfield(L, -2, "name");
             for (int a = 0; a < s_nargs; a++) {
                 lua_pushinteger(L, (lua_Integer)s_args[a].value);
@@ -437,14 +437,14 @@ static int dispatch(lua_State *L)
 
 static void report(Script *s)
 {
-    log_line(s, "script stopped: ", s->why);
+    fm_script_log_line(s, "script stopped: ", s->why);
     fm_set_script_error(s->id, s->path, s->why);
     s_dirty = true;
 }
 
 static const char *event_name(int e)
 {
-    return e == FRAME_BIT ? "frame" : s_game.events[e].name;
+    return e == FRAME_BIT ? "frame" : fm_script_game.events[e].name;
 }
 
 /* Runs the script's handlers of event e: true when one returned dt.CANCEL
@@ -454,7 +454,7 @@ static bool run(Script *s, int e)
     lua_State *L = s->L;
     lua_pushcfunction(L, dispatch);
     lua_pushinteger(L, e);
-    lua_pushinteger(L, (lua_Integer)s_frame);
+    lua_pushinteger(L, (lua_Integer)fm_script_frame);
     if (lua_pcall(L, 2, 1, 0) != LUA_OK) {
         stop_if_over(s);
         const char *msg = lua_tostring(L, -1);
@@ -467,14 +467,14 @@ static bool run(Script *s, int e)
     }
     bool cancel = lua_toboolean(L, -1);
     lua_pop(L, 1);
-    bool cancelable = e != FRAME_BIT && s_game.events[e].cancelable;
+    bool cancelable = e != FRAME_BIT && fm_script_game.events[e].cancelable;
     if (cancel && !cancelable && !(s->warned & 1ull << e)) {
         s->warned |= 1ull << e;
         char text[160];
         snprintf(text, sizeof text,
                  "a \"%s\" handler returned dt.CANCEL, which that event ignores: it cannot be cancelled",
                  event_name(e));
-        log_line(s, "", text);
+        fm_script_log_line(s, "", text);
     }
     return cancel && cancelable;
 }
@@ -489,9 +489,9 @@ bool fm_scripts_event(int event, const FmArg *args, int nargs)
     bool cancel = false;
     s_args = args;
     s_nargs = nargs;
-    for (int i = 0; i < s_script_count; i++) {
-        if (event >= 0 && event < s_game.event_count && live(s_scripts[i], event)) {
-            cancel |= run(s_scripts[i], event);
+    for (int i = 0; i < fm_script_script_count; i++) {
+        if (event >= 0 && event < fm_script_game.event_count && live(fm_script_scripts[i], event)) {
+            cancel |= run(fm_script_scripts[i], event);
         }
     }
     s_nargs = 0;
@@ -515,17 +515,17 @@ static void close_script(Script *s)
 static void sync_events(void)
 {
     uint64_t wants = 0;
-    for (int i = 0; i < s_script_count; i++) {
-        if (s_scripts[i]->stopped) {
-            close_script(s_scripts[i]);
+    for (int i = 0; i < fm_script_script_count; i++) {
+        if (fm_script_scripts[i]->stopped) {
+            close_script(fm_script_scripts[i]);
         }
-        wants |= s_scripts[i]->wants;
+        wants |= fm_script_scripts[i]->wants;
     }
     s_dirty = false;
-    for (int e = 0; e < s_game.event_count; e++) {
+    for (int e = 0; e < fm_script_game.event_count; e++) {
         bool want = (wants & 1ull << e) != 0;
-        if (want != s_registered[e] && s_game.listen) {
-            s_game.listen(e, want);
+        if (want != s_registered[e] && fm_script_game.listen) {
+            fm_script_game.listen(e, want);
             s_registered[e] = want;
         }
     }
@@ -620,15 +620,15 @@ static void flush_at_exit(void)
 
 void fm_scripts_configure(const FmScriptGame *game)
 {
-    s_game = *game;
-    if (s_game.event_count > SCRIPT_EVENTS) {
-        s_game.event_count = SCRIPT_EVENTS;
+    fm_script_game = *game;
+    if (fm_script_game.event_count > SCRIPT_EVENTS) {
+        fm_script_game.event_count = SCRIPT_EVENTS;
     }
 }
 
 bool fm_script_add(const FmMod *mod)
 {
-    if (s_script_count == FM_MAX_MODS) {
+    if (fm_script_script_count == FM_MAX_MODS) {
         return false;
     }
     Script *s = calloc(1, sizeof *s);
@@ -639,7 +639,7 @@ bool fm_script_add(const FmMod *mod)
     snprintf(s->name, sizeof s->name, "%s", mod->name);
     snprintf(s->path, sizeof s->path, "%s", mod->path);
     s->folder = mod->folder;
-    s_scripts[s_script_count++] = s;
+    fm_script_scripts[fm_script_script_count++] = s;
     if (!s_exit_hooked) {
         s_exit_hooked = true;
         atexit(flush_at_exit);
@@ -657,13 +657,13 @@ bool fm_script_add(const FmMod *mod)
 
 int fm_script_count(void)
 {
-    return s_script_count;
+    return fm_script_script_count;
 }
 
 static void reload_changed(void)
 {
-    for (int i = 0; i < s_script_count; i++) {
-        Script *s = s_scripts[i];
+    for (int i = 0; i < fm_script_script_count; i++) {
+        Script *s = fm_script_scripts[i];
         long long stamp = file_stamp(s->watch);
         if (stamp == s->stamp) {
             continue;
@@ -671,7 +671,7 @@ static void reload_changed(void)
         close_script(s);
         char err[300];
         if (start_script(s, err, sizeof err)) {
-            log_line(s, "script reloaded", "");
+            fm_script_log_line(s, "script reloaded", "");
             fm_set_script_error(s->id, s->path, "");
         } else {
             s->stamp = stamp;
@@ -684,37 +684,37 @@ static void reload_changed(void)
 
 void fm_scripts_flush(void)
 {
-    for (int i = 0; i < s_script_count; i++) {
-        store_write(s_scripts[i]);
+    for (int i = 0; i < fm_script_script_count; i++) {
+        fm_script_store_write(fm_script_scripts[i]);
     }
 }
 
 void fm_scripts_frame(void)
 {
-    if (!s_script_count) {
+    if (!fm_script_script_count) {
         return;
     }
-    s_frame++;
-    if (s_toast_frames > 0) {
-        s_toast_frames--;
+    fm_script_frame++;
+    if (fm_script_toast_frames > 0) {
+        fm_script_toast_frames--;
     }
     if (s_dirty) {
         sync_events();
     }
-    bool frame = s_write_count > 0;
-    for (int i = 0; i < s_script_count; i++) {
-        frame |= live(s_scripts[i], FRAME_BIT);
+    bool frame = fm_script_write_count > 0;
+    for (int i = 0; i < fm_script_script_count; i++) {
+        frame |= live(fm_script_scripts[i], FRAME_BIT);
     }
-    if (frame && s_game.begin_frame && s_game.end_frame) {
-        s_game.begin_frame();
-        for (int i = 0; i < s_script_count; i++) {
-            if (live(s_scripts[i], FRAME_BIT)) {
-                run(s_scripts[i], FRAME_BIT);
+    if (frame && fm_script_game.begin_frame && fm_script_game.end_frame) {
+        fm_script_game.begin_frame();
+        for (int i = 0; i < fm_script_script_count; i++) {
+            if (live(fm_script_scripts[i], FRAME_BIT)) {
+                run(fm_script_scripts[i], FRAME_BIT);
             }
         }
-        for (int i = 0; i < s_write_count; i++) {
-            const Write *w = &s_writes[i];
-            const FmField *f = &s_game.fields[w->field];
+        for (int i = 0; i < fm_script_write_count; i++) {
+            const Write *w = &fm_script_writes[i];
+            const FmField *f = &fm_script_game.fields[w->field];
             char err[160];
             if (w->script->stopped) {
                 continue;
@@ -724,13 +724,13 @@ void fm_scripts_frame(void)
             } else {
                 char text[260];
                 snprintf(text, sizeof text, "dt.set.%s(%lld) dropped at the frame's end: %s", f->name, w->value, err);
-                log_line(w->script, "", text);
+                fm_script_log_line(w->script, "", text);
             }
         }
-        s_game.end_frame();
+        fm_script_game.end_frame();
     }
-    s_write_count = 0;
-    finish_drawing();
+    fm_script_write_count = 0;
+    fm_script_finish_drawing();
     time_t now = time(NULL);
     if (now != s_checked) {
         s_checked = now;

@@ -22,7 +22,7 @@
 #define SCRIPT_TOAST_CHARS  64
 
 static char s_toast_title[128], s_toast_body[SCRIPT_TOAST_CHARS * 4 + 1];
-int s_toast_frames;
+int fm_script_toast_frames;
 static FmDraw s_drawing[FM_DRAW_MAX], s_drawn[FM_DRAW_MAX];
 static Script *s_drawing_by[FM_DRAW_MAX];
 static int s_drawing_count, s_drawn_count;
@@ -41,19 +41,19 @@ static void copy_text(char *out, size_t cap, const char *text, int chars)
     out[n] = 0;
 }
 
-int sb_toast(lua_State *L)
+int fm_script_sb_toast(lua_State *L)
 {
     const char *text = luaL_checkstring(L, 1);
-    Script *s = script_of(L);
-    if (s->last_toast && s_frame - s->last_toast < SCRIPT_TOAST_GAP) {
+    Script *s = fm_script_of(L);
+    if (s->last_toast && fm_script_frame - s->last_toast < SCRIPT_TOAST_GAP) {
         lua_pushboolean(L, 0);
         return 1;
     }
-    s->last_toast = s_frame ? s_frame : 1;
+    s->last_toast = fm_script_frame ? fm_script_frame : 1;
     copy_text(s_toast_body, sizeof s_toast_body, text, SCRIPT_TOAST_CHARS);
     snprintf(s_toast_title, sizeof s_toast_title, "%s", s->name);
-    s_toast_frames = SCRIPT_TOAST_FRAMES;
-    log_line(s, "toast: ", s_toast_body);
+    fm_script_toast_frames = SCRIPT_TOAST_FRAMES;
+    fm_script_log_line(s, "toast: ", s_toast_body);
     lua_pushboolean(L, 1);
     return 1;
 }
@@ -70,14 +70,14 @@ static uint32_t check_color(lua_State *L, int arg)
 /* A slot for this frame's drawing, or NULL (logged once) past the caps. */
 static FmDraw *add_draw(lua_State *L)
 {
-    Script *s = script_of(L);
+    Script *s = fm_script_of(L);
     if (s->draws == FM_DRAW_PER_MOD || s_drawing_count == FM_DRAW_MAX) {
         if (!s->draw_warned) {
             s->draw_warned = true;
             char text[120];
             snprintf(text, sizeof text, "dt.draw: more than %d drawings in one frame; the rest are not shown",
                      s->draws == FM_DRAW_PER_MOD ? FM_DRAW_PER_MOD : FM_DRAW_MAX);
-            log_line(s, "", text);
+            fm_script_log_line(s, "", text);
         }
         return NULL;
     }
@@ -94,7 +94,7 @@ static int clamp(lua_Integer v)
     return v < -0x10000 ? -0x10000 : v > 0x10000 ? 0x10000 : (int)v;
 }
 
-int sb_draw_text(lua_State *L)
+int fm_script_sb_draw_text(lua_State *L)
 {
     lua_Integer x = luaL_checkinteger(L, 1), y = luaL_checkinteger(L, 2);
     const char *text = luaL_checkstring(L, 3);
@@ -108,7 +108,7 @@ int sb_draw_text(lua_State *L)
     return 1;
 }
 
-int sb_draw_rect(lua_State *L)
+int fm_script_sb_draw_rect(lua_State *L)
 {
     lua_Integer x = luaL_checkinteger(L, 1), y = luaL_checkinteger(L, 2);
     lua_Integer w = luaL_checkinteger(L, 3), h = luaL_checkinteger(L, 4);
@@ -122,7 +122,7 @@ int sb_draw_rect(lua_State *L)
 }
 
 /* The frame's drawings become the shown ones; a stopped script's are dropped. */
-void finish_drawing(void)
+void fm_script_finish_drawing(void)
 {
     s_drawn_count = 0;
     for (int i = 0; i < s_drawing_count; i++) {
@@ -131,8 +131,8 @@ void finish_drawing(void)
         }
     }
     s_drawing_count = 0;
-    for (int i = 0; i < s_script_count; i++) {
-        s_scripts[i]->draws = 0;
+    for (int i = 0; i < fm_script_script_count; i++) {
+        fm_script_scripts[i]->draws = 0;
     }
 }
 
@@ -144,7 +144,7 @@ int fm_draws(const FmDraw **draws)
 
 bool fm_toast(char *title, size_t title_cap, char *body, size_t body_cap)
 {
-    if (s_toast_frames <= 0) {
+    if (fm_script_toast_frames <= 0) {
         return false;
     }
     snprintf(title, title_cap, "%s", s_toast_title);

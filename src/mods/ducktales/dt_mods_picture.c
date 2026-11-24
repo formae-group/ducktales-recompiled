@@ -27,7 +27,7 @@ static const uint32_t *s_painted_palette;
 
 static bool painting(void)
 {
-    return fm_nes_tile_count() || s_palette_count || fm_nes_dumping();
+    return fm_nes_tile_count() || dt_mods_palette_count || fm_nes_dumping();
 }
 
 bool app_mods_video_active(void)
@@ -149,7 +149,7 @@ void app_mods_video_apply(const NvVideo *video, const NvRenderOptions *options, 
         ram[DT_ADDR_LAST_MUSIC] != DT_MUSIC_TITLE) {
         land = ram[DT_ADDR_LAND];
     }
-    const uint32_t *pal = s_palette_for[land] ? s_palette_for[land] : s_palette_for[LANDS];
+    const uint32_t *pal = dt_mods_palette_for[land] ? dt_mods_palette_for[land] : dt_mods_palette_for[LANDS];
     s_painted_palette = pal;
     const uint32_t *base = nv_palette_argb();
     const bool tiles = fm_nes_tile_count() || fm_nes_dumping();
