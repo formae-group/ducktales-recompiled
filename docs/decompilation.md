@@ -632,7 +632,7 @@ background through the C of the probe `$D120` and its snaps (`collision.c`).
 
 ### Progress
 
-`tools/decomp_progress.py` gives one number: the PRG bytes the 12 routes and the 19 poke cases
+`tools/decomp_progress.py` gives one number: the PRG bytes the 12 routes and the poke cases
 execute on the original (quick_verify's golden coverage, and `decomp_pokes.cover` beside it, which
 `--record-pokes` writes), counted once with each instruction's length, and the share of them
 inside routines with C. A `DecompRoutine` has no end field: the script derives each routine's code
@@ -641,21 +641,21 @@ indirect jump or another routine's entry, and counts as C the routines only C re
 script's docstring gives every rule. `--rev` reads the C of another branch against the same
 coverage.
 
-On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **58.6%, 14,730 of 25,120 executed
-bytes**, in 234 routines (main after the player batch, 12 routes and 33 poke cases).
+On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **71.8%, 18,231 of 25,403 executed
+bytes**, in 262 routines (main 7bf545d after the objects batch, 12 routes and 45 poke cases).
 
 | Group | Files | Routines | Executed bytes | Share |
 |---|---|---|---|---|
-| player | `player.c`, `motion.c`, `sound.c` | 53 | 3,569 | 14.2% |
-| objects | `objects.c`, `objcommon.c` | 62 | 4,172 | 16.6% |
-| flow | `flow.c` | 85 | 2,406 | 9.6% |
-| level | `level.c`, `collision.c` | 18 | 1,935 | 7.7% |
-| system | `system.c`, `sprites.c`, `audio.c` | 16 | 2,648 | 10.5% |
+| player | `player.c`, `motion.c`, `sound.c` | 53 | 3,569 | 14.0% |
+| objects | `objects.c`, `objcommon.c` | 90 | 7,671 | 30.2% |
+| flow | `flow.c` | 85 | 2,408 | 9.5% |
+| level | `level.c`, `collision.c` | 18 | 1,935 | 7.6% |
+| system | `system.c`, `sprites.c`, `audio.c` | 16 | 2,648 | 10.4% |
 
 317 of those bytes are also run by original routines (shared tails). `Input_ReadControllers` is
 not counted: replace mode gives every call to the original. The largest routines still original
 are the object kinds of bank 6 that `Obj_UpdateAll` hands to the original (`$A6D3` 469 bytes,
-`$A8D6` 466, `$A065` 367, `$AAE1` 342), bank 5 `$80BE` (381, under the entry `$8003`) and the NMI `$C000` (308).
+`$A8D6` 466, `$AAE1` 342, `$AF2B` 263), bank 5 `$80BE` (381, under the entry `$8003`) and the NMI `$C000` (308).
 
 ### Adding a routine
 
