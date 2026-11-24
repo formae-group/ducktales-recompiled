@@ -102,7 +102,8 @@ extern uint64_t hw_isolated_io_writes;
 
 #define MAX_ROUTINES     512
 #define MAX_BUS_OPS      16384
-#define MAX_STORES       8
+#define MAX_STORES       64
+#define MAX_NESTED       32
 #define FRAME_END_MARGIN 32
 #define SCOPE_OP_GAP     8
 #define LOAD_GAP         3
@@ -159,6 +160,10 @@ static struct {
 } s_store[MAX_STORES];
 
 static int s_stores;
+static bool s_task; /* the routine run_c runs is task code */
+/* The task routines whose C the task routine run_c runs reached in C: its
+ * comparison covers them. */
+static int s_nested[MAX_NESTED], s_nnested;
 
 typedef struct {
     uint16_t start, stop_pc;
@@ -190,9 +195,16 @@ static void record(uint16_t addr, uint8_t value, bool write)
     s_ops[s_nops++] = (BusOp){ addr, value, write };
 }
 
+static void record_store(uint16_t addr, uint8_t value);
+
+/* Task code makes its device writes when it ends (task_replace), so a write
+ * of a routine it calls in C is one of its stores too. */
 void Decomp_BusWrite(uint16_t addr, uint8_t value)
 {
     record(addr, value, true);
+    if (s_task) {
+        record_store(addr, value);
+    }
     Game_MapperWrite(addr, value);
     if (Game_RomView() >= 0) {
         s_c_bank = (uint8_t)Game_RomView();
@@ -461,6 +473,8 @@ static void run_c(const DecompRoutine *rt, const CycModRegs *in, Regs *out)
     s_cur_s = in->s;
     s_handoff_set = false;
     s_stores = 0;
+    s_task = rt->task;
+    s_nnested = 0;
     Regs r = { in->a, in->x, in->y, in->p };
     GameRam_Enter(s_image);
     rt->run(&r);
@@ -675,7 +689,7 @@ static void check_inner(int i, Regs in, bool drill)
     const DecompRoutine *rt = s_routine[i];
     const DecompRoutine *top = s_top;
     bool top_entered = s_top_entered, run_original = s_run_original, inner = s_inner;
-    int nops = s_nops, view = Game_RomView();
+    int nops = s_nops, stores = s_stores, view = Game_RomView();
     uint8_t image[GAME_RAM_SIZE], orig_ram[GAME_RAM_SIZE];
     memcpy(image, gRam, GAME_RAM_SIZE);
     s_top = rt;
@@ -692,6 +706,7 @@ static void check_inner(int i, Regs in, bool drill)
     s_run_original = run_original;
     s_inner = inner;
     s_nops = nops;
+    s_stores = stores;
     if (s_ops_in_scope > s_nops) {
         s_ops_in_scope = s_nops;
     }
@@ -734,6 +749,10 @@ void Decomp_Enter(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
         }
         if (s_routine[i]->task) {
             s_stats[i].calls++;
+            if (s_nnested == MAX_NESTED) {
+                fail("too many task routines reached in C in one call", routine);
+            }
+            s_nested[s_nnested++] = i;
         } else if (s_mode == DECOMP_CHECK && !s_routine[i]->site_id) {
             check_inner(i, (Regs){ a, x, y, s_entry_p }, false);
         }
@@ -858,6 +877,7 @@ static void run_task_original(const DecompRoutine *rt, const CycModRegs *in)
     }
     cyc_mod_allow_isolated_hooks(true);
     memset(&s_run, 0, sizeof s_run);
+    s_damage_replayed = 0;
     s_run.start = rt->addr;
     s_run.start_s = in->s;
     s_run.call_s = (uint8_t)(in->s + rt->locals + 2);
@@ -964,6 +984,13 @@ static void task_report(const DecompRoutine *rt, const CycModRegs *in, const Reg
     exit(3);
 }
 
+static void nested_compared(void)
+{
+    for (int k = 0; k < s_nnested; k++) {
+        s_stats[s_nested[k]].compared++;
+    }
+}
+
 static void task_check(int i, const CycModRegs *in)
 {
     const DecompRoutine *rt = s_routine[i];
@@ -979,6 +1006,7 @@ static void task_check(int i, const CycModRegs *in)
         task_report(rt, in, &c);
     }
     s_stats[i].compared++;
+    nested_compared();
 }
 
 /* Replace mode: the C's results stored, its device writes made and the
@@ -1039,6 +1067,7 @@ static bool task_replace(int i, const CycModRegs *in)
     }
     spend_cycles(rt->addr, s_run.cycles > (uint64_t)s_stores ? s_run.cycles - (uint64_t)s_stores : 1);
     s_stats[i].compared++;
+    nested_compared();
     cpu.pc = pc;
     return true;
 }
@@ -1103,8 +1132,8 @@ static void on_return(void)
 static int on_entry(uint16_t addr)
 {
     if (cyc_mod_isolated()) {
-        if (s_run_active) {
-            return task_isolated_site(addr);
+        if (s_run_active && task_isolated_site(addr)) {
+            return 1;
         }
         return addr == DT_SITE_DAMAGE && s_damage_replayed < s_damage_raised && s_damage_cancel[s_damage_replayed++];
     }

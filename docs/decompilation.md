@@ -157,7 +157,7 @@ motion, sound, level and collision tables, 27 have
 one: `Player_Update` (the frame loop's `JSR` at `$DB6C`), `Player_PitDeath` (the original
 `Player_Update` jumps to it in mode 8), `Player_RowChange` (the original `$E878` falls into
 it), `Player_Message` and `Player_Treasure` (the original `Player_Update`'s mode table jumps to
-them), the four motion primitives and the two sound requests
+them; the C calls all three, and these sites serve replace mode's original call past VBlank), the four motion primitives and the two sound requests
 (object and game code everywhere), `Player_TakeDamage`, kept for replace mode's measuring call
 above, and 15 of the 19 camera, scrolling, level and background routines (all but
 `Level_ScreenPointer`, `Level_DecodeBlock`, `Level_MetatileAt` and `Bg_ProbePoint`, which only decompiled code
@@ -193,7 +193,10 @@ call can do. `flow.c` decompiles that code as **task code** (`DecompRoutine.task
   that runs for real: `Decomp_Handoff(routine, resume, uses)` is a JSR (resume 0: a JMP), and
   `Decomp_Push`/`Decomp_Pull`/`Decomp_PushReturn` keep the task's stack as the original keeps it
   (frame counters, the land and row around a redraw). `Decomp_SelectBank` and `Decomp_Store` make
-  the device writes the C needs (the mapper, `$2000`), for real in replace mode.
+  the device writes the C needs (the mapper, `$2000`), for real in replace mode, and so do the
+  `Decomp_BusWrite` writes of the routines a task routine calls in C (the probe's bank switches).
+  A task routine whose C another task routine's C reaches has no check of its own: the caller's
+  covers it, and its calls count as compared with the caller's.
 - Its C starts at a site (original code reaches it: `$D4E6` from the scheduler's `JMP ($93)`, `$D79B`
   from Land Select, `$DB36` after each frame, `$DD52` from the scenes, `$DFED` from the message
   box), from another task routine's C (a plain C call), or at a **resume point** (`DecompRoutine.resume`): the address an RTS returns
@@ -229,7 +232,7 @@ leave the jump vector in `$00/$01` as the original's loop does.
 |---|---|---|---|
 | `Obj_ApplyVelocityY`, `Obj_ApplyGravity`, `Obj_MoveRight`, `Obj_MoveLeft`, `Obj_AddVelocityY`, `Obj_SubVelocityY` | X = slot | A, X, Y, P | callers test the flags of the last `ADC`/`SBC` (`$F298` keeps the Y move's carry across the probe) |
 | `Music_Request`, `Sound_Request` | A = id, X | A, X, Y, P | the caller's X is left in `$00` and the id in `$01` |
-| `Player_Update` | X | none | X goes into the power-up music request; the probe's metatile lookup switches banks and back, so the call leaves no device change (as for `Level_MetatileAt`); modes 15 and 16 run as the original, which reaches `Player_Message` and `Player_Treasure` at their sites |
+| `Player_Update` | X | none, or the hand-off of mode 15, 16 or the row change | task code: X goes into the power-up music request; the probe's bank switches are its device writes; modes 15 and 16 go on in `Player_Message` and `Player_Treasure` (A = the handler's high byte, X = the mode, Y kept), a row change in `Player_RowChange` |
 | `Player_Walk`, `Player_Knockback` | X | none | X is the slot the push of `$73` moves when no direction is held, and what the sound request keeps in `$00` |
 | `Player_MoveRight`, `Player_MoveLeft`, `Player_Fall`, `Player_Rise`, `Player_ProbeVertical` | X (moves only) | X | X is what the probe or contact routine returned; callers pass it on |
 | `Player_ContactH` | none | X, C | X is the slot touched (0 for none, carry set); the cane swing reads its kind |
@@ -254,6 +257,7 @@ leave the jump vector in `$00/$01` as the original's loop does.
 | `Boss_CheckTrigger` | none | none | the arena start runs as the original (`Decomp_RunOriginal`): it scrolls the row |
 | `Bank_Select`, `Bank_SelectTemp` | A = bank | A, X, P, hardware | the bank is written to the bus-conflict table at `$FFE5` |
 | `Oam_Build`, `Random_Next` | none | X, Y | the frame loop yields right after them, and `task_yield` keeps X and Y on the stack |
+| `Records_MarkTaken` | none (bank 5 mapped) | A, X, Y | `$00` ends at `$FF` and `$01` holds the last record's bit; the message box goes on with Y |
 | `Ppu_Blank`, `Ppu_Unblank`, `Ppu_FillNametable`, `Chr_LoadList`, `Text_DrawStrings`, `Input_ReadControllers`, `Sound_Update`, `Sound_Play` | as the original | hardware | the controller reads use `Decomp_BusLoad`, made at once; check also compares OAM and the APU, PPU and mapper registers |
 | `Hud_Reset` | none | none | |
 | `Land_ApplyTables`, `Land_LoadPalette` | X = palette set (palette) | X, Y | Land Select and the title read X and Y after them |
@@ -278,16 +282,16 @@ RAM-identical in replace mode.
 | `Obj_SubVelocityY` | `$F284` | checked | 7 | - | not measured |
 | `Music_Request` | `$F752` | checked | 12 | - | none |
 | `Sound_Request` | `$F754` | checked | 12 | - | a request dropped because its ring entry is still full |
-| `Player_Update` | `$E354` | checked | 12 | invulnerable-held | none (modes 15 and 16 go to the original, which reaches their C) |
-| `Player_Ground` | `$E3B8` | checked | 12 | select-refill, select-poor, select-full | none |
-| `Player_StartJump` | `$E3F2` | checked | 12 | - | none |
+| `Player_Update` | `$E354` | checked (task code) | 12 | invulnerable-held | none |
+| `Player_Ground` | `$E3B8` | checked with `Player_Update` | 12 | select-refill, select-poor, select-full | none |
+| `Player_StartJump` | `$E3F2` | checked with `Player_Update` | 12 | - | none |
 | `Player_Walk` | `$E482` | checked | 12 | slippery | the push of `$73` with no direction held; reversing on slippery floor; momentum speed at `$0300` or more |
 | `Player_MoveRight` | `$E593` | checked | 11 | - | an object contact deeper than 12 px (the clamp) |
 | `Player_MoveLeft` | `$E5C3` | checked | 12 | - | an object contact deeper than 12 px (the clamp) |
-| `Player_Air` | `$E63B` | checked | 12 | - | B in the push pose (cane from the air); landing in the push pose or in cane mode; a pogo landing below the pogo ceiling; controller 2 Up; and in the row exit `$E878`/`$E719` it calls: the final arena drop, the early returns (no row edge, no map cell, last row), the camera page step and stream direction 0 |
+| `Player_Air` | `$E63B` | checked with `Player_Update` | 12 | - | B in the push pose (cane from the air); landing in the push pose or in cane mode; a pogo landing below the pogo ceiling; controller 2 Up; and in the row exit `$E878`/`$E719` it calls: the final arena drop, the early returns (no row edge, no map cell, last row), the camera page step and stream direction 0 |
 | `Player_GrabClimb` | `$E740` | checked | 12 | - | the climb probes hitting a solid tile; a grab found by probe 0 or 2 |
-| `Player_Pogo` | `$E7EA` | checked | 11 | - | none |
-| `Player_Climb` | `$E806` | checked | 5 | - | holding still without A; climbing off the end of the vine, up or down |
+| `Player_Pogo` | `$E7EA` | checked with `Player_Update` | 11 | - | none |
+| `Player_Climb` | `$E806` | checked with `Player_Update` | 5 | - | holding still without A; climbing off the end of the vine, up or down |
 | `Player_Cane` | `$E8EB` | checked | 7 | - | a swing that touches an object of kind `$15` or `$42` |
 | `Player_Fall` | `$E970` | checked | 12 | - | none |
 | `Player_Rise` | `$E9BA` | checked | 12 | - | none |
@@ -295,11 +299,11 @@ RAM-identical in replace mode.
 | `Player_Hurt` | `$EAB9` | checked (pokes only) | 0 | hurt-wait, hurt-now, hurt-last-dot | none |
 | `Player_Knockback` | `$EB00` | checked | 10 | - | none |
 | `Player_TakeDamage` | `$EB5E` | checked | 10 | hurt-now, hurt-last-dot | a hit with no full HP dot left; the cancel (replace mode with a handler only: events check) |
-| `Player_Stuck` | `$EB82` | checked | 2 | - | none |
+| `Player_Stuck` | `$EB82` | checked with `Player_Update` | 2 | - | none |
 | `Player_Pit` | `$EBA7` | checked (pokes only) | 0 | pit-falling, pit-death | none |
 | `Player_PitDeath` | `$EBB4` | checked | 8 | pit-death | none |
 | `Player_Mode9` | `$EBC9` | checked | 1 | - | none |
-| `Player_Carried` | `$EBD9` | checked (pokes only) | 0 | carried-10, carried-11 | a wall at the left probes (the knock-back); Down held when A is pressed in mode 10 |
+| `Player_Carried` | `$EBD9` | checked with `Player_Update` (pokes only) | 0 | carried-10, carried-11 | a wall at the left probes (the knock-back); Down held when A is pressed in mode 10 |
 | `Player_Mode12` | `$EC2D` | checked (pokes only) | 0 | mode12, mode12-page7 | no vertical direction with Y below `$18` |
 | `Player_Death` | `$EC9B` | checked | 8 | hurt-last-dot | none |
 | `Player_Mode14` | `$ECFF` | checked | 1 | - | none |
@@ -311,6 +315,7 @@ RAM-identical in replace mode.
 | `Message_Opened` | `$ED0E` | checked (pokes only) | 0 | message-scene | not measured |
 | `Message_Shown` | `$ED33` | checked | 5 | message-pay, message-pay-poor, message-life, message-block, message-launchpad, message-scene | not measured |
 | `Message_Drawn` | `$ED49` | checked | 5 | message-pay, message-pay-poor, message-life, message-block, message-launchpad, message-scene | not measured |
+| `Records_MarkTaken` | bank 5 `$B76A` | checked | 5 | message-pay, message-pay-poor, message-life, message-block, message-launchpad, message-scene | not measured |
 | `Message_Wait` | `$ED60` | checked | 5 | message-pay, message-pay-poor, message-life, message-block, message-launchpad, message-scene | not measured |
 | `Message_WaitNext` | `$ED69` | checked | 5 | message-pay, message-pay-poor, message-life, message-block, message-launchpad, message-scene | not measured |
 | `Message_Paged` | `$ED73` | checked | 5 | message-pay, message-pay-poor, message-life, message-block, message-launchpad, message-scene | not measured |
@@ -425,11 +430,14 @@ Not decompiled yet, and still run as the original from the C:
 - Called as C: the background probe `$D120`, its snaps `$D49A`/`$D4B2`/`$D4C8`/`$D4D6` and the probe point
   `$D350` (where `Player_ContactV` falls through to) are the C of `collision.c`, the walls move `$F0F8` and
   the climbing steps `$F192`/`$F1A8` the C of `objcommon.c` and the HP refill `$F812` the C of `objects.c`, and
-  `player.c` calls that C directly.
-- Through `Decomp_RunOriginal`: `Player_Update` in modes 15 (`$ED05`, message box) and 16
-  (`$EF62`, treasure), and every call that reaches the row change. That call runs as the original,
-  which reaches `Player_Message`, `Player_Treasure` or `Player_RowChange` at its own site: those
-  wait for frames, so they are task code and `Player_Update` is not.
+  `player.c` calls that C directly. So does the message box with the OAM clear `$C267` (`system.c`), the
+  sprite builder (bank 5 `$8000`, `sprites.c`) and the consumed-record bits (bank 5 `$B76A`,
+  `Records_MarkTaken` in `player.c`).
+- No call goes to the original: `Player_Update` is task code and calls the C of `Player_Message`,
+  `Player_Treasure` and `Player_RowChange`, which wait for frames or leave it without returning. The
+  handlers on the way to the row change (`Player_Ground`, `Player_StartJump`, `Player_Air`,
+  `Player_Pogo`, `Player_Climb`, `Player_Stuck`, `Player_Carried`) are task code too, checked with
+  `Player_Update`: their original does not return from a row change.
 
 **Coverage of Scrooge's code.** His own code in the fixed bank is `$E2FE-$EFE1` (3,300 bytes).
 The decompiled routines cover all of it, modes 15 and 16 included. With the collision and movement

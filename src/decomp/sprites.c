@@ -23,6 +23,7 @@
  * original used (s_y follows it).
  */
 #include "decomp/decomp.h"
+#include "decomp/system.h"
 
 #include "ducktales/game.h"
 #include "ducktales/objects.h"
@@ -232,7 +233,7 @@ static void visit_slot(int slot)
 }
 
 /* bank 5 $8000; returns the Y it leaves. */
-static uint8_t Oam_Build(void)
+uint8_t Oam_Build(void)
 {
     Decomp_Enter(DT_CODE_OAM_BUILD, 0, 0, 0);
     gObjects->flags[PLAYER_SLOT] &= (uint8_t)~(FLAG_BLINK | 0x01);
