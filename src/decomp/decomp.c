@@ -877,6 +877,7 @@ static void run_task_original(const DecompRoutine *rt, const CycModRegs *in)
     }
     cyc_mod_allow_isolated_hooks(true);
     memset(&s_run, 0, sizeof s_run);
+    s_damage_replayed = 0;
     s_run.start = rt->addr;
     s_run.start_s = in->s;
     s_run.call_s = (uint8_t)(in->s + rt->locals + 2);
@@ -1128,8 +1129,8 @@ static bool at_entry(const DecompRoutine *rt, uint16_t addr)
 static int on_entry(uint16_t addr)
 {
     if (cyc_mod_isolated()) {
-        if (s_run_active) {
-            return task_isolated_site(addr);
+        if (s_run_active && task_isolated_site(addr)) {
+            return 1;
         }
         return addr == DT_SITE_DAMAGE && s_damage_replayed < s_damage_raised && s_damage_cancel[s_damage_replayed++];
     }
