@@ -117,6 +117,7 @@ set(_ducktales_decomp
     "${CMAKE_SOURCE_DIR}/src/decomp/level.c"
     "${CMAKE_SOURCE_DIR}/src/decomp/collision.c"
     "${CMAKE_SOURCE_DIR}/src/decomp/flow.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/nmi.c"
 )
 # The port's systems layer (docs/architecture.md): typed game state, the hook
 # sites it alters behaviour at, settings and options; the typed game API and

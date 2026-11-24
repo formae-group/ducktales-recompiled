@@ -90,6 +90,10 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   original. The seven handlers on the way to the row change are task code checked with it. In task
   code the `Decomp_BusWrite` writes of the routines it calls are its device stores (up to 64), and a
   task routine reached from another one's C counts as compared with it.
+- The NMI handler gets its own kind of decompiled routine, **interrupt routines**: task code whose C
+  ends in RTI (`src/decomp/nmi.c`, docs/decompilation.md "Interrupt routines"). Its RTI pays the cycles
+  a replaced routine owed when the NMI came, and tells the native runtime the handler ended. The
+  handler's exit `$C132` (`Nmi_Return`) is the first; the body still runs as the original.
 - Decompiled: the task primitives (`src/decomp/system.c`): `task_create` `$FF7D` with the slot offsets
   `$FF9F`/`$FFA1`, and `task_yield` `$FFAC` and `task_wait` `$FFA5` (resume point `$FFA8`) as task code. Their
   sites replace the flow's stops there; `task_yield`'s C hands off to the scheduler `$FF35`, which has a

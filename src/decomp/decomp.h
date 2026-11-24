@@ -65,6 +65,7 @@ typedef struct DecompRoutine {
     uint8_t locals; /* task code: bytes the routine keeps on the stack at its start */
     bool resume;    /* task code: started where an RTS returns to its address, with no site */
     uint8_t bank;   /* entries below $C000: the bank mapped at $8000 */
+    bool interrupt; /* task code of the NMI handler: its C ends in RTI, not RTS */
 } DecompRoutine;
 
 typedef enum DecompMode {
@@ -153,6 +154,12 @@ int Decomp_RaiseEvent(int event);
  * A task routine whose C another task routine's C reaches is compared as
  * part of that one: it has no check of its own.
  *
+ * An interrupt routine (DecompRoutine.interrupt) is task code of the NMI
+ * handler whose C ends in RTI: when it returns, P and the return address come
+ * off the stack above its last pull. Replace mode pays there the cycles a
+ * replaced routine still owed when the NMI came, and tells the native
+ * runtime the handler ended.
+ *
  * Check mode runs the original from the same site until it reaches the same
  * routine at the same stack depth (a stop hook in the isolated call), and
  * compares RAM, the stack the C built, A, X, Y and the number of device
@@ -228,6 +235,8 @@ extern const DecompRoutine gSpriteRoutines[];
 extern const int gSpriteRoutineCount;
 extern const DecompRoutine gAudioRoutines[];
 extern const int gAudioRoutineCount;
+extern const DecompRoutine gNmiRoutines[];
+extern const int gNmiRoutineCount;
 
 /* Addresses a task routine hands off to: sites where an isolated run of the
  * original stops, with no C of their own. */

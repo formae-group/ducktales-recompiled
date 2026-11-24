@@ -227,6 +227,12 @@ void native_vblank_taken(bool nmi_enabled, bool picture_on)
     defer_polls = 0;
 }
 
+void native_nmi_return(void)
+{
+    overrun_nmi += cycles - nmi_entry;
+    in_nmi = false;
+}
+
 static void observe(uint16_t addr, HwCycleKind kind)
 {
     unsigned k = (unsigned)kind & 3u;

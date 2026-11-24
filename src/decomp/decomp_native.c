@@ -182,7 +182,12 @@ static bool task_replace(int i, const CycModRegs *in)
     const uint8_t *ram = native_cpu_ram();
     uint8_t s = dc_cur_s;
     uint16_t pc = dc_handoff;
-    if (!dc_handoff_set) {
+    bool rti = rt->interrupt && !dc_handoff_set;
+    if (rti) {
+        c.p = ram[0x100 | (uint8_t)(s + 1)];
+        pc = (uint16_t)(ram[0x100 | (uint8_t)(s + 2)] | ram[0x100 | (uint8_t)(s + 3)] << 8);
+        s = (uint8_t)(s + 3);
+    } else if (!dc_handoff_set) {
         pc = (uint16_t)((ram[0x100 | (uint8_t)(s + 1)] | ram[0x100 | (uint8_t)(s + 2)] << 8) + 1);
         s = (uint8_t)(s + 2);
     }
@@ -191,13 +196,16 @@ static bool task_replace(int i, const CycModRegs *in)
     cpu.x = c.x;
     cpu.y = c.y;
     cpu.s = s;
-    cpu_set_p(dc_handoff_set ? in->p : (uint8_t)((c.p & flags) | (in->p & ~flags)));
+    cpu_set_p(rti ? c.p : dc_handoff_set ? in->p : (uint8_t)((c.p & flags) | (in->p & ~flags)));
     for (int k = 0; k < dc_stores; k++) {
         cpu_write(dc_store[k].addr, dc_store[k].value, 0);
     }
     dc_stats[i].compared++;
     dc_nested_compared();
     cpu.pc = pc;
+    if (rti) {
+        native_nmi_return();
+    }
     return true;
 }
 
