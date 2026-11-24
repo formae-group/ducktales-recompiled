@@ -7,6 +7,9 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- 19 decompilation poke cases cover launched blocks, pouncers, the snapper grab, pickup respawn,
+  the final stand-in spawn, and smaller object, collision and row-boundary branches no existing
+  route or poke case reached.
 - `tools/decomp_gap.py`: the PRG code a static walk from the executed code reaches (branches, calls and
   dispatch tables) but no route or poke case executes, by block and routine, and the unreached runs that
   decode as code (docs/decompilation.md "Gap").
