@@ -184,6 +184,7 @@ static void run_frame(uint8_t pad0, uint8_t pad1)
         app_mods_audio_frame_end(native_cpu_ram());
     }
     app_mods_scripts_frame();
+    app_mods_dump_frame();
 }
 
 /* What the window shows (ui/app_present.h, or the plain picture) for a
@@ -1292,9 +1293,6 @@ int ducktales_host_main(int argc, char **argv)
         return 2;
     }
     bool off_screen = frames >= 0;
-    if (!off_screen) {
-        app_mods_use_player_folders(config ? config : cyc_settings_default_path());
-    }
     size_t prg_at = 16 + ((image[6] & 4) ? 512 : 0), prg_size = (size_t)image[4] * 0x4000;
     app_mods_start(prg_at + prg_size <= size ? image + prg_at : NULL, prg_at + prg_size <= size ? prg_size : 0);
     free(image);

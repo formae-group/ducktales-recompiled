@@ -71,9 +71,10 @@ bool fm_png_write(const char *path, const uint32_t *argb, int w, int h)
         rgba[i * 4 + 2] = (unsigned char)argb[i];
         rgba[i * 4 + 3] = (unsigned char)(argb[i] >> 24);
     }
-    FILE *f = fopen(path, "wb");
+    FILE *f = fm_open_file(path, "wb");
     bool ok = f && stbi_write_png_to_func(write_to_file, f, w, h, 4, rgba, w * 4) != 0;
     if (f) {
+        ok = !ferror(f) && ok;
         ok = fclose(f) == 0 && ok;
     }
     free(rgba);
