@@ -7,7 +7,7 @@
  */
 #include "decomp/flow/flow_internal.h"
 
-#define SFX_PAUSE       0x15
+#define SFX_PAUSE             0x15
 #define RESPAWN_PENDING       0x80
 #define HAZARD_SPIKES         6 /* hazard mode that invulnerability ignores */
 #define CHECKPOINT_SET        5
@@ -21,14 +21,14 @@
 #define TEXT_BLANKS           8
 #define TEXT_BOX              4
 #define TEXT_MESSAGE_BOX      9
-#define gTileEditPending RAM_U8(DT_ADDR_TILE_EDIT_PENDING)
-#define gTileEditOffset  RAM_U8(DT_ADDR_TILE_EDIT_OFFSET)
-#define gUnk2E           RAM_U8(DT_ADDR_UNK_2E)
-#define gBlockOpened     RAM_U8(DT_ADDR_BLOCK_OPENED)
-#define gMessage         RAM_U8(DT_ADDR_MESSAGE)
-#define gHazard          RAM_U8(DT_ADDR_HAZARD)
-#define gPaused          RAM_U8(DT_ADDR_PAUSE)
-#define gBgOffBelowSplit RAM_U8(DT_ADDR_BG_OFF_BELOW_SPLIT)
+#define gTileEditPending      RAM_U8(DT_ADDR_TILE_EDIT_PENDING)
+#define gTileEditOffset       RAM_U8(DT_ADDR_TILE_EDIT_OFFSET)
+#define gUnk2E                RAM_U8(DT_ADDR_UNK_2E)
+#define gBlockOpened          RAM_U8(DT_ADDR_BLOCK_OPENED)
+#define gMessage              RAM_U8(DT_ADDR_MESSAGE)
+#define gHazard               RAM_U8(DT_ADDR_HAZARD)
+#define gPaused               RAM_U8(DT_ADDR_PAUSE)
+#define gBgOffBelowSplit      RAM_U8(DT_ADDR_BG_OFF_BELOW_SPLIT)
 
 /* ---- bank 5: the pause and message box text ---- */
 
@@ -328,6 +328,7 @@ void FrameLoop_Next(Regs *r)
     Decomp_Enter(DT_FLOW_NEXT_FRAME, r->a, r->x, r->y);
     FrameLoop(r);
 }
+
 static void Reset_Ready(Regs *r);
 
 /* $FEE0: the reset vector turns rendering off and resets S. Four VBlanks

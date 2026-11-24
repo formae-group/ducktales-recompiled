@@ -5,13 +5,13 @@
  */
 #include "decomp/flow/flow_internal.h"
 
-#define PPU_STRINGS_LAND      0 /* $BAB0 set drawn at every land load */
-#define ROW_SCROLL_HI         0x24
-#define SCROOGE_START_Y       0x40
-#define SCROOGE_JUMP_VY       0x04BB /* take-off velocity, whole and fraction */
-#define SCROOGE_START_SPEED   0x0180
-#define SPRITE0_Y             0x2C
-#define gRowScrollAddrHi RAM_U8(DT_ADDR_ROW_SCROLL_ADDR_HI)
+#define PPU_STRINGS_LAND    0 /* $BAB0 set drawn at every land load */
+#define ROW_SCROLL_HI       0x24
+#define SCROOGE_START_Y     0x40
+#define SCROOGE_JUMP_VY     0x04BB /* take-off velocity, whole and fraction */
+#define SCROOGE_START_SPEED 0x0180
+#define SPRITE0_Y           0x2C
+#define gRowScrollAddrHi    RAM_U8(DT_ADDR_ROW_SCROLL_ADDR_HI)
 
 /* ---- lands ---- */
 

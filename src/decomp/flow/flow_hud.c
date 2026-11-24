@@ -5,8 +5,8 @@
  */
 #include "decomp/flow/flow_internal.h"
 
-#define SFX_TIME_LOW    0x36
-#define TIME_LOW_TENS         3
+#define SFX_TIME_LOW  0x36
+#define TIME_LOW_TENS 3
 
 /* ---- HUD ---- */
 

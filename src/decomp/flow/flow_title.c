@@ -4,18 +4,18 @@
  */
 #include "decomp/flow/flow_internal.h"
 
-#define MAIN_TASK_STACK       0xBF
-#define TITLE_SEED            0x88
-#define TITLE_OBJECTS         2
-#define TITLE_STRINGS         2 /* $BAB0 set of the title */
-#define TITLE_CHR             6 /* $C301 set of the title */
-#define TITLE_PALETTE         0x60
-#define TITLE_COLOUR_TEXT     0x11
-#define TITLE_COLOUR_A        0x2C
-#define TITLE_COLOUR_B        0x20
-#define TITLE_PAD_MOVE        (DT_PAD_SELECT | DT_PAD_LEFT | DT_PAD_RIGHT)
-#define TITLE_BLINK_FRAMES    0xB4
-#define DIFFICULTY_COUNT      3
+#define MAIN_TASK_STACK    0xBF
+#define TITLE_SEED         0x88
+#define TITLE_OBJECTS      2
+#define TITLE_STRINGS      2 /* $BAB0 set of the title */
+#define TITLE_CHR          6 /* $C301 set of the title */
+#define TITLE_PALETTE      0x60
+#define TITLE_COLOUR_TEXT  0x11
+#define TITLE_COLOUR_A     0x2C
+#define TITLE_COLOUR_B     0x20
+#define TITLE_PAD_MOVE     (DT_PAD_SELECT | DT_PAD_LEFT | DT_PAD_RIGHT)
+#define TITLE_BLINK_FRAMES 0xB4
+#define DIFFICULTY_COUNT   3
 
 /* ---- title and difficulty ---- */
 

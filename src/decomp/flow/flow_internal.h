@@ -32,42 +32,42 @@
 #include "ducktales/objects.h"
 #include "ducktales/player.h"
 
-#define P_ PLAYER_SLOT
-#define MUSIC_BOSS      0x06
-#define LAND_ARENA            5
-#define SPLIT_ON              0x40
-#define ROW_SCROLL_ADDR       0xC0
-#define SCROOGE_RESPAWN       0xA0 /* $0700 of Scrooge after a respawn */
-#define NT_FILL_ADDR          0x20 /* $C203: nametables from $2000 */
-#define NT_FILL_TILE          0x24
-#define ALL_TREASURES         0x1F
-#define SFX_CURSOR            0x2F
-#define ENDING_STREAM_STEPS   0x40
-#define gScratch0        RAM_U8(DT_ADDR_SCRATCH0)
-#define gScratch(i)      RAM_U8(DT_ADDR_SCRATCH0 + (i))
-#define gStreamSteps     RAM_U8(DT_ADDR_SCRATCH4)
-#define gStreamQueueEnd  RAM_U8(DT_ADDR_SCRATCH5)
-#define gVramPending     RAM_U8(DT_ADDR_VRAM_PENDING)
-#define gVramQueueReady  RAM_U8(DT_ADDR_VRAM_QUEUE_READY)
-#define gStreamPage      RAM_U8(DT_ADDR_STREAM_PAGE)
-#define gStreamRequest   RAM_U8(DT_ADDR_MOVE_DIR)
-#define gHeldSlot        RAM_U8(DT_ADDR_HELD_SLOT)
-#define gRowChrState     RAM_U8(DT_ADDR_ROW_CHR_STATE)
-#define gLandLeft        RAM_U8(DT_ADDR_LAND_LEFT)
-#define gHudMoneyDirty   RAM_U8(DT_ADDR_HUD_MONEY_DIRTY)
-#define gHudTotalDirty   RAM_U8(DT_ADDR_HUD_TOTAL_DIRTY)
-#define gScene           RAM_U8(DT_ADDR_SCENE)
-#define gEnding          RAM_U8(DT_ADDR_ENDING)
-#define gNoSpriteDma     RAM_U8(DT_ADDR_NO_SPRITE_DMA)
-#define gSpritePhase     RAM_U8(DT_ADDR_SPR_PHASE)
-#define gRowScroll       RAM_U8(DT_ADDR_ROW_SCROLL)
-#define gRowScrollAddr   RAM_U8(DT_ADDR_ROW_SCROLL_ADDR)
-#define gHudSplit        RAM_U8(DT_ADDR_HUD_SPLIT)
-#define gPrevCameraX     RAM_U8(DT_ADDR_PREV_CAMERA_X)
-#define gSprite0Y        RAM_U8(DT_ADDR_SPRITE0_Y)
-#define gHudGate         RAM_U8(DT_ADDR_HUD_GATE)
-#define gSelectMessage   RAM_U8(DT_ADDR_SELECT_MESSAGE)
-#define gTimeDigit(i)    RAM_U8(DT_ADDR_TIME_DIGITS + 4 * (i))
+#define P_                  PLAYER_SLOT
+#define MUSIC_BOSS          0x06
+#define LAND_ARENA          5
+#define SPLIT_ON            0x40
+#define ROW_SCROLL_ADDR     0xC0
+#define SCROOGE_RESPAWN     0xA0 /* $0700 of Scrooge after a respawn */
+#define NT_FILL_ADDR        0x20 /* $C203: nametables from $2000 */
+#define NT_FILL_TILE        0x24
+#define ALL_TREASURES       0x1F
+#define SFX_CURSOR          0x2F
+#define ENDING_STREAM_STEPS 0x40
+#define gScratch0           RAM_U8(DT_ADDR_SCRATCH0)
+#define gScratch(i)         RAM_U8(DT_ADDR_SCRATCH0 + (i))
+#define gStreamSteps        RAM_U8(DT_ADDR_SCRATCH4)
+#define gStreamQueueEnd     RAM_U8(DT_ADDR_SCRATCH5)
+#define gVramPending        RAM_U8(DT_ADDR_VRAM_PENDING)
+#define gVramQueueReady     RAM_U8(DT_ADDR_VRAM_QUEUE_READY)
+#define gStreamPage         RAM_U8(DT_ADDR_STREAM_PAGE)
+#define gStreamRequest      RAM_U8(DT_ADDR_MOVE_DIR)
+#define gHeldSlot           RAM_U8(DT_ADDR_HELD_SLOT)
+#define gRowChrState        RAM_U8(DT_ADDR_ROW_CHR_STATE)
+#define gLandLeft           RAM_U8(DT_ADDR_LAND_LEFT)
+#define gHudMoneyDirty      RAM_U8(DT_ADDR_HUD_MONEY_DIRTY)
+#define gHudTotalDirty      RAM_U8(DT_ADDR_HUD_TOTAL_DIRTY)
+#define gScene              RAM_U8(DT_ADDR_SCENE)
+#define gEnding             RAM_U8(DT_ADDR_ENDING)
+#define gNoSpriteDma        RAM_U8(DT_ADDR_NO_SPRITE_DMA)
+#define gSpritePhase        RAM_U8(DT_ADDR_SPR_PHASE)
+#define gRowScroll          RAM_U8(DT_ADDR_ROW_SCROLL)
+#define gRowScrollAddr      RAM_U8(DT_ADDR_ROW_SCROLL_ADDR)
+#define gHudSplit           RAM_U8(DT_ADDR_HUD_SPLIT)
+#define gPrevCameraX        RAM_U8(DT_ADDR_PREV_CAMERA_X)
+#define gSprite0Y           RAM_U8(DT_ADDR_SPRITE0_Y)
+#define gHudGate            RAM_U8(DT_ADDR_HUD_GATE)
+#define gSelectMessage      RAM_U8(DT_ADDR_SELECT_MESSAGE)
+#define gTimeDigit(i)       RAM_U8(DT_ADDR_TIME_DIGITS + 4 * (i))
 
 static inline uint8_t Rom(uint16_t addr)
 {

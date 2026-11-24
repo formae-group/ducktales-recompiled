@@ -6,30 +6,30 @@
  */
 #include "decomp/flow/flow_internal.h"
 
-#define MUSIC_SCENE           0x0B
-#define SCENE_NUMBER          0x0F /* $78: the scene, below its request bit */
-#define SCENE_MAP             6    /* map of scene 0; the scene's map follows */
-#define SCENE_RESPAWN         0x10 /* respawn entry of scene 0 */
-#define SCENE_TILESET         3
-#define SCENE_PALETTE         0x70
-#define SCENE_OBJECT_STATE    0xA0
-#define TRIP_SLOT             8    /* the plane of the take-off scene */
-#define TRIP_ACTION           0x6F /* its first action; the scene ends at $74 */
-#define TRIP_ACTION_END       0x74
-#define TRIP_GRAVITY          0x40
-#define TRIP_STATE            0xA0
-#define TRIP_Y                0xC0
-#define TRIP_X                0x80
-#define TRIP_SPEED            2
-#define TRIP_VY               0x077D /* take-off velocity, whole and fraction */
-#define TRIP_FLASHES          0x10
-#define TRIP_FLASH_FRAMES     4
-#define TRIP_COLOUR_BRIGHT    0x16
-#define TRIP_COLOUR_DARK      0x0F
-#define M15_SCREEN            0x17 /* camera screen: row 2, page 7 */
-#define M15_STREAM_ROW        6
-#define M15_ROW               2
-#define gUnk4C(i)        RAM_U8(DT_ADDR_UNK_4C + (i))
+#define MUSIC_SCENE        0x0B
+#define SCENE_NUMBER       0x0F /* $78: the scene, below its request bit */
+#define SCENE_MAP          6    /* map of scene 0; the scene's map follows */
+#define SCENE_RESPAWN      0x10 /* respawn entry of scene 0 */
+#define SCENE_TILESET      3
+#define SCENE_PALETTE      0x70
+#define SCENE_OBJECT_STATE 0xA0
+#define TRIP_SLOT          8    /* the plane of the take-off scene */
+#define TRIP_ACTION        0x6F /* its first action; the scene ends at $74 */
+#define TRIP_ACTION_END    0x74
+#define TRIP_GRAVITY       0x40
+#define TRIP_STATE         0xA0
+#define TRIP_Y             0xC0
+#define TRIP_X             0x80
+#define TRIP_SPEED         2
+#define TRIP_VY            0x077D /* take-off velocity, whole and fraction */
+#define TRIP_FLASHES       0x10
+#define TRIP_FLASH_FRAMES  4
+#define TRIP_COLOUR_BRIGHT 0x16
+#define TRIP_COLOUR_DARK   0x0F
+#define M15_SCREEN         0x17 /* camera screen: row 2, page 7 */
+#define M15_STREAM_ROW     6
+#define M15_ROW            2
+#define gUnk4C(i)          RAM_U8(DT_ADDR_UNK_4C + (i))
 
 /* ---- scenes ---- */
 

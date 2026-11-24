@@ -27,8 +27,8 @@
 #define BANK_PACKET           12 /* the money packet's offset in the VRAM queue */
 #define BANK_MONEY_STEP_DIGIT 3  /* the money digit a step takes one from */
 #define TOTAL_DIGITS          5  /* TOTAL's counted digits; two zeros follow */
-#define gSelectMove      RAM_U8(DT_ADDR_SCRATCH10)
-#define gBankSteps       RAM_U8(DT_ADDR_SCRATCH10)
+#define gSelectMove           RAM_U8(DT_ADDR_SCRATCH10)
+#define gBankSteps            RAM_U8(DT_ADDR_SCRATCH10)
 
 /* ---- bank 5: Land Select messages and the consumed records ---- */
 

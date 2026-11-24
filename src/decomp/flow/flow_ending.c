@@ -5,41 +5,41 @@
  */
 #include "decomp/flow/flow_internal.h"
 
-#define STATUS_SPRITE0        0x40
-#define CTRL_NAMETABLE_1      0x01
-#define ENDING_WAIT           0x78
-#define ENDING_LAND           9
-#define MUSIC_ENDING          0x05
-#define ENDING_TREASURES      0x7F
-#define ENDING_SCREENS        6
-#define ENDING_SCREEN_TEXT    3    /* the first screen with strings; the earlier ones are drawn as one */
-#define ENDING_SCREEN_SPLIT   4    /* screens from here have the HUD split */
-#define END_OBJ_STEPS         0x10 /* an object entry's first byte below this ends the list: slot 0's kind */
-#define END_OBJ_FACING_RIGHT  0x19
-#define END_STEP_LEAVE        3
-#define END_STEP_DONE         5
-#define END_LAST_SCENE        3
-#define END_HOPS              0x0B
-#define END_HOP_VY            4
-#define END_HOP_GROUND        0xB4
-#define END_WALK_STOP         0x90
-#define END_LEAVE_SPEED       3
-#define END_LEAVE_X           0x48
-#define END_LEAVE_Y           0x78
-#define END_WAIT_SECONDS      10
-#define END_SECOND            60
-#define END_LAST_SCREEN       5
-#define END_LAST_SPLIT        0xB0
-#define END_SPLIT_LIMIT       0xE8
-#define END_MUSIC_LINE        0xB7
-#define END_PAUSE_MASK        0x3F
-#define MUSIC_CREDITS         0x07
-#define ENDING_FILL           0x24
-#define gOamSprite0Y     RAM_U8(DT_ADDR_OAM)
-#define gCreditsPause    RAM_U8(DT_ADDR_SCRATCH10)
-#define gEndingScreen    RAM_U8(DT_ADDR_STREAM_SCREEN) /* $24 during the ending */
-#define gEndingVariant   RAM_U8(DT_ADDR_ENDING_VARIANT)
-#define gEndingText      RAM_U8(DT_ADDR_SCRATCH10)
+#define STATUS_SPRITE0       0x40
+#define CTRL_NAMETABLE_1     0x01
+#define ENDING_WAIT          0x78
+#define ENDING_LAND          9
+#define MUSIC_ENDING         0x05
+#define ENDING_TREASURES     0x7F
+#define ENDING_SCREENS       6
+#define ENDING_SCREEN_TEXT   3    /* the first screen with strings; the earlier ones are drawn as one */
+#define ENDING_SCREEN_SPLIT  4    /* screens from here have the HUD split */
+#define END_OBJ_STEPS        0x10 /* an object entry's first byte below this ends the list: slot 0's kind */
+#define END_OBJ_FACING_RIGHT 0x19
+#define END_STEP_LEAVE       3
+#define END_STEP_DONE        5
+#define END_LAST_SCENE       3
+#define END_HOPS             0x0B
+#define END_HOP_VY           4
+#define END_HOP_GROUND       0xB4
+#define END_WALK_STOP        0x90
+#define END_LEAVE_SPEED      3
+#define END_LEAVE_X          0x48
+#define END_LEAVE_Y          0x78
+#define END_WAIT_SECONDS     10
+#define END_SECOND           60
+#define END_LAST_SCREEN      5
+#define END_LAST_SPLIT       0xB0
+#define END_SPLIT_LIMIT      0xE8
+#define END_MUSIC_LINE       0xB7
+#define END_PAUSE_MASK       0x3F
+#define MUSIC_CREDITS        0x07
+#define ENDING_FILL          0x24
+#define gOamSprite0Y         RAM_U8(DT_ADDR_OAM)
+#define gCreditsPause        RAM_U8(DT_ADDR_SCRATCH10)
+#define gEndingScreen        RAM_U8(DT_ADDR_STREAM_SCREEN) /* $24 during the ending */
+#define gEndingVariant       RAM_U8(DT_ADDR_ENDING_VARIANT)
+#define gEndingText          RAM_U8(DT_ADDR_SCRATCH10)
 
 /* ---- bank 5: the ending's scene objects ---- */
 

@@ -5,18 +5,18 @@
  */
 #include "decomp/flow/flow_internal.h"
 
-#define SFX_WARP        0x2D
-#define MUSIC_GAME_OVER 0x09
-#define MUSIC_DEATH     0x0A
-#define RESPAWN_LIFE          0x87 /* entries from here cost a life */
-#define RESPAWN_ARENA         0x85 /* the warp into a boss arena */
-#define DEATH_PAUSE_FALL      0xB4 /* frames after a death */
-#define DEATH_PAUSE_WARP      0x3C /* frames after a warp */
-#define GAME_OVER_FRAMES      0xF0
-#define LAND_EXIT_FRAMES      0xB4
-#define RESPAWN_ENTRY_LEN     9
-#define gScreensLeft     RAM_U8(DT_ADDR_SCRATCH11)
-#define gPogoCeiling     RAM_U8(DT_ADDR_POGO_CEILING)
+#define SFX_WARP          0x2D
+#define MUSIC_GAME_OVER   0x09
+#define MUSIC_DEATH       0x0A
+#define RESPAWN_LIFE      0x87 /* entries from here cost a life */
+#define RESPAWN_ARENA     0x85 /* the warp into a boss arena */
+#define DEATH_PAUSE_FALL  0xB4 /* frames after a death */
+#define DEATH_PAUSE_WARP  0x3C /* frames after a warp */
+#define GAME_OVER_FRAMES  0xF0
+#define LAND_EXIT_FRAMES  0xB4
+#define RESPAWN_ENTRY_LEN 9
+#define gScreensLeft      RAM_U8(DT_ADDR_SCRATCH11)
+#define gPogoCeiling      RAM_U8(DT_ADDR_POGO_CEILING)
 
 /* A byte of the current map's screen grid (pointer at $20). */
 static uint8_t Map_Cell(uint8_t index)
