@@ -187,6 +187,10 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   `decomp_cycle_task.c`, `decomp_cycle_nmi.c` and `decomp_cycle_clock.c`, and the native player's
   `native_window.c` into `native_player.c` (entry, options, frame), `native_window.c` and
   `native_offscreen.c`. No behaviour changes.
+- `src/decomp/player.c` and `src/decomp/level.c` are split into the modules of `src/decomp/player/`
+  (contact tests, moves, modes, damage, message box) and `src/decomp/level/` (map, scroll, screen, row
+  scroll, block draw, spawner), and `tests/decomp_test.py`'s case tables and builders move to
+  `tests/decomp/`. Code moves only: no routine, behaviour or command line changes.
 - The native player (`ducktales.exe`) starts with Decompiled code and No slowdown on. Settings →
   Gameplay → Original mode, at the top of the page with a (?), turns both off for the recompiled
   original with the console's slowdown, and turning it off turns both back on. `config.ini` now

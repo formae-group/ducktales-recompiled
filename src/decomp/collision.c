@@ -11,7 +11,7 @@
  * then moves the object out of the tile the last probe hit, using the
  * point's position the probe left in $06/$07.
  *
- * The metatile lookup ($CDE2, level.c) switches banks and restores them, so
+ * The metatile lookup ($CDE2, level/map.c) switches banks and restores them, so
  * the probe's contract has OUT_HW.
  */
 #include "decomp/collision.h"
