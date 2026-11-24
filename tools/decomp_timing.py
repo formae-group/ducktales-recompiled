@@ -100,7 +100,8 @@ def table_entries(text):
 def routines():
     """name -> dict(addr, bank, func, file, timed) from every table entry."""
     syms, found = symbols(), {}
-    for path in sorted((ROOT / 'src' / 'decomp').glob('*.c')):
+    base = ROOT / 'src' / 'decomp'
+    for path in sorted(base.rglob('*.c')):
         for fields in table_entries(path.read_text(encoding='utf-8')):
             entry = {}
             if len(fields) < 4 or not fields[2].startswith('"'):
@@ -120,7 +121,7 @@ def routines():
                 'addr': addr,
                 'bank': int(bank, 0) if re.fullmatch(r'\d+|0x[0-9A-Fa-f]+', bank) else 0,
                 'func': entry.get('run', ''),
-                'file': path.name,
+                'file': path.relative_to(base).as_posix(),
                 'timed': entry.get('timed', 'false') == 'true',
             }
     return found
@@ -140,8 +141,13 @@ def function(text, func):
 
 
 def body(file, func):
-    """The C of func with the functions of the same file it calls, two calls deep (an adapter's helper)."""
-    text = (ROOT / 'src' / 'decomp' / file).read_text(encoding='utf-8')
+    """The C of func with the functions of the same file it calls, two calls deep (an adapter's helper).
+    A file in a subfolder (objects/) also finds them in the other files of its folder."""
+    path = ROOT / 'src' / 'decomp' / file
+    text = path.read_text(encoding='utf-8')
+    near = [text]
+    if '/' in file:
+        near += [p.read_text(encoding='utf-8') for p in sorted(path.parent.glob('*.c')) if p != path]
     src, line = function(text, func)
     seen, todo = {func}, [src]
     for _ in range(2):
@@ -149,7 +155,7 @@ def body(file, func):
         for part in todo:
             for name in set(re.findall(r'\b([A-Z]\w+)\s*\(', part)) - seen:
                 seen.add(name)
-                more, _ = function(text, name)
+                more = next((m for m in (function(t, name)[0] for t in near) if m), '')
                 if more:
                     found.append(more)
         src += ''.join(found)
@@ -249,7 +255,7 @@ def report(rom, name, info, table, by_addr):
 
 def summary(rom, table, only):
     entries = {r['addr'] for r in table.values()}
-    print('%-28s%-8s%-14s%-7s%9s%9s' % ('routine', 'addr', 'file', 'timed', 'branches', 'missing'))
+    print('%-28s%-8s%-22s%-7s%9s%9s' % ('routine', 'addr', 'file', 'timed', 'branches', 'missing'))
     for name, r in sorted(table.items(), key=lambda kv: (kv[1]['file'], kv[1]['addr'])):
         if only and r['file'] != only:
             continue
@@ -259,7 +265,7 @@ def summary(rom, table, only):
         branches = [pc for pc, c in code.items() if c[0] in BRANCHES]
         missing = len([pc for pc in branches if pc not in marked])
         timed = 'yes' if r['timed'] else 'no'
-        print('%-28s$%04X   %-14s%-7s%9d%9d' % (name, r['addr'], r['file'], timed, len(branches), missing))
+        print('%-28s$%04X   %-22s%-7s%9d%9d' % (name, r['addr'], r['file'], timed, len(branches), missing))
 
 
 def main():
@@ -268,7 +274,7 @@ def main():
     ap.add_argument('--bank', type=int, help='the bank at $8000 for an address below $C000')
     ap.add_argument('--rom', default=default_rom())
     ap.add_argument('--summary', action='store_true', help='every routine: timed, branches and missing DC_BR')
-    ap.add_argument('--file', help='with --summary: only the routines of this file (system.c, flow.c, ...)')
+    ap.add_argument('--file', help='with --summary: only the routines of this file (system.c, objects/walkers.c, ...)')
     args = ap.parse_args()
     rom, table = Rom(args.rom), routines()
     by_addr = {}

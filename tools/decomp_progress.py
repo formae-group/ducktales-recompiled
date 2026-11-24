@@ -91,12 +91,21 @@ def source(rev, path):
 
 
 def decomp_sources(rev):
+    """Path under src/decomp/ without .c (objects/walkers) -> text, subfolders included."""
+    base = ROOT / 'src' / 'decomp'
     if not rev:
-        return {p.stem: p.read_text(encoding='utf-8') for p in sorted((ROOT / 'src' / 'decomp').glob('*.c'))}
+        return {
+            p.relative_to(base).with_suffix('').as_posix(): p.read_text(encoding='utf-8')
+            for p in sorted(base.rglob('*.c'))
+        }
     names = subprocess.run(
-        ['git', 'ls-tree', '--name-only', rev, 'src/decomp/'], cwd=ROOT, capture_output=True, text=True, check=True
+        ['git', 'ls-tree', '-r', '--name-only', rev, 'src/decomp/'],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout.split()
-    return {Path(n).stem: source(rev, n) for n in names if n.endswith('.c')}
+    return {n[len('src/decomp/') : -len('.c')]: source(rev, n) for n in names if n.endswith('.c')}
 
 
 class Code:
@@ -378,7 +387,7 @@ def main():
     )
     print(f'{"group":8} {"routines":>8} {"bytes":>8} {"of all":>7}')
     for group, stems in GROUPS.items():
-        mine = [e for e, (stem, _) in c_entries.items() if stem in stems]
+        mine = [e for e, (stem, _) in c_entries.items() if stem.split('/')[0] in stems]
         b = nbytes(set().union(*(reach[e] for e in mine)))
         print(f'{group:8} {len(mine):8} {b:8,} {100 * b / total:6.1f}%')
     print(f'{"total":8} {len(c_entries):8} {c:8,} {100 * c / total:6.1f}%  ({c:,} of {total:,} executed bytes)')
