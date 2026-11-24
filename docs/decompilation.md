@@ -695,8 +695,8 @@ A routine every route runs at power-on selects frame 0 and saves nothing; run th
 | Check | What it shows |
 |---|---|
 | `decomp_test --modes check` | every call of every decompiled routine on every route agrees with the original |
-| `decomp_test --modes replace` | stock against `--decomp replace` (`--dt-ram-log`): CPU RAM outside page 1 equal after every frame; the main task's live stack equal on every frame where both runs are idle in the scheduler |
-| `decomp_test --modes pokes` | 11 poked states (modes 5, 8, 10, 11 and 12, the last HP dot, slippery floor, held timers) in check mode and stock against replace |
+| `decomp_test --modes replace` | the check run (stock without check mode; check keeps the original's result, so its RAM is stock's) against `--decomp replace` (`--dt-ram-log`): CPU RAM outside page 1 equal after every frame; the main task's live stack equal on every frame where both runs are idle in the scheduler |
+| `decomp_test --modes pokes` | 11 poked states (modes 5, 8, 10, 11 and 12, the last HP dot, slippery floor, held timers) in check mode and stock against replace, each from the latest idle golden save state before its first poke |
 | `decomp_test --modes events` | NoDamage and JumpScale with the decompiled routines raising the events: check mode, and off against replace with the option on |
 | `verify_routes` | native, interpreter and oracle agree on every frame at 4 alignments |
 | `verify_routes` with `DUCKTALES_DECOMP=check` | the same, with check mode on in the recompiled runs |
