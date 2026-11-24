@@ -331,9 +331,9 @@ save a fix. Only the scripts of mods loaded at start reload: a mod that had no
 
 | Folder | What it holds |
 |---|---|
-| `core/` | Knows no game. `fm_mods.h` is its interface: the package format and catalogue (`fm_catalog.c`: folders, `mod.toml`, order, switches, restart check), the archive and folder reader (`fm_archive.c`), PNG, OGG, WAV and deflate on stb (`fm_codec.c`) and the Lua sandbox with the generic script API (`fm_script.c`: `dt.on`, cancel, `dt.state` and `dt.set` over fields the game describes, toast, store, log, limits, hot reload) |
+| `core/` | Knows no game. `fm_mods.h` is its interface: the package format and catalogue (`fm_catalog.c`: folders, `mod.toml`, order, switches, restart check), the archive and folder reader (`fm_archive.c`), PNG, OGG, WAV and deflate on stb (`fm_codec.c`) and the Lua sandbox with the generic script API (`fm_script.c`: `dt.on`, cancel, log, limits, hot reload; `fm_script_state.c`: `dt.state`, `dt.set` and the queries over the fields and records the game describes; `fm_script_show.c`: toast and `dt.draw`; `fm_script_store.c`: store; `fm_script_internal.h`: what they share) |
 | `nes/` | NES games: tile keys, the replacement tile table, `.pal` palettes and tile templates (`fm_nes.c`) |
-| `ducktales/` | This game: what the assets mean and how they are painted and mixed (`dt_mods.c`, `dt_mods_audio.c`), the event list, the `dt.state` and writable fields, the store folder and the toast drawing |
+| `ducktales/` | This game: what the assets mean and how they are loaded (`dt_mods.c`), painted (`dt_mods_picture.c`, with the toast and `dt.draw` overlay) and mixed (`dt_mods_audio.c`); the event list, the `dt.state` and writable fields, the queries and the store folder (`dt_mods_script.c`) |
 | `app_mods.h` | The interface the hosts and the menu call |
 
 Both hosts and the native player call the same entry points:
@@ -352,6 +352,6 @@ Both hosts and the native player call the same entry points:
   the queued `dt.set` writes are applied in one RAM transaction and the frame's drawings replace
   the shown ones.
 
-The tests are in `tests/mods_test.py`, `tests/mods_catalogue_test.c` and `tests/window_smoke.py`.
+The tests are in `tests/mods_test.py` (its steps in `tests/mods/`), `tests/mods_catalogue_test.c` and `tests/window_smoke.py`.
 They generate their fixtures in scratch folders, and the tile templates come from the player's own
 ROM; no game content is committed.
