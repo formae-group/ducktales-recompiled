@@ -36,6 +36,7 @@
 #include "ui/app_rom.h"
 
 #include "cyc_overlay.h"
+#include "cyc_render.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -827,6 +828,14 @@ bool app_mods_video_active(void)
 bool app_mods_dump_dir(const char *dir)
 {
     return fm_nes_dump_to(dir);
+}
+
+void app_mods_dump_frame(void)
+{
+    if (fm_nes_dumping()) {
+        int w, h;
+        cyc_render_present(&w, &h);
+    }
 }
 
 uint32_t app_mods_color(uint16_t index, uint32_t argb)

@@ -57,7 +57,7 @@ runs do not scan the player's mods folder, so pass `--mods-dir` explicitly.
 | `--mods on\|off` | Load mods or not (the window's default is `[Mods] Enabled`; headless runs default to off) |
 | `--mods-dir DIR` | Another folder to scan (repeatable, up to 4); a path that is not a folder is an error |
 | `--mods-order ID:on\|off,...` | The order and switches, as `[Mods] Order` |
-| `--mods-dump DIR` | Writes every tile drawn, once, as a replacement template, even with mods off. Creates missing parent folders and reports a write failure before stopping the dump |
+| `--mods-dump DIR` | Writes every tile drawn, once, as a replacement template, even with mods off or without `--present-out` in a headless run. Creates missing parent folders and reports a write failure before stopping the dump |
 
 ## Making a mod
 

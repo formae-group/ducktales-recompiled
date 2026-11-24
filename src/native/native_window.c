@@ -172,6 +172,7 @@ static void run_frame(uint8_t pad0, uint8_t pad1)
         app_mods_audio_frame_end(native_cpu_ram());
     }
     app_mods_scripts_frame();
+    app_mods_dump_frame();
 }
 
 /* What the window shows (ui/app_present.h, or the plain picture) for a

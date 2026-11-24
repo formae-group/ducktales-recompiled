@@ -159,7 +159,8 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   position and switch of a valid mod with the same ID. Rescan and the restart prompt distinguish
   packages by source, so replacing a file with the same ID doesn't make it appear already loaded.
 - Mods: `--mods-dump` writes to paths with accented characters and reports a failed PNG write
-  instead of silently dropping tiles.
+  instead of silently dropping tiles. An off-screen run dumps tiles without needing a
+  second option to request a presented picture.
 
 ## [1.0.0] - 2026-11-23
 
