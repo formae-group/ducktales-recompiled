@@ -4028,33 +4028,34 @@ static void Obj_HopWalker(uint8_t x)
             return;
         }
     }
+}
 
-    /* Kind $38 ($F9F8): what kind $37 lets down into slot 3 (a rope, as a
+/* Kind $38 ($F9F8): what kind $37 lets down into slot 3 (a rope, as a
  * hypothesis). Once Scrooge touches it, unless he is dying (mode 13), he holds
  * on: action 4, its world X, mode 14. From then on it rises 2 px a frame with
  * him, and the land is left once it is above Y $10. */
-    static void Obj_SkyRope(uint8_t x)
-    {
-        Decomp_Enter(DT_CODE_KIND_SKY_ROPE, 0x22, x, gObjects->kind[x]);
-        if ((gObjects->state[x] & 0x0F) == 0) {
-            if (!Obj_TouchScrooge(x) || gPlayerMode == PLAYER_MODE_DEATH) {
-                return;
-            }
-            gObjects->state[x]++;
-            gObjects->action[P_] = ROPE_ACTION;
-            gObjects->animFrame[P_] = 0;
-            gObjects->worldX[P_] = gObjects->worldX[x];
-            gObjects->worldPage[P_] = gObjects->worldPage[x];
-            gPlayerMode = PLAYER_MODE_14;
+static void Obj_SkyRope(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_SKY_ROPE, 0x22, x, gObjects->kind[x]);
+    if ((gObjects->state[x] & 0x0F) == 0) {
+        if (!Obj_TouchScrooge(x) || gPlayerMode == PLAYER_MODE_DEATH) {
+            return;
         }
-        gObjects->animTimer[P_] = 0;
-        gObjects->y[P_] = gObjects->y[x] = (uint8_t)(gObjects->y[x] - ROPE_RISE);
-        if (gObjects->y[x] < ROPE_TOP_Y) {
-            RAM_U8(DT_ADDR_LAND_LEFT)++;
-        }
+        gObjects->state[x]++;
+        gObjects->action[P_] = ROPE_ACTION;
+        gObjects->animFrame[P_] = 0;
+        gObjects->worldX[P_] = gObjects->worldX[x];
+        gObjects->worldPage[P_] = gObjects->worldPage[x];
+        gPlayerMode = PLAYER_MODE_14;
     }
+    gObjects->animTimer[P_] = 0;
+    gObjects->y[P_] = gObjects->y[x] = (uint8_t)(gObjects->y[x] - ROPE_RISE);
+    if (gObjects->y[x] < ROPE_TOP_Y) {
+        RAM_U8(DT_ADDR_LAND_LEFT)++;
+    }
+}
 
-    /* ---- kinds $3A and $3B, the final arena's stand-in (fixed bank) ---- */
+/* ---- kinds $3A and $3B, the final arena's stand-in (fixed bank) ---- */
 
 #define STAND_IN_Y         0x74
 #define STAND_IN_WAIT      0x78 /* frames hidden before it appears */
@@ -4071,7 +4072,7 @@ static void Obj_HopWalker(uint8_t x)
 #define BEATEN_WAIT        0xB4
 #define BEATEN_SCENE_STEP  0x0B /* mode 15's arena redraw */
 
-    /* Kind $3A ($FA3F): what a boss becomes in the final arena (the spawner's
+/* Kind $3A ($FA3F): what a boss becomes in the final arena (the spawner's
  * stand-in, five hits, no prize). Hidden at Y $74, it waits 120 frames, then
  * appears at a random one of 16 world X spots ($FB54; its random step adds
  * the carry the dispatch left), blinking and facing Scrooge, for 60 frames.
@@ -4079,921 +4080,918 @@ static void Obj_HopWalker(uint8_t x)
  * faces, stays 240 frames (the last 60 blinking) and hides for 60 frames
  * before the next spot. A counted hit goes to the boss hit $F6D7; the last
  * one makes it kind $3B. */
-    static void Obj_FinalStandIn(uint8_t x, bool carry)
-    {
-        static const uint8_t spots[16] = { 0x20, 0x50, 0x80, 0xB0, 0xE0, 0x20, 0x20, 0x20,
-                                           0x50, 0x50, 0x80, 0xB0, 0xB0, 0xE0, 0xE0, 0xE0 };
-        static const uint8_t throwX[2] = { 0x10, 0xF0 };
-        static const uint8_t facing[2] = { 0, OBJ_FLAG_FACING_RIGHT };
+static void Obj_FinalStandIn(uint8_t x, bool carry)
+{
+    static const uint8_t spots[16] = { 0x20, 0x50, 0x80, 0xB0, 0xE0, 0x20, 0x20, 0x20,
+                                       0x50, 0x50, 0x80, 0xB0, 0xB0, 0xE0, 0xE0, 0xE0 };
+    static const uint8_t throwX[2] = { 0x10, 0xF0 };
+    static const uint8_t facing[2] = { 0, OBJ_FLAG_FACING_RIGHT };
 
-        Decomp_Enter(DT_CODE_KIND_FINAL_STAND_IN, 0x22, x, gObjects->kind[x]);
-        if (gObjects->unk_0690[x] != 0) {
-            if (Boss_Hit(&x)) {
-                gObjects->action[x] = STAND_IN_BEATEN;
-                gObjects->animTimer[x] = 0;
-                gObjects->animFrame[x] = 0;
-                gObjects->hitbox[x] = 0;
-                gObjects->state[x] = 0xA0;
-                gObjects->kind[x] = OBJ_KIND_STAND_IN_BEATEN;
-                return;
-            }
-            carry = false;
-        }
-        gObjects->animTimer[x] = 0;
-        if ((gObjects->state[x] & 0x0F) == 0) {
-            gObjects->y[x] = STAND_IN_Y;
-            gObjects->timer[x] = STAND_IN_WAIT;
-            RAM_U8(DT_ADDR_TRANSYLVANIA_BOSS_05EF) = 0x44;
-            gObjects->state[x]++;
-        }
-        if (gObjects->timer[x] != 0) {
-            if (--gObjects->timer[x] != 0) {
-                return;
-            }
-            gRandom(0) = (uint8_t)(gRandom(0) + gRandom(1) + carry);
-            gObjects->worldX[x] = spots[gRandom(0) & 0x0F];
-            gObjects->unk_06C0[x] = STAND_IN_SHOW;
-            gObjects->flags[x] |= OBJ_FLAG_BLINK;
-            gObjects->state[x] &= (uint8_t)~OBJ_STATUS_HIDDEN;
-            Obj_FaceScrooge(x);
-            gObjects->flags[x] = (uint8_t)((gObjects->flags[x] & ~OBJ_FLAG_FACING_RIGHT) |
-                                           facing[gObjects->dir[x] & 1]);
-            return;
-        }
-        if (gObjects->unk_06C0[x] != 0) {
-            if (--gObjects->unk_06C0[x] != 0) {
-                return;
-            }
-            gObjects->flags[x] &= 0xF0;
-            gObjects->animFrame[x] = 1;
-            gObjects->hitbox[x] = STAND_IN_HITBOX;
-            uint8_t o = STAND_IN_SHOT_SLOT;
-            gObjects->y[o] = STAND_IN_SHOT_Y;
-            gObjects->animTimer[o] = 0;
-            gObjects->animFrame[o] = 0;
-            gObjects->unk_0690[o] = 0;
-            gObjects->state[o] = 0xA0;
-            gObjects->flags[o] = 0xA0;
-            gObjects->action[o] = STAND_IN_SHOT;
-            gObjects->kind[o] = OBJ_KIND_SWOOPER;
-            gObjects->hitbox[o] = STAND_IN_SHOT_BOX;
-            gObjects->worldPage[o] = gObjects->worldPage[x];
-            gObjects->dir[o] = gObjects->dir[x];
-            gObjects->worldX[o] = (uint8_t)(gObjects->worldX[x] + throwX[gObjects->dir[x] & 1]);
-            gObjects->unk_06D0[x] = STAND_IN_STAY;
-            return;
-        }
-        if (gObjects->unk_06D0[x] == STAND_IN_SHOW) {
-            gObjects->flags[x] |= OBJ_FLAG_BLINK;
+    Decomp_Enter(DT_CODE_KIND_FINAL_STAND_IN, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0) {
+        if (Boss_Hit(&x)) {
+            gObjects->action[x] = STAND_IN_BEATEN;
+            gObjects->animTimer[x] = 0;
             gObjects->animFrame[x] = 0;
-        }
-        if (--gObjects->unk_06D0[x] != 0) {
+            gObjects->hitbox[x] = 0;
+            gObjects->state[x] = 0xA0;
+            gObjects->kind[x] = OBJ_KIND_STAND_IN_BEATEN;
             return;
         }
-        gObjects->hitbox[x] = 0;
-        gObjects->state[x] |= OBJ_STATUS_HIDDEN;
-        gObjects->timer[x] = STAND_IN_SHOW;
+        carry = false;
     }
+    gObjects->animTimer[x] = 0;
+    if ((gObjects->state[x] & 0x0F) == 0) {
+        gObjects->y[x] = STAND_IN_Y;
+        gObjects->timer[x] = STAND_IN_WAIT;
+        RAM_U8(DT_ADDR_TRANSYLVANIA_BOSS_05EF) = 0x44;
+        gObjects->state[x]++;
+    }
+    if (gObjects->timer[x] != 0) {
+        if (--gObjects->timer[x] != 0) {
+            return;
+        }
+        gRandom(0) = (uint8_t)(gRandom(0) + gRandom(1) + carry);
+        gObjects->worldX[x] = spots[gRandom(0) & 0x0F];
+        gObjects->unk_06C0[x] = STAND_IN_SHOW;
+        gObjects->flags[x] |= OBJ_FLAG_BLINK;
+        gObjects->state[x] &= (uint8_t)~OBJ_STATUS_HIDDEN;
+        Obj_FaceScrooge(x);
+        gObjects->flags[x] = (uint8_t)((gObjects->flags[x] & ~OBJ_FLAG_FACING_RIGHT) | facing[gObjects->dir[x] & 1]);
+        return;
+    }
+    if (gObjects->unk_06C0[x] != 0) {
+        if (--gObjects->unk_06C0[x] != 0) {
+            return;
+        }
+        gObjects->flags[x] &= 0xF0;
+        gObjects->animFrame[x] = 1;
+        gObjects->hitbox[x] = STAND_IN_HITBOX;
+        uint8_t o = STAND_IN_SHOT_SLOT;
+        gObjects->y[o] = STAND_IN_SHOT_Y;
+        gObjects->animTimer[o] = 0;
+        gObjects->animFrame[o] = 0;
+        gObjects->unk_0690[o] = 0;
+        gObjects->state[o] = 0xA0;
+        gObjects->flags[o] = 0xA0;
+        gObjects->action[o] = STAND_IN_SHOT;
+        gObjects->kind[o] = OBJ_KIND_SWOOPER;
+        gObjects->hitbox[o] = STAND_IN_SHOT_BOX;
+        gObjects->worldPage[o] = gObjects->worldPage[x];
+        gObjects->dir[o] = gObjects->dir[x];
+        gObjects->worldX[o] = (uint8_t)(gObjects->worldX[x] + throwX[gObjects->dir[x] & 1]);
+        gObjects->unk_06D0[x] = STAND_IN_STAY;
+        return;
+    }
+    if (gObjects->unk_06D0[x] == STAND_IN_SHOW) {
+        gObjects->flags[x] |= OBJ_FLAG_BLINK;
+        gObjects->animFrame[x] = 0;
+    }
+    if (--gObjects->unk_06D0[x] != 0) {
+        return;
+    }
+    gObjects->hitbox[x] = 0;
+    gObjects->state[x] |= OBJ_STATUS_HIDDEN;
+    gObjects->timer[x] = STAND_IN_SHOW;
+}
 
-    /* Kind $3B ($FBC9): the beaten stand-in. Once its action shows a frame past
+/* Kind $3B ($FBC9): the beaten stand-in. Once its action shows a frame past
  * the first with the frame timer at 5, it hides (state $B1) for 180 frames,
  * then is freed and starts mode 15's arena redraw (step $0B), the background
  * below the split going off. */
-    static void Obj_StandInBeaten(uint8_t x)
-    {
-        Decomp_Enter(DT_CODE_KIND_STAND_IN_BEATEN, 0x22, x, gObjects->kind[x]);
-        if ((gObjects->state[x] & 0x0F) == 0) {
-            if (gObjects->animFrame[x] == 0 || gObjects->animTimer[x] != BEATEN_FRAME_TIMER) {
-                return;
-            }
-            gObjects->state[x] = BEATEN_STATE;
-            gObjects->timer[x] = BEATEN_WAIT;
-        }
-        if (gObjects->timer[x] != 0) {
-            gObjects->timer[x]--;
+static void Obj_StandInBeaten(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_STAND_IN_BEATEN, 0x22, x, gObjects->kind[x]);
+    if ((gObjects->state[x] & 0x0F) == 0) {
+        if (gObjects->animFrame[x] == 0 || gObjects->animTimer[x] != BEATEN_FRAME_TIMER) {
             return;
         }
-        gObjects->state[x] = 0;
-        gPlayerMode = PLAYER_MODE_MESSAGE;
-        RAM_U8(DT_ADDR_BG_OFF_BELOW_SPLIT)++;
-        RAM_U8(DT_ADDR_SCENE_STEP) = BEATEN_SCENE_STEP;
+        gObjects->state[x] = BEATEN_STATE;
+        gObjects->timer[x] = BEATEN_WAIT;
     }
+    if (gObjects->timer[x] != 0) {
+        gObjects->timer[x]--;
+        return;
+    }
+    gObjects->state[x] = 0;
+    gPlayerMode = PLAYER_MODE_MESSAGE;
+    RAM_U8(DT_ADDR_BG_OFF_BELOW_SPLIT)++;
+    RAM_U8(DT_ADDR_SCENE_STEP) = BEATEN_SCENE_STEP;
+}
 
-    /* ---- the dispatch ---- */
+/* ---- the dispatch ---- */
 
-    /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
+/* One live slot: the dispatch leaves the handler's address in $00/$01 (the
  * JMP ($0000) vector), A = $22 (the low byte of the return it pushed),
  * X = slot and Y = kind. The flags are those of the loop: the caller's carry
  * for slot 1, the CPX of the loop for the others, and the V the previous
  * handler left. *r gets the registers an original handler returns with.
  * Kinds $43 and up read past the table in the original; here they do nothing. */
-    static void Obj_RunHandler(uint8_t slot, Regs *r)
-    {
-        uint8_t kind = gObjects->kind[slot];
-        gScratch0 = Rom((uint16_t)(DT_CODE_OBJ_HANDLER_LO + kind));
-        gScratch1 = Rom((uint16_t)(DT_CODE_OBJ_HANDLER_HI + kind));
-        r->a = 0x22;
-        r->y = kind;
-        r->p = Flags_NZ(r->p, r->a);
-        switch (kind) {
-            case OBJ_KIND_NONE:
-                break;
-            case OBJ_KIND_HOPPER:
-                Obj_Hopper(slot);
-                break;
-            case OBJ_KIND_WALKER:
-                Obj_Walker(slot);
-                break;
-            case OBJ_KIND_THROWER:
-                Obj_Thrower(slot);
-                break;
-            case OBJ_KIND_SHOT:
-                Obj_Shot(slot);
-                break;
-            case OBJ_KIND_WATCHER:
-                Obj_Watcher(slot);
-                break;
-            case OBJ_KIND_DANGLER:
-                Obj_Dangler(slot);
-                break;
-            case OBJ_KIND_SNAPPER:
-                Obj_Snapper(slot);
-                break;
-            case OBJ_KIND_BLOCK:
-                Obj_Block(slot, kind);
-                break;
-            case OBJ_KIND_THROWN:
-                Obj_Thrown(slot);
-                break;
-            case OBJ_KIND_DEFEATED:
-                Obj_Defeated(slot);
-                break;
-            case OBJ_KIND_DROPPER:
-                Obj_Dropper(slot);
-                break;
-            case OBJ_KIND_CRAWLER:
-                Obj_Crawler(slot);
-                break;
-            case OBJ_KIND_FLYER:
-                Obj_Flyer(slot);
-                break;
-            case OBJ_KIND_SWING:
-                Obj_Swing(slot);
-                break;
-            case OBJ_KIND_LIFT:
-                Obj_Lift(slot);
-                break;
-            case OBJ_KIND_CHARGER:
-                Obj_Charger(slot);
-                break;
-            case OBJ_KIND_SWOOPER:
-                Obj_Swooper(slot);
-                break;
-            case OBJ_KIND_BLOCK_DWELLER:
-                Obj_BlockDweller(slot);
-                break;
-            case OBJ_KIND_PICKUP:
-                Obj_Pickup(slot);
-                break;
-            case OBJ_KIND_HIDDEN_ITEM:
-                Obj_HiddenItem(slot);
-                break;
-            case OBJ_KIND_CHEST:
-                Obj_Chest(slot);
-                break;
-            case OBJ_KIND_PATROLLER:
-                Obj_Patroller(slot);
-                break;
-            case OBJ_KIND_POUNCER:
-                Obj_Pouncer(slot);
-                break;
-            case OBJ_KIND_PIT_JUMPER:
-                Obj_PitJumper(slot);
-                break;
-            case OBJ_KIND_BOUNCER:
-                Obj_Bouncer(slot);
-                break;
-            case OBJ_KIND_LEAPER:
-                Obj_Leaper(slot);
-                break;
-            case OBJ_KIND_BLOCK_KICKER:
-                Obj_BlockKicker(slot);
-                break;
-            case OBJ_KIND_LEDGE_WALKER:
-                Obj_LedgeWalker(slot);
-                break;
-            case OBJ_KIND_PACER:
-                Obj_Pacer(slot);
-                break;
-            case OBJ_KIND_BOBBER:
-                Obj_Bobber(slot);
-                break;
-            case OBJ_KIND_ROLLER:
-                Obj_Roller(slot);
-                break;
-            case OBJ_KIND_BOULDER:
-                Obj_Boulder(slot);
-                break;
-            case OBJ_KIND_CEILING_HOPPER:
-                Obj_CeilingHopper(slot);
-                break;
-            case OBJ_KIND_TRANSYLVANIA_BOSS:
-                Obj_TransylvaniaBoss(slot);
-                break;
-            case OBJ_KIND_RISING_SHOT:
-                Obj_RisingShot(slot);
-                break;
-            case OBJ_KIND_MINES_BOSS:
-                Obj_MinesBoss(slot);
-                break;
-            case OBJ_KIND_MOON_BOSS:
-                Obj_MoonBoss(slot, r->p & P_C);
-                break;
-            case OBJ_KIND_HIMALAYAS_BOSS:
-                Obj_HimalayasBoss(slot);
-                break;
-            case OBJ_KIND_DROPPING:
-                Obj_Dropping(slot);
-                break;
-            case OBJ_KIND_TREAT_SPOUT:
-                Obj_TreatSpout(slot);
-                break;
-            case OBJ_KIND_TREAT:
-                Obj_Treat(slot);
-                break;
-            case OBJ_KIND_AMAZON_BOSS:
-                Obj_AmazonBoss(slot, r->p & P_C);
-                break;
-            case OBJ_KIND_DOOR:
-                Obj_Door(slot);
-                break;
-            case OBJ_KIND_THIEF:
-            case OBJ_KIND_SHORT_THIEF:
-                Obj_Thief(slot);
-                break;
-            case OBJ_KIND_PICKPOCKET:
-                Obj_Pickpocket(slot);
-                break;
-            case OBJ_KIND_TARGET:
-                Obj_Target(slot);
-                break;
-            case OBJ_KIND_LAUNCHER:
-                Obj_Launcher(slot);
-                break;
-            case OBJ_KIND_TALKER:
-                Obj_Talker(slot);
-                break;
-            case OBJ_KIND_LAUNCHPAD_RIDE:
-                Obj_LaunchpadRide(slot);
-                break;
-            case OBJ_KIND_SKY_FLYER:
-                Obj_SkyFlyer(slot);
-                break;
-            case OBJ_KIND_SKY_ROPE:
-                Obj_SkyRope(slot);
-                break;
-            case OBJ_KIND_FINAL_STAND_IN:
-                Obj_FinalStandIn(slot, r->p & P_C);
-                break;
-            case OBJ_KIND_STAND_IN_BEATEN:
-                Obj_StandInBeaten(slot);
-                break;
-            case OBJ_KIND_MOVING_PLATFORM:
-                Obj_MovingPlatform(slot);
-                break;
-            case OBJ_KIND_VISITOR:
-                Obj_Visitor(slot);
-                break;
-            case OBJ_KIND_PATH_OPENER:
-                Obj_PathOpener(slot);
-                break;
-            case OBJ_KIND_KEY_SPOT:
-                Obj_KeySpot(slot);
-                break;
-            case OBJ_KIND_16:
-                *r = Decomp_CallP(DT_CODE_KIND_16, r->a, slot, r->y, r->p);
-                break;
-            case OBJ_KIND_17:
-                *r = Decomp_CallP(DT_CODE_KIND_17, r->a, slot, r->y, r->p);
-                break;
-            case OBJ_KIND_CART:
-                Obj_Cart(slot);
-                break;
-            case OBJ_KIND_HOP_WALKER:
-                Obj_HopWalker(slot);
-                break;
-            case OBJ_KIND_3C:
-                *r = Decomp_CallP(DT_CODE_KIND_3C, r->a, slot, r->y, r->p);
-                break;
-            case OBJ_KIND_3D:
-                *r = Decomp_CallP(DT_CODE_KIND_3D, r->a, slot, r->y, r->p);
-                break;
-            case OBJ_KIND_40:
-                *r = Decomp_CallP(DT_CODE_KIND_40, r->a, slot, r->y, r->p);
-                break;
-            case OBJ_KIND_42:
-                *r = Decomp_CallP(DT_CODE_KIND_42, r->a, slot, r->y, r->p);
-                break;
-        }
+static void Obj_RunHandler(uint8_t slot, Regs *r)
+{
+    uint8_t kind = gObjects->kind[slot];
+    gScratch0 = Rom((uint16_t)(DT_CODE_OBJ_HANDLER_LO + kind));
+    gScratch1 = Rom((uint16_t)(DT_CODE_OBJ_HANDLER_HI + kind));
+    r->a = 0x22;
+    r->y = kind;
+    r->p = Flags_NZ(r->p, r->a);
+    switch (kind) {
+        case OBJ_KIND_NONE:
+            break;
+        case OBJ_KIND_HOPPER:
+            Obj_Hopper(slot);
+            break;
+        case OBJ_KIND_WALKER:
+            Obj_Walker(slot);
+            break;
+        case OBJ_KIND_THROWER:
+            Obj_Thrower(slot);
+            break;
+        case OBJ_KIND_SHOT:
+            Obj_Shot(slot);
+            break;
+        case OBJ_KIND_WATCHER:
+            Obj_Watcher(slot);
+            break;
+        case OBJ_KIND_DANGLER:
+            Obj_Dangler(slot);
+            break;
+        case OBJ_KIND_SNAPPER:
+            Obj_Snapper(slot);
+            break;
+        case OBJ_KIND_BLOCK:
+            Obj_Block(slot, kind);
+            break;
+        case OBJ_KIND_THROWN:
+            Obj_Thrown(slot);
+            break;
+        case OBJ_KIND_DEFEATED:
+            Obj_Defeated(slot);
+            break;
+        case OBJ_KIND_DROPPER:
+            Obj_Dropper(slot);
+            break;
+        case OBJ_KIND_CRAWLER:
+            Obj_Crawler(slot);
+            break;
+        case OBJ_KIND_FLYER:
+            Obj_Flyer(slot);
+            break;
+        case OBJ_KIND_SWING:
+            Obj_Swing(slot);
+            break;
+        case OBJ_KIND_LIFT:
+            Obj_Lift(slot);
+            break;
+        case OBJ_KIND_CHARGER:
+            Obj_Charger(slot);
+            break;
+        case OBJ_KIND_SWOOPER:
+            Obj_Swooper(slot);
+            break;
+        case OBJ_KIND_BLOCK_DWELLER:
+            Obj_BlockDweller(slot);
+            break;
+        case OBJ_KIND_PICKUP:
+            Obj_Pickup(slot);
+            break;
+        case OBJ_KIND_HIDDEN_ITEM:
+            Obj_HiddenItem(slot);
+            break;
+        case OBJ_KIND_CHEST:
+            Obj_Chest(slot);
+            break;
+        case OBJ_KIND_PATROLLER:
+            Obj_Patroller(slot);
+            break;
+        case OBJ_KIND_POUNCER:
+            Obj_Pouncer(slot);
+            break;
+        case OBJ_KIND_PIT_JUMPER:
+            Obj_PitJumper(slot);
+            break;
+        case OBJ_KIND_BOUNCER:
+            Obj_Bouncer(slot);
+            break;
+        case OBJ_KIND_LEAPER:
+            Obj_Leaper(slot);
+            break;
+        case OBJ_KIND_BLOCK_KICKER:
+            Obj_BlockKicker(slot);
+            break;
+        case OBJ_KIND_LEDGE_WALKER:
+            Obj_LedgeWalker(slot);
+            break;
+        case OBJ_KIND_PACER:
+            Obj_Pacer(slot);
+            break;
+        case OBJ_KIND_BOBBER:
+            Obj_Bobber(slot);
+            break;
+        case OBJ_KIND_ROLLER:
+            Obj_Roller(slot);
+            break;
+        case OBJ_KIND_BOULDER:
+            Obj_Boulder(slot);
+            break;
+        case OBJ_KIND_CEILING_HOPPER:
+            Obj_CeilingHopper(slot);
+            break;
+        case OBJ_KIND_TRANSYLVANIA_BOSS:
+            Obj_TransylvaniaBoss(slot);
+            break;
+        case OBJ_KIND_RISING_SHOT:
+            Obj_RisingShot(slot);
+            break;
+        case OBJ_KIND_MINES_BOSS:
+            Obj_MinesBoss(slot);
+            break;
+        case OBJ_KIND_MOON_BOSS:
+            Obj_MoonBoss(slot, r->p & P_C);
+            break;
+        case OBJ_KIND_HIMALAYAS_BOSS:
+            Obj_HimalayasBoss(slot);
+            break;
+        case OBJ_KIND_DROPPING:
+            Obj_Dropping(slot);
+            break;
+        case OBJ_KIND_TREAT_SPOUT:
+            Obj_TreatSpout(slot);
+            break;
+        case OBJ_KIND_TREAT:
+            Obj_Treat(slot);
+            break;
+        case OBJ_KIND_AMAZON_BOSS:
+            Obj_AmazonBoss(slot, r->p & P_C);
+            break;
+        case OBJ_KIND_DOOR:
+            Obj_Door(slot);
+            break;
+        case OBJ_KIND_THIEF:
+        case OBJ_KIND_SHORT_THIEF:
+            Obj_Thief(slot);
+            break;
+        case OBJ_KIND_PICKPOCKET:
+            Obj_Pickpocket(slot);
+            break;
+        case OBJ_KIND_TARGET:
+            Obj_Target(slot);
+            break;
+        case OBJ_KIND_LAUNCHER:
+            Obj_Launcher(slot);
+            break;
+        case OBJ_KIND_TALKER:
+            Obj_Talker(slot);
+            break;
+        case OBJ_KIND_LAUNCHPAD_RIDE:
+            Obj_LaunchpadRide(slot);
+            break;
+        case OBJ_KIND_SKY_FLYER:
+            Obj_SkyFlyer(slot);
+            break;
+        case OBJ_KIND_SKY_ROPE:
+            Obj_SkyRope(slot);
+            break;
+        case OBJ_KIND_FINAL_STAND_IN:
+            Obj_FinalStandIn(slot, r->p & P_C);
+            break;
+        case OBJ_KIND_STAND_IN_BEATEN:
+            Obj_StandInBeaten(slot);
+            break;
+        case OBJ_KIND_MOVING_PLATFORM:
+            Obj_MovingPlatform(slot);
+            break;
+        case OBJ_KIND_VISITOR:
+            Obj_Visitor(slot);
+            break;
+        case OBJ_KIND_PATH_OPENER:
+            Obj_PathOpener(slot);
+            break;
+        case OBJ_KIND_KEY_SPOT:
+            Obj_KeySpot(slot);
+            break;
+        case OBJ_KIND_16:
+            *r = Decomp_CallP(DT_CODE_KIND_16, r->a, slot, r->y, r->p);
+            break;
+        case OBJ_KIND_17:
+            *r = Decomp_CallP(DT_CODE_KIND_17, r->a, slot, r->y, r->p);
+            break;
+        case OBJ_KIND_CART:
+            Obj_Cart(slot);
+            break;
+        case OBJ_KIND_HOP_WALKER:
+            Obj_HopWalker(slot);
+            break;
+        case OBJ_KIND_3C:
+            *r = Decomp_CallP(DT_CODE_KIND_3C, r->a, slot, r->y, r->p);
+            break;
+        case OBJ_KIND_3D:
+            *r = Decomp_CallP(DT_CODE_KIND_3D, r->a, slot, r->y, r->p);
+            break;
+        case OBJ_KIND_40:
+            *r = Decomp_CallP(DT_CODE_KIND_40, r->a, slot, r->y, r->p);
+            break;
+        case OBJ_KIND_42:
+            *r = Decomp_CallP(DT_CODE_KIND_42, r->a, slot, r->y, r->p);
+            break;
     }
+}
 
-    /* Bank 6 $8000: once per frame from the frame loop. Returns with X = 16,
+/* Bank 6 $8000: once per frame from the frame loop. Returns with X = 16,
  * which the code after it passes on (a sound request keeps it in $00). */
-    static void Obj_UpdateAll(Regs * r)
-    {
-        Decomp_Enter(DT_B6_OBJECTS, r->a, r->x, r->y);
-        gGravity = OBJ_GRAVITY;
-        r->a = OBJ_GRAVITY;
-        for (gObjCursor = 1; gObjCursor != OBJ_SLOTS; gObjCursor++) {
-            r->a = gObjects->state[gObjCursor];
-            if (r->a & OBJ_STATUS_LIVE) {
-                Obj_RunHandler(gObjCursor, r);
-            }
-            r->x = (uint8_t)(gObjCursor + 1);
-            r->p = Flags_Cmp(r->p, r->x, OBJ_SLOTS);
+static void Obj_UpdateAll(Regs *r)
+{
+    Decomp_Enter(DT_B6_OBJECTS, r->a, r->x, r->y);
+    gGravity = OBJ_GRAVITY;
+    r->a = OBJ_GRAVITY;
+    for (gObjCursor = 1; gObjCursor != OBJ_SLOTS; gObjCursor++) {
+        r->a = gObjects->state[gObjCursor];
+        if (r->a & OBJ_STATUS_LIVE) {
+            Obj_RunHandler(gObjCursor, r);
         }
-    }
-
-    /* ---- adapters ---- */
-
-    static void SetCarry(Regs * r, bool carry)
-    {
-        r->p = (uint8_t)(carry ? r->p | P_C : r->p & ~P_C);
-    }
-
-    static void Run_UpdateAll(Regs * r)
-    {
-        Obj_UpdateAll(r);
-    }
-
-    static void Run_Block(Regs * r)
-    {
-        Obj_Block(r->x, r->y);
-    }
-
-    static void Run_Hopper(Regs * r)
-    {
-        Obj_Hopper(r->x);
-    }
-
-    static void Run_Walker(Regs * r)
-    {
-        Obj_Walker(r->x);
-    }
-
-    static void Run_Thrower(Regs * r)
-    {
-        Obj_Thrower(r->x);
-    }
-
-    static void Run_Shot(Regs * r)
-    {
-        Obj_Shot(r->x);
-    }
-
-    static void Run_Watcher(Regs * r)
-    {
-        Obj_Watcher(r->x);
-    }
-
-    static void Run_Dangler(Regs * r)
-    {
-        Obj_Dangler(r->x);
-    }
-
-    static void Run_Snapper(Regs * r)
-    {
-        Obj_Snapper(r->x);
-    }
-
-    static void Run_Thrown(Regs * r)
-    {
-        Obj_Thrown(r->x);
-    }
-
-    static void Run_Defeated(Regs * r)
-    {
-        Obj_Defeated(r->x);
-    }
-
-    static void Run_Dropper(Regs * r)
-    {
-        Obj_Dropper(r->x);
-    }
-
-    static void Run_Crawler(Regs * r)
-    {
-        Obj_Crawler(r->x);
-    }
-
-    static void Run_Flyer(Regs * r)
-    {
-        Obj_Flyer(r->x);
-    }
-
-    static void Run_Swing(Regs * r)
-    {
-        Obj_Swing(r->x);
-    }
-
-    static void Run_Lift(Regs * r)
-    {
-        Obj_Lift(r->x);
-    }
-
-    static void Run_Patroller(Regs * r)
-    {
-        Obj_Patroller(r->x);
-    }
-
-    static void Run_Charger(Regs * r)
-    {
-        Obj_Charger(r->x);
-    }
-
-    static void Run_Bobber(Regs * r)
-    {
-        Obj_Bobber(r->x);
-    }
-
-    static void Run_Leaper(Regs * r)
-    {
-        Obj_Leaper(r->x);
-    }
-
-    static void Run_SpawnDust(Regs * r)
-    {
-        Obj_SpawnDust(r->x);
-    }
-
-    static void Run_RisingShot(Regs * r)
-    {
-        Obj_RisingShot(r->x);
-    }
-
-    static void Run_Dropping(Regs * r)
-    {
-        Obj_Dropping(r->x);
-    }
-
-    static void Run_CeilingHopper(Regs * r)
-    {
-        Obj_CeilingHopper(r->x);
-    }
-
-    static void Run_CeilingWalk(Regs * r)
-    {
-        Obj_CeilingWalk(r->x);
-    }
-
-    static void Run_BlockDweller(Regs * r)
-    {
-        Obj_BlockDweller(r->x);
-    }
-
-    static void Run_DwellerLinkBlock(Regs * r)
-    {
-        Obj_DwellerLinkBlock(r->x);
-    }
-
-    static void Run_LaunchpadRide(Regs * r)
-    {
-        Obj_LaunchpadRide(r->x);
-    }
-
-    static void Run_SkyFlyer(Regs * r)
-    {
-        Obj_SkyFlyer(r->x);
-    }
-
-    static void Run_SkyRope(Regs * r)
-    {
-        Obj_SkyRope(r->x);
-    }
-
-    static void Run_FinalStandIn(Regs * r)
-    {
-        Obj_FinalStandIn(r->x, r->p & P_C);
-    }
-
-    static void Run_StandInBeaten(Regs * r)
-    {
-        Obj_StandInBeaten(r->x);
-    }
-
-    static void Run_KeySpot(Regs * r)
-    {
-        Obj_KeySpot(r->x);
-    }
-
-    static void Run_MovingPlatform(Regs * r)
-    {
-        Obj_MovingPlatform(r->x);
-    }
-
-    static void Run_Pacer(Regs * r)
-    {
-        Obj_Pacer(r->x);
-    }
-
-    static void Run_LedgeWalker(Regs * r)
-    {
-        Obj_LedgeWalker(r->x);
-    }
-
-    static void Run_Pouncer(Regs * r)
-    {
-        Obj_Pouncer(r->x);
-    }
-
-    static void Run_Pickpocket(Regs * r)
-    {
-        Obj_Pickpocket(r->x);
-    }
-
-    static void Run_PickpocketWalk(Regs * r)
-    {
-        Obj_PickpocketWalk(r->x);
-    }
-
-    static void Run_StealMoney(Regs * r)
-    {
-        Obj_StealMoney(r->x);
-    }
-
-    static void Run_PitJumper(Regs * r)
-    {
-        Obj_PitJumper(r->x);
-    }
-
-    static void Run_PitSplashOut(Regs * r)
-    {
-        Obj_PitSplashOut(r->x);
-    }
-
-    static void Run_PitSplashIn(Regs * r)
-    {
-        Obj_PitSplashIn(r->x);
-    }
-
-    static void Run_Bouncer(Regs * r)
-    {
-        Obj_Bouncer(r->x);
-    }
-
-    static void Run_Boulder(Regs * r)
-    {
-        Obj_Boulder(r->x);
-    }
-
-    static void Run_Roller(Regs * r)
-    {
-        Obj_Roller(r->x);
-    }
-
-    static void Run_TreatSpout(Regs * r)
-    {
-        Obj_TreatSpout(r->x);
-    }
-
-    static void Run_Treat(Regs * r)
-    {
-        Obj_Treat(r->x);
-    }
-
-    static void Run_Thief(Regs * r)
-    {
-        Obj_Thief(r->x);
-    }
-
-    static void Run_MinesBoss(Regs * r)
-    {
-        Obj_MinesBoss(r->x);
-    }
-
-    static void Run_HimalayasBoss(Regs * r)
-    {
-        Obj_HimalayasBoss(r->x);
-    }
-
-    static void Run_MoonBoss(Regs * r)
-    {
-        Obj_MoonBoss(r->x, r->p & P_C);
-    }
-
-    static void Run_Target(Regs * r)
-    {
-        Obj_Target(r->x);
-    }
-
-    static void Run_Launcher(Regs * r)
-    {
-        Obj_Launcher(r->x);
-    }
-
-    static void Run_SpawnRecord(Regs * r)
-    {
-        r->x = Obj_SpawnRecord(r->y);
-    }
-
-    static void Run_AmazonBoss(Regs * r)
-    {
-        Obj_AmazonBoss(r->x, r->p & P_C);
-    }
-
-    static void Run_TransylvaniaBoss(Regs * r)
-    {
-        Obj_TransylvaniaBoss(r->x);
-    }
-
-    static void Run_BlockKicker(Regs * r)
-    {
-        Obj_BlockKicker(r->x);
-    }
-
-    static void Run_KickBlock(Regs * r)
-    {
-        Obj_KickBlock(r->x, r->y);
-    }
-
-    static void Run_PathOpener(Regs * r)
-    {
-        Obj_PathOpener(r->x);
-    }
-
-    static void Run_Visitor(Regs * r)
-    {
-        Obj_Visitor(r->x);
-    }
-
-    static void Run_Cart(Regs * r)
-    {
-        Obj_Cart(r->x);
-    }
-
-    static void Run_HopWalker(Regs * r)
-    {
-        Obj_HopWalker(r->x);
-    }
-
-    static void Run_HopWalkerWalk(Regs * r)
-    {
-        Obj_HopWalkerWalk(r->x);
-    }
-
-    static void Run_Swooper(Regs * r)
-    {
-        Obj_Swooper(r->x);
-    }
-
-    static void Run_Pickup(Regs * r)
-    {
-        Obj_Pickup(r->x);
-    }
-
-    static void Run_HiddenItem(Regs * r)
-    {
-        Obj_HiddenItem(r->x);
-    }
-
-    static void Run_Chest(Regs * r)
-    {
-        Obj_Chest(r->x);
-    }
-
-    static void Run_Door(Regs * r)
-    {
-        Obj_Door(r->x);
-    }
-
-    static void Run_Talker(Regs * r)
-    {
-        Obj_Talker(r->x);
-    }
-
-    static void Run_FindFreeSlotY(Regs * r)
-    {
-        uint8_t slot;
-        SetCarry(r, !Obj_FindFreeSlotY(&slot));
-        r->y = slot;
-    }
-
-    static void Run_HitOthers(Regs * r)
-    {
-        SetCarry(r, !Obj_HitOthers(r->x));
-    }
-
-    static void Run_SetMotionIndex(Regs * r)
-    {
-        Obj_SetMotionIndex(r->x, r->a);
-    }
-
-    static void Run_EnemyWalk(Regs * r)
-    {
-        r->x = Enemy_Walk(r->x);
-    }
-
-    static void Run_LaunchBlock(Regs * r)
-    {
-        Obj_LaunchBlock(r->x);
-    }
-
-    static void Run_ResolveBlock(Regs * r)
-    {
-        Obj_ResolveBlock(r->x);
-    }
-
-    static void Run_Break(Regs * r)
-    {
-        Obj_Break(r->x);
-    }
-
-    static void Run_Shatter(Regs * r)
-    {
-        Obj_Shatter(r->x);
-    }
-
-    static void Run_Defeat(Regs * r)
-    {
-        Obj_Defeat(r->x);
-    }
-
-    static void Run_OpenBlock(Regs * r)
-    {
-        Obj_OpenBlock(r->x);
-    }
-
-    static void Run_BecomePickupNow(Regs * r)
-    {
-        Obj_BecomePickupNow(r->x);
-    }
-
-    static void Run_BecomeBlock(Regs * r)
-    {
-        Obj_BecomeBlock(r->x);
-    }
-
-    static void Run_HitBlock(Regs * r)
-    {
-        Obj_HitBlock(r->x, r->y);
-    }
-
-    static void Run_ThrownFall(Regs * r)
-    {
-        r->x = Obj_ThrownFall(r->x);
-    }
-
-    static void Run_ThrownWalk(Regs * r)
-    {
-        r->x = Obj_ThrownWalk(r->x);
-    }
-
-    static void Run_ShowItem(Regs * r)
-    {
-        Obj_ShowItem(r->x, r->a);
-    }
-
-    static void Run_PickupTake(Regs * r)
-    {
-        Pickup_Take(r->x);
-    }
-
-    static void Run_PickupTreasure(Regs * r)
-    {
-        Pickup_Treasure(r->x);
-    }
-
-    static void Run_PickupExtraDot(Regs * r)
-    {
-        Pickup_ExtraDot();
-    }
-
-    static void Run_RestoreDot(Regs * r)
-    {
-        Hud_RestoreDot();
-    }
-
-    static void Run_MoneyAdd(Regs * r)
-    {
-        Money_Add(r->a, r->y);
-    }
-
-    static void Run_BossHit(Regs * r)
-    {
-        SetCarry(r, Boss_Hit(&r->x));
-    }
-
-    static void Run_RefillHp(Regs * r)
-    {
-        Hud_RefillHp();
-        r->a = 0;
-        r->y = 0xFC;
-    }
-
-    static void Run_MoneyMax(Regs * r)
-    {
-        Money_Max();
-        r->a = 9;
-        r->y = 0xFF;
-    }
-
-    const DecompRoutine gObjectRoutines[] = {
-        { DT_B6_OBJECTS, "ducktales.decomp.6.8000", "Obj_UpdateAll", Run_UpdateAll, OUT_X, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_HOPPER, NULL, "Obj_Hopper", Run_Hopper, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_WALKER, NULL, "Obj_Walker", Run_Walker, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_THROWER, NULL, "Obj_Thrower", Run_Thrower, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_SHOT, NULL, "Obj_Shot", Run_Shot, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_WATCHER, NULL, "Obj_Watcher", Run_Watcher, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_DANGLER, NULL, "Obj_Dangler", Run_Dangler, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_SNAPPER, NULL, "Obj_Snapper", Run_Snapper, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_BLOCK, NULL, "Obj_Block", Run_Block, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_THROWN, NULL, "Obj_Thrown", Run_Thrown, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_DEFEATED, NULL, "Obj_Defeated", Run_Defeated, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_DROPPER, NULL, "Obj_Dropper", Run_Dropper, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_CRAWLER, NULL, "Obj_Crawler", Run_Crawler, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_FLYER, NULL, "Obj_Flyer", Run_Flyer, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_HOP_WALKER, NULL, "Obj_HopWalker", Run_HopWalker, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_HOP_WALKER_WALK, NULL, "Obj_HopWalkerWalk", Run_HopWalkerWalk, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_CART, NULL, "Obj_Cart", Run_Cart, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_VISITOR, NULL, "Obj_Visitor", Run_Visitor, 0 },
-        { DT_CODE_KIND_PATH_OPENER, NULL, "Obj_PathOpener", Run_PathOpener, 0 },
-        { DT_CODE_KIND_BLOCK_KICKER, NULL, "Obj_BlockKicker", Run_BlockKicker, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_TRANSYLVANIA_BOSS, NULL, "Obj_TransylvaniaBoss", Run_TransylvaniaBoss, 0,
-          .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_AMAZON_BOSS, NULL, "Obj_AmazonBoss", Run_AmazonBoss, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_SPAWN_RECORD, "ducktales.decomp.6.AF2B", "Obj_SpawnRecord", Run_SpawnRecord, OUT_X,
-          .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_LAUNCHER, NULL, "Obj_Launcher", Run_Launcher, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_TARGET, NULL, "Obj_Target", Run_Target, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_MOON_BOSS, NULL, "Obj_MoonBoss", Run_MoonBoss, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_HIMALAYAS_BOSS, NULL, "Obj_HimalayasBoss", Run_HimalayasBoss, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_MINES_BOSS, NULL, "Obj_MinesBoss", Run_MinesBoss, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_THIEF, NULL, "Obj_Thief", Run_Thief, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_TREAT, NULL, "Obj_Treat", Run_Treat, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_TREAT_SPOUT, NULL, "Obj_TreatSpout", Run_TreatSpout, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_ROLLER, NULL, "Obj_Roller", Run_Roller, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_BOULDER, NULL, "Obj_Boulder", Run_Boulder, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_BOUNCER, NULL, "Obj_Bouncer", Run_Bouncer, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_PIT_JUMPER, NULL, "Obj_PitJumper", Run_PitJumper, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_PIT_SPLASH_OUT, NULL, "Obj_PitSplashOut", Run_PitSplashOut, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_PIT_SPLASH_IN, NULL, "Obj_PitSplashIn", Run_PitSplashIn, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_PICKPOCKET, NULL, "Obj_Pickpocket", Run_Pickpocket, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_PICKPOCKET_WALK, NULL, "Obj_PickpocketWalk", Run_PickpocketWalk, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_PICKPOCKET_STEAL, NULL, "Obj_StealMoney", Run_StealMoney, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_POUNCER, NULL, "Obj_Pouncer", Run_Pouncer, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_LEDGE_WALKER, NULL, "Obj_LedgeWalker", Run_LedgeWalker, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_PACER, NULL, "Obj_Pacer", Run_Pacer, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_MOVING_PLATFORM, NULL, "Obj_MovingPlatform", Run_MovingPlatform, 0 },
-        { DT_CODE_KIND_KEY_SPOT, NULL, "Obj_KeySpot", Run_KeySpot, 0 },
-        { DT_CODE_KIND_LAUNCHPAD_RIDE, NULL, "Obj_LaunchpadRide", Run_LaunchpadRide, 0 },
-        { DT_CODE_KIND_SKY_FLYER, NULL, "Obj_SkyFlyer", Run_SkyFlyer, 0 },
-        { DT_CODE_KIND_SKY_ROPE, NULL, "Obj_SkyRope", Run_SkyRope, 0 },
-        { DT_CODE_KIND_FINAL_STAND_IN, NULL, "Obj_FinalStandIn", Run_FinalStandIn, 0 },
-        { DT_CODE_KIND_STAND_IN_BEATEN, NULL, "Obj_StandInBeaten", Run_StandInBeaten, 0 },
-        { DT_CODE_KIND_BLOCK_DWELLER, NULL, "Obj_BlockDweller", Run_BlockDweller, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_DWELLER_LINK_BLOCK, NULL, "Obj_DwellerLinkBlock", Run_DwellerLinkBlock, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_CEILING_HOPPER, NULL, "Obj_CeilingHopper", Run_CeilingHopper, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_CEILING_HOPPER_WALK, NULL, "Obj_CeilingWalk", Run_CeilingWalk, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_DROPPING, NULL, "Obj_Dropping", Run_Dropping, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_RISING_SHOT, NULL, "Obj_RisingShot", Run_RisingShot, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_LEAPER, NULL, "Obj_Leaper", Run_Leaper, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_LEAPER_DUST, NULL, "Obj_SpawnDust", Run_SpawnDust, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_BOBBER, NULL, "Obj_Bobber", Run_Bobber, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_CHARGER, NULL, "Obj_Charger", Run_Charger, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_PATROLLER, NULL, "Obj_Patroller", Run_Patroller, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_PICKUP, NULL, "Obj_Pickup", Run_Pickup, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_HIDDEN_ITEM, NULL, "Obj_HiddenItem", Run_HiddenItem, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_CHEST, NULL, "Obj_Chest", Run_Chest, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_DOOR, NULL, "Obj_Door", Run_Door, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_KIND_TALKER, NULL, "Obj_Talker", Run_Talker, 0 },
-        { DT_CODE_OBJ_FIND_FREE_Y, NULL, "Obj_FindFreeSlotY", Run_FindFreeSlotY, OUT_Y | OUT_C,
-          .bank = DT_BANK_OBJECTS },
-        { DT_CODE_OBJ_HIT_OTHERS, NULL, "Obj_HitOthers", Run_HitOthers, OUT_C, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_OBJ_SET_MOTION, NULL, "Obj_SetMotionIndex", Run_SetMotionIndex, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_ENEMY_WALK, NULL, "Enemy_Walk", Run_EnemyWalk, OUT_X, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_OBJ_LAUNCH_BLOCK, NULL, "Obj_LaunchBlock", Run_LaunchBlock, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_OBJ_KICK_BLOCK, NULL, "Obj_KickBlock", Run_KickBlock, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_OBJ_RESOLVE_BLOCK, NULL, "Obj_ResolveBlock", Run_ResolveBlock, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_OBJ_BREAK, NULL, "Obj_Break", Run_Break, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_OBJ_SHATTER, NULL, "Obj_Shatter", Run_Shatter, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_OBJ_DEFEAT, NULL, "Obj_Defeat", Run_Defeat, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_OBJ_OPEN_BLOCK, NULL, "Obj_OpenBlock", Run_OpenBlock, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_OBJ_BECOME_PICKUP, NULL, "Obj_BecomePickupNow", Run_BecomePickupNow, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_OBJ_BECOME_BLOCK, NULL, "Obj_BecomeBlock", Run_BecomeBlock, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_OBJ_HIT_BLOCK, NULL, "Obj_HitBlock", Run_HitBlock, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_THROWN_FALL, NULL, "Obj_ThrownFall", Run_ThrownFall, OUT_X, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_THROWN_WALK, NULL, "Obj_ThrownWalk", Run_ThrownWalk, OUT_X, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_OBJ_SHOW_ITEM, NULL, "Obj_ShowItem", Run_ShowItem, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_PICKUP_TAKE, NULL, "Pickup_Take", Run_PickupTake, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_PICKUP_TREASURE, NULL, "Pickup_Treasure", Run_PickupTreasure, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_PICKUP_EXTRA_DOT, NULL, "Pickup_ExtraDot", Run_PickupExtraDot, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_HUD_RESTORE_DOT, NULL, "Hud_RestoreDot", Run_RestoreDot, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_MONEY_ADD, NULL, "Money_Add", Run_MoneyAdd, 0, .bank = DT_BANK_OBJECTS },
-        { DT_CODE_HP_REFILL, "ducktales.decomp.F812", "Hud_RefillHp", Run_RefillHp, OUT_A | OUT_Y },
-        { DT_CODE_BOSS_HIT, "ducktales.decomp.F6D7", "Boss_Hit", Run_BossHit, OUT_X | OUT_C },
-        { DT_CODE_MONEY_MAX, "ducktales.decomp.F83F", "Money_Max", Run_MoneyMax, OUT_A | OUT_Y },
-    };
-    const int gObjectRoutineCount = sizeof gObjectRoutines / sizeof gObjectRoutines[0];
+        r->x = (uint8_t)(gObjCursor + 1);
+        r->p = Flags_Cmp(r->p, r->x, OBJ_SLOTS);
+    }
+}
+
+/* ---- adapters ---- */
+
+static void SetCarry(Regs *r, bool carry)
+{
+    r->p = (uint8_t)(carry ? r->p | P_C : r->p & ~P_C);
+}
+
+static void Run_UpdateAll(Regs *r)
+{
+    Obj_UpdateAll(r);
+}
+
+static void Run_Block(Regs *r)
+{
+    Obj_Block(r->x, r->y);
+}
+
+static void Run_Hopper(Regs *r)
+{
+    Obj_Hopper(r->x);
+}
+
+static void Run_Walker(Regs *r)
+{
+    Obj_Walker(r->x);
+}
+
+static void Run_Thrower(Regs *r)
+{
+    Obj_Thrower(r->x);
+}
+
+static void Run_Shot(Regs *r)
+{
+    Obj_Shot(r->x);
+}
+
+static void Run_Watcher(Regs *r)
+{
+    Obj_Watcher(r->x);
+}
+
+static void Run_Dangler(Regs *r)
+{
+    Obj_Dangler(r->x);
+}
+
+static void Run_Snapper(Regs *r)
+{
+    Obj_Snapper(r->x);
+}
+
+static void Run_Thrown(Regs *r)
+{
+    Obj_Thrown(r->x);
+}
+
+static void Run_Defeated(Regs *r)
+{
+    Obj_Defeated(r->x);
+}
+
+static void Run_Dropper(Regs *r)
+{
+    Obj_Dropper(r->x);
+}
+
+static void Run_Crawler(Regs *r)
+{
+    Obj_Crawler(r->x);
+}
+
+static void Run_Flyer(Regs *r)
+{
+    Obj_Flyer(r->x);
+}
+
+static void Run_Swing(Regs *r)
+{
+    Obj_Swing(r->x);
+}
+
+static void Run_Lift(Regs *r)
+{
+    Obj_Lift(r->x);
+}
+
+static void Run_Patroller(Regs *r)
+{
+    Obj_Patroller(r->x);
+}
+
+static void Run_Charger(Regs *r)
+{
+    Obj_Charger(r->x);
+}
+
+static void Run_Bobber(Regs *r)
+{
+    Obj_Bobber(r->x);
+}
+
+static void Run_Leaper(Regs *r)
+{
+    Obj_Leaper(r->x);
+}
+
+static void Run_SpawnDust(Regs *r)
+{
+    Obj_SpawnDust(r->x);
+}
+
+static void Run_RisingShot(Regs *r)
+{
+    Obj_RisingShot(r->x);
+}
+
+static void Run_Dropping(Regs *r)
+{
+    Obj_Dropping(r->x);
+}
+
+static void Run_CeilingHopper(Regs *r)
+{
+    Obj_CeilingHopper(r->x);
+}
+
+static void Run_CeilingWalk(Regs *r)
+{
+    Obj_CeilingWalk(r->x);
+}
+
+static void Run_BlockDweller(Regs *r)
+{
+    Obj_BlockDweller(r->x);
+}
+
+static void Run_DwellerLinkBlock(Regs *r)
+{
+    Obj_DwellerLinkBlock(r->x);
+}
+
+static void Run_LaunchpadRide(Regs *r)
+{
+    Obj_LaunchpadRide(r->x);
+}
+
+static void Run_SkyFlyer(Regs *r)
+{
+    Obj_SkyFlyer(r->x);
+}
+
+static void Run_SkyRope(Regs *r)
+{
+    Obj_SkyRope(r->x);
+}
+
+static void Run_FinalStandIn(Regs *r)
+{
+    Obj_FinalStandIn(r->x, r->p & P_C);
+}
+
+static void Run_StandInBeaten(Regs *r)
+{
+    Obj_StandInBeaten(r->x);
+}
+
+static void Run_KeySpot(Regs *r)
+{
+    Obj_KeySpot(r->x);
+}
+
+static void Run_MovingPlatform(Regs *r)
+{
+    Obj_MovingPlatform(r->x);
+}
+
+static void Run_Pacer(Regs *r)
+{
+    Obj_Pacer(r->x);
+}
+
+static void Run_LedgeWalker(Regs *r)
+{
+    Obj_LedgeWalker(r->x);
+}
+
+static void Run_Pouncer(Regs *r)
+{
+    Obj_Pouncer(r->x);
+}
+
+static void Run_Pickpocket(Regs *r)
+{
+    Obj_Pickpocket(r->x);
+}
+
+static void Run_PickpocketWalk(Regs *r)
+{
+    Obj_PickpocketWalk(r->x);
+}
+
+static void Run_StealMoney(Regs *r)
+{
+    Obj_StealMoney(r->x);
+}
+
+static void Run_PitJumper(Regs *r)
+{
+    Obj_PitJumper(r->x);
+}
+
+static void Run_PitSplashOut(Regs *r)
+{
+    Obj_PitSplashOut(r->x);
+}
+
+static void Run_PitSplashIn(Regs *r)
+{
+    Obj_PitSplashIn(r->x);
+}
+
+static void Run_Bouncer(Regs *r)
+{
+    Obj_Bouncer(r->x);
+}
+
+static void Run_Boulder(Regs *r)
+{
+    Obj_Boulder(r->x);
+}
+
+static void Run_Roller(Regs *r)
+{
+    Obj_Roller(r->x);
+}
+
+static void Run_TreatSpout(Regs *r)
+{
+    Obj_TreatSpout(r->x);
+}
+
+static void Run_Treat(Regs *r)
+{
+    Obj_Treat(r->x);
+}
+
+static void Run_Thief(Regs *r)
+{
+    Obj_Thief(r->x);
+}
+
+static void Run_MinesBoss(Regs *r)
+{
+    Obj_MinesBoss(r->x);
+}
+
+static void Run_HimalayasBoss(Regs *r)
+{
+    Obj_HimalayasBoss(r->x);
+}
+
+static void Run_MoonBoss(Regs *r)
+{
+    Obj_MoonBoss(r->x, r->p & P_C);
+}
+
+static void Run_Target(Regs *r)
+{
+    Obj_Target(r->x);
+}
+
+static void Run_Launcher(Regs *r)
+{
+    Obj_Launcher(r->x);
+}
+
+static void Run_SpawnRecord(Regs *r)
+{
+    r->x = Obj_SpawnRecord(r->y);
+}
+
+static void Run_AmazonBoss(Regs *r)
+{
+    Obj_AmazonBoss(r->x, r->p & P_C);
+}
+
+static void Run_TransylvaniaBoss(Regs *r)
+{
+    Obj_TransylvaniaBoss(r->x);
+}
+
+static void Run_BlockKicker(Regs *r)
+{
+    Obj_BlockKicker(r->x);
+}
+
+static void Run_KickBlock(Regs *r)
+{
+    Obj_KickBlock(r->x, r->y);
+}
+
+static void Run_PathOpener(Regs *r)
+{
+    Obj_PathOpener(r->x);
+}
+
+static void Run_Visitor(Regs *r)
+{
+    Obj_Visitor(r->x);
+}
+
+static void Run_Cart(Regs *r)
+{
+    Obj_Cart(r->x);
+}
+
+static void Run_HopWalker(Regs *r)
+{
+    Obj_HopWalker(r->x);
+}
+
+static void Run_HopWalkerWalk(Regs *r)
+{
+    Obj_HopWalkerWalk(r->x);
+}
+
+static void Run_Swooper(Regs *r)
+{
+    Obj_Swooper(r->x);
+}
+
+static void Run_Pickup(Regs *r)
+{
+    Obj_Pickup(r->x);
+}
+
+static void Run_HiddenItem(Regs *r)
+{
+    Obj_HiddenItem(r->x);
+}
+
+static void Run_Chest(Regs *r)
+{
+    Obj_Chest(r->x);
+}
+
+static void Run_Door(Regs *r)
+{
+    Obj_Door(r->x);
+}
+
+static void Run_Talker(Regs *r)
+{
+    Obj_Talker(r->x);
+}
+
+static void Run_FindFreeSlotY(Regs *r)
+{
+    uint8_t slot;
+    SetCarry(r, !Obj_FindFreeSlotY(&slot));
+    r->y = slot;
+}
+
+static void Run_HitOthers(Regs *r)
+{
+    SetCarry(r, !Obj_HitOthers(r->x));
+}
+
+static void Run_SetMotionIndex(Regs *r)
+{
+    Obj_SetMotionIndex(r->x, r->a);
+}
+
+static void Run_EnemyWalk(Regs *r)
+{
+    r->x = Enemy_Walk(r->x);
+}
+
+static void Run_LaunchBlock(Regs *r)
+{
+    Obj_LaunchBlock(r->x);
+}
+
+static void Run_ResolveBlock(Regs *r)
+{
+    Obj_ResolveBlock(r->x);
+}
+
+static void Run_Break(Regs *r)
+{
+    Obj_Break(r->x);
+}
+
+static void Run_Shatter(Regs *r)
+{
+    Obj_Shatter(r->x);
+}
+
+static void Run_Defeat(Regs *r)
+{
+    Obj_Defeat(r->x);
+}
+
+static void Run_OpenBlock(Regs *r)
+{
+    Obj_OpenBlock(r->x);
+}
+
+static void Run_BecomePickupNow(Regs *r)
+{
+    Obj_BecomePickupNow(r->x);
+}
+
+static void Run_BecomeBlock(Regs *r)
+{
+    Obj_BecomeBlock(r->x);
+}
+
+static void Run_HitBlock(Regs *r)
+{
+    Obj_HitBlock(r->x, r->y);
+}
+
+static void Run_ThrownFall(Regs *r)
+{
+    r->x = Obj_ThrownFall(r->x);
+}
+
+static void Run_ThrownWalk(Regs *r)
+{
+    r->x = Obj_ThrownWalk(r->x);
+}
+
+static void Run_ShowItem(Regs *r)
+{
+    Obj_ShowItem(r->x, r->a);
+}
+
+static void Run_PickupTake(Regs *r)
+{
+    Pickup_Take(r->x);
+}
+
+static void Run_PickupTreasure(Regs *r)
+{
+    Pickup_Treasure(r->x);
+}
+
+static void Run_PickupExtraDot(Regs *r)
+{
+    Pickup_ExtraDot();
+}
+
+static void Run_RestoreDot(Regs *r)
+{
+    Hud_RestoreDot();
+}
+
+static void Run_MoneyAdd(Regs *r)
+{
+    Money_Add(r->a, r->y);
+}
+
+static void Run_BossHit(Regs *r)
+{
+    SetCarry(r, Boss_Hit(&r->x));
+}
+
+static void Run_RefillHp(Regs *r)
+{
+    Hud_RefillHp();
+    r->a = 0;
+    r->y = 0xFC;
+}
+
+static void Run_MoneyMax(Regs *r)
+{
+    Money_Max();
+    r->a = 9;
+    r->y = 0xFF;
+}
+
+const DecompRoutine gObjectRoutines[] = {
+    { DT_B6_OBJECTS, "ducktales.decomp.6.8000", "Obj_UpdateAll", Run_UpdateAll, OUT_X, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_HOPPER, NULL, "Obj_Hopper", Run_Hopper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_WALKER, NULL, "Obj_Walker", Run_Walker, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_THROWER, NULL, "Obj_Thrower", Run_Thrower, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_SHOT, NULL, "Obj_Shot", Run_Shot, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_WATCHER, NULL, "Obj_Watcher", Run_Watcher, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_DANGLER, NULL, "Obj_Dangler", Run_Dangler, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_SNAPPER, NULL, "Obj_Snapper", Run_Snapper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_BLOCK, NULL, "Obj_Block", Run_Block, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_THROWN, NULL, "Obj_Thrown", Run_Thrown, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_DEFEATED, NULL, "Obj_Defeated", Run_Defeated, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_DROPPER, NULL, "Obj_Dropper", Run_Dropper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_CRAWLER, NULL, "Obj_Crawler", Run_Crawler, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_FLYER, NULL, "Obj_Flyer", Run_Flyer, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_HOP_WALKER, NULL, "Obj_HopWalker", Run_HopWalker, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_HOP_WALKER_WALK, NULL, "Obj_HopWalkerWalk", Run_HopWalkerWalk, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_CART, NULL, "Obj_Cart", Run_Cart, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_VISITOR, NULL, "Obj_Visitor", Run_Visitor, 0 },
+    { DT_CODE_KIND_PATH_OPENER, NULL, "Obj_PathOpener", Run_PathOpener, 0 },
+    { DT_CODE_KIND_BLOCK_KICKER, NULL, "Obj_BlockKicker", Run_BlockKicker, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_TRANSYLVANIA_BOSS, NULL, "Obj_TransylvaniaBoss", Run_TransylvaniaBoss, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_AMAZON_BOSS, NULL, "Obj_AmazonBoss", Run_AmazonBoss, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_SPAWN_RECORD, "ducktales.decomp.6.AF2B", "Obj_SpawnRecord", Run_SpawnRecord, OUT_X,
+      .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_LAUNCHER, NULL, "Obj_Launcher", Run_Launcher, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_TARGET, NULL, "Obj_Target", Run_Target, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_MOON_BOSS, NULL, "Obj_MoonBoss", Run_MoonBoss, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_HIMALAYAS_BOSS, NULL, "Obj_HimalayasBoss", Run_HimalayasBoss, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_MINES_BOSS, NULL, "Obj_MinesBoss", Run_MinesBoss, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_THIEF, NULL, "Obj_Thief", Run_Thief, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_TREAT, NULL, "Obj_Treat", Run_Treat, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_TREAT_SPOUT, NULL, "Obj_TreatSpout", Run_TreatSpout, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_ROLLER, NULL, "Obj_Roller", Run_Roller, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_BOULDER, NULL, "Obj_Boulder", Run_Boulder, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_BOUNCER, NULL, "Obj_Bouncer", Run_Bouncer, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_PIT_JUMPER, NULL, "Obj_PitJumper", Run_PitJumper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_PIT_SPLASH_OUT, NULL, "Obj_PitSplashOut", Run_PitSplashOut, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_PIT_SPLASH_IN, NULL, "Obj_PitSplashIn", Run_PitSplashIn, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_PICKPOCKET, NULL, "Obj_Pickpocket", Run_Pickpocket, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_PICKPOCKET_WALK, NULL, "Obj_PickpocketWalk", Run_PickpocketWalk, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_PICKPOCKET_STEAL, NULL, "Obj_StealMoney", Run_StealMoney, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_POUNCER, NULL, "Obj_Pouncer", Run_Pouncer, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_LEDGE_WALKER, NULL, "Obj_LedgeWalker", Run_LedgeWalker, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_PACER, NULL, "Obj_Pacer", Run_Pacer, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_MOVING_PLATFORM, NULL, "Obj_MovingPlatform", Run_MovingPlatform, 0 },
+    { DT_CODE_KIND_KEY_SPOT, NULL, "Obj_KeySpot", Run_KeySpot, 0 },
+    { DT_CODE_KIND_LAUNCHPAD_RIDE, NULL, "Obj_LaunchpadRide", Run_LaunchpadRide, 0 },
+    { DT_CODE_KIND_SKY_FLYER, NULL, "Obj_SkyFlyer", Run_SkyFlyer, 0 },
+    { DT_CODE_KIND_SKY_ROPE, NULL, "Obj_SkyRope", Run_SkyRope, 0 },
+    { DT_CODE_KIND_FINAL_STAND_IN, NULL, "Obj_FinalStandIn", Run_FinalStandIn, 0 },
+    { DT_CODE_KIND_STAND_IN_BEATEN, NULL, "Obj_StandInBeaten", Run_StandInBeaten, 0 },
+    { DT_CODE_KIND_BLOCK_DWELLER, NULL, "Obj_BlockDweller", Run_BlockDweller, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_DWELLER_LINK_BLOCK, NULL, "Obj_DwellerLinkBlock", Run_DwellerLinkBlock, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_CEILING_HOPPER, NULL, "Obj_CeilingHopper", Run_CeilingHopper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_CEILING_HOPPER_WALK, NULL, "Obj_CeilingWalk", Run_CeilingWalk, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_DROPPING, NULL, "Obj_Dropping", Run_Dropping, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_RISING_SHOT, NULL, "Obj_RisingShot", Run_RisingShot, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_LEAPER, NULL, "Obj_Leaper", Run_Leaper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_LEAPER_DUST, NULL, "Obj_SpawnDust", Run_SpawnDust, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_BOBBER, NULL, "Obj_Bobber", Run_Bobber, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_CHARGER, NULL, "Obj_Charger", Run_Charger, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_PATROLLER, NULL, "Obj_Patroller", Run_Patroller, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_PICKUP, NULL, "Obj_Pickup", Run_Pickup, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_HIDDEN_ITEM, NULL, "Obj_HiddenItem", Run_HiddenItem, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_CHEST, NULL, "Obj_Chest", Run_Chest, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_DOOR, NULL, "Obj_Door", Run_Door, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_TALKER, NULL, "Obj_Talker", Run_Talker, 0 },
+    { DT_CODE_OBJ_FIND_FREE_Y, NULL, "Obj_FindFreeSlotY", Run_FindFreeSlotY, OUT_Y | OUT_C, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_HIT_OTHERS, NULL, "Obj_HitOthers", Run_HitOthers, OUT_C, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_SET_MOTION, NULL, "Obj_SetMotionIndex", Run_SetMotionIndex, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_ENEMY_WALK, NULL, "Enemy_Walk", Run_EnemyWalk, OUT_X, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_LAUNCH_BLOCK, NULL, "Obj_LaunchBlock", Run_LaunchBlock, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_KICK_BLOCK, NULL, "Obj_KickBlock", Run_KickBlock, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_RESOLVE_BLOCK, NULL, "Obj_ResolveBlock", Run_ResolveBlock, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_BREAK, NULL, "Obj_Break", Run_Break, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_SHATTER, NULL, "Obj_Shatter", Run_Shatter, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_DEFEAT, NULL, "Obj_Defeat", Run_Defeat, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_OPEN_BLOCK, NULL, "Obj_OpenBlock", Run_OpenBlock, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_BECOME_PICKUP, NULL, "Obj_BecomePickupNow", Run_BecomePickupNow, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_BECOME_BLOCK, NULL, "Obj_BecomeBlock", Run_BecomeBlock, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_HIT_BLOCK, NULL, "Obj_HitBlock", Run_HitBlock, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_THROWN_FALL, NULL, "Obj_ThrownFall", Run_ThrownFall, OUT_X, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_THROWN_WALK, NULL, "Obj_ThrownWalk", Run_ThrownWalk, OUT_X, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_SHOW_ITEM, NULL, "Obj_ShowItem", Run_ShowItem, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_PICKUP_TAKE, NULL, "Pickup_Take", Run_PickupTake, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_PICKUP_TREASURE, NULL, "Pickup_Treasure", Run_PickupTreasure, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_PICKUP_EXTRA_DOT, NULL, "Pickup_ExtraDot", Run_PickupExtraDot, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_HUD_RESTORE_DOT, NULL, "Hud_RestoreDot", Run_RestoreDot, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_MONEY_ADD, NULL, "Money_Add", Run_MoneyAdd, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_HP_REFILL, "ducktales.decomp.F812", "Hud_RefillHp", Run_RefillHp, OUT_A | OUT_Y },
+    { DT_CODE_BOSS_HIT, "ducktales.decomp.F6D7", "Boss_Hit", Run_BossHit, OUT_X | OUT_C },
+    { DT_CODE_MONEY_MAX, "ducktales.decomp.F83F", "Money_Max", Run_MoneyMax, OUT_A | OUT_Y },
+};
+const int gObjectRoutineCount = sizeof gObjectRoutines / sizeof gObjectRoutines[0];
