@@ -448,6 +448,18 @@
 #define DT_B6_SPAWN_TABLES_MAP 0xAE22 /* X = map: its spawn table pointers into $60-$69 (code) */
 #define DT_B6_SPAWN_RESET      0xAE60
 #define DT_B6_SPAWN            0xAEA0
+#define DT_B6_SPAWN_TIMED      0xB0AB /* the timed object at the far edge of the screen (code) */
+#define DT_B6_SPAWN_POINTERS   0xB050 /* 10 tables of 9 entries: the spawn table pointers of each map */
+#define DT_B6_TIMED_LAND       0xB164 /* first timed-object row entry of each land */
+#define DT_B6_TIMED_ROW        0xB16D /* first timed-object entry of each map row */
+#define DT_B6_TIMED_PAGE       0xB18F /* timed objects: page, bit 7 a pair; $FF ends a row */
+#define DT_B6_TIMED_TYPE       0xB1B5
+#define DT_B6_TIMED_Y          0xB1DB
+#define DT_B6_TIMED_EDGE       0xB201 /* 16-bit X offset of the far edge, by $4B & 2 */
+#define DT_B6_SPAWN_TEMPLATES  0xBE16 /* 4-byte templates by type: status, action, kind, hitbox */
+#define DT_ADDR_SPAWN_RIGHT    0x004C /* spawner: next record at the right end of the window (code) */
+#define DT_ADDR_SPAWN_LEFT     0x004D /* spawner: first record inside at the left end (code) */
+#define DT_ADDR_SPAWN_FIRST    0x004E /* spawner: first record of the map row (code) */
 
 #define DT_CODE_BOSS_TRIGGER  0xCF93
 #define DT_CODE_LAND_SELECT   0xD630

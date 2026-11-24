@@ -403,6 +403,11 @@ RAM-identical in replace mode.
 | `Block_Debris` | bank 4 `$BD80` | checked | 1 | message-block | not measured |
 | `Tile_EditByAction` | `$F4D8` | checked | 6 | - | not measured |
 | `Tile_EditBySlot` | `$F506` | checked | 1 | - | not measured |
+| `Spawn_Tables` | bank 6 `$AE20` | checked | 12 | - | not measured |
+| `Spawn_TablesOf` | bank 6 `$AE22` | checked | 12 | - | not measured |
+| `Spawn_Reset` | bank 6 `$AE60` | checked | 12 | - | not measured |
+| `Spawn_Update` | bank 6 `$AEA0` | checked | 12 | - | not measured |
+| `Spawn_TimedAtEdge` | bank 6 `$B0AB` | checked | 12 | - | not measured |
 | `Nmi_Handler` | `$C000` | claimed (decomp/system): the NMI has no site form yet | - | - | - |
 | `Ppu_NmiOff` | `$C183` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
 | `Ppu_NmiOn` | `$C18D` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
@@ -703,8 +708,8 @@ through `Obj_Defeat`), the vertical moves `$F270`/`$F284`/`$F298` and the seven 
 `$8B71-$8BE7`.
 
 Not decompiled yet: the other 24 kinds, among them the bosses (their hit routine `$F6D7` raises
-`EVENT_BOSS_HIT`, so a C boss has to raise it itself), the spawner (bank 6 `$AE20-$AF61`), the tile
-edit `$F506` (through `Decomp_Call`). The movers and the climbing steps test the
+`EVENT_BOSS_HIT`, so a C boss has to raise it itself). The spawner that calls `Obj_SpawnRecord`
+(bank 6 `$AE20-$B163`) is in `level.c`. The movers and the climbing steps test the
 background through the C of the probe `$D120` and its snaps (`collision.c`).
 
 ### Progress
