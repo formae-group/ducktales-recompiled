@@ -17,11 +17,13 @@
  *              or invalid asset refuses it with the reason. Per asset the
  *              first mod that has it wins: a tile key, a land's palette (the
  *              mod's file for that land, else its global.pal), a sound id
- *   scripts    events = include/ducktales/events.h; dt.state and dt.set =
- *              FIELDS below, read and written through the game API
- *              (ducktales/hud.h, game.h, player.h, objects.h) inside a RAM
+ *   scripts    events = include/ducktales/events.h, with their values
+ *              (Events_Args); dt.state and dt.set = FIELDS below, dt.objects()
+ *              and dt.camera() = QUERIES, read and written through the game
+ *              API (ducktales/hud.h, game.h, player.h, objects.h) inside a RAM
  *              transaction; dt.store in the data folder's mods-data; toasts
- *              drawn with cyc_overlay over the presented picture only
+ *              and dt.draw drawn with cyc_overlay over the presented picture
+ *              only
  */
 #include "mods/app_mods.h"
 #include "mods/ducktales/dt_mods_internal.h"
@@ -278,10 +280,56 @@ static const FmField FIELDS[] = {
     { "y", false, get_y, NULL, NULL },
 };
 
+static const char *const OBJECT_FIELDS[] = { "slot", "kind", "action", "state", "x", "y", "screen_x" };
+#define OBJECT_FIELD_COUNT ((int)(sizeof OBJECT_FIELDS / sizeof OBJECT_FIELDS[0]))
+
+/* The live object slots (Scrooge is slot 0): x is the world X, y and
+ * screen_x where the slot is on the screen. */
+static int read_objects(long long *v)
+{
+    int n = 0;
+    for (int slot = 0; slot < OBJ_SLOTS; slot++) {
+        if (!(gObjects->state[slot] & OBJ_STATUS_LIVE)) {
+            continue;
+        }
+        long long *r = &v[n++ * OBJECT_FIELD_COUNT];
+        r[0] = slot;
+        r[1] = gObjects->kind[slot];
+        r[2] = gObjects->action[slot];
+        r[3] = gObjects->state[slot];
+        r[4] = Obj_GetWorldX(slot);
+        r[5] = gObjects->y[slot];
+        r[6] = gObjects->x[slot];
+    }
+    return n;
+}
+
+static const char *const CAMERA_FIELDS[] = { "x", "row", "screen" };
+
+/* The camera's world X (its left edge), map row and screen index. */
+static int read_camera(long long *v)
+{
+    v[0] = gCameraPage << 8 | gCameraX;
+    v[1] = gMapRow;
+    v[2] = gCameraScreen;
+    return 1;
+}
+
+static const FmQuery QUERIES[] = {
+    { "objects", true, OBJECT_FIELD_COUNT, OBJECT_FIELDS, read_objects },
+    { "camera", false, (int)(sizeof CAMERA_FIELDS / sizeof CAMERA_FIELDS[0]), CAMERA_FIELDS, read_camera },
+};
+
 static EventResult on_event(EventId id, void *user)
 {
     (void)user;
-    return fm_scripts_event((int)id) ? EVENT_CANCEL : EVENT_CONTINUE;
+    const EventArg *args;
+    FmArg values[EVENT_MAX_ARGS];
+    int n = Events_Args(&args);
+    for (int i = 0; i < n; i++) {
+        values[i] = (FmArg){ args[i].name, args[i].value };
+    }
+    return fm_scripts_event((int)id, values, n) ? EVENT_CANCEL : EVENT_CONTINUE;
 }
 
 static void listen(int event, bool on)
@@ -309,9 +357,19 @@ static void configure(void)
     if (app_data_dir(s_store_dir, sizeof s_store_dir - 16)) {
         strcat(s_store_dir, "\\mods-data");
     }
-    FmScriptGame script = { events,       EVENT_COUNT, FIELDS,        (int)(sizeof FIELDS / sizeof FIELDS[0]),
-                            GameRam_Open, listen,      GameRam_Begin, GameRam_End,
-                            s_store_dir };
+    FmScriptGame script = {
+        .events = events,
+        .event_count = EVENT_COUNT,
+        .fields = FIELDS,
+        .field_count = (int)(sizeof FIELDS / sizeof FIELDS[0]),
+        .queries = QUERIES,
+        .query_count = (int)(sizeof QUERIES / sizeof QUERIES[0]),
+        .state_open = GameRam_Open,
+        .listen = listen,
+        .begin_frame = GameRam_Begin,
+        .end_frame = GameRam_End,
+        .store_dir = s_store_dir,
+    };
     fm_scripts_configure(&script);
 }
 
@@ -861,13 +919,61 @@ static void overlay_text(const char *text, int width, char *out, size_t cap)
     }
 }
 
+/* A dt.draw rectangle, clipped to the picture. */
+static void fill_rect(uint32_t *argb, int width, int height, const FmDraw *d)
+{
+    int x0 = d->x < 0 ? 0 : d->x, y0 = d->y < 0 ? 0 : d->y;
+    int x1 = d->x + d->w > width ? width : d->x + d->w, y1 = d->y + d->h > height ? height : d->y + d->h;
+    for (int y = y0; y < y1; y++) {
+        for (int x = x0; x < x1; x++) {
+            argb[y * width + x] = 0xFF000000u | d->color;
+        }
+    }
+}
+
+static uint8_t s_overlay_mask[NV_WIDTH * NV_HEIGHT];
+static bool s_overlay_drawn;
+
 void app_mods_draw_overlay(uint32_t *argb, int width, int height)
 {
     char title[128], body[300], title_shown[128], body_shown[300];
-    if (argb && fm_toast(title, sizeof title, body, sizeof body)) {
+    static uint32_t before[NV_WIDTH * NV_HEIGHT];
+    const FmDraw *draws;
+    int n = argb ? fm_draws(&draws) : 0;
+    bool toast = argb && fm_toast(title, sizeof title, body, sizeof body);
+    bool masked = width == NV_WIDTH && height == NV_HEIGHT;
+    s_overlay_drawn = masked && (n || toast);
+    if (s_overlay_drawn) {
+        memcpy(before, argb, sizeof before);
+    }
+    for (int i = 0; i < n; i++) {
+        if (draws[i].text) {
+            char text[sizeof draws[i].str];
+            overlay_text(draws[i].str, 1 << 20, text, sizeof text);
+            cyc_overlay_text(argb, width, height, draws[i].x, draws[i].y, 1, draws[i].color, text);
+        } else {
+            fill_rect(argb, width, height, &draws[i]);
+        }
+    }
+    if (toast) {
         overlay_text(title, width, title_shown, sizeof title_shown);
         overlay_text(body, width, body_shown, sizeof body_shown);
         cyc_overlay_toast(argb, width, height, title_shown, body_shown);
+    }
+    for (int i = 0; s_overlay_drawn && i < NV_WIDTH * NV_HEIGHT; i++) {
+        s_overlay_mask[i] = argb[i] != before[i];
+    }
+}
+
+void app_mods_keep_overlay(uint32_t *pic, const uint32_t *src, int width, int height)
+{
+    if (!s_overlay_drawn || width != NV_WIDTH || height != NV_HEIGHT) {
+        return;
+    }
+    for (int i = 0; i < NV_WIDTH * NV_HEIGHT; i++) {
+        if (s_overlay_mask[i]) {
+            pic[i] = src[i];
+        }
     }
 }
 

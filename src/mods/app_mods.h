@@ -122,9 +122,13 @@ void app_mods_video_apply(const NvVideo *video, const NvRenderOptions *options, 
 bool app_mods_dump_dir(const char *dir);
 /* Collect the finished frame if a tile dump is active, even off screen. */
 void app_mods_dump_frame(void);
-/* Draws the script notice showing now (dt.toast) over a presented picture,
- * never the machine's (cyc_overlay.h). */
+/* Draws the scripts' drawings (dt.draw) and the notice showing now (dt.toast)
+ * over a presented picture, never the machine's (cyc_overlay.h). */
 void app_mods_draw_overlay(uint32_t *argb, int width, int height);
+/* pic is a copy of src, the last picture app_mods_draw_overlay drew on, with
+ * pixels the presentation redrew since (the HUD split): the pixels the
+ * overlay drew take src's again, so the overlay stays on top. */
+void app_mods_keep_overlay(uint32_t *pic, const uint32_t *src, int width, int height);
 /* The colour of 9-bit palette index under the palette mod of the last picture
  * painted, or argb when none applies (presentation that redraws pixels after
  * the compositor, ui/app_present.c). */

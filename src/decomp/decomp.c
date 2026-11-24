@@ -224,6 +224,13 @@ int Decomp_RaiseEvent(int event)
     return result;
 }
 
+void Decomp_RaiseSlotEvent(int event, uint8_t slot)
+{
+    if (dc_mode == DECOMP_REPLACE) {
+        Events_RaiseSlot((EventId)event, slot);
+    }
+}
+
 /* The C of a routine on an image of RAM at its entry; dc_image holds the RAM
  * it leaves, *out its registers. */
 void dc_run_c(const DecompRoutine *rt, const CycModRegs *in, Regs *out)

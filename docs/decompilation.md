@@ -50,12 +50,13 @@ rows keep their address as their name (`unk_0690`).
 
 ## Events
 
-Each event owns one `[[mod_function_hook]]` site (`config/game.toml`, with a `length`/`crc32`
-content key). A handler registered with `Events_On(EVENT_..., fn, user)` runs inside a RAM
-transaction at that site, before the site's instruction. **While an event has no handler its site's
-hook is disabled**, so the generated code runs the original instruction with nothing changed. A
-cancelable event is cancelled when any handler returns `EVENT_CANCEL`. All handlers run, in
-registration order, even after one cancels.
+An event with a site owns one `[[mod_function_hook]]` site (`config/game.toml`, with a
+`length`/`crc32` content key); `EVENT_BOSS_DEFEATED` shares the boss hit's. A handler registered
+with `Events_On(EVENT_..., fn, user)` runs inside a RAM transaction at that site, before the site's
+instruction. **While none of a site's events has a handler its hook is disabled**, so the generated
+code runs the original instruction with nothing changed. A cancelable event is cancelled when any
+handler returns `EVENT_CANCEL`. All handlers run, in registration order, even after one cancels. A
+handler reads the values its event carries with `Events_Args`.
 
 | Event | Site | When | Cancel | Used by |
 |---|---|---|---|---|
@@ -65,6 +66,20 @@ registration order, even after one cancels.
 | `EVENT_BOSS_HIT` | `$F6DD`, in the boss hit routine `$F6D7` | a hit is about to count against a boss | one hit is added to `$B1` before the decrement (the boss still flashes) | none yet |
 | `EVENT_NEW_GAME` | `$D59C`, title set-up | the HUD template was copied (lives = 2) | not cancelable | StartLives |
 | `EVENT_JUMP_START` | `$E3FE`, ground handler | the take-off velocity was copied into Scrooge's | not cancelable | JumpScale |
+| `EVENT_BOSS_DEFEATED` | `$F6DD`, the boss hit's | after `EVENT_BOSS_HIT` when it was not cancelled and `$B1` is 1, so the decrement beats the boss; carries `land` | not cancelable | mods |
+| `EVENT_ENEMY_DEFEATED` | bank 6 `$8932`, entry of `Obj_Defeat` | an enemy is beaten; carries `slot`, `kind` (`$0710,X`), `x` (world) and `y` | not cancelable | mods |
+| `EVENT_ITEM_COLLECTED` | bank 6 `$8B21`, entry of `Pickup_Take` | Scrooge takes a pickup; carries `slot`, `item` (`$0620,X`), `x` and `y` | not cancelable | mods |
+
+Four more events have no site. `Events_FrameEnd`, which the hosts call after every machine frame,
+compares RAM with the previous frame's while one of them has a handler (the first such frame only
+records it), so they cost no hook site and take the same values with the decompiled routines on:
+
+| Event | Seen when | Carries |
+|---|---|---|
+| `EVENT_LAND_START` | the last music `$C5` becomes the land's own (`$F6`, 0-4) after Land Select's (5) or another land's: a land load requested it (`$D9CA`). A respawn (after music `$0A`), the end of the power-up music (8) and the boss music (6) do not count | `land` |
+| `EVENT_LAND_CLEAR` | `$5D` becomes non-zero while the scene request `$78` is 0: the land is left with its "clear" result (game-state.md, "Land completion"); the Launchpad ride home sets `$78` first | `land` |
+| `EVENT_CHECKPOINT` | `$7C` becomes 5: `$DC04` found Scrooge in his land's boss-checkpoint screen | `land` |
+| `EVENT_MONEY_CHANGED` | the HUD money differs from the last frame that showed it (several adds in one frame make one event) | `money`, `delta` |
 
 Evidence for each site:
 
@@ -78,15 +93,26 @@ Evidence for each site:
   Himalayas in [game-state.md](game-state.md)). With `--dt-events-log`, `full_amazon` raises
   `boss-hit` at frames 7093, 7285, 7645, 7933 and 8173, exactly the frames where `$B1` drops from 5
   to 0 (verified). The cancel's effect comes from the code alone: no enhancement cancels it yet.
+- `$8932` and `$8B21` are the entries of the decompiled `Obj_Defeat` and `Pickup_Take` (bank 6).
+  The enemy kinds reach `$8932` with 28 `JMP`s, and the instruction before `$8B21` is an `RTS`.
+  Their 8 bytes appear at that address in no other bank, so the content key also requires bank 6.
+  They fire once per beaten enemy and taken pickup: in check mode as many times as `Obj_Defeat`
+  and `Pickup_Take` are called (`decomp_test.py --modes events`).
 
 `--dt-events-log FILE` (developer builds) registers a handler on every event that changes nothing
-and writes one line per raised event.
+and writes one line per raised event, with its frame and values.
 
 **Events raised by decompiled code.** `$EB5E` is also the entry of the decompiled
-`Player_TakeDamage`, and `$E3FE` lies inside the decompiled `Player_StartJump`. When a decompiled
-routine runs instead of the original, the original instruction never runs, so the C raises those
-two events itself (`Decomp_RaiseEvent`, replace mode only) at the same point in its logic.
-`tests/decomp_test.py --modes events` checks NoDamage and JumpScale with the decompiled routines on.
+`Player_TakeDamage`, `$E3FE` lies inside the decompiled `Player_StartJump`, `$D59C` follows the
+copy in `Title_Lit`, `$F6DD` is in `Boss_Hit`, and `$8932` and `$8B21` are the entries of
+`Obj_Defeat` and `Pickup_Take`. When a decompiled routine runs instead of the original, the
+original instruction never runs, so the C raises those events itself (`Decomp_RaiseEvent`,
+`Decomp_RaiseSlotEvent`, replace mode only) at the same point in its logic; the original measured
+in an isolated call raises nothing. In check mode only the original raises them. `Title_Lit` did
+not raise `EVENT_NEW_GAME` before, so StartLives had no effect with the decompiled routines on.
+`tests/decomp_test.py --modes events` checks NoDamage, JumpScale and StartLives with the decompiled
+routines on, and that `full_moon` and `full_amazon` log the same events, frame for frame and with
+the same values, with `--decomp off`, `check` and `replace`.
 
 ## Decompiled routines
 

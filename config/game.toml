@@ -62,6 +62,21 @@ addr = 0xF6DD
 length = 8
 crc32 = 0xA509A34C
 
+# Bank 6: the entry of Obj_Defeat ($8932), an enemy beaten. The key is unique
+# to bank 6 at this address, so the site fires only with that bank mapped.
+[[mod_function_hook]]
+id = "ducktales.event.enemy-defeated"
+addr = 0x8932
+length = 8
+crc32 = 0x7AB68118
+
+# Bank 6: the entry of Pickup_Take ($8B21), a pickup taken; unique as above.
+[[mod_function_hook]]
+id = "ducktales.event.item-collected"
+addr = 0x8B21
+length = 8
+crc32 = 0x5D6EF23E
+
 # Decompiled routines (src/decomp/, docs/decompilation.md): a site at the
 # entry of each routine that original code calls (routines only decompiled
 # code calls have none), enabled only with --decomp check or replace.

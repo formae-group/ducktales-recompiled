@@ -7,6 +7,19 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- Mods: seven script events. `enemy-defeated` and `item-collected` have hook sites of their own in
+  bank 6 (`$8932` Obj_Defeat, `$8B21` Pickup_Take) and carry the object's slot, kind or item and
+  position. `boss-defeated` comes from the boss hit's site. `land-start`, `land-clear`,
+  `checkpoint` and `money-changed` (with the new money and the delta) are seen in RAM at the end of
+  the frame and cost no site. A game event's handler now gets a table with the event's `name`
+  and values, instead of the event's name. Each fires once per occurrence with the decompiled code
+  off, checked or replacing (`tests/decomp_test.py --modes events`).
+- Mods: `dt.objects()` (the live object slots: kind, action, state, world X, screen position) and
+  `dt.camera()` (world X, map row, screen), read only.
+- Mods: `dt.draw.rect` and `dt.draw.text` draw over the presented picture for one frame, at most 64
+  a mod each frame; like toasts they never reach the machine's picture or any hash, and the
+  window's HUD split repair no longer draws over them.
+
 - The chest's opening, sliding block and health block handlers (kinds `$16`, `$17` and `$42`)
   are decompiled, with poke cases based on three Transylvania chest records.
 - `tests/decomp_test.py` poke cases `extra-life` (the extra life `$8BB0`), `secret-treasure` (item `$74`,
@@ -138,6 +151,9 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   `Records_MarkTaken`.
 
 ### Fixed
+
+- Extra lives at start had no effect with the decompiled code on: the decompiled title set-up
+  (`Title_Lit`) did not raise the new-game event the option uses.
 
 - The native player's sound no longer clips, clicks or drops out (docs/audio.md "Output stage"): a
   look-ahead limiter at -1 dBFS replaces the 16-bit clamp (a full-scale mod over the game's effects

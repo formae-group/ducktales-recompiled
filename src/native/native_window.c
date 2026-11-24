@@ -86,6 +86,7 @@
 #include "native/native_output.h"
 
 #include "decomp/decomp.h"
+#include "ducktales/events.h"
 #include "game/enhancements.h"
 #include "host/ducktales_host.h"
 #include "host/ducktales_sprites.h"
@@ -183,6 +184,7 @@ static void run_frame(uint8_t pad0, uint8_t pad1)
     if (app_mods_audio_active()) {
         app_mods_audio_frame_end(native_cpu_ram());
     }
+    Events_FrameEnd();
     app_mods_scripts_frame();
     app_mods_dump_frame();
 }

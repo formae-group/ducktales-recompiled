@@ -567,10 +567,12 @@ static void Pickup_Treasure(uint8_t x)
     }
 }
 
-/* $8B21: Scrooge takes the pickup; the item is its pose. */
+/* $8B21: Scrooge takes the pickup (EVENT_ITEM_COLLECTED); the item is its
+ * pose. */
 static void Pickup_Take(uint8_t x)
 {
     Decomp_Enter(DT_CODE_PICKUP_TAKE, 0, x, 0);
+    Decomp_RaiseSlotEvent(EVENT_ITEM_COLLECTED, x);
     gObjects->state[x] = 0;
     uint8_t item = gObjects->action[x];
     if (item == OBJ_ITEM_EXTRA_DOT) {
@@ -1017,11 +1019,13 @@ static void Obj_Defeated(uint8_t x)
     }
 }
 
-/* $8932: an enemy is beaten: sound $35, maybe a drop, then it flies off
- * away from Scrooge as kind $0B. Off screen it is just freed. */
+/* $8932: an enemy is beaten (EVENT_ENEMY_DEFEATED): sound $35, maybe a drop,
+ * then it flies off away from Scrooge as kind $0B. Off screen it is just
+ * freed. */
 static void Obj_Defeat(uint8_t x)
 {
     Decomp_Enter(DT_CODE_OBJ_DEFEAT, 0, x, 0);
+    Decomp_RaiseSlotEvent(EVENT_ENEMY_DEFEATED, x);
     if (!OnScreen(x)) {
         gObjects->state[x] = 0;
         gObjects->flags[x] = 0;

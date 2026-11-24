@@ -190,11 +190,33 @@ typedef struct {
     void (*set)(long long value);
 } FmField;
 
+/* A value a game event carries: the handler's table has it as e.<name>. */
+typedef struct {
+    const char *name;
+    long long value;
+} FmArg;
+
+/* dt.<name>(): records of the game's state read now, as tables with the
+ * named integer fields; an array of them when list is set, else one. */
+#define FM_QUERY_VALUES 256
+
+typedef struct {
+    const char *name;
+    bool list;
+    int field_count;
+    const char *const *fields;
+    /* Fills values with field_count values per record; returns the records
+     * (at most FM_QUERY_VALUES / field_count). */
+    int (*read)(long long *values);
+} FmQuery;
+
 typedef struct {
     const FmEvent *events;
     int event_count;
     const FmField *fields;
     int field_count;
+    const FmQuery *queries;
+    int query_count;
     bool (*state_open)(void);           /* the game's state can be read now */
     void (*listen)(int event, bool on); /* turns a game event's site on or off */
     void (*begin_frame)(void);          /* opens the frame-end window: "frame" handlers and dt.set writes */
@@ -206,14 +228,32 @@ void fm_scripts_configure(const FmScriptGame *game);
 /* Starts a loaded mod's scripts/main.lua; false when it failed (the mod's script_error says why). */
 bool fm_script_add(const FmMod *mod);
 int fm_script_count(void);
-/* The game raised event: runs its handlers; true when one cancelled it. */
-bool fm_scripts_event(int event);
+/* The game raised event with its values: runs its handlers; true when one
+ * cancelled it. */
+bool fm_scripts_event(int event, const FmArg *args, int nargs);
 /* After each machine frame: "frame" handlers, queued dt.set writes, toasts, hot reload, stores. */
 void fm_scripts_frame(void);
 /* The script notice to show now (dt.toast); false when none. */
 bool fm_toast(char *title, size_t title_cap, char *body, size_t body_cap);
 /* Writes the stores that changed (also done once a second and at exit). */
 void fm_scripts_flush(void);
+
+/* dt.draw: what the scripts drew during the last frame, to show over the
+ * next presented picture (never the machine's). At most FM_DRAW_PER_MOD a
+ * mod each frame, FM_DRAW_MAX in all; text is cut to FM_DRAW_CHARS
+ * characters (UTF-8 code points, control characters as spaces). */
+#define FM_DRAW_PER_MOD 64
+#define FM_DRAW_MAX     512
+#define FM_DRAW_CHARS   64
+
+typedef struct {
+    bool text;      /* text at (x, y), else a filled w x h rectangle */
+    int x, y, w, h; /* the picture's pixels */
+    uint32_t color; /* 0xRRGGBB */
+    char str[FM_DRAW_CHARS * 4 + 1];
+} FmDraw;
+
+int fm_draws(const FmDraw **draws);
 
 #ifdef __cplusplus
 }

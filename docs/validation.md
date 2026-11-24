@@ -529,6 +529,35 @@ On `mods/polish` (based on 1b91636, tree of 81e5db3), with `--jobs 2`:
 
 Not run on this tree: the full `verify_routes.py`, `decomp_test.py` and the window by eye.
 
+## Mods phase 2: events, state and drawing (2026-11-24)
+
+On `mods/phase2` (from main 074541c), with `--jobs 2`:
+
+- `tests/decomp_test.py --modes events` (`build/dev`, developer diagnostics), 322 s: NoDamage,
+  JumpScale and StartLives pass in check and replace (StartLives failed before `Title_Lit` raised
+  the new-game event). `full_moon` (8,046 events, 12 kinds) and `full_amazon` (7,181 events, 13
+  kinds) log the same events, frame for frame and with the same values, with `--decomp off`,
+  `check` and `replace`. In check mode the enemy-defeated and item-collected counts equal the
+  calls of `Obj_Defeat` and `Pickup_Take`.
+- `tests/mods_test.py`: all 82 checks pass (headless and native player). The new step 10 runs
+  `full_amazon` to frame 9,600 on both hosts: land-start, checkpoint and land-clear once each,
+  boss-defeated once with the last of 5 boss hits, 16 enemy-defeated and 3 item-collected events
+  with their values, 48 money-changed deltas that add up to the money shown last (1,049,000),
+  `dt.objects()` and `dt.camera()` agreeing with `dt.state`, `dt.draw` capped at 64 a frame and
+  drawn over the presented picture. With all of it running, the per-frame machine hashes of the
+  9,600 frames equal a run without mods, and the native player logs the same events in the same
+  frames as the cycle host.
+- `tests/quick_verify.py`: native 13/13 routes, 88,826 frames, 19.5 s; `--runtime cycle` 13/13,
+  88,826 frames, 302.0 s (both with mods off).
+- `mods_catalogue_test` 8/8; `tests/window_smoke.py --build build/windows`: all passed.
+
+Found on the way: the native player's HUD split repair (`ui/app_present.c`) redrew two lines over
+the scripts' overlay (a `dt.draw` rectangle lost 66 of its 384 pixels); the overlay's pixels now
+stay on top.
+
+Not run on this tree: the full `verify_routes.py`, the full `decomp_test.py` (check, replace and
+pokes), and the window by eye.
+
 ## Not verified
 
 - The full `tests/verify_routes.py`, `tests/enhancements_test.py` and `tests/decomp_test.py` on
