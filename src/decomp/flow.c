@@ -2,34 +2,29 @@
  * flow.c - the game flow of the main task, decompiled from the fixed bank
  * (docs/game-state.md, docs/levels.md, docs/decompilation.md "Task code").
  *
- * The main task runs the title, Land Select, the land load and then the
- * frame loop, once per frame, until a land is left. Almost all of it waits
- * for frames, switches banks and drives the PPU, so it is task code: each
- * function below that owns a site ends either by returning or by handing off
- * to an original routine (task_yield, a fade, the PPU loaders, the object code
- * of bank 6), and the site of the address the original's JSR returns to
- * continues it. Values the original keeps on the stack across a frame (frame
- * counters, the land and row around a redraw) are pushed and pulled as it
- * does. "r" is the registers of the original at that point: they are what
- * the routines called next receive.
+ * The main task runs the title, Land Select, the land load, the frame loop
+ * and the ending. Its task code returns or hands off to another routine
+ * (task_yield, the fades, the PPU loaders); the RTS observer resumes the C
+ * at the address after the original JSR. The credits' raster split waits
+ * on the PPU in the original, then resumes the C at an internal site.
+ * Values the original keeps across a frame go on the 6502 stack.
+ * "r" holds the registers of the original at that point.
  *
  * Plain routines (no frame waits): the HUD timer, the HUD refreshes, the
  * per-land tables and the HUD template.
  *
- * Original routines called from here: through Decomp_Call the sprite builder
- * (bank 5 $8000), the pause text (bank 5 $B580), the Land Select messages
- * (bank 5 $B800/$B81C), the spawner set-up (bank 6 $AE60), $C267, $C2E6 and
- * $F812; the object clear $F2C7 is objcommon.c's C and the TOTAL cap $F84A
- * this file's; handed off to: task_yield and task_wait, the camera $EFE2, the
- * object spawner (bank 6 $AEA0), the fades $C279/$C282, $C197/$C1A1, $C42C,
- * $C78F, $C830, the object code (bank 6 $8000), Scrooge's update $E354 and
- * the routines of this subsystem that are not decompiled yet (the ending's later frames, reset).
+ * Bank 5 routines: the pause and message text, the Land Select messages,
+ * the consumed-record bits and the ending's scene objects.
  */
 #include "decomp/decomp.h"
+#include "decomp/devices.h"
 #include "decomp/motion.h"
 #include "decomp/objcommon.h"
 #include "decomp/player.h"
 #include "decomp/sound.h"
+#include "decomp/system.h"
+
+#include <string.h>
 
 #include "ducktales/events.h"
 #include "ducktales/game.h"
@@ -134,8 +129,28 @@
 #define MUSIC_ENDING          0x05
 #define ENDING_TREASURES      0x7F
 #define ENDING_SCREENS        6
-#define ENDING_SCREEN_TEXT    3 /* the first screen with strings; the earlier ones are drawn as one */
-#define ENDING_SCREEN_SPLIT   4 /* screens from here have the HUD split */
+#define ENDING_SCREEN_TEXT    3    /* the first screen with strings; the earlier ones are drawn as one */
+#define ENDING_SCREEN_SPLIT   4    /* screens from here have the HUD split */
+#define END_OBJ_STEPS         0x10 /* an object entry's first byte below this ends the list: slot 0's kind */
+#define END_OBJ_FACING_RIGHT  0x19
+#define END_STEP_LEAVE        3
+#define END_STEP_DONE         5
+#define END_LAST_SCENE        3
+#define END_HOPS              0x0B
+#define END_HOP_VY            4
+#define END_HOP_GROUND        0xB4
+#define END_WALK_STOP         0x90
+#define END_LEAVE_SPEED       3
+#define END_LEAVE_X           0x48
+#define END_LEAVE_Y           0x78
+#define END_WAIT_SECONDS      10
+#define END_SECOND            60
+#define END_LAST_SCREEN       5
+#define END_LAST_SPLIT        0xB0
+#define END_SPLIT_LIMIT       0xE8
+#define END_MUSIC_LINE        0xB7
+#define END_PAUSE_MASK        0x3F
+#define MUSIC_CREDITS         0x07
 #define ENDING_FILL           0x24
 #define ENDING_STREAM_STEPS   0x40
 #define BANK_STEPS            10 /* steps of the transfer per two frames */
@@ -179,6 +194,9 @@
 #define gPrevCameraX     RAM_U8(DT_ADDR_PREV_CAMERA_X)
 #define gRowScrollAddrHi RAM_U8(DT_ADDR_ROW_SCROLL_ADDR_HI)
 #define gSprite0Y        RAM_U8(DT_ADDR_SPRITE0_Y)
+#define gOamSprite0Y     RAM_U8(DT_ADDR_OAM)
+#define gHudSplit        RAM_U8(DT_ADDR_HUD_SPLIT)
+#define gCreditsPause    RAM_U8(DT_ADDR_SCRATCH10)
 #define gHudGate         RAM_U8(DT_ADDR_HUD_GATE)
 #define gUnk4C(i)        RAM_U8(DT_ADDR_UNK_4C + (i))
 #define gEndingScreen    RAM_U8(DT_ADDR_STREAM_SCREEN) /* $24 during the ending */
@@ -1039,6 +1057,65 @@ static void FrameLoop_Yield(Regs *r)
 
 static void Title_Loop(Regs *r);
 static void LandSelect(Regs *r);
+
+/* $FEE0: the reset vector turns rendering off and resets S. The live PPU
+ * wait at $FEEE-$FEFA lets four vblanks pass before RAM is initialized. */
+static void Reset(Regs *r)
+{
+    Decomp_Enter(DT_CODE_RESET, r->a, r->x, r->y);
+    r->p = (uint8_t)((r->p | P_I) & ~P_D);
+    Decomp_Store(PPU_CTRL, 0);
+    Decomp_Store(PPU_MASK, 0);
+    r->x = 0xFF;
+    Decomp_SetStack(r->x);
+    r->y = 4;
+    r->p = Flags_NZ(r->p, r->y);
+    Jump(DT_RESET_POLL, OUT_X | OUT_Y | OUT_P);
+}
+
+/* $FEFB: clear all eight pages (the original's pointer $00/$01 ends at
+ * $0700), park the sprites and fill the first nametable with blank tiles. */
+static void Reset_Ready(Regs *r)
+{
+    Decomp_Enter(DT_RESET_READY, r->a, r->x, r->y);
+    Decomp_KeepStackRam();
+    memset(gRam, 0, GAME_RAM_SIZE);
+    gScratch(1) = GAME_RAM_SIZE / 0x100 - 1;
+    Oam_Clear();
+    r->a = 0x20;
+    r->x = DT_MONEY_TILE_BLANK;
+    r->y = 0;
+    Jsr(DT_CODE_NT_FILL, DT_RESET_NT0_READY, OUT_A | OUT_X | OUT_Y);
+}
+
+/* $FF1B: the second nametable. */
+static void Reset_SecondNametable(Regs *r)
+{
+    Decomp_Enter(DT_RESET_NT0_READY, r->a, r->x, r->y);
+    r->a = 0x24;
+    r->x = DT_MONEY_TILE_BLANK;
+    r->y = 0;
+    Jsr(DT_CODE_NT_FILL, DT_RESET_NT1_READY, OUT_A | OUT_X | OUT_Y);
+}
+
+/* $FF24: slot 0 starts at the title. */
+static void Reset_CreateMainTask(Regs *r)
+{
+    Decomp_Enter(DT_RESET_NT1_READY, r->a, r->x, r->y);
+    Ram_SetU16(DT_ADDR_TASK_ENTRY, DT_ADDR_TASK_ENTRY + 1, DT_CODE_MAIN_TASK);
+    r->a = 0;
+    Jsr(DT_CODE_TASK_CREATE, DT_RESET_CREATED, OUT_A);
+}
+
+/* $FF31: the control byte for the main task to turn on NMIs and the
+ * background pattern table, then enter the scheduler. */
+static void Reset_StartScheduler(Regs *r)
+{
+    Decomp_Enter(DT_RESET_CREATED, r->a, r->x, r->y);
+    r->a = 0x90;
+    gRam[DT_ADDR_PPU_CTRL] = r->a;
+    Jump(DT_CODE_SCHEDULER, 0);
+}
 
 /* $D4E6: the main task starts (power-on and every reset): the title. */
 static void MainTask(Regs *r)
@@ -2357,6 +2434,182 @@ static void Mode15_Spawned(Regs *r)
     r->a = 0xFF;
 }
 
+/* ---- bank 5: the ending's scene objects ---- */
+
+/* bank 5 $B382: the objects of ending scene X (its first entry at
+ * DT_B5_END_OBJ_LIST): from slot 0 entries of three bytes, the action, Y and
+ * world X ($FF: the slot left out), up to a byte below $10, slot 0's kind (the
+ * scene's step); then the sprites. Entry $19 faces right. */
+static void EndingObjects_Place(Regs *r)
+{
+    Decomp_Enter(DT_B5_END_OBJ_PLACE, r->a, r->x, r->y);
+    uint8_t y = Rom((uint16_t)(DT_B5_END_OBJ_LIST + r->x));
+    uint8_t x = 0;
+    while ((r->a = Rom((uint16_t)(DT_B5_END_OBJ_ENTRIES + y))) >= END_OBJ_STEPS) {
+        if (r->a != 0xFF) {
+            gObjects->action[x] = r->a;
+            gObjects->y[x] = Rom((uint16_t)(DT_B5_END_OBJ_ENTRIES + 1 + y));
+            gObjects->worldX[x] = Rom((uint16_t)(DT_B5_END_OBJ_ENTRIES + 2 + y));
+            gObjects->worldPage[x] = gObjects->animTimer[x] = gObjects->animFrame[x] = 0;
+            gObjects->state[x] = 0x80;
+            gObjects->flags[x] = y == END_OBJ_FACING_RIGHT ? 0xD0 : 0x90;
+        }
+        x++;
+        y = (uint8_t)(y + 3);
+    }
+    gObjects->kind[0] = r->a;
+    r->y = Oam_Build();
+    r->x = RAM_U8(DT_ADDR_SPR_SLOT);
+}
+
+/* bank 5 $B380: the objects of ending screen $24. */
+static void EndingObjects(Regs *r)
+{
+    Decomp_Enter(DT_B5_ENDING_OBJECTS, r->a, r->x, r->y);
+    r->x = gEndingScreen;
+    EndingObjects_Place(r);
+}
+
+/* bank 5 $B4A2: step 3 with slot 0's timer at 0. */
+static void EndingObjects_StartExit(void)
+{
+    gObjects->kind[0] = END_STEP_LEAVE;
+    gObjects->state[0] = gObjects->animTimer[0] = 0x80;
+    gObjects->timer[0] = 0;
+}
+
+/* bank 5 $B412: bounce eleven times before the exit. */
+static void EndingObjects_Hop(Regs *r)
+{
+    Decomp_Enter(DT_B5_END_OBJ_HOP, r->a, r->x, r->y);
+    if (!(gObjects->state[0] & 0x0F)) {
+        gObjects->timer[0] = END_HOPS;
+        gObjects->vyFrac[0] = 0;
+        gObjects->vy[0] = END_HOP_VY;
+        gObjects->state[0]++;
+    }
+    if (gObjects->state[0] & 2) {
+        Obj_ApplyGravity(0);
+        Obj_ApplyVelocityY(0);
+        if (gObjects->y[0] >= END_HOP_GROUND) {
+            gObjects->vyFrac[0] = 0;
+            gObjects->vy[0] = END_HOP_VY;
+            gObjects->state[0]--;
+        }
+        return;
+    }
+    Obj_ApplyVelocityY(0);
+    Obj_ApplyGravity(0);
+    if (!(gObjects->vy[0] & 0x80)) {
+        return;
+    }
+    gObjects->vyFrac[0] = gObjects->vy[0] = 0;
+    gObjects->state[0]++;
+    if (!--gObjects->timer[0]) {
+        EndingObjects_StartExit();
+    }
+}
+
+/* bank 5 $B46A: walk left to X $90, then wait before the exit. */
+static void EndingObjects_Walk(Regs *r)
+{
+    Decomp_Enter(DT_B5_END_OBJ_WALK, r->a, r->x, r->y);
+    if (!(gObjects->state[0] & 0x0F)) {
+        gObjects->timer[0] = gObjects->speedFrac[0] = 0;
+        gObjects->speed[0] = 1;
+        gObjects->state[0]++;
+    }
+    if (gObjects->worldX[0] >= END_WALK_STOP) {
+        Obj_MoveLeft(0);
+        return;
+    }
+    if (!--gObjects->timer[0]) {
+        EndingObjects_StartExit();
+    }
+}
+
+/* bank 5 $B48F: wait 256 frames before the exit. */
+static void EndingObjects_Wait(Regs *r)
+{
+    Decomp_Enter(DT_B5_END_OBJ_WAIT, r->a, r->x, r->y);
+    if (!(gObjects->state[0] & 0x0F)) {
+        gObjects->timer[0] = 0;
+        gObjects->state[0]++;
+        return;
+    }
+    if (!--gObjects->timer[0]) {
+        EndingObjects_StartExit();
+    }
+}
+
+/* bank 5 $B4B5: wait, walk left to X $48, rise to Y $78, then wait again
+ * and place scene 3's objects with its palette. */
+static void EndingObjects_Exit(Regs *r)
+{
+    Decomp_Enter(DT_B5_END_OBJ_EXIT, r->a, r->x, r->y);
+    if (!(gObjects->state[0] & 0x0F)) {
+        if (--gObjects->timer[0]) {
+            return;
+        }
+        gObjects->speedFrac[0] = gObjects->vyFrac[0] = 0;
+        gObjects->speed[0] = gObjects->vy[0] = END_LEAVE_SPEED;
+        gObjects->state[0]++;
+    }
+    if (gObjects->worldX[0] >= END_LEAVE_X) {
+        Obj_MoveLeft(0);
+        return;
+    }
+    if (gObjects->y[0] >= END_LEAVE_Y) {
+        Obj_SubVelocityY(0);
+        return;
+    }
+    if (--gObjects->timer[0]) {
+        return;
+    }
+    r->x = END_LAST_SCENE;
+    EndingObjects_Place(r);
+    r->y = END_LAST_SCENE;
+    Palette_LoadScene(END_LAST_SCENE);
+    RAM_U8(DT_ADDR_PALETTE_REQUEST) = 0xFF;
+    RAM_U8(DT_ADDR_PPU_CTRL) |= 1;
+    gObjects->kind[0] = END_STEP_DONE;
+}
+
+/* bank 5 $B507: mark the scene done. */
+static void EndingObjects_Done(Regs *r)
+{
+    Decomp_Enter(DT_B5_END_OBJ_DONE, r->a, r->x, r->y);
+    gObjects->kind[0] = END_STEP_DONE;
+}
+
+/* bank 5 $B400: a frame of the ending scene's slot 0 by its step (its kind,
+ * handlers at DT_B5_END_OBJ_LO/HI, jumped to through $00). */
+static void EndingObjects_Update(Regs *r)
+{
+    Decomp_Enter(DT_B5_END_OBJ_UPDATE, r->a, r->x, r->y);
+    r->x = 0;
+    r->y = gObjects->kind[0];
+    gScratch(0) = Rom((uint16_t)(DT_B5_END_OBJ_LO + r->y));
+    gScratch(1) = r->a = Rom((uint16_t)(DT_B5_END_OBJ_HI + r->y));
+    switch (r->y) {
+        case 0:
+            EndingObjects_Hop(r);
+            return;
+        case 1:
+            EndingObjects_Walk(r);
+            return;
+        case 2:
+            EndingObjects_Wait(r);
+            return;
+        case END_STEP_LEAVE:
+            EndingObjects_Exit(r);
+            return;
+        default:
+            EndingObjects_Done(r);
+            return;
+    }
+}
+
 /* ---- ending ---- */
 
 static void Ending_Banked(Regs *r);
@@ -2365,18 +2618,21 @@ static void EndingScreen(Regs *r);
 static void EndingScreen_Stream(Regs *r);
 static void EndingScreen_Strings(Regs *r);
 static void EndingScreen_Drawn(Regs *r);
+static void Ending_Frame(Regs *r);
+static void Ending_Scroll(Regs *r);
+static void Ending_WaitSecond(Regs *r);
+static void Ending_Over(Regs *r);
 
 /* $E1AF: the ending, in place of a frame of play. The first frame banks the
  * money into TOTAL in the HUD, waits two seconds with the ending music, picks
- * the variant ($AD) and shows the first ending screen. After that each frame
- * runs the original: it scrolls the credits with a raster split polled on
- * the sprite-0 flag of $2002, which task code cannot do. */
+ * the variant ($AD) and shows the first ending screen; the later ones are
+ * Ending_Frame. */
 static void Ending(Regs *r)
 {
     Decomp_Enter(DT_CODE_ENDING, r->a, r->x, r->y);
     r->a = gEnding;
     if (gEnding & 0x80) {
-        Decomp_RunOriginal();
+        Ending_Frame(r);
         return;
     }
     gEnding |= 0x80;
@@ -2435,6 +2691,116 @@ static void Ending_Shown(Regs *r)
         gEndingScreen = 0;
         r->a = 0;
     }
+}
+
+/* $E1F9: a frame of the ending after the first: the scene's objects until
+ * slot 0's step is 5; then on the screens with the HUD split the credits
+ * scroll, on the others ten seconds and the next screen. */
+static void Ending_Frame(Regs *r)
+{
+    r->a = gObjects->kind[0];
+    if (r->a != END_STEP_DONE) {
+        SelectBank(r, DT_BANK_SPRITES);
+        EndingObjects_Update(r);
+        return;
+    }
+    r->a = gHudSplit;
+    if (!gHudSplit) {
+        r->a = END_WAIT_SECONDS;
+        Ending_WaitSecond(r);
+        return;
+    }
+    gHudSplit = 0;
+    gCreditsPause = 0;
+    Ending_Scroll(r);
+}
+
+/* $E212: the split (sprite 0's Y) a line down, the credits with it, until
+ * line $E8 or on screen 5 $B0; then a frame, where the original waits for
+ * the sprite-0 hit and shows the credits' nametable below it ($E229-$E23B). */
+static void Ending_Scroll(Regs *r)
+{
+    r->a = ++gOamSprite0Y;
+    if (r->a == END_SPLIT_LIMIT) {
+        return;
+    }
+    r->x = gEndingScreen;
+    if (gEndingScreen == END_LAST_SCREEN && r->a == END_LAST_SPLIT) {
+        return;
+    }
+    Yield(DT_FLOW_END_SPLIT_WAIT);
+}
+
+/* $E23C, after the split: every eighth line the scroll stops for 64 frames,
+ * but on screen 0 from line $B7 on, where the credits music starts. */
+static void Ending_Split(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_END_SPLIT, r->a, r->x, r->y);
+    r->a = gOamSprite0Y & 7;
+    if (r->a != 7) {
+        Ending_Scroll(r);
+        return;
+    }
+    r->a = gEndingScreen;
+    if (!gEndingScreen && (r->a = gOamSprite0Y) >= END_MUSIC_LINE) {
+        r->a = MUSIC_CREDITS;
+        if (gMusic != MUSIC_CREDITS) {
+            MusicRequest(r, MUSIC_CREDITS);
+        }
+        Ending_Scroll(r);
+        return;
+    }
+    r->a = ++gCreditsPause & END_PAUSE_MASK;
+    if (r->a) {
+        Yield(DT_FLOW_END_SPLIT_WAIT);
+        return;
+    }
+    gCreditsPause = 0;
+    Ending_Scroll(r);
+}
+
+/* $E26B: a second (the seconds left on the stack). */
+static void Ending_WaitSecond(Regs *r)
+{
+    Decomp_Push(r->a);
+    r->x = END_SECOND;
+    Jsr(DT_CODE_TASK_WAIT, DT_FLOW_END_SECOND, OUT_X | OUT_Y);
+}
+
+/* $E271: after the last second the next screen, from 4 on; after screen 5
+ * the game ends here. */
+static void Ending_Second(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_END_SECOND, r->a, r->x, r->y);
+    r->a = (uint8_t)(Decomp_Pull() - 1);
+    if (r->a) {
+        Ending_WaitSecond(r);
+        return;
+    }
+    r->a = gEndingScreen;
+    if (!gEndingScreen) {
+        Ending_Over(r);
+        return;
+    }
+    if (gEndingScreen < ENDING_SCREEN_SPLIT) {
+        gEndingScreen = r->a = ENDING_SCREEN_SPLIT;
+    }
+    if (Gosub(EndingScreen, r, DT_FLOW_ENDING_SHOWN)) {
+        Ending_Shown(r);
+    }
+}
+
+/* $E286: frames, for ever. */
+static void Ending_Over(Regs *r)
+{
+    Yield(DT_FLOW_END_OVER);
+}
+
+/* $E289 */
+static void Ending_OverNext(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_END_OVER, r->a, r->x, r->y);
+    Ending_Over(r);
 }
 
 /* $E054: ending screen $24. The picture fades out (the objects stay for
@@ -2579,7 +2945,7 @@ static void EndingScreen_Drawn(Regs *r)
 {
     gEndingScreen = Decomp_Pull();
     r->a = gEndingScreen;
-    Call(r, DT_B5_ENDING_OBJECTS);
+    EndingObjects(r);
     r->y = gEndingScreen;
     r->x = Rom((uint16_t)(DT_DATA_ENDING_CHR + r->y));
     Jsr(DT_CODE_CHR_LOAD, DT_FLOW_END_CHR, OUT_X);
@@ -2645,6 +3011,14 @@ static void Run_RespawnEntry(Regs *r)
 
 const DecompRoutine gFlowRoutines[] = {
     ROUTINE(DT_CODE_TIMER_TICK, NULL, "Timer_Tick", Timer_Tick, 0),
+    ROUTINE_IN(DT_BANK_SPRITES, DT_B5_ENDING_OBJECTS, "EndingObjects", EndingObjects, 0),
+    ROUTINE_IN(DT_BANK_SPRITES, DT_B5_END_OBJ_PLACE, "EndingObjects_Place", EndingObjects_Place, 0),
+    ROUTINE_IN(DT_BANK_SPRITES, DT_B5_END_OBJ_UPDATE, "EndingObjects_Update", EndingObjects_Update, 0),
+    ROUTINE_IN(DT_BANK_SPRITES, DT_B5_END_OBJ_HOP, "EndingObjects_Hop", EndingObjects_Hop, 0),
+    ROUTINE_IN(DT_BANK_SPRITES, DT_B5_END_OBJ_WALK, "EndingObjects_Walk", EndingObjects_Walk, 0),
+    ROUTINE_IN(DT_BANK_SPRITES, DT_B5_END_OBJ_WAIT, "EndingObjects_Wait", EndingObjects_Wait, 0),
+    ROUTINE_IN(DT_BANK_SPRITES, DT_B5_END_OBJ_EXIT, "EndingObjects_Exit", EndingObjects_Exit, 0),
+    ROUTINE_IN(DT_BANK_SPRITES, DT_B5_END_OBJ_DONE, "EndingObjects_Done", EndingObjects_Done, 0),
     ROUTINE_IN(DT_BANK_SPRITES, DT_B5_MESSAGE, "Select_Message", Select_Message, OUT_A | OUT_X | OUT_Y),
     ROUTINE_IN(DT_BANK_SPRITES, DT_B5_SELECT_MESSAGE, "Select_ResultMessage", Select_ResultMessage,
                OUT_A | OUT_X | OUT_Y),
@@ -2755,10 +3129,18 @@ const DecompRoutine gFlowRoutines[] = {
     RESUME(DT_FLOW_M15_NEXT, "Mode15_Next", Mode15_Next, 0),
     RESUME(DT_FLOW_M15_ARENA_CHR, "Mode15_ArenaChr", Mode15_ArenaChr, 0),
     RESUME(DT_FLOW_M15_SPAWNED, "Mode15_Spawned", Mode15_Spawned, 0),
+    TASK(DT_CODE_RESET, SITE("FEE0"), "Reset", Reset, 0),
+    TASK(DT_RESET_READY, SITE("FEFB"), "Reset_Ready", Reset_Ready, 0),
+    RESUME(DT_RESET_NT0_READY, "Reset_SecondNametable", Reset_SecondNametable, 0),
+    RESUME(DT_RESET_NT1_READY, "Reset_CreateMainTask", Reset_CreateMainTask, 0),
+    RESUME(DT_RESET_CREATED, "Reset_StartScheduler", Reset_StartScheduler, 0),
     TASK(DT_CODE_ENDING, SITE("E1AF"), "Ending", Ending, 0),
     TASK(DT_CODE_ENDING_BANK, NULL, "Ending_BankTransfer", Ending_BankTransfer, 0),
     RESUME(DT_FLOW_ENDING_BANKED, "Ending_Banked", Ending_Banked, 0),
     RESUME(DT_FLOW_ENDING_WAITED, "Ending_Waited", Ending_Waited, 0),
+    TASK(DT_FLOW_END_SPLIT, SITE("E23C"), "Ending_Split", Ending_Split, 0),
+    RESUME(DT_FLOW_END_SECOND, "Ending_Second", Ending_Second, 1),
+    RESUME(DT_FLOW_END_OVER, "Ending_OverNext", Ending_OverNext, 0),
     RESUME(DT_FLOW_ENDING_SHOWN, "Ending_Shown", Ending_Shown, 0),
     TASK(DT_CODE_ENDING_SCREEN, NULL, "EndingScreen", EndingScreen, 0),
     RESUME(DT_FLOW_END_FADED, "EndingScreen_Faded", EndingScreen_Faded, 0),
@@ -2788,6 +3170,6 @@ const int gFlowRoutineCount = sizeof gFlowRoutines / sizeof gFlowRoutines[0];
  * own sites; task_yield's C hands off to the scheduler. */
 const DecompStop gFlowStops[] = {
     STOP(DT_CODE_SCHEDULER, "FF35"),
-    STOP(DT_CODE_RESET, "FEE0"),
+    STOP(DT_RESET_POLL, "FEEE"),
 };
 const int gFlowStopCount = sizeof gFlowStops / sizeof gFlowStops[0];

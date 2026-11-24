@@ -210,7 +210,7 @@ call can do. `flow.c` decompiles that code as **task code** (`DecompRoutine.task
   true S, with the isolated call's return address in place of the routine's own (at S + locals
   + 1). When the C hands off, the original stops where it reaches the same routine at the same
   depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`, 2 of
-  them: the scheduler `$FF35`, which `task_yield`'s C hands off to, and the reset `$FEE0`). Check compares RAM, the stack down to that depth, the registers the hand-off uses and the
+  them: the scheduler `$FF35`, which `task_yield`'s C hands off to, and the reset's PPU wait `$FEEE`). Check compares RAM, the stack down to that depth, the registers the hand-off uses and the
   number of device writes.
 - Replace mode stores the C's results, makes its device writes, spends the original's cycles up to
   the stop (without the entry RTS) and jumps there. A call that would run into VBlank or past the
@@ -505,8 +505,9 @@ RAM-identical in replace mode.
 | `BankTransfer` (1 resume point) | `$D8D9-$D9BD` | checked | 5 | all-treasures (no money), total-max (TOTAL at 99999) | not measured |
 | `Scene` (6 resume points) | `$DF27-$DFEC` | checked | 0 | scene-1, scene-2 | not measured |
 | `Mode15_Redraw` (5 resume points) | `$DFED-$E053` | checked | 0 | mode15-redraw, message-scene | not measured |
-| `Ending` (3 resume points), `Ending_BankTransfer` (`$FFC7`) | `$E1AF-$E1F8` | checked (first frame; the later frames run the original) | 0 | ending | not measured |
-| `EndingScreen` (11 resume points) | `$E054-$E11A` | checked | 0 | ending | not measured |
+| `Ending`, `Ending_Split`, `Ending_BankTransfer` (`$FFC7`) and their resume points | `$E1AF-$E28B` | checked; the raster wait and write at `$E229-$E23B` run in the original | 0 | ending, ending-0, ending-2 | not measured |
+| `EndingScreen` (11 resume points) | `$E054-$E11A` | checked | 0 | ending, ending-0, ending-2 | not measured |
+| `EndingObjects`, `EndingObjects_Update` and the five scene handlers | bank 5 `$B380-$B3CB`, `$B400-$B50C` | checked with the ending | 0 | ending-0 (hop), ending (walk), ending-2 (wait); all three exit and reach the credits | not measured |
 | `WaitA` (1 resume point) | `$D9BE` | checked | 5 | final-trip | not measured |
 | `FrameLoop` and its resume points | `$DB36-$DC3D` | checked | 12 | - | not measured; the scene request (`$DBC5`) |
 | `DeathOrWarp`, `Death_*` and `Respawn_*` | `$DC3E`, `$DD4E`, `$DD52` | checked | 10 | - | not measured |
@@ -521,16 +522,21 @@ RAM-identical in replace mode.
 (`$D9CA-$DA0F`), the frame loop with pause, the boss checkpoint, death, warps, respawn, game over and
 land exit (`$DB36-$DF26`), the special scenes with their tables (`$DF27-$DFEC`), the scene set-up
 of message `$0B` that Scrooge's message box calls (`$DFED-$E053`), the ending's screens and its
-first frame with their tables (`$E054-$E126`, `$E133-$E142`, `$E1AF-$E1F8`), the HUD timer
-(`$E28C-$E2FD`) and the boss trigger with the arena scroll (`$CF93-$D04C`): 3,218 of the 3,880 bytes,
-or 83% (tables inside the ranges included). Outside these ranges the flow also has the final trip's
+frames with their tables (`$E054-$E126`, `$E133-$E142`, `$E1AF-$E28B`), the HUD timer
+(`$E28C-$E2FD`) and the boss trigger with the arena scroll (`$CF93-$D04C`). Outside these ranges the flow also has the final trip's
 take-off scene (bank 4 `$BE00-$BEAA`) with the sprites frame it waits with (`$F855-$F868`), and
 in bank 5 the pause and message box text (`$B580-$B61B`), the Land Select messages
-(`$B800-$B86B`) and the clearing of the consumed-record bits (`$B760`). Not yet: the ending's later frames (`$E1F9-$E28B`: the credits scroll with a raster split polled on
-`$2002`, which `Ending` gives to the original) and the Select refill `$E2FE` (Scrooge's); the
-scene palette tables `$E127-$E132` and `$E143-$E1AE` are read by `Palette_LoadScene` (system.c).
-The flow has 14 sites: 11 entries that original code reaches and 3 stop sites (`task_yield`
-`$FFAC`, `task_wait` `$FFA5` and the reset `$FEE0`).
+(`$B800-$B86B`), the clearing of the consumed-record bits (`$B760`) and the ending's scene
+objects (`$B380-$B50C`, with tables). The credits yield to the original raster split at
+`$E229-$E23B`: it watches the sprite-0 flag on `$2002`, writes `$2000` at the split and
+resumes the C via the internal hook at `$E23C`. The Select refill `$E2FE` is in `player.c`;
+the scene palette tables `$E127-$E132` and `$E143-$E1AE` are read by `Palette_LoadScene` (system.c).
+The flow has 16 sites: 14 entries that original code reaches and 2 stop sites (the scheduler
+`$FF35` and the reset's PPU wait `$FEEE`). The reset `$FEE0-$FF34` is task code: `Reset` turns
+rendering off and hands the four-vblank wait `$FEEE-$FEFA` to the original, whose fall-through reaches
+the internal site `$FEFB` (`Reset_Ready`: RAM, sprites, nametables, the main task, the scheduler). A
+warm reset at the frame boundary takes an NMI before the first store to `$2000`, so replace gives
+that call to the original (the NMI line has risen but the CPU has not latched it yet).
 
 Not decompiled yet, and still run as the original from the C:
 
@@ -783,7 +789,7 @@ background through the C of the probe `$D120` and its snaps (`collision.c`).
 
 ### Progress
 
-`tools/decomp_progress.py` gives one number: the PRG bytes the 12 routes and the poke cases
+`tools/decomp_progress.py` gives one number: the PRG bytes the routes and the poke cases
 execute on the original (quick_verify's golden coverage, and `decomp_pokes.cover` beside it, which
 `--record-pokes` writes), counted once with each instruction's length, and the share of them
 inside routines with C. A `DecompRoutine` has no end field: the script derives each routine's code
@@ -792,20 +798,20 @@ indirect jump or another routine's entry, and counts as C the routines only C re
 script's docstring gives every rule. `--rev` reads the C of another branch against the same
 coverage.
 
-On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **99.0%, 27,105 of 27,382 executed
-bytes**, in 370 routines (main 3dd0520, 13 routes and 68 poke cases).
+On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **99.6%, 27,681 of 27,788 executed
+bytes**, in 386 routines (main 6209080 merged, 13 routes and 70 poke cases).
 
 | Group | Files | Routines | Executed bytes | Share |
 |---|---|---|---|---|
-| player | `player.c`, `motion.c`, `sound.c` | 54 | 3,624 | 13.8% |
-| objects | `objects.c`, `objcommon.c` | 109 | 11,728 | 44.7% |
-| flow | `flow.c` | 131 | 3,312 | 12.6% |
-| level | `level.c`, `collision.c` | 40 | 3,602 | 13.7% |
-| system | `system.c`, `sprites.c`, `audio.c` | 25 | 3,363 | 12.8% |
+| player | `player.c`, `motion.c`, `sound.c` | 54 | 3,624 | 13.0% |
+| objects | `objects.c`, `objcommon.c` | 118 | 12,893 | 46.4% |
+| flow | `flow.c` | 147 | 3,866 | 13.9% |
+| level | `level.c`, `collision.c` | 40 | 3,602 | 13.0% |
+| system | `system.c`, `sprites.c`, `audio.c` | 25 | 3,385 | 12.2% |
 
-No executed byte is shared with an original routine. The routines still original are the
-reset `$FEE0` (85), the scheduler `$FF35` (72), the ending's bank-5
-objects `$B380` (71), `$B46A` (31) and `$B400` (18). Every object kind has C.
+No executed byte is shared with an original routine. The original code still reached is the scheduler
+`$FF35` (72 bytes), the credits' raster split `$E229` (19), the reset's four-vblank wait `$FEEE` (13)
+and the frame loop's return jump `$DC29` (3).
 
 ### Gap
 

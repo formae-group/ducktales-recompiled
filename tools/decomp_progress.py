@@ -73,7 +73,7 @@ ENTRY = re.compile(r'\{\s*(\w+)\s*,\s*(?:NULL|"[^"]*")\s*,\s*"(\w+)"([^}]*)\}')
 MACRO = re.compile(
     r'\b(?:ROUTINE|TASK)\(\s*(\w+)\s*,\s*(?:NULL|"[^"]*"|SITE\("[^"]*"\))\s*,\s*"(\w+)"|\bRESUME\(\s*(\w+)\s*,\s*"(\w+)"'
 )
-CALLED = re.compile(r'\b(?:Decomp_Call|Decomp_CallP|Decomp_Handoff|Call|Jsr|Jump)\(\s*(?:r\s*,\s*)?(DT_\w+)')
+CALLED = re.compile(r'\b(?:Decomp_Call|Decomp_CallP|Decomp_Handoff|Call|Jsr|Jump|Yield)\(\s*(?:r\s*,\s*)?(DT_\w+)')
 POKES = 'decomp_pokes.cover'
 FUNCTION = re.compile(r'^\w[\w *]*?\b(\w+)\(([^;{]*?)\)\s*\{(.*?)^\}', re.M | re.S)
 CALL_ARG = re.compile(r'\bDecomp_CallP?\(\s*([^,]+?)\s*,')
