@@ -16,15 +16,26 @@ runs exactly as the console does.
    `%APPDATA%\DuckTales Recompiled\mods` (`DUCKTALES_DATA_DIR\mods` when that variable is set). The
    game creates the folder on its first start.
 2. Open the menu (Escape) and go to **Settings, Mods**. Switch **Enable mods** on, tick the mods you
-   want and put them in order. **Open mods folder** shows the folder and **Rescan** reads it again.
-3. Restart the game. Mods load once, at start, so the page shows *Restart DuckTales to apply these
-   changes* until you restart.
+   want and put them in order. Each mod shows its version and author, and *folder* or *script*
+   when it is a loose folder or runs a script. **Open mods folder** shows the folder, **Rescan**
+   reads it again and **Open mods log** opens `mods.log` (see below).
+3. Restart the game to apply changes to which mods load, their priority, or their source folders
+   and archives. The page asks you to restart when the selection differs from what is running;
+   undoing a change clears the prompt. Edited assets inside an already loaded mod still need a
+   restart even if the selection hasn't changed.
 
 Mods higher in the list win: when two mods replace the same tile, palette or sound, the one nearer
 the top is used. A mod that cannot be loaded stays in the list with the reason under its name, in
 red, and its checkbox is off: it was made for another game or another PRG, the archive cannot be
-read, or one of its files is invalid. A mod whose script stopped is named under the list with the
-reason (see [Scripts](#scripts)).
+read, its mod.toml is invalid, one of its files is invalid, or it has two files for the same tile,
+palette or sound. **Rescan** checks the files of every mod that is not loaded yet, so a broken new
+mod shows its reason before you restart. A mod whose script stopped is named under the list with
+the reason (see [Scripts](#scripts)).
+
+With mods on, the game writes what it loaded, every refused mod with its reason, and the scripts'
+`dt.log` lines, toasts and errors to `mods.log` in the data folder, emptied
+at each start and capped at 4 MiB. The same lines go to the console when the game runs from one.
+Attach that file to a bug report about a mod.
 
 The settings live in `config.ini`:
 
@@ -34,16 +45,19 @@ Enabled = on
 Order = hd-hud:on,purple-amazon:off,title-remix:on
 ```
 
-`Order` lists the mods by id, top first. New mods join the bottom of the list, switched on.
+`Order` lists the mods by id, top first. New mods join the bottom of the list, switched on. A
+refused copy cannot take another mod's saved position or switch.
 
-The command line selects mods without the menu, in the window and in the headless host:
+The command line selects mods without the menu, in the window and in the headless host. Its
+switch and order override `config.ini` for that run without changing the saved values. Off-screen
+runs do not scan the player's mods folder, so pass `--mods-dir` explicitly.
 
 | Option | Meaning |
 |---|---|
 | `--mods on\|off` | Load mods or not (the window's default is `[Mods] Enabled`; headless runs default to off) |
-| `--mods-dir DIR` | Another folder to scan (repeatable) |
+| `--mods-dir DIR` | Another folder to scan (repeatable, up to 4); a path that is not a folder is an error |
 | `--mods-order ID:on\|off,...` | The order and switches, as `[Mods] Order` |
-| `--mods-dump DIR` | Writes every tile drawn, once, as the template a tile replacement starts from |
+| `--mods-dump DIR` | Writes every tile drawn, once, as a replacement template, even with mods off or without `--present-out` in a headless run. Creates missing parent folders and reports a write failure before stopping the dump |
 
 ## Making a mod
 
@@ -76,10 +90,19 @@ game = "DuckTales (USA)"
 prg_sha256 = "8ba8baed01a9fbaf1e9ff29e0c9825db1963ac2aff211d6f1f3bcfd3839e2013"
 ```
 
-`id` is 1 to 63 characters of `a-z`, `0-9`, `-`, `_` and `.`, and it is what `[Mods] Order`
-saves. `name`, `version`, `game` and `prg_sha256` are required. `prg_sha256` is the SHA-256 of the
-PRG ROM the mod was made for: tile keys and sound ids belong to that program, so a mod for another
+`id` is 1 to 63 characters of `a-z`, `0-9`, `-`, `_` and `.`, starting with a letter or a digit,
+and it is what `[Mods] Order` saves. `id`, `name`, `version`, `game` and `prg_sha256` are required;
+`author` and `description` are optional. These seven keys are quoted strings and each may be set
+once; other keys and tables are ignored. `prg_sha256` is the SHA-256 of the PRG ROM the mod was
+made for, in 64 hex digits: tile keys and sound ids belong to that program, so a mod for another
 PRG is refused.
+
+A mod.toml that breaks these rules is listed with the reason and the line: *mod.toml is missing
+version, prg_sha256*, *mod.toml line 3: version must be a quoted string (version = "...")*,
+*mod.toml line 5: name is set twice*. The file may start with a UTF-8 byte order mark (Notepad
+writes one), and so may `scripts/main.lua`. A NUL byte is refused, rather than silently ending
+the manifest before the rest of the file. File and folder names inside a mod are matched
+whatever their case (`Scripts/Main.lua`, `MOD.TOML`), as Windows matches them.
 
 ### Tiles
 
@@ -90,7 +113,7 @@ tile's 16 CHR bytes in 16 hex digits, optionally followed by `_` and the palette
 - `tiles/<hash>_<palette>.png` replaces the tile drawn with that palette.
 - `tiles/<hash>.png` replaces the tile with any palette. A palette-specific file wins over it.
 
-Run the game with `--mods on --mods-dump DIR` and play to the place you want to change: `DIR`
+Run the game with `--mods-dump DIR` and play to the place you want to change: `DIR`
 fills with `<hash>_<palette>.png`, one per tile and palette drawn, each the tile as the console
 shows it. Edit a copy and put it in `tiles/`. Replacements are 8x8 for now. Pixels with alpha
 below 128 show the original pixel, so a replacement can change part of a tile.
@@ -142,12 +165,12 @@ end)
 | Name | What it is |
 |---|---|
 | `dt.on(event, fn)` | Calls `fn` at every `event`, in the order handlers were added; mods higher in the list run first |
-| `dt.CANCEL` | Returned by a handler of a cancelable event: the event is cancelled |
+| `dt.CANCEL` | Returned by a handler of a cancelable event: the event is cancelled. Returned for an event that cannot be cancelled, it is ignored and the log says so once |
 | `dt.state` | The game's state, read only, inside handlers (fields below) |
 | `dt.set.<field>(value)` | Sets a writable field at the frame's end, inside handlers (see [Writing the game](#writing-the-game)) |
 | `dt.toast(text)` | Shows a short notice over the picture; returns `false` when it was refused (see [Toasts](#toasts)) |
 | `dt.store.get(key)`, `dt.store.set(key, value)` | The mod's own saved values (see [Store](#store)) |
-| `dt.log(...)` | Writes a line to the game's log (`print` does the same) |
+| `dt.log(...)` | Writes a line to `mods.log` and the console (`print` does the same) |
 | `dt.frame()` | Frames since the game started |
 | `dt.mod` | The mod's id |
 
@@ -189,7 +212,9 @@ game, as the matching enhancement does.
 The value is checked when `dt.set` is called, and a value out of range is an error (catchable
 with `pcall`). Calls are only allowed inside handlers, and they are queued: the writes happen at
 the end of the frame, after the `frame` handlers, through the game's RAM transaction (the same
-helpers the enhancements use), so `dt.state` shows the new value from the next frame on. **Every
+helpers the enhancements use), so `dt.state` shows the new value from the next frame on. The
+value is checked again then, and a write the state no longer allows (the HUD stopped showing
+money) is dropped with a line in the log. **Every
 write is a gameplay change**: the machine then differs from the console's, like an enhancement
 that is on. A mod whose script stopped has its queued writes dropped.
 
@@ -197,7 +222,11 @@ that is on. A mod whose script stopped has its queued writes dropped.
 
 `dt.toast(text)` shows a notice with the mod's name and `text` near the top of the picture for 3
 seconds (180 frames). At most one per mod per second is shown (a refused call returns `false`), a
-newer notice replaces the one showing, and `text` is cut to 64 characters. The notice is drawn with
+newer notice replaces the one showing, and `text` is cut to 64 characters (UTF-8 code points;
+control characters become spaces). The picture's font is small: it draws `A`-`Z` (lower case in
+capitals), `0`-`9`, the space and `- . : / ( ) = + ! ? , '`, any other character as `?`, and the
+first 61 characters of a line, ending in `...` when the text is longer. The log keeps the text as
+written. The notice is drawn with
 the hosts' overlay font (`cyc_overlay`) over the presented picture only, after the mods' tiles and
 palettes: it never reaches the machine's picture, screenshots taken from it, or any hash. It is also
 written to the log.
@@ -208,7 +237,10 @@ written to the log.
 `A-Z`, `a-z`, `0-9`, `_`, `-` and `.`); `nil` removes it. `dt.store.get(key)` returns it, or
 `nil`. Each mod has its own store of at most 64 KiB, kept in the data folder as
 `mods-data/<id>.ini`. It is written when it changed, at most once a second and when the game
-exits, and it survives a hot reload. Scripts never see a path: the file is named by the mod's id,
+exits, and it survives a hot reload. A write goes to `<id>.ini.tmp` first and then takes the old
+file's place, so a crash or a full disk never leaves half a store; a write that fails is logged
+once and tried again a second later. Keys of a store file past 64 KiB are dropped with a line in
+the log. Scripts never see a path: the file is named by the mod's id,
 which can only hold `a-z`, `0-9`, `-`, `_` and `.`, and a mod whose id is a Windows device name
 (`con`, `nul`, `com1`, ...) has no store.
 
@@ -223,15 +255,20 @@ which can only hold `a-z`, `0-9`, `-`, `_` and `.`, and a mod whose id is a Wind
 - An error, or a limit reached, stops that mod's script: its handlers and queued writes are dropped, the reason is
   written to the log and shown in the Mod Menu, and the game and the other mods go on. `pcall`,
   `xpcall`, `coroutine.resume` and `coroutine.close` do not catch a limit.
+- The reason names the line and where it ran: *scripts/main.lua:12: attempt to index a nil value
+  (field 'x') (in a "frame" handler)*, *scripts/main.lua:3: ran more than 1000000 instructions in
+  one callback (in a "timer-tick" handler)*, or *(when the script started)* for the script's first
+  run. The memory limit has no line: *used more than 16 MiB of memory*.
 - The instruction limit counts Lua instructions. A single long call into the C library, such as a
   pathological string pattern, is not interrupted.
 
 ### Hot reload
 
 About once a second the game checks `scripts/main.lua` of a folder mod, or the `.dtmod` archive.
-When it changed, the script starts again from scratch with the new text. A script that stopped
-with an error also starts again once you save a fix. Only scripts reload; tiles, palettes and
-sounds load at start.
+When its write time or size changed, the script starts again from scratch with the new text, and
+the log says *script reloaded*. A script that stopped with an error also starts again once you
+save a fix. Only the scripts of mods loaded at start reload: a mod that had no
+`scripts/main.lua` then, and tiles, palettes and sounds, need a restart.
 
 ## How it works
 
@@ -258,5 +295,6 @@ Both hosts and the native player call the same entry points:
   each frame (including the frames the open menu runs) the `frame` handlers run and the queued
   `dt.set` writes are applied in one RAM transaction.
 
-The tests are in `tests/mods_test.py`. They generate their mods on the fly from the player's own
+The tests are in `tests/mods_test.py`, `tests/mods_catalogue_test.c` and `tests/window_smoke.py`.
+They generate their fixtures in scratch folders, and the tile templates come from the player's own
 ROM; no game content is committed.

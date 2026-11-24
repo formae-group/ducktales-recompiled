@@ -55,6 +55,9 @@ typedef FmMod AppMod;
 void app_mods_add_folder(const char *dir, bool create);
 /* The first folder: the one the menu opens. Empty when none. */
 const char *app_mods_folder(void);
+/* mods.log in the data folder, written since the start with mods on; empty
+ * when there is none. */
+const char *app_mods_log_path(void);
 /* A [Mods] key of config.ini; false when the key is unknown. */
 bool app_mods_setting(const char *key, const char *value);
 /* Reads the [Mods] section of an ini file (the host's reader skips it). */
@@ -117,6 +120,8 @@ void app_mods_video_apply(const NvVideo *video, const NvRenderOptions *options, 
 /* Developer: from now on write every tile drawn, once, into dir as
  * <key>.png (from the player's own ROM; never distribute them). */
 bool app_mods_dump_dir(const char *dir);
+/* Collect the finished frame if a tile dump is active, even off screen. */
+void app_mods_dump_frame(void);
 /* Draws the script notice showing now (dt.toast) over a presented picture,
  * never the machine's (cyc_overlay.h). */
 void app_mods_draw_overlay(uint32_t *argb, int width, int height);

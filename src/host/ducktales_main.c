@@ -200,6 +200,7 @@ int main(int argc, char **argv)
     }
     args[n] = NULL;
     sdl_hints();
+    launch.off_screen = headless != 0;
     app_ui_configure(&launch);
     int result = ducktales_host_main(n, args);
     app_ui_finish();
