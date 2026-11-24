@@ -55,8 +55,6 @@
 #define TASK_WAIT         1
 #define TASK_STACK        2 /* the saved S, or a new task's entry low byte */
 #define TASK_ENTRY_HI     3
-#define TASK_WAITING      1
-#define TASK_NEW          8
 #define YIELD_FRAMES      1
 
 #define TASK_BYTE(x, field) RAM_U8((uint8_t)(DT_ADDR_TASKS + (field) + (x)))
@@ -67,7 +65,7 @@ static uint16_t rom_pointer(uint16_t lo_table, uint16_t hi_table, uint8_t index)
 }
 
 /* $FFE0: map a bank at $8000 without recording it (the NMI's switch). */
-static void Bank_SelectTemp(uint8_t bank)
+void Bank_SelectTemp(uint8_t bank)
 {
     Decomp_Enter(DT_CODE_BANK_SELECT_TEMP, bank, 0, 0);
     Decomp_BusWrite((uint16_t)(DT_CODE_BANK_TABLE + bank), bank);
@@ -281,7 +279,7 @@ static void Task_Create(Regs *r)
     Task_SlotOffset(r);
     TASK_BYTE(r->x, TASK_STACK) = gTaskEntry[0];
     TASK_BYTE(r->x, TASK_ENTRY_HI) = gTaskEntry[1];
-    r->a = TASK_NEW;
+    r->a = DT_TASK_NEW;
     TASK_BYTE(r->x, TASK_STATE) = r->a;
     r->p = Flags_NZ(r->p, r->a);
 }
@@ -297,7 +295,7 @@ static void Task_Yield(Regs *r)
     Decomp_Push(r->y);
     Task_CurrentSlot(r);
     TASK_BYTE(r->x, TASK_WAIT) = gTaskEntry[0];
-    TASK_BYTE(r->x, TASK_STATE) = TASK_WAITING;
+    TASK_BYTE(r->x, TASK_STATE) = DT_TASK_WAITING;
     r->a = r->y = r->x;
     r->x = Decomp_Stack();
     r->p = Flags_NZ(r->p, r->x);

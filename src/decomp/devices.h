@@ -12,12 +12,16 @@
 #define PPU_CTRL   0x2000
 #define PPU_MASK   0x2001
 #define PPU_STATUS 0x2002
+#define OAM_ADDR   0x2003
+#define PPU_SCROLL 0x2005
 #define PPU_ADDR   0x2006
 #define PPU_DATA   0x2007
 #define APU_BASE   0x4000
+#define OAM_DMA    0x4014
 #define APU_STATUS 0x4015
 #define JOYPAD1    0x4016
 #define JOYPAD2    0x4017
+#define APU_FRAME  0x4017 /* the frame counter, when written */
 
 /* A read of PPUSTATUS for its side effect: it resets the address latch. */
 static inline void Ppu_ResetLatch(void)

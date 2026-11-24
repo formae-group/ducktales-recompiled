@@ -23,6 +23,7 @@
  */
 #include "decomp/decomp.h"
 #include "decomp/devices.h"
+#include "decomp/sound.h"
 
 #include "ducktales/game.h"
 
@@ -290,7 +291,7 @@ static void stop_music(void)
 }
 
 /* bank 3 $8003: sound id, and Y for the speed and fade ids. */
-static void Sound_Play(uint8_t id, uint8_t y)
+void Sound_Play(uint8_t id, uint8_t y)
 {
     Decomp_Enter(DT_CODE_SOUND_PLAY, id, 0, y);
     switch (id) {
@@ -882,7 +883,7 @@ static void effect_tick(void)
 }
 
 /* bank 3 $8000 (JMP $823D): once per NMI. */
-static void Sound_Update(void)
+void Sound_Update(void)
 {
     Decomp_Enter(DT_CODE_SOUND_UPDATE, 0, 0, 0);
     apu_write(0x01, SWEEP_OFF);
