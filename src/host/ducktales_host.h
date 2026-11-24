@@ -40,6 +40,15 @@ void ducktales_host_set_no_slowdown(bool on);
  * (ducktales_host.c) or the native runtime's lag mode (native_window.c). */
 void ducktales_host_apply_no_slowdown(bool on);
 
+/* Decompiled code (config.ini [Game] DecompiledCode, the Settings menu), off
+ * by default: the native player runs the routines decompiled to C in place of
+ * the recompiled ones (src/decomp/decomp_native.c), with No slowdown on only,
+ * since the C does not take the console's cycles and would change where the
+ * console lags. Every host keeps the key; the native player applies it with
+ * No slowdown (ducktales_host_apply_no_slowdown). */
+bool ducktales_host_decompiled(void);
+void ducktales_host_set_decompiled(bool on);
+
 /* The native player's extra voices (config.ini [Audio] MusicUnderEffects and
  * OverlapEffects, the Audio page; native/native_voices.h), both off by
  * default. NESRecomp's settings file hands the game only its [Game] keys, so

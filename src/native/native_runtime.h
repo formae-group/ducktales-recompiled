@@ -99,6 +99,20 @@ bool native_poke(uint16_t addr, uint8_t value);
 size_t native_state_save(uint8_t *out, size_t cap);
 bool native_state_load(const uint8_t *in, size_t size);
 
+/* Isolated calls, for the decompiled routines (src/decomp/decomp_native.c):
+ * begin saves the machine, end puts it back; in between no clock runs, no
+ * interrupt comes and no observer (step, latch, NMI audit) is told.
+ * native_isolated_call runs an original routine to its RTS there, hook sites
+ * letting it through; false when it does not return. */
+typedef struct {
+    uint8_t a, x, y, s, p;
+} NativeRegs;
+
+bool native_isolated(void);
+bool native_isolate_begin(void);
+void native_isolate_end(void);
+bool native_isolated_call(uint16_t routine, NativeRegs *r);
+
 /* ---- native_hooks.c: game.toml hook sites (cyc_hooks.h) ---- */
 /* Bind the plugins registered with mod_function_hooks.h to the program's
  * sites and keep cyc_hooks_armed current; false when a plugin names a site

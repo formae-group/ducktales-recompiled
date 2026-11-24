@@ -55,6 +55,10 @@ uint8_t cyc_ram_code_dirty;
 
 static uint64_t cycles;
 
+/* An isolated call is open (native_isolate_begin): no clock runs and no
+ * observer is told, and the machine is put back when it closes. */
+static bool scope_open;
+
 /* With cyc_trace_enabled and cyc_trace_file set (ducktales_native
  * --trace-frame), one line per instruction in the cycle host's --trace-out
  * INSN format, so the two traces line up on the CPU cycle number. */
@@ -353,6 +357,10 @@ bool hw_native_prepare(void)
 
 static inline void end_cycle(void)
 {
+    if (scope_open) {
+        cycles++;
+        return;
+    }
     video_advance(3 * cycles + 3);
     cycles++;
     video_advance(3 * cycles);
@@ -383,7 +391,9 @@ static void sprite_dma(void)
 void hw_cycle_start(uint16_t addr, HwCycleKind kind)
 {
     hw_dma_stalls = 0;
-    observe(addr, kind);
+    if (!scope_open) {
+        observe(addr, kind);
+    }
     if (cycles == 0) {
         video_advance(0);
         cpu_nmi_input(video_nmi_level());
@@ -412,7 +422,7 @@ uint8_t hw_read(uint16_t addr)
 {
     if (addr < 0x2000) {
         data_bus = ram[addr & 0x7FF];
-        if (nmi_seen && !in_nmi) {
+        if (nmi_seen && !in_nmi && !scope_open) {
             task_reads[addr & 0x7FF]++;
         }
     } else if (addr < 0x4000) {
@@ -446,7 +456,7 @@ void hw_write(uint16_t addr, uint8_t value)
 {
     if (addr < 0x2000) {
         ram[addr & 0x7FF] = value;
-        if (in_nmi) {
+        if (in_nmi && !scope_open) {
             nmi_writes[addr & 0x7FF]++;
         }
     } else if (addr < 0x4000) {
@@ -457,7 +467,7 @@ void hw_write(uint16_t addr, uint8_t value)
     } else if (addr == 0x4016) {
         if ((strobe & 1) && !(value & 1)) {
             uint8_t latched[2] = { buttons[0], buttons[1] };
-            if (latch_hook) {
+            if (latch_hook && !scope_open) {
                 latch_hook(latched);
             }
             shift[0] = latched[0];
@@ -508,6 +518,82 @@ void native_run_frame(void)
     memset(&lag_cur, 0, sizeof lag_cur);
     lag_cur.overrun_frame = -1;
     frame_number++;
+}
+
+/* ---- isolated calls (src/decomp/decomp_native.c) ---- */
+
+#define RETURN_PC       0x5FFFu
+#define ISOLATED_BUDGET 2000000u
+
+static uint8_t *scope_state;
+static size_t scope_size;
+static bool scope_frame_done;
+
+bool native_isolated(void)
+{
+    return scope_open;
+}
+
+bool native_isolate_begin(void)
+{
+    size_t n = native_state_save(NULL, 0);
+    if (n > scope_size) {
+        uint8_t *p = (uint8_t *)realloc(scope_state, n);
+        if (!p) {
+            return false;
+        }
+        scope_state = p;
+        scope_size = n;
+    }
+    native_state_save(scope_state, n);
+    scope_frame_done = hw_frame_done;
+    hw_frame_done = false;
+    scope_open = true;
+    return true;
+}
+
+void native_isolate_end(void)
+{
+    scope_open = false;
+    native_state_load(scope_state, native_state_save(NULL, 0));
+    hw_frame_done = scope_frame_done;
+}
+
+/* As the cycle host's isolated call (cyc_run_isolated): the routine from a
+ * JSR's return address at RETURN_PC until it returns there with the stack back
+ * at r->s; hook sites let the original through. */
+bool native_isolated_call(uint16_t routine, NativeRegs *r)
+{
+    cpu.a = r->a;
+    cpu.x = r->x;
+    cpu.y = r->y;
+    cpu_set_p(r->p);
+    ram[0x100 | r->s] = (uint8_t)((RETURN_PC - 1) >> 8);
+    ram[0x100 | (uint8_t)(r->s - 1)] = (uint8_t)(RETURN_PC - 1);
+    cpu.s = (uint8_t)(r->s - 2);
+    cpu.pc = routine;
+    cpu.jammed = 0;
+    uint64_t start = cycles;
+    while (!(cpu.pc == RETURN_PC && cpu.s == r->s)) {
+        if (cpu.jammed || cycles - start > ISOLATED_BUDGET || (int8_t)(cpu.s - r->s) > 0) {
+            return false;
+        }
+        cyc_hook_hit = false;
+        if (cyc_hooks_armed && native_hooks_due(cpu.pc)) {
+            cyc_hook_passed = cpu.pc;
+        }
+        if (cyc_native_has(cpu.pc)) {
+            cyc_native_run();
+        } else {
+            cpu_interp_step();
+        }
+        cyc_hook_passed = -1;
+    }
+    r->a = cpu.a;
+    r->x = cpu.x;
+    r->y = cpu.y;
+    r->p = cpu_get_p(0);
+    return true;
 }
 
 /* ---- save states ---- */

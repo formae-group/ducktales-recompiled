@@ -25,6 +25,8 @@
  *                 menu ([Game] MenuPausesGame stops it, app_ui.h)
  *   No slowdown   [Game] NoSlowdown: the runtime's lag mode
  *                 (NATIVE_LAG_NONE when on, NATIVE_LAG_FAITHFUL when off)
+ *   decompiled    [Game] DecompiledCode, with No slowdown on only: the
+ *   code          decompiled routines in replace mode (decomp/decomp_native.c)
  *   picture       app_ui_present (ui/app_present.h) or the plain picture, in
  *                 a texture the size of the picture, logical size and integer
  *                 scaling as the cycle host keeps them
@@ -67,6 +69,7 @@
 #include "native/native_state.h"
 #include "native/native_audio.h"
 
+#include "decomp/decomp.h"
 #include "game/enhancements.h"
 #include "host/ducktales_host.h"
 #include "host/ducktales_sprites.h"
@@ -104,6 +107,7 @@ int ducktales_host_main(int argc, char **argv);
 void ducktales_host_apply_no_slowdown(bool on)
 {
     native_set_lag_mode(on ? NATIVE_LAG_NONE : NATIVE_LAG_FAITHFUL);
+    Decomp_SetMode(on && ducktales_host_decompiled() ? DECOMP_REPLACE : DECOMP_OFF);
 }
 
 static uint8_t *read_file(const char *path, size_t *size)
@@ -136,6 +140,9 @@ static void power_on(void)
     ducktales_host_apply_no_slowdown(ducktales_host_no_slowdown());
     if (ducktales_host_no_slowdown()) {
         printf("[ducktales] No slowdown: the native runtime holds VBlank until each frame's logic is done\n");
+    }
+    if (ducktales_host_no_slowdown() && ducktales_host_decompiled()) {
+        printf("[ducktales] Decompiled code: the routines decompiled to C run in place of the recompiled ones\n");
     }
     fflush(stdout);
 }

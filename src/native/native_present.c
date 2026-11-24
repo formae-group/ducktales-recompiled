@@ -1,7 +1,7 @@
 /*
  * native_present.c - the cycle host's presentation interface (NESRecomp's
- * cyc_render.h, the frame records of cyc_core.h, and the cyc_mod.h reads and
- * stores hook callbacks use) served from the native runtime, so the port's
+ * cyc_render.h and the frame records of cyc_core.h; the cyc_mod.h reads and
+ * stores hook callbacks use are native_mod.c's) served from the native runtime, so the port's
  * presentation code builds unchanged on it: ui/app_present.c (HUD split,
  * overscan, scaling, aspect), host/ducktales_sprites.c (No sprite flicker, a
  * stock-width compositor) and the enhancement hooks in src/game.
@@ -206,11 +206,6 @@ const uint32_t *cyc_frame_argb(void)
     return s_argb;
 }
 
-const uint8_t *cyc_cpu_ram(void)
-{
-    return native_cpu_ram();
-}
-
 static const CycLine *line(int y)
 {
     return &s_lines[y < 0 ? 0 : y > 239 ? 239 : y];
@@ -348,33 +343,4 @@ const uint32_t *cyc_render_present(int *width, int *height)
         s_composed = s_generation;
     }
     return s_painted ? s_canvas : s_argb;
-}
-
-/* ---- cyc_mod.h: what hook callbacks read and store ---- */
-
-uint8_t cyc_mod_peek(uint16_t addr)
-{
-    uint8_t v = 0;
-    native_peek(addr, &v);
-    return v;
-}
-
-bool cyc_mod_peek_ok(uint16_t addr, uint8_t *value)
-{
-    return native_peek(addr, value);
-}
-
-bool cyc_mod_poke(uint16_t addr, uint8_t value)
-{
-    return native_poke(addr, value);
-}
-
-size_t cyc_mod_copy_cart_payload(uint8_t *out, size_t capacity)
-{
-    size_t size;
-    const uint8_t *prg = native_prg(&size);
-    if (out && prg && capacity >= size) {
-        memcpy(out, prg, size);
-    }
-    return prg ? size : 0;
 }

@@ -28,7 +28,10 @@ folder (DUCKTALES_DATA_DIR):
      self-test with the default (off) checks that the native player keeps
      running the game behind the menu (the cycle host always pauses);
   8. the menu's own [Game] keys (MenuOpacity, MenuControllerNav,
-     MenuPausesGame) survive a run.
+     MenuPausesGame) survive a run;
+  9. Decompiled code ([Game] DecompiledCode) is off by default; on the native
+     player, set on, the decompiled routines run with No slowdown on and not
+     with it off, and the key is kept either way.
 
     py -3 -I tests/window_smoke.py --build build/windows [--shots captures/shots] [--exe NAME]
 
@@ -43,6 +46,7 @@ the menu, the file dialog, full-screen switching and VSync are not exercised.
 
 import argparse
 import os
+import re
 import shutil
 import struct
 import subprocess
@@ -158,6 +162,25 @@ def main():
             'the menu settings default to 80% opacity, controller navigation on and no pause',
             (tmp / 'a.ini').read_text(),
         )
+        check(
+            'DecompiledCode = off' in (tmp / 'a.ini').read_text(),
+            'Decompiled code is off by default and saved as DecompiledCode = off',
+            (tmp / 'a.ini').read_text(),
+        )
+        for slowdown, runs in (('on', native), ('off', False)):
+            ini = tmp / f'decomp_{slowdown}.ini'
+            ini.write_text(f'[Game]\nNoSlowdown = {slowdown}\nDecompiledCode = on\n')
+            code, out = run(args.rom, '--hidden', '--exit-after', '300', '--config', str(ini))
+            calls = sum(int(c) for c in re.findall(r'^decomp: mode=replace .* calls=(\d+) ', out, re.M))
+            check(
+                code == 0
+                and 'DecompiledCode = on' in ini.read_text()
+                and (calls > 0) == runs
+                and ('[ducktales] Decompiled code:' in out) == runs,
+                f'DecompiledCode = on with NoSlowdown = {slowdown}: the decompiled routines '
+                f'{"run" if runs else "do not run"} ({calls} calls)',
+                out,
+            )
 
         def png_size(path):
             with open(path, 'rb') as f:

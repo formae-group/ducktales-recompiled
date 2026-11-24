@@ -7,6 +7,13 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- The native player can run the decompiled C: Settings → Gameplay → Decompiled code (`[Game] DecompiledCode`,
+  off by default) runs the routines decompiled to C alone in place of the recompiled ones, with No
+  slowdown on only; with No slowdown off the toggle is disabled and its (?) says why. `decomp.c` is now
+  the core of two backends, `decomp_cycle.c` (the cycle host's check and replace, unchanged) and
+  `decomp_native.c`; `ducktales_native --decomp replace` runs it headless with `--lag none`.
+  `tests/native_decomp_test.py` compares RAM after every logic step with the recompiled program on the
+  12 routes: equal except the stack and NMI-run state (docs/decompilation.md "On the native runtime").
 - The block draw `$D068` with the debris it throws (bank 4 `$BD80`) and the object tile edits
   `$F4D8`/`$F506` are decompiled (`src/decomp/level.c`); `$D068`'s site replaces the flow's stop
   there. The probe's special-tile switch no longer has an original fallback (every entry of
