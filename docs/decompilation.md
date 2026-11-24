@@ -209,7 +209,7 @@ call can do. `flow.c` decompiles that code as **task code** (`DecompRoutine.task
   enters through an RTS (`$FFAB`) whose return the observer moves to the start, at the routine's
   true S, with the isolated call's return address in place of the routine's own (at S + locals
   + 1). When the C hands off, the original stops where it reaches the same routine at the same
-  depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`, 4 of
+  depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`, 3 of
   them). Check compares RAM, the stack down to that depth, the registers the hand-off uses and the
   number of device writes.
 - Replace mode stores the C's results, makes its device writes, spends the original's cycles up to
@@ -403,6 +403,11 @@ RAM-identical in replace mode.
 | `Block_Debris` | bank 4 `$BD80` | checked | 1 | message-block | not measured |
 | `Tile_EditByAction` | `$F4D8` | checked | 6 | - | not measured |
 | `Tile_EditBySlot` | `$F506` | checked | 1 | - | not measured |
+| `Spawn_Tables` | bank 6 `$AE20` | checked | 12 | - | not measured |
+| `Spawn_TablesOf` | bank 6 `$AE22` | checked | 12 | - | not measured |
+| `Spawn_Reset` | bank 6 `$AE60` | checked | 12 | - | not measured |
+| `Spawn_Update` | bank 6 `$AEA0` | checked | 12 | - | not measured |
+| `Spawn_TimedAtEdge` | bank 6 `$B0AB` | checked | 12 | - | not measured |
 | `Nmi_Handler` | `$C000` | claimed (decomp/system): the NMI has no site form yet | - | - | - |
 | `Ppu_NmiOff` | `$C183` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
 | `Ppu_NmiOn` | `$C18D` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
@@ -467,8 +472,8 @@ in bank 5 the pause and message box text (`$B580-$B61B`), the Land Select messag
 (`$B800-$B86B`) and the clearing of the consumed-record bits (`$B760`). Not yet: the ending's later frames (`$E1F9-$E28B`: the credits scroll with a raster split polled on
 `$2002`, which `Ending` gives to the original) and the Select refill `$E2FE` (Scrooge's); the
 scene palette tables `$E127-$E132` and `$E143-$E1AE` are read by `Palette_LoadScene` (system.c).
-The flow has 15 sites: 11 entries that original code reaches and 4 stop sites (`task_yield`
-`$FFAC`, `task_wait` `$FFA5`, the reset `$FEE0` and the spawner `$AEA0`).
+The flow has 14 sites: 11 entries that original code reaches and 3 stop sites (`task_yield`
+`$FFAC`, `task_wait` `$FFA5` and the reset `$FEE0`).
 
 Not decompiled yet, and still run as the original from the C:
 
@@ -707,8 +712,8 @@ through `Obj_Defeat`), the vertical moves `$F270`/`$F284`/`$F298` and the seven 
 `$8B71-$8BE7`.
 
 Not decompiled yet: the other 24 kinds, among them the bosses (their hit routine `$F6D7` raises
-`EVENT_BOSS_HIT`, so a C boss has to raise it itself), the spawner (bank 6 `$AE20-$AF61`), the tile
-edit `$F506` (through `Decomp_Call`). The movers and the climbing steps test the
+`EVENT_BOSS_HIT`, so a C boss has to raise it itself). The spawner that calls `Obj_SpawnRecord`
+(bank 6 `$AE20-$B163`) is in `level.c`. The movers and the climbing steps test the
 background through the C of the probe `$D120` and its snaps (`collision.c`).
 
 ### Progress
@@ -722,18 +727,18 @@ indirect jump or another routine's entry, and counts as C the routines only C re
 script's docstring gives every rule. `--rev` reads the C of another branch against the same
 coverage.
 
-On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **87.3%, 22,255 of 25,489 executed
-bytes**, in 310 routines (main a59a409, 12 routes and 48 poke cases).
+On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **88.9%, 22,659 of 25,489 executed
+bytes**, in 315 routines (decomp/level 978ce9a, 12 routes and 48 poke cases).
 
 | Group | Files | Routines | Executed bytes | Share |
 |---|---|---|---|---|
 | player | `player.c`, `motion.c`, `sound.c` | 54 | 3,622 | 14.2% |
 | objects | `objects.c`, `objcommon.c` | 96 | 9,297 | 36.5% |
 | flow | `flow.c` | 108 | 2,924 | 11.5% |
-| level | `level.c`, `collision.c` | 35 | 3,196 | 12.5% |
+| level | `level.c`, `collision.c` | 40 | 3,601 | 14.1% |
 | system | `system.c`, `sprites.c`, `audio.c` | 17 | 3,216 | 12.6% |
 
-61 of those bytes are also run by original routines (shared tails). `Input_ReadControllers` is
+60 of those bytes are also run by original routines (shared tails). `Input_ReadControllers` is
 not counted: replace mode gives every call to the original. The largest routines still original
 are the NMI `$C000` (308 bytes), the object kinds of bank 6 that `Obj_UpdateAll` still hands to the
 original (`$A5DB` 238, `$A4C7` 217, `$A3EC` 169), `$FCA0` (164) and the reset `$FEE0` (157).

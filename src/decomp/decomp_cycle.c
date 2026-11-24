@@ -141,11 +141,6 @@ uint64_t dc_frame(void)
     return cyc_ring_frame;
 }
 
-bool Decomp_ConsoleTiming(void)
-{
-    return true;
-}
-
 void dc_c_begin(void)
 {
     s_scope = false;
@@ -289,6 +284,17 @@ uint8_t Decomp_BusLoad(uint16_t addr)
     value = cpu_read(addr, 0);
     dc_record(addr, value, false);
     dc_played = dc_nops;
+    return value;
+}
+
+/* The measuring call's reads of the values the C gave (Decomp_IsolatedRead). */
+static uint8_t isolated_read(uint16_t pc, uint16_t addr, uint8_t value)
+{
+    for (int k = 0; k < dc_nreads; k++) {
+        if (dc_reads[k].pc == pc && dc_reads[k].addr == addr) {
+            return dc_reads[k].value;
+        }
+    }
     return value;
 }
 
@@ -601,6 +607,11 @@ static int replace(int i, const CycModRegs *in)
     }
     if (cancelled) {
         cycles = run_original(rt, in, &o, true);
+    }
+    if (dc_nreads) {
+        cyc_mod_set_ram_read_hook(isolated_read);
+        cycles = run_original(rt, in, &o, cancelled);
+        cyc_mod_set_ram_read_hook(NULL);
     }
     const uint8_t *ram = cyc_cpu_ram();
     for (uint16_t a = 0; a < GAME_RAM_SIZE; a++) {

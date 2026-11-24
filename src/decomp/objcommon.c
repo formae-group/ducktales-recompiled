@@ -30,6 +30,7 @@
 #define HITBOX_INDEX       0x7F
 #define HITBOX_HARMFUL     0x70
 #define DESPAWN_HELD_RESET 0x3C
+#define KEEP_ROWS          2 /* Transylvania's rows where a clear keeps slots 14 and 15 */
 
 #define gProbeHits    RAM_U8(DT_ADDR_PROBE_HITS)
 #define gContactDepth RAM_U8(DT_ADDR_CONTACT_DEPTH)
@@ -400,6 +401,44 @@ bool Obj_FindFreeSlot(uint8_t *slot)
     return false;
 }
 
+/* $F2C7: the object slots cleared for a new screen: slots 2-15 lose their
+ * flags and state and their land record ($FF). In Transylvania's top two rows
+ * slots 14 and 15 stay instead: their state gets bit 4, and where the high
+ * byte of their count $06C0 is not 0 the count loses 60 (the low byte $06B0
+ * borrows $10 more). Returns the A it leaves; *x the X (0, or $FF when the
+ * slots stay). */
+uint8_t Obj_ClearSlots(uint8_t *x)
+{
+    Decomp_Enter(DT_CODE_CLEAR_OBJECTS, 0, 0, 0);
+    if (gLand != LAND_TRANSYLVANIA || gMapRow >= KEEP_ROWS) {
+        for (uint8_t slot = OBJ_SLOTS - 1; slot >= 2; slot--) {
+            gObjects->flags[slot] = 0;
+            gObjects->state[slot] = 0;
+            gObjects->record[slot] = 0xFF;
+        }
+        *x = 0;
+        return 0xFF;
+    }
+    uint8_t a = 0;
+    for (uint8_t slot = OBJ_SLOTS - 1; slot >= OBJ_SLOTS - 2; slot--) {
+        gObjects->state[slot] |= 0x10;
+        a = gObjects->unk_06C0[slot];
+        if (a == 0) {
+            continue;
+        }
+        uint8_t p = P_C;
+        uint8_t low = Alu_Sbc(gObjects->timer[slot], 60, &p);
+        if (!(p & P_C)) {
+            low = Alu_Sbc(low, 0x0F, &p);
+            p &= (uint8_t)~P_C;
+        }
+        gObjects->timer[slot] = low;
+        a = gObjects->unk_06C0[slot] = Alu_Sbc(a, 0, &p);
+    }
+    *x = 0xFF;
+    return a;
+}
+
 /* ---- site adapters ---- */
 
 static void SetCarry(Regs *r, bool carry)
@@ -502,6 +541,11 @@ static void Run_SetSpeedIndex(Regs *r)
     r->a = gObjects->speed[r->x];
 }
 
+static void Run_ClearSlots(Regs *r)
+{
+    r->a = Obj_ClearSlots(&r->x);
+}
+
 static void Run_FindFreeSlot(Regs *r)
 {
     uint8_t slot;
@@ -527,5 +571,6 @@ const DecompRoutine gObjCommonRoutines[] = {
     { DT_CODE_OBJ_DIFFICULT_ACTION, NULL, "Obj_DifficultAction", Run_DifficultAction, 0 },
     { DT_CODE_OBJ_SET_SPEED, "ducktales.decomp.F312", "Obj_SetSpeedIndex", Run_SetSpeedIndex, OUT_A | OUT_Y },
     { DT_CODE_OBJ_FIND_FREE, "ducktales.decomp.F7BE", "Obj_FindFreeSlot", Run_FindFreeSlot, OUT_X | OUT_C },
+    { DT_CODE_CLEAR_OBJECTS, "ducktales.decomp.F2C7", "Obj_ClearSlots", Run_ClearSlots, OUT_A | OUT_X },
 };
 const int gObjCommonRoutineCount = sizeof gObjCommonRoutines / sizeof gObjCommonRoutines[0];

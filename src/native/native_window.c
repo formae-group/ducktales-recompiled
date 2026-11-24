@@ -26,7 +26,12 @@
  *   No slowdown   [Game] NoSlowdown: the runtime's lag mode
  *                 (NATIVE_LAG_NONE when on, NATIVE_LAG_FAITHFUL when off)
  *   decompiled    [Game] DecompiledCode, with No slowdown on only: the
- *   code          decompiled routines in replace mode (decomp/decomp_native.c)
+ *   code          decompiled routines in replace mode (decomp/decomp_native.c);
+ *                 a window session that ran them writes
+ *                 decomp-session-<time>.txt at exit beside the cycle host's
+ *                 replays (NESRECOMP_REPLAY_DIR, NESRECOMP_DIAGNOSTICS_DIR or
+ *                 <exe dir>/diagnostics): frames, each routine's calls and
+ *                 the decomp error that stopped the game, if any
  *   picture       app_ui_present (ui/app_present.h) or the plain picture, in
  *                 a texture the size of the picture, logical size and integer
  *                 scaling as the cycle host keeps them
@@ -87,6 +92,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #ifdef _WIN32
 #include <direct.h>
 #include <windows.h>
@@ -147,8 +153,14 @@ static void power_on(void)
     fflush(stdout);
 }
 
+static unsigned long long s_frames, s_decomp_frames;
+
 static void run_frame(uint8_t pad0, uint8_t pad1)
 {
+    s_frames++;
+    if (Decomp_Mode() == DECOMP_REPLACE) {
+        s_decomp_frames++;
+    }
     native_set_controller(0, pad0);
     native_set_controller(1, pad1);
     uint8_t mute = app_mods_audio_mute();
@@ -365,6 +377,51 @@ static void note(const char *title, const char *body)
     s_note_until = SDL_GetTicks64() + 2500;
     printf("[ducktales] %s%s%s\n", title, body && *body ? ": " : "", body ? body : "");
     fflush(stdout);
+}
+
+static char s_session_dir[1100], s_session_path[1200], s_session_start[32];
+
+/* At exit (an exit from a decomp error included), when the decompiled code
+ * ran in this window session. */
+static void session_end(void)
+{
+    if (!s_decomp_frames) {
+        return;
+    }
+#ifdef _WIN32
+    _mkdir(s_session_dir);
+#endif
+    FILE *f = fopen(s_session_path, "w");
+    if (!f) {
+        return;
+    }
+    const char *error = Decomp_Error();
+    fprintf(f, "DuckTales Recompiled native player: decompiled code session\nstarted %s\n", s_session_start);
+    fprintf(f, "frames %llu, %llu of them with the decompiled code on\n", s_frames, s_decomp_frames);
+    fprintf(f, "error %s\n", *error ? error : "none");
+    Decomp_WriteStats(f, DECOMP_REPLACE);
+    fclose(f);
+}
+
+static void session_begin(void)
+{
+    const char *dir = getenv("NESRECOMP_REPLAY_DIR");
+    if (!dir || !*dir) {
+        dir = getenv("NESRECOMP_DIAGNOSTICS_DIR");
+    }
+    if (dir && *dir) {
+        snprintf(s_session_dir, sizeof s_session_dir, "%s", dir);
+    } else {
+        char *base = SDL_GetBasePath();
+        snprintf(s_session_dir, sizeof s_session_dir, "%sdiagnostics", base ? base : "");
+        SDL_free(base);
+    }
+    time_t now = time(NULL);
+    char stamp[32];
+    strftime(stamp, sizeof stamp, "%Y%m%d-%H%M%S", localtime(&now));
+    strftime(s_session_start, sizeof s_session_start, "%Y-%m-%d %H:%M:%S", localtime(&now));
+    snprintf(s_session_path, sizeof s_session_path, "%s/decomp-session-%s.txt", s_session_dir, stamp);
+    atexit(session_end);
 }
 
 static void state_path(char *out, size_t cap)
@@ -716,6 +773,7 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
         fprintf(stderr, "SDL initialization failed: %s\n", SDL_GetError());
         return 1;
     }
+    session_begin();
     const char *title = cyc_native_display_name ? cyc_native_display_name : "DuckTales";
     int w, h;
     window_size(0, &w, &h);

@@ -29,6 +29,7 @@
 #pragma once
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #include "ducktales/ram.h"
 
@@ -74,10 +75,11 @@ typedef enum DecompMode {
 
 bool Decomp_SetMode(DecompMode mode);
 DecompMode Decomp_Mode(void);
-/* Whether replace mode keeps the console's timing: true on the cycle host,
- * which spends each replaced call's original cycle count; false on the native
- * runtime, where the C runs alone (decomp_native.c). */
-bool Decomp_ConsoleTiming(void);
+/* Each routine's call counts as the "decomp: mode=..." lines the host prints
+ * at exit, labelled with mode; and the error that stopped the program ("" when
+ * none). The native player writes both to its session summary. */
+void Decomp_WriteStats(FILE *f, DecompMode mode);
+const char *Decomp_Error(void);
 bool Decomp_ParseMode(const char *text, DecompMode *out);
 
 /* The first statement of every routine's C, with the registers the original
@@ -106,6 +108,12 @@ void Decomp_BusRead(uint16_t addr);
  * and on the bus in replace mode. A routine that gives its call to the
  * original must do so before its first load; task code never loads. */
 uint8_t Decomp_BusLoad(uint16_t addr);
+/* A RAM value the original reads at pc from addr, for the cycle host's
+ * replace mode: devices do not run in its isolated measuring call, so an
+ * original whose cycle count depends on what it read from one (the
+ * controllers) is measured again after the C, reading these values there.
+ * Check mode and the native runtime ignore them. */
+void Decomp_IsolatedRead(uint16_t pc, uint16_t addr, uint8_t value);
 /* The host's frame end (replace mode gives a call that would still run at
  * the frame end to the original routine, so the RAM at every frame end is
  * the console's). */

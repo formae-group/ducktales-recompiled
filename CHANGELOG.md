@@ -7,6 +7,13 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- The native player writes a session summary when its Decompiled code ran: `decomp-session-<time>.txt`
+  in `diagnostics/` beside the replays, with the frames played, the decomp error that stopped the game
+  if any, and every routine's calls and calls given to the original (`decomp:` lines). None is written
+  with the option off.
+- The object spawner of bank 6 is decompiled (`src/decomp/level.c`): the table set-up `$AE20`/`$AE22`,
+  the reset `$AE60`, the per-frame window update `$AEA0` and the timed spawns at the camera's edge
+  `$B0AB`. `$AEA0`'s site replaces the flow's stop there.
 - The native player can run the decompiled C: Settings → Gameplay → Decompiled code (`[Game] DecompiledCode`,
   off by default) runs the routines decompiled to C alone in place of the recompiled ones, with No
   slowdown on only; with No slowdown off the toggle is disabled and its (?) says why. `decomp.c` is now
@@ -81,6 +88,9 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   original. The seven handlers on the way to the row change are task code checked with it. In task
   code the `Decomp_BusWrite` writes of the routines it calls are its device stores (up to 64), and a
   task routine reached from another one's C counts as compared with it.
+- Decompiled: the boss hit `$F6D7` (`Boss_Hit`, objects.c; it raises the boss-hit event from C), the
+  object clear `$F2C7` (`Obj_ClearSlots`, objcommon.c, called as C by flow.c and level.c) and the TOTAL
+  cap `$F84A` (`Total_Max`, flow.c).
 - The message box calls the C of the OAM clear `$C267` and the sprite builder (bank 5 `$8000`), and
   bank 5 `$B76A` (the consumed-record bits from the progress flags) is decompiled as
   `Records_MarkTaken`.

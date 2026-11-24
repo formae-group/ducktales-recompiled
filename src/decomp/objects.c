@@ -24,6 +24,7 @@
 #include "decomp/objcommon.h"
 #include "decomp/sound.h"
 
+#include "ducktales/events.h"
 #include "ducktales/game.h"
 #include "ducktales/hud.h"
 #include "ducktales/objects.h"
@@ -81,6 +82,8 @@
 #define gPaletteUpload    RAM_U8(DT_ADDR_PALETTE_REQUEST)
 #define gHeldSlot         RAM_U8(DT_ADDR_HELD_SLOT)
 #define gRowScroll        RAM_U8(DT_ADDR_ROW_SCROLL)
+#define gRowScrollAddr    RAM_U8(DT_ADDR_ROW_SCROLL_ADDR)
+#define gSprPhase         RAM_U8(DT_ADDR_SPR_PHASE)
 #define SpawnTable(i) \
     ((uint16_t)(RAM_U8(DT_ADDR_SPAWN_TABLES + 2 * (i)) | RAM_U8(DT_ADDR_SPAWN_TABLES + 2 * (i) + 1) << 8))
 #define gProbeCount      RAM_U8(DT_ADDR_PROBE_COUNT)
@@ -344,7 +347,7 @@ static uint8_t Obj_ThrownWalk(uint8_t x)
 }
 
 /* Kind 9 ($8722): a launched block, by step ($0700 bits 0-3) through the
- * table at $88FC/$8905. It rises then falls (vdir), moves, and breaks
+ * table at $88FC/$8905 (steps 0-8; the words past it point into RAM). It rises then falls (vdir), moves, and breaks
  * against a wall or the floor or on the first object it hits; some steps
  * become a pickup or a block again. */
 static void Obj_Thrown(uint8_t x)
@@ -451,9 +454,6 @@ static void Obj_Thrown(uint8_t x)
             if (gProbeHits & 1) {
                 gObjects->kind[x] = OBJ_KIND_BLOCK;
             }
-            return;
-        default:
-            Decomp_Call(at, gScratch(1), x, step);
             return;
     }
 }
@@ -611,9 +611,6 @@ static void Pickup_Take(uint8_t x)
             gKeyItems |= gLand == 4 ? 4 : 2;
             gSceneStep = gLand == 4 ? 0x10 : 0x0E;
             gPlayerMode = PLAYER_MODE_MESSAGE;
-            break;
-        default:
-            Decomp_Call(at, gScratch(1), x, i);
             break;
     }
 }
@@ -2761,13 +2758,58 @@ static void Obj_Thief(uint8_t x)
     gObjects->timer[x] = (uint8_t)(gObjects->unk_06D0[x] << 1);
 }
 
-/* $F6D7, not decompiled yet: a counted hit on a boss (the boss-hit event's
- * site is in it). Carry set when the hit beat it. */
+#define BOSS_COOLDOWN        0x78 /* frames before the next hit counts */
+#define BOSS_ACTION_NO_PRIZE 0x84
+#define PRIZE_X              0x80
+#define PRIZE_Y              0xB8
+#define PRIZE_STATE          0xB1
+#define PRIZE_TIMER          0x3C
+
+/* $F6D7: a hit on a boss. While its cooldown $06F0 runs the hit only counts
+ * it down, and the blink (flag bit 1, and $0690) ends with it. A counted hit
+ * raises EVENT_BOSS_HIT, takes one of the hits left $B1 and starts the
+ * cooldown, blinking; the last one beats the boss: unless its action is $84,
+ * its prize appears at the arena's middle (a hidden item in a chest, in a
+ * free slot or else slot 1). True (carry) when the hit beat it; X is kept. */
 static bool Boss_Hit(uint8_t *x)
 {
-    Regs r = Decomp_Call(DT_CODE_BOSS_HIT, 0, *x, 0);
-    *x = r.x;
-    return r.p & P_C;
+    uint8_t slot = *x;
+    Decomp_Enter(DT_CODE_BOSS_HIT, 0, slot, 0);
+    if (gObjects->bossCooldown[slot] != 0) {
+        if (--gObjects->bossCooldown[slot] == 0) {
+            gObjects->unk_0690[slot] = 0;
+            gObjects->flags[slot] &= (uint8_t)~OBJ_FLAG_BLINK;
+        }
+        return false;
+    }
+    Decomp_RaiseEvent(EVENT_BOSS_HIT);
+    if (--gBossHits != 0) {
+        gObjects->bossCooldown[slot] = BOSS_COOLDOWN;
+        gObjects->flags[slot] |= OBJ_FLAG_BLINK;
+        return false;
+    }
+    if (gObjects->action[slot] == BOSS_ACTION_NO_PRIZE) {
+        return true;
+    }
+    gScratch0 = slot;
+    uint8_t o;
+    if (!Obj_FindFreeSlot(&o)) {
+        o = 1;
+    }
+    gObjects->y[o] = PRIZE_Y;
+    gObjects->worldPage[o] = gCameraPage;
+    gObjects->worldX[o] = PRIZE_X;
+    gObjects->unk_0690[o] = 0;
+    gObjects->animTimer[o] = 0;
+    gObjects->animFrame[o] = 0;
+    gObjects->hitbox[o] = 0;
+    gObjects->bossCooldown[o] = 0;
+    gObjects->state[o] = PRIZE_STATE;
+    gObjects->flags[o] = PRIZE_STATE & 0xF0;
+    gObjects->action[o] = OBJ_ACTION_CHEST;
+    gObjects->kind[o] = OBJ_KIND_HIDDEN_ITEM;
+    gObjects->unk_06C0[o] = PRIZE_TIMER;
+    return true;
 }
 
 /* Kind $28 ($A6D3): the African Mines boss. It lands in the middle of the
@@ -3200,7 +3242,7 @@ static void Obj_DrawBlock(uint8_t x, uint8_t a, uint8_t y)
  * pose $84, hidden). With the Amazon's treasure, the land's hidden items,
  * chests and pose-$1B blocks are not spawned again. $10 holds the record's
  * bit and $04/$05 the template's address. */
-static void Obj_SpawnRecord(uint8_t y)
+void Obj_SpawnRecord(uint8_t y)
 {
     Decomp_Enter(DT_CODE_SPAWN_RECORD, 0, 0, y);
     gProbeHits = (uint8_t)(1 << (y & 7));
@@ -3268,6 +3310,89 @@ static void Obj_SpawnRecord(uint8_t y)
     if (kind == OBJ_KIND_HIDDEN_ITEM || kind == OBJ_KIND_CHEST ||
         (kind == OBJ_KIND_BLOCK && gObjects->action[x] == 0x1B)) {
         gObjects->state[x] = 0;
+    }
+}
+
+/* Kind $2E ($A5DB): the Amazon boss. It starts at Y $AC walking right at
+ * $0100, turning at walls. When its wait runs out it jumps (vertical
+ * velocity $06B7) towards Scrooge, rises with probe $64 and falls with probe
+ * $63. Landing (sound $1E) shakes the screen for 30 frames (row scroll $E9
+ * on bit 2 of $95, split $C0 or $E0) and holds pogo bounces ($A7); then it
+ * waits 60, 120 or 180 frames, picked by a random step that adds the carry
+ * the dispatch left. A counted hit goes to the boss hit $F6D7; the last one
+ * stops the shake and beats it. */
+static void Obj_AmazonBoss(uint8_t x, bool carry)
+{
+    static const uint8_t waits[8] = { 0x3C, 0x3C, 0x78, 0x78, 0x78, 0xB4, 0xB4, 0xB4 };
+    static const uint8_t splits[2] = { 0xC0, 0xE0 };
+
+    Decomp_Enter(DT_CODE_KIND_AMAZON_BOSS, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0) {
+        if (Boss_Hit(&x)) {
+            gRowScroll = 0;
+            gRowScrollAddr = 0xC0;
+            Obj_Defeat(x);
+            return;
+        }
+        carry = false;
+    }
+    if (Step(x) == 0) {
+        gObjects->unk_06C0[x] = 0;
+        gObjects->y[x] = 0xAC;
+        gObjects->timer[x] = 0x1E;
+        Obj_SetSpeed(x, 0x0100);
+        gObjects->dir[x] = OBJ_DIR_RIGHT;
+        RAM_U8(DT_ADDR_BOSS_05AF) = 0x44;
+        gObjects->state[x]++;
+    }
+    if (gObjects->timer[x] == 0) {
+        if (!(gObjects->state[x] & 2)) {
+            x = Obj_Rise(x, 0x64, 0);
+            if (gObjects->vy[x] & 0x80) {
+                gObjects->state[x]++;
+                Obj_SetVelocityY(x, 0);
+            }
+        } else {
+            bool shaking = gObjects->unk_06C0[x] != 0;
+            if (!shaking) {
+                x = Obj_Fall(x, 0x63, 0);
+                if (gProbeHits & 1) {
+                    Sound_Request(SFX_BOSS_LAND, x);
+                    gPogoCeiling++;
+                    gObjects->unk_06C0[x] = 0x1E;
+                    shaking = true;
+                }
+            }
+            if (shaking) {
+                if (--gObjects->unk_06C0[x] != 0) {
+                    gRowScroll = (uint8_t)((gSprPhase >> 2) & 1);
+                    gRowScrollAddr = splits[gRowScroll];
+                    return;
+                }
+                gObjects->state[x]--;
+                gRandom(0) = (uint8_t)(gRandom(0) + gRandom(3) + carry);
+                gObjects->timer[x] = waits[gRandom(0) & 7];
+                gRowScrollAddr = 0xC0;
+                gRowScroll = 0;
+                gPogoCeiling = 0;
+                return;
+            }
+        }
+    }
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        x = Obj_WalkRight(x, 0x61, 0);
+    } else {
+        x = Obj_WalkLeft(x, 0x62, 0);
+    }
+    if (gObjects->timer[x] == 0) {
+        return;
+    }
+    if (--gObjects->timer[x] == 0) {
+        Obj_SetVelocityY(x, 0x06B7);
+        Obj_FaceScrooge(x);
+    }
+    if (gProbeHits & 1) {
+        gObjects->dir[x] ^= 3;
     }
 }
 
@@ -3405,6 +3530,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_TREAT:
             Obj_Treat(slot);
+            break;
+        case OBJ_KIND_AMAZON_BOSS:
+            Obj_AmazonBoss(slot, r->p & P_C);
             break;
         case OBJ_KIND_DOOR:
             Obj_Door(slot);
@@ -3711,6 +3839,11 @@ static void Run_SpawnRecord(Regs *r)
     Obj_SpawnRecord(r->y);
 }
 
+static void Run_AmazonBoss(Regs *r)
+{
+    Obj_AmazonBoss(r->x, r->p & P_C);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -3848,6 +3981,11 @@ static void Run_MoneyAdd(Regs *r)
     Money_Add(r->a, r->y);
 }
 
+static void Run_BossHit(Regs *r)
+{
+    SetCarry(r, Boss_Hit(&r->x));
+}
+
 static void Run_RefillHp(Regs *r)
 {
     Hud_RefillHp();
@@ -3880,6 +4018,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_AMAZON_BOSS, NULL, "Obj_AmazonBoss", Run_AmazonBoss, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_SPAWN_RECORD, "ducktales.decomp.6.AF2B", "Obj_SpawnRecord", Run_SpawnRecord, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LAUNCHER, NULL, "Obj_Launcher", Run_Launcher, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_TARGET, NULL, "Obj_Target", Run_Target, 0, .bank = DT_BANK_OBJECTS },
@@ -3941,6 +4080,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_HUD_RESTORE_DOT, NULL, "Hud_RestoreDot", Run_RestoreDot, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_MONEY_ADD, NULL, "Money_Add", Run_MoneyAdd, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_HP_REFILL, "ducktales.decomp.F812", "Hud_RefillHp", Run_RefillHp, OUT_A | OUT_Y },
+    { DT_CODE_BOSS_HIT, "ducktales.decomp.F6D7", "Boss_Hit", Run_BossHit, OUT_X | OUT_C },
     { DT_CODE_MONEY_MAX, "ducktales.decomp.F83F", "Money_Max", Run_MoneyMax, OUT_A | OUT_Y },
 };
 const int gObjectRoutineCount = sizeof gObjectRoutines / sizeof gObjectRoutines[0];

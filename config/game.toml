@@ -266,6 +266,38 @@ addr = 0xC42C
 length = 8
 crc32 = 0xC14ABEE7
 
+# Spawn_Tables (bank 6)
+[[mod_function_hook]]
+id = "ducktales.decomp.6.AE20"
+bank = 6
+addr = 0xAE20
+length = 8
+crc32 = 0xBA48C286
+
+# Spawn_TablesOf (bank 6)
+[[mod_function_hook]]
+id = "ducktales.decomp.6.AE22"
+bank = 6
+addr = 0xAE22
+length = 8
+crc32 = 0x3E7016EE
+
+# Spawn_Reset (bank 6)
+[[mod_function_hook]]
+id = "ducktales.decomp.6.AE60"
+bank = 6
+addr = 0xAE60
+length = 8
+crc32 = 0x4E334517
+
+# Spawn_Update (its site also stops the isolated runs of the flow and the row scroll) (bank 6)
+[[mod_function_hook]]
+id = "ducktales.decomp.6.AEA0"
+bank = 6
+addr = 0xAEA0
+length = 8
+crc32 = 0x2CF3FD6D
+
 # Tile_EditByAction and Tile_EditBySlot (bank 6 calls them)
 [[mod_function_hook]]
 id = "ducktales.decomp.F4D8"
@@ -417,12 +449,26 @@ addr = 0xF7F0
 length = 8
 crc32 = 0x353FCE0E
 
+# Obj_ClearSlots
+[[mod_function_hook]]
+id = "ducktales.decomp.F2C7"
+addr = 0xF2C7
+length = 8
+crc32 = 0xB0B510A3
+
 # Hud_RefillHp
 [[mod_function_hook]]
 id = "ducktales.decomp.F812"
 addr = 0xF812
 length = 8
 crc32 = 0x1394DA66
+
+# Boss_Hit
+[[mod_function_hook]]
+id = "ducktales.decomp.F6D7"
+addr = 0xF6D7
+length = 8
+crc32 = 0x093C0A7B
 
 # Money_Max
 [[mod_function_hook]]
@@ -523,12 +569,6 @@ id = "ducktales.decomp.stop.FEE0"
 addr = 0xFEE0
 length = 8
 crc32 = 0x446DE306
-
-[[mod_function_hook]]
-id = "ducktales.decomp.stop.AEA0.6"
-addr = 0xAEA0
-length = 8
-crc32 = 0x2CF3FD6D
 
 [[mod_function_hook]]
 id = "ducktales.decomp.stop.FFA5"

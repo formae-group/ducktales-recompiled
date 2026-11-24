@@ -38,13 +38,18 @@ DeviceStore dc_store[MAX_STORES];
 int dc_stores;
 bool dc_task;
 int dc_nested[MAX_NESTED], dc_nnested;
+IsolatedRead dc_reads[MAX_READS];
+int dc_nreads;
 bool dc_handoff_set;
 uint16_t dc_handoff;
 uint8_t dc_handoff_uses, dc_handoff_bank;
 
+static char s_error[256];
+
 void dc_fail(const char *what, uint16_t routine)
 {
-    fprintf(stderr, "[decomp] %s ($%04X, frame %llu)\n", what, routine, (unsigned long long)dc_frame());
+    snprintf(s_error, sizeof s_error, "%s ($%04X, frame %llu)", what, routine, (unsigned long long)dc_frame());
+    fprintf(stderr, "[decomp] %s\n", s_error);
     fflush(stderr);
     exit(3);
 }
@@ -169,6 +174,14 @@ void Decomp_SelectBank(uint8_t bank)
     record_store((uint16_t)(DT_CODE_BANK_TABLE + bank), bank);
 }
 
+void Decomp_IsolatedRead(uint16_t pc, uint16_t addr, uint8_t value)
+{
+    if (dc_nreads == MAX_READS) {
+        dc_fail("too many isolated reads in one routine", pc);
+    }
+    dc_reads[dc_nreads++] = (IsolatedRead){ pc, (uint16_t)(addr & 0x7FF), value };
+}
+
 void Decomp_Store(uint16_t addr, uint8_t value)
 {
     record_store(addr, value);
@@ -205,6 +218,7 @@ void dc_run_c(const DecompRoutine *rt, const CycModRegs *in, Regs *out)
     dc_stores = 0;
     dc_task = rt->task;
     dc_nnested = 0;
+    dc_nreads = 0;
     dc_c_begin();
     Regs r = { in->a, in->x, in->y, in->p };
     GameRam_Enter(dc_image);
@@ -278,17 +292,27 @@ void dc_add_table(const DecompRoutine *table, int n)
     }
 }
 
+const char *Decomp_Error(void)
+{
+    return s_error;
+}
+
+void Decomp_WriteStats(FILE *f, DecompMode mode)
+{
+    for (int i = 0; i < dc_count; i++) {
+        fprintf(f, "decomp: mode=%s routine=%s addr=$%04X calls=%llu compared=%llu original=%llu\n",
+                mode == DECOMP_CHECK ? "check" : "replace", dc_routine[i]->name, dc_routine[i]->addr,
+                (unsigned long long)dc_stats[i].calls, (unsigned long long)dc_stats[i].compared,
+                (unsigned long long)dc_stats[i].original);
+    }
+}
+
 void dc_report_stats(void)
 {
     if (dc_mode == DECOMP_OFF) {
         return;
     }
-    for (int i = 0; i < dc_count; i++) {
-        printf("decomp: mode=%s routine=%s addr=$%04X calls=%llu compared=%llu original=%llu\n",
-               dc_mode == DECOMP_CHECK ? "check" : "replace", dc_routine[i]->name, dc_routine[i]->addr,
-               (unsigned long long)dc_stats[i].calls, (unsigned long long)dc_stats[i].compared,
-               (unsigned long long)dc_stats[i].original);
-    }
+    Decomp_WriteStats(stdout, dc_mode);
     fflush(stdout);
 }
 
