@@ -388,7 +388,17 @@ NES_MOD_CONSTRUCTOR(dt_register_decomp_sites)
     dc_add_table(gSoundRoutines, gSoundRoutineCount);
     dc_add_table(gPlayerRoutines, gPlayerRoutineCount);
     dc_add_table(gObjCommonRoutines, gObjCommonRoutineCount);
-    dc_add_table(gObjectRoutines, gObjectRoutineCount);
+    dc_add_table(gObjDispatchRoutines, gObjDispatchRoutineCount);
+    dc_add_table(gObjWalkerRoutines, gObjWalkerRoutineCount);
+    dc_add_table(gObjFlyerRoutines, gObjFlyerRoutineCount);
+    dc_add_table(gObjHazardRoutines, gObjHazardRoutineCount);
+    dc_add_table(gObjBlockRoutines, gObjBlockRoutineCount);
+    dc_add_table(gObjEnemyRoutines, gObjEnemyRoutineCount);
+    dc_add_table(gObjPropRoutines, gObjPropRoutineCount);
+    dc_add_table(gObjBossRoutines, gObjBossRoutineCount);
+    dc_add_table(gObjThiefRoutines, gObjThiefRoutineCount);
+    dc_add_table(gObjSceneRoutines, gObjSceneRoutineCount);
+    dc_add_table(gObjItemRoutines, gObjItemRoutineCount);
     dc_add_table(gLevelRoutines, gLevelRoutineCount);
     dc_add_table(gCollisionRoutines, gCollisionRoutineCount);
     dc_add_table(gFlowRoutines, gFlowRoutineCount);

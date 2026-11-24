@@ -3204,6 +3204,6 @@ const int gFlowRoutineCount = sizeof gFlowRoutines / sizeof gFlowRoutines[0];
 
 /* Every routine the flow hands off to has a decompiled C of its own ($C42C,
  * $C71D, $C78F, $C830, $C976, $D068, $EFE2 and bank 6 $AEA0 in level.c, $E354
- * in player.c, $8000 bank 6 in objects.c, the fades, the PPU and CHR loaders
+ * in player.c, $8000 bank 6 in objects/dispatch.c, the fades, the PPU and CHR loaders
  * and bank 5 $BAB0 in system.c, and task_yield, task_wait and the scheduler
  * there): the isolated runs stop at their own sites. */
