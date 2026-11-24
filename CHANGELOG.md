@@ -23,6 +23,11 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - `tests/decomp_test.py --changed <ranges> --from-state --span N` checks only the routes that run
   a decompiled routine, from the golden save state before it: 32 s instead of 689 s for a routine
   the routes reach late.
+- `tests/decomp_test.py` runs each case twice instead of three times: replace mode compares with
+  the check run's RAM, which equals the stock run's byte for byte, and the poke cases start from the
+  golden save state at frame 1,500 instead of power-on. All cases share one queue, longest first.
+  The full run on main 7bf545d took 1,904 s against 5,145 s for the three-run version, with the
+  same results.
 - `tools/test_slot.py` queues heavy test runs across worktrees, at most three at once (two left the 16-thread PC at 47% load).
 - The system layer is decompiled (`src/decomp/system.c`, `sprites.c`, `audio.c`): bank switching,
   the controllers, PPU blanking, nametable fill, CHR uploads, the OAM clear, the random generator,
@@ -42,13 +47,14 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   the vertical velocity moves (`$F270`/`$F284`). `tests/decomp_test.py` poke cases can add pad
   states to their route; three of them press Select.
 - The object system is decompiled (`src/decomp/objects.c`, `src/decomp/objcommon.c`): the per-frame
-  dispatch of bank 6, 21 of the 67 object kinds (the Amazon's enemies, the Himalayas' dangler,
-  Transylvania's swooper, blocks, pickups and what taking each item does, hidden items, chests,
-  doors, the lift and talking characters) and the shared helpers: contact with Scrooge, the movers,
-  block tests, the climbing steps, money and HP. 62 routines, each checked on its own at every call
-  (1,989,532 calls compared on the 12 routes) and RAM-identical in replace mode; poke cases cover
-  the lift, the extra HP dot and the money cap, which no route reaches. Hook sites only where
-  original code calls them.
+  dispatch of bank 6, 43 of the 67 object kinds (most enemies, none of the bosses yet, blocks,
+  pickups and what taking each item does, hidden items, chests, doors, the lift, the moving
+  platform, the key spot, the treat spout and its treats, and talking characters) and the shared
+  helpers: contact with Scrooge, the movers, block tests, the climbing steps, money and HP. 90
+  routines, each checked on its own at every call (3,185,085 calls compared on the 12 routes) and
+  RAM-identical in replace mode; poke cases cover what no route reaches: the lift, the extra HP
+  dot, the money cap, beaten enemies, thefts of money, the pit splashes, a boulder stopping at a
+  wall and a treat taken. Hook sites only where original code calls them.
 - Decompiled: the row change (`$E8C0`), as task code with its own site. A task routine may now pop
   its own return address before it hands off.
 - `src/decomp/player.c` calls the C of the background probe (`$D120`) and its four snaps instead

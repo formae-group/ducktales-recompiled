@@ -7,8 +7,11 @@
            routine's contract registers must agree; the first difference stops
            the run (exit 3). Prints how often each routine was called,
            compared, or given to the original routine.
-  replace  (needs --dev-build) every route runs stock and with
-           --decomp replace, both with --dt-ram-log, and CPU RAM outside
+  replace  (needs --dev-build) every route runs with --decomp replace
+           against the check run (a stock run without check mode), both
+           with --dt-ram-log: check mode keeps the original's result, so its
+           RAM is the stock run's byte for byte, and the check then runs on
+           the dev build. CPU RAM outside
            the stack ($0161-$01FF) must be equal after every frame. The stack
            is compared where
            both runs sit in the game's scheduler with every task yielded
@@ -18,7 +21,9 @@
            inside a replaced routine is taken right after it.
   pokes    (needs --dev-build) states no route reaches, made with
            --dt-poke-at (and extra pad states, written into a copy of the
-           route) from a point of re_amazon_moves (POKES below): each
+           route) from a point of re_amazon_moves (POKES below), started
+           from the latest golden save state before the first poke where the
+           scheduler is idle (power-on without one): each
            case runs in check mode, where the routines it targets must be
            compared at least once, and stock against replace as above.
   events   (needs --dev-build) enhancements whose event a decompiled routine
@@ -34,6 +39,8 @@ directory, tests/quick_verify.py) executes those PRG addresses; --from-state sta
 from the latest golden save state at or before the first segment that does where the game's
 scheduler is idle (S = $FF on the frame before it: a state inside a task would resume the original's
 task while replace mode runs the C), and --span N stops N frames after that segment's start. That is the loop for one routine; the merge gate is every route from power-on.
+
+Every case goes into one queue of --jobs workers, longest first.
 
 DUCKTALES_DECOMP=check py -3 -I tests/verify_routes.py runs the oracle comparison with
 the checks on.
@@ -150,6 +157,131 @@ POKES = [
     ),
     # slot 9 made a lift (kind $0F) under Scrooge
     ('lift', {0x709: 0xA0, 0x719: 0x0F, 0x649: 0xB0, 0x729: 0x62, 0x739: 0x00, 0x609: 0x80}, ['Obj_Lift']),
+    # slot 9 made a ledge patroller (kind $18) that a blow has hit ($0690): it is beaten
+    (
+        'patroller-hit',
+        {0x709: 0xA1, 0x719: 0x18, 0x699: 0x01, 0x649: 0x90, 0x729: 0x90, 0x739: 0x00, 0x609: 0x80},
+        ['Obj_Patroller', 'Obj_Defeat'],
+    ),
+    # slot 9 made a charging enemy (kind $10, charging) on the floor that a blow has hit: it is beaten
+    (
+        'charger-hit',
+        {0x709: 0xA2, 0x719: 0x10, 0x699: 0x01, 0x649: 0xA6, 0x729: 0x90, 0x739: 0x00, 0x609: 0x80},
+        ['Obj_Charger', 'Obj_Defeat'],
+    ),
+    # slot 9 made a bobbing enemy (kind $20) that a blow has hit: it is beaten
+    (
+        'bobber-hit',
+        {0x709: 0xA1, 0x719: 0x20, 0x699: 0x01, 0x649: 0x90, 0x729: 0x90, 0x739: 0x00, 0x609: 0x80},
+        ['Obj_Bobber', 'Obj_Defeat'],
+    ),
+    # slot 9 made a leaping enemy (kind $1C) that a blow has hit: it is beaten
+    (
+        'leaper-hit',
+        {0x709: 0xA1, 0x719: 0x1C, 0x699: 0x01, 0x649: 0x90, 0x729: 0x90, 0x739: 0x00, 0x609: 0x80},
+        ['Obj_Leaper', 'Obj_Defeat'],
+    ),
+    # slot 9 made a leaping enemy (kind $1C) walking on the floor near Scrooge: it leaps after 5 frames
+    (
+        'leaper-walk',
+        {0x709: 0xA1, 0x719: 0x1C, 0x6B9: 0x05, 0x649: 0xA6, 0x729: 0x90, 0x739: 0x00, 0x609: 0x80, 0x7E9: 0x01},
+        ['Obj_Leaper', 'Obj_SpawnDust'],
+    ),
+    # kind $32 touches Scrooge with no money: the theft borrows out and blanks every digit
+    (
+        'pickpocket-broke',
+        {0x709: 0xA1, 0x719: 0x32, 0x649: 0xB4, 0x729: 0x50, 0x739: 0x00, 0x609: 0x80, 0x6B9: 0x00, 0x699: 0x00},
+        ['Obj_Pickpocket', 'Obj_StealMoney'],
+    ),
+    # kind $32 touches Scrooge holding 100,000: the theft borrows through two digits and blanks the leading zeros
+    (
+        'pickpocket-steal',
+        {
+            0x709: 0xA1,
+            0x719: 0x32,
+            0x649: 0xB4,
+            0x729: 0x50,
+            0x739: 0x00,
+            0x609: 0x80,
+            0x6B9: 0x00,
+            0x699: 0x00,
+            0x324: 0x24,
+            0x325: 0x01,
+            0x326: 0x00,
+            0x327: 0x00,
+            0x328: 0x00,
+            0x329: 0x00,
+        },
+        ['Obj_Pickpocket', 'Obj_StealMoney'],
+    ),
+    # kind $1A of variant 0 next to Scrooge: it jumps out and falls back with both splashes
+    (
+        'pit-splash',
+        {0x709: 0xA0, 0x719: 0x1A, 0x729: 0x50, 0x739: 0x00, 0x609: 0x80, 0x6B9: 0x00, 0x699: 0x00},
+        ['Obj_PitJumper', 'Obj_PitSplashOut', 'Obj_PitSplashIn'],
+    ),
+    # kind $24 by Scrooge: it rolls into a wall, walks once more and stops (kind 0)
+    (
+        'boulder-wall',
+        {0x709: 0xA0, 0x719: 0x24, 0x649: 0xB4, 0x729: 0x60, 0x739: 0x00, 0x609: 0x80, 0x699: 0x00},
+        ['Obj_Boulder', 'Obj_WalkRight'],
+    ),
+    # kind $2D dropped on Scrooge: taken, it gives an HP dot back
+    (
+        'treat-taken',
+        {
+            0x709: 0xA1,
+            0x719: 0x2D,
+            0x649: 0xB0,
+            0x729: 0x58,
+            0x739: 0x00,
+            0x609: 0x80,
+            0x7E9: 0x00,
+            0x7C9: 0x00,
+            0x7B9: 0x00,
+        },
+        ['Obj_Treat', 'Hud_RestoreDot'],
+    ),
+    # kind $30 pacing over Scrooge holding 5,000: a theft each frame of contact
+    (
+        'thief-steal',
+        {
+            0x709: 0xA0,
+            0x719: 0x30,
+            0x649: 0xB4,
+            0x729: 0x50,
+            0x739: 0x00,
+            0x609: 0x80,
+            0x699: 0x00,
+            0x324: 0x24,
+            0x325: 0x24,
+            0x326: 0x05,
+            0x327: 0x00,
+            0x328: 0x00,
+            0x329: 0x00,
+        },
+        ['Obj_Thief', 'Obj_StealMoney'],
+    ),
+    # kind $31, the same handler with the shorter span
+    (
+        'short-thief-steal',
+        {
+            0x709: 0xA0,
+            0x719: 0x31,
+            0x649: 0xB4,
+            0x729: 0x50,
+            0x739: 0x00,
+            0x609: 0x80,
+            0x699: 0x00,
+            0x324: 0x24,
+            0x325: 0x24,
+            0x326: 0x05,
+            0x327: 0x00,
+            0x328: 0x00,
+            0x329: 0x00,
+        },
+        ['Obj_Thief', 'Obj_StealMoney'],
+    ),
     # the ending flag ($AC): the frame loop starts the ending, whose first scene loads its palettes ($E08F)
     ('ending', {0xAC: 0x01}, ['Palette_LoadScene']),
     # slot 9 a harmful solid pickup on Scrooge under the power-up, its contact count about to wrap:
@@ -220,6 +352,15 @@ def route_frames(path):
     return last + 120
 
 
+def idle_state(golden, route, frame):
+    log = golden / f'{route.stem}.txt'
+    if not log.exists():
+        return 0, None
+    idle = {int(m[1]) + 1 for m in re.finditer(r'^(\d+) .*\bS=FF\b', log.read_text(), re.M)}
+    start = max((s for s in idle if s <= frame and quick_verify.state_path(golden, route, s).exists()), default=0)
+    return start, quick_verify.state_path(golden, route, start) if start else None
+
+
 def route_case(route, start=0, state=None, span=None):
     case = {'name': route.stem, 'route': route, 'frames': route_frames(route), 'extra': [], 'want': []}
     if span:
@@ -229,10 +370,8 @@ def route_case(route, start=0, state=None, span=None):
     return case
 
 
-def select_routes(routes, args):
-    rom = Path(args.rom)
-    golden = Path(args.golden) / quick_verify.file_sha256(rom)
-    ranges = quick_verify.parse_specs(args.changed, rom.read_bytes()[4])
+def select_routes(routes, args, golden):
+    ranges = quick_verify.parse_specs(args.changed, Path(args.rom).read_bytes()[4])
     selected = []
     for route in routes:
         cover = golden / f'{route.stem}.cover'
@@ -240,16 +379,7 @@ def select_routes(routes, args):
             sys.exit(f'{route.stem}: no coverage in {golden}; record it with tests/quick_verify.py --record')
         reach = [s for s, offs in quick_verify.read_cover(cover) if quick_verify.hits(offs, ranges)]
         if reach:
-            start = 0
-            if args.from_state:
-                idle = {
-                    int(m[1]) + 1
-                    for m in re.finditer(r'^(\d+) .*\bS=FF\b', (golden / f'{route.stem}.txt').read_text(), re.M)
-                }
-                start = max(
-                    (s for s in idle if s <= reach[0] and quick_verify.state_path(golden, route, s).exists()), default=0
-                )
-            state = quick_verify.state_path(golden, route, start) if start else None
+            start, state = idle_state(golden, route, reach[0]) if args.from_state else (0, None)
             selected.append(route_case(route, reach[0] if args.from_state else 0, state, args.span))
             print(
                 f'{route.stem}: executes {" ".join(args.changed)} from the segment at frame {reach[0]}, run from frame {start}'
@@ -268,7 +398,15 @@ def poke_case(name, pokes, want, presses=None, frames=POKE_FRAMES):
         for addr, value in at.items()
         for arg in ('--dt-poke-at', f'{frame}:{addr:X}={value:02X}')
     ]
-    case = {'name': name, 'route': POKE_ROUTE, 'frames': POKE_FRAME + frames, 'extra': extra, 'want': want}
+    first = min([*pokes, *(presses or {})], default=POKE_FRAME)
+    case = {
+        'name': name,
+        'route': POKE_ROUTE,
+        'frames': POKE_FRAME + frames,
+        'extra': extra,
+        'want': want,
+        'first': first,
+    }
     return case | {'presses': presses} if presses else case
 
 
@@ -294,8 +432,7 @@ def run(exe, rom, case, extra):
     return subprocess.run(cmd, capture_output=True, text=True)
 
 
-def check_case(exe, rom, case):
-    p = run(exe, rom, case, ['--decomp', 'check'])
+def check_result(p, case):
     stats = {(m[0], m[1]): tuple(map(int, m[2:])) for m in LINE.findall(p.stdout)}
     err = [
         NAMED.sub(lambda m: f'${m[1]} {SYMBOLS.get(int(m[1], 16), "")}'.rstrip(), l)
@@ -304,7 +441,7 @@ def check_case(exe, rom, case):
     ]
     compared = {name for (name, _), s in stats.items() if s[1]}
     err += [f'{name} was not compared' for name in case['want'] if name not in compared]
-    return case['name'], p.returncode == 0 and bool(stats) and not err, stats, err
+    return p.returncode == 0 and bool(stats) and not err, stats, err
 
 
 def ram_frames(path):
@@ -316,14 +453,7 @@ def ram_frames(path):
             yield rec[:RAM], rec[RAM]
 
 
-def replace_case(exe, rom, case, tmp):
-    logs = []
-    for mode in ('off', 'replace'):
-        log = Path(tmp) / f'{case["name"]}.{mode}.ram'
-        p = run(exe, rom, case, ['--decomp', mode, '--dt-ram-log', str(log)])
-        if p.returncode:
-            return case['name'], f'{mode} run failed (exit {p.returncode}): {p.stderr[-500:]}', 0
-        logs.append(log)
+def ram_diff(logs):
     frames = idle = 0
     result = None
     for frame, ((a, sa), (b, sb)) in enumerate(zip(ram_frames(logs[0]), ram_frames(logs[1]))):
@@ -343,37 +473,62 @@ def replace_case(exe, rom, case, tmp):
             result = f'frame {frame}: {shown}'
     for log in logs:
         log.unlink()
-    return case['name'], result, f'{frames} idle={idle}'
+    return result, f'{frames} idle={idle}'
 
 
-def run_checks(pool, exe, rom, cases, label, failed):
+def run_case(exe, dev, rom, case, modes, tmp, label):
+    out = {}
+    logs = [Path(tmp) / f'{label}.{case["name"]}.{mode}.ram' for mode in ('base', 'replace')]
+    base = None
+    if 'check' in modes:
+        log = ['--dt-ram-log', str(logs[0])] if 'replace' in modes else []
+        base = run(dev if log else exe, rom, case, ['--decomp', 'check', *log])
+        out['check'] = check_result(base, case)
+    if 'replace' not in modes:
+        return out
+    if base is None or base.returncode:
+        base = run(dev, rom, case, ['--decomp', 'off', '--dt-ram-log', str(logs[0])])
+        if base.returncode:
+            out['replace'] = f'off run failed (exit {base.returncode}): {base.stderr[-500:]}', 0
+            return out
+    p = run(dev, rom, case, ['--decomp', 'replace', '--dt-ram-log', str(logs[1])])
+    if p.returncode:
+        out['replace'] = f'replace run failed (exit {p.returncode}): {p.stderr[-500:]}', 0
+        return out
+    out['replace'] = ram_diff(logs)
+    return out
+
+
+def print_checks(label, cases, results, failed):
     total = {}
-    for name, ok, stats, err in pool.map(lambda c: check_case(exe, rom, c), cases):
+    for case in cases:
+        ok, stats, err = results[id(case)].result()['check']
         calls = sum(s[0] for s in stats.values())
-        print(f'{label:8s} {name:24s} {"PASS" if ok else "FAIL"}  calls={calls}')
+        print(f'{label:8s} {case["name"]:24s} {"PASS" if ok else "FAIL"}  calls={calls}', flush=True)
         if not ok:
-            failed.append(f'{label} {name}')
+            failed.append(f'{label} {case["name"]}')
             print('\n'.join(err[:30]))
         for key, s in stats.items():
             t = total.setdefault(key, [0, 0, 0, set()])
             for i in range(3):
                 t[i] += s[i]
             if s[1]:
-                t[3].add(name)
+                t[3].add(case['name'])
     print(f'{"routine":22s} {"addr":5s} {"calls":>9s} {"compared":>9s} {"original":>9s}  cases compared')
     for (name, addr), (calls, compared, orig, rs) in sorted(total.items(), key=lambda kv: kv[0][1]):
         print(f'{name:22s} ${addr} {calls:9d} {compared:9d} {orig:9d}  {len(rs)}')
 
 
-def run_replaces(pool, exe, rom, cases, label, failed):
-    with tempfile.TemporaryDirectory(dir=ROOT / 'captures' if (ROOT / 'captures').is_dir() else None) as tmp:
-        for name, result, frames in pool.map(lambda c: replace_case(exe, rom, c, tmp), cases):
-            print(
-                f'{label:8s} {name:24s} {"PASS" if result is None else "FAIL"}  frames={frames}'
-                + ('' if result is None else f'  first difference: {result}')
-            )
-            if result is not None:
-                failed.append(f'{label} {name}')
+def print_replaces(label, cases, results, failed):
+    for case in cases:
+        result, frames = results[id(case)].result()['replace']
+        print(
+            f'{label:8s} {case["name"]:24s} {"PASS" if result is None else "FAIL"}  frames={frames}'
+            + ('' if result is None else f'  first difference: {result}'),
+            flush=True,
+        )
+        if result is not None:
+            failed.append(f'{label} {case["name"]}')
 
 
 def main():
@@ -393,28 +548,43 @@ def main():
     args = ap.parse_args()
     if (args.from_state and not args.changed) or (args.span and not args.from_state):
         ap.error('--from-state needs --changed, --span needs --from-state')
+    golden = Path(args.golden) / quick_verify.file_sha256(Path(args.rom))
     routes = [Path(r) for r in args.routes] if args.routes else sorted((ROOT / 'tests' / 'routes').glob('*.txt'))
-    cases = select_routes(routes, args) if args.changed else [route_case(r) for r in routes]
+    cases = select_routes(routes, args, golden) if args.changed else [route_case(r) for r in routes]
     pokes = [poke_case(*p) for p in POKES if not args.pokes or p[0] in args.pokes]
+    for case in pokes:
+        start, state = idle_state(golden, POKE_ROUTE, case['first'])
+        if state:
+            case['extra'] = ['--load-state', str(state), *case['extra']]
     events = [event_case(*e) for e in EVENTS]
     exe = ROOT / args.build / args.config / 'ducktales.exe'
     dev = ROOT / args.dev_build / args.config / 'ducktales.exe' if args.dev_build else None
+    groups = [
+        ('check', 'replace', cases, [m for m in ('check', 'replace') if m in args.modes and (m == 'check' or dev)])
+    ]
+    if dev:
+        groups += [
+            (n, n, g, ['check', 'replace'] if n in args.modes else [])
+            for n, g in (('pokes', pokes), ('events', events))
+        ]
     failed = []
     scratch = ROOT / 'captures' if (ROOT / 'captures').is_dir() else None
     with tempfile.TemporaryDirectory(dir=scratch) as tmp, concurrent.futures.ThreadPoolExecutor(args.jobs) as pool:
         for case in pokes:
             if 'presses' in case:
                 case['route'] = pressed_route(case, tmp)
-        if 'check' in args.modes:
-            run_checks(pool, exe, args.rom, cases, 'check', failed)
-        if 'replace' in args.modes and dev:
-            run_replaces(pool, dev, args.rom, cases, 'replace', failed)
-        if 'pokes' in args.modes and dev:
-            run_checks(pool, dev, args.rom, pokes, 'pokes', failed)
-            run_replaces(pool, dev, args.rom, pokes, 'pokes', failed)
-        if 'events' in args.modes and dev:
-            run_checks(pool, dev, args.rom, events, 'events', failed)
-            run_replaces(pool, dev, args.rom, events, 'events', failed)
+        jobs = sorted(
+            ((case, modes, label) for label, _, g, modes in groups if modes for case in g),
+            key=lambda j: -j[0]['frames'],
+        )
+        results = {
+            id(case): pool.submit(run_case, exe, dev, args.rom, case, modes, tmp, label) for case, modes, label in jobs
+        }
+        for check, replace, g, modes in groups:
+            if 'check' in modes:
+                print_checks(check, g, results, failed)
+            if 'replace' in modes:
+                print_replaces(replace, g, results, failed)
     print('all passed' if not failed else 'failed: ' + ', '.join(failed))
     return 1 if failed else 0
 

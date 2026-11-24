@@ -27,7 +27,6 @@
 
 #define OBJ_KIND_BLOCK     0x08
 #define OBJ_KIND_09        0x09
-#define OBJ_KIND_24        0x24
 #define HITBOX_INDEX       0x7F
 #define HITBOX_HARMFUL     0x70
 #define DESPAWN_HELD_RESET 0x3C
@@ -191,7 +190,7 @@ uint8_t Obj_WalkRight(uint8_t slot, uint8_t first, uint8_t count)
     }
     uint8_t x = slot;
     gObjects->flags[x] |= OBJ_FLAG_FACING_RIGHT;
-    if (gObjects->kind[x] == OBJ_KIND_24 && x != 0) {
+    if (gObjects->kind[x] == OBJ_KIND_BOULDER && x != 0) {
         return x;
     }
     if (PushedByBlocks(x)) {
