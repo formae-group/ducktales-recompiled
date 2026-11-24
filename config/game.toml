@@ -552,7 +552,14 @@ length = 8
 crc32 = 0xD1E4F218
 
 [[mod_function_hook]]
-id = "ducktales.decomp.stop.FFAC"
+id = "ducktales.decomp.stop.FF35"
+addr = 0xFF35
+length = 8
+crc32 = 0xEB49C2BB
+
+# Task_Yield
+[[mod_function_hook]]
+id = "ducktales.decomp.FFAC"
 addr = 0xFFAC
 length = 8
 crc32 = 0x937EB346
@@ -569,8 +576,9 @@ addr = 0xC27C
 length = 8
 crc32 = 0x22C37620
 
+# Task_Wait
 [[mod_function_hook]]
-id = "ducktales.decomp.stop.FFA5"
+id = "ducktales.decomp.FFA5"
 addr = 0xFFA5
 length = 8
 crc32 = 0x0FCE60E7
@@ -615,6 +623,13 @@ id = "ducktales.decomp.FFE0"
 addr = 0xFFE0
 length = 8
 crc32 = 0x906ED902
+
+# Task_Create
+[[mod_function_hook]]
+id = "ducktales.decomp.FF7D"
+addr = 0xFF7D
+length = 8
+crc32 = 0xDAAF4730
 
 # Input_ReadControllers
 [[mod_function_hook]]
