@@ -102,7 +102,6 @@ static void Player_Walk(uint8_t x);
 static uint8_t Player_Fall(void);
 static void Player_StartJump(void);
 static void Player_Knockback(uint8_t x);
-static void Player_PitDeath(void);
 static void Player_RowChange(Regs *r);
 static void Player_Message(Regs *r);
 static void Player_Treasure(Regs *r);
@@ -1022,7 +1021,7 @@ static void Player_Stuck(void)
 }
 
 /* $EBB4: fell into a pit: request the respawn that costs a life. */
-static void Player_PitDeath(void)
+void Player_PitDeath(void)
 {
     Decomp_Enter(DT_CODE_PIT_DEATH, 0, 0, 0);
     uint8_t p = 0;

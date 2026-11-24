@@ -22,6 +22,7 @@
 #include "decomp/decomp.h"
 #include "decomp/motion.h"
 #include "decomp/objcommon.h"
+#include "decomp/player.h"
 #include "decomp/sound.h"
 
 #include "ducktales/events.h"
@@ -3397,6 +3398,163 @@ static void Obj_AmazonBoss(uint8_t x, bool carry)
     }
 }
 
+/* ---- kinds $36 and $37 (fixed bank, not studied) ---- */
+
+#define KIND36_SCENE     0x82 /* the special scene its fall requests */
+#define KIND36_BRAKE_X   0xB0 /* below this world X it slows down */
+#define KIND36_BRAKE     4
+#define KIND36_LEAVE_X   0x10
+#define KIND36_BRAKE_DIG 7 /* the money digit $0326 that makes it brake */
+#define KIND37_WAIT      0x3C
+#define KIND37_TOP_Y     0x50
+#define KIND37_STOP_X    0x70
+#define KIND37_GONE_Y    0x10
+#define KIND37_SCROLL    0x80
+#define KIND37_NEXT_SLOT 3
+
+/* Kind $36 ($F869): Scrooge rides it (his Y and world X are its own) and the
+ * HUD time stands still. Step 1 moves left at speed 1; while the money digit
+ * $0326 is 7 it brakes by 4/256 a frame below world X $B0 and stops, going to
+ * step 2, otherwise the land is left once Scrooge is left of $10. Steps 2 and
+ * 3 fall with gravity, requesting scene 2 while the fall does not wrap. */
+static void Obj_Kind36(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_36, 0x22, x, gObjects->kind[x]);
+    gObjects->animTimer[P_] = 0;
+    gTickFrames = 0;
+    if ((gObjects->state[x] & 0x0F) == 0) {
+        gObjects->vyFrac[x] = 0;
+        gObjects->vy[x] = 0;
+        gObjects->speedFrac[x] = 0;
+        gObjects->speed[x] = 1;
+        gObjects->state[x]++;
+    }
+    if (gObjects->state[x] & 0x02) {
+        Obj_ApplyGravity(x);
+        bool carry = (uint16_t)(gObjects->y[x] << 8 | gObjects->yFrac[x]) >=
+                     (uint16_t)(gObjects->vy[x] << 8 | gObjects->vyFrac[x]);
+        Obj_ApplyVelocityY(x);
+        gObjects->y[P_] = gObjects->y[x];
+        if (carry) {
+            RAM_U8(DT_ADDR_SCENE) = KIND36_SCENE;
+        }
+        return;
+    }
+    uint8_t p = P_C;
+    (void)Alu_Sbc(gObjects->xFrac[x], gObjects->speedFrac[x], &p);
+    gObjects->worldX[P_] = gObjects->worldX[x] = Alu_Sbc(gObjects->worldX[x], gObjects->speed[x], &p);
+    gObjects->worldPage[P_] = gObjects->worldPage[x] = Alu_Sbc(gObjects->worldPage[x], 0, &p);
+    if (RAM_U8(DT_ADDR_MONEY_DIGITS + 2) != KIND36_BRAKE_DIG) {
+        if (gObjects->worldX[P_] < KIND36_LEAVE_X) {
+            RAM_U8(DT_ADDR_LAND_LEFT)++;
+        }
+        return;
+    }
+    if (gObjects->worldX[x] >= KIND36_BRAKE_X) {
+        return;
+    }
+    p = P_C;
+    gObjects->speedFrac[x] = Alu_Sbc(gObjects->speedFrac[x], KIND36_BRAKE, &p);
+    gObjects->speed[x] = Alu_Sbc(gObjects->speed[x], 0, &p);
+    if ((gObjects->speed[x] | gObjects->speedFrac[x]) == 0) {
+        gObjects->state[x]++;
+    }
+}
+
+/* $F99C: kind $37 drops an object (kind $13, action $28) from where it is
+ * into the highest free slot of 15..9, falling at 4, and waits 30, 60 or 120
+ * frames for the next. With no free slot it tries again next frame. */
+static void Kind37_Drop(uint8_t x)
+{
+    static const uint8_t gaps[8] = { 0x1E, 0x1E, 0x1E, 0x3C, 0x3C, 0x3C, 0x78, 0x78 };
+    for (uint8_t o = OBJ_SLOTS - 1; o > 8; o--) {
+        if (gObjects->state[o] & OBJ_STATUS_LIVE) {
+            continue;
+        }
+        gObjects->state[o] = 0xA0;
+        gObjects->flags[o] = 0xA0;
+        gObjects->action[o] = 0x28;
+        gObjects->kind[o] = 0x13;
+        gObjects->animTimer[o] = 0;
+        gObjects->animFrame[o] = 0;
+        gObjects->hitbox[o] = 0;
+        gObjects->y[o] = gObjects->y[x];
+        gObjects->worldX[o] = gObjects->worldX[x];
+        gObjects->worldPage[o] = gObjects->worldPage[x];
+        gObjects->vyFrac[o] = 0;
+        gObjects->vy[o] = 4;
+        gRandom(1) = (uint8_t)(gRandom(0) + gRandom(1) + 1);
+        gObjects->unk_06C0[x] = gaps[gRandom(1) & 7];
+        return;
+    }
+}
+
+/* Kind $37 ($F8F2): with Scrooge gone (status bit 7 clear) it requests the
+ * pit death. It waits 60 frames, rises at 2 to Y $50 (the scripted camera
+ * then scrolls left), moves left at speed 1 dropping objects (Kind37_Drop)
+ * until world X $70 of page 0, where it puts kind $38 into slot 3, then rises
+ * off the top and starts over. */
+static void Obj_Kind37(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_37, 0x22, x, gObjects->kind[x]);
+    if (!(gObjects->flags[P_] & 0x80)) {
+        Player_PitDeath();
+        return;
+    }
+    if ((gObjects->state[x] & 0x0F) == 0) {
+        gObjects->speedFrac[x] = 0;
+        gObjects->vyFrac[x] = 0;
+        gObjects->unk_06C0[x] = 0;
+        gObjects->timer[x] = KIND37_WAIT;
+        gObjects->speed[x] = 1;
+        gObjects->vy[x] = 2;
+        gObjects->state[x]++;
+    }
+    if (gObjects->timer[x] != 0) {
+        gObjects->timer[x]--;
+        return;
+    }
+    switch (gObjects->state[x] & 0x0F) {
+        case 2: {
+            if (gObjects->unk_06C0[x] == 0) {
+                Kind37_Drop(x);
+            }
+            gObjects->unk_06C0[x]--;
+            Obj_MoveLeft(x);
+            if (gObjects->worldPage[x] != 0 || gObjects->worldX[x] >= KIND37_STOP_X) {
+                return;
+            }
+            gObjects->state[x]++;
+            uint8_t o = KIND37_NEXT_SLOT;
+            gObjects->state[o] = 0xA0;
+            gObjects->flags[o] = 0xA0;
+            gObjects->action[o] = 0x5A;
+            gObjects->worldX[o] = 0x30;
+            gObjects->y[o] = 0x80;
+            gObjects->kind[o] = 0x38;
+            gObjects->hitbox[o] = 0;
+            gObjects->animTimer[o] = 0;
+            gObjects->animFrame[o] = 0;
+            gObjects->worldPage[o] = 0;
+            return;
+        }
+        case 3:
+            Obj_SubVelocityY(x);
+            if (gObjects->y[x] < KIND37_GONE_Y) {
+                gObjects->state[x] = 0;
+            }
+            return;
+        default:
+            Obj_AddVelocityY(x);
+            if (gObjects->y[x] < KIND37_TOP_Y) {
+                return;
+            }
+            gObjects->state[x]++;
+            RAM_U8(DT_ADDR_SCENE_SCROLL) = KIND37_SCROLL;
+            return;
+    }
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -3553,6 +3711,12 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_TALKER:
             Obj_Talker(slot);
+            break;
+        case OBJ_KIND_36:
+            Obj_Kind36(slot);
+            break;
+        case OBJ_KIND_37:
+            Obj_Kind37(slot);
             break;
         case OBJ_KIND_MOVING_PLATFORM:
             Obj_MovingPlatform(slot);
@@ -3723,6 +3887,16 @@ static void Run_BlockDweller(Regs *r)
 static void Run_DwellerLinkBlock(Regs *r)
 {
     Obj_DwellerLinkBlock(r->x);
+}
+
+static void Run_Kind36(Regs *r)
+{
+    Obj_Kind36(r->x);
+}
+
+static void Run_Kind37(Regs *r)
+{
+    Obj_Kind37(r->x);
 }
 
 static void Run_KeySpot(Regs *r)
@@ -4044,6 +4218,8 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_PACER, NULL, "Obj_Pacer", Run_Pacer, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_MOVING_PLATFORM, NULL, "Obj_MovingPlatform", Run_MovingPlatform, 0 },
     { DT_CODE_KIND_KEY_SPOT, NULL, "Obj_KeySpot", Run_KeySpot, 0 },
+    { DT_CODE_KIND_36, NULL, "Obj_Kind36", Run_Kind36, 0 },
+    { DT_CODE_KIND_37, NULL, "Obj_Kind37", Run_Kind37, 0 },
     { DT_CODE_KIND_BLOCK_DWELLER, NULL, "Obj_BlockDweller", Run_BlockDweller, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_DWELLER_LINK_BLOCK, NULL, "Obj_DwellerLinkBlock", Run_DwellerLinkBlock, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_CEILING_HOPPER, NULL, "Obj_CeilingHopper", Run_CeilingHopper, 0, .bank = DT_BANK_OBJECTS },

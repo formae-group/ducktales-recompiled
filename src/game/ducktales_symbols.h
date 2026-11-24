@@ -696,6 +696,8 @@
 #define DT_CODE_SWOOPER_PATH         0x9544 /* kind $11: motion index by step, 14 entries */
 #define DT_CODE_KIND_LIFT            0x9093 /* kind $0F */
 #define DT_CODE_KIND_TALKER          0xFDF5 /* kind $35 (fixed bank) */
+#define DT_CODE_KIND_36              0xF869 /* kind $36 (fixed bank) */
+#define DT_CODE_KIND_37              0xF8F2 /* kind $37 (fixed bank) */
 #define DT_CODE_KIND_HOPPER          0x8225 /* kind 1 */
 #define DT_CODE_KIND_WALKER          0x82AF /* kind 2 */
 #define DT_CODE_KIND_THROWER         0x830E /* kind 3 */
