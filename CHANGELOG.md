@@ -21,6 +21,11 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - `tests/decomp_test.py --changed <ranges> --from-state --span N` checks only the routes that run
   a decompiled routine, from the golden save state before it: 32 s instead of 689 s for a routine
   the routes reach late.
+- `tests/decomp_test.py` runs each case twice instead of three times: replace mode compares with
+  the check run's RAM, which equals the stock run's byte for byte, and the poke cases start from the
+  golden save state at frame 1,500 instead of power-on. All cases share one queue, longest first.
+  The full run on main 7bf545d took 1,904 s against 5,145 s for the three-run version, with the
+  same results.
 - `tools/test_slot.py` queues heavy test runs across worktrees, at most three at once (two left the 16-thread PC at 47% load).
 - The system layer is decompiled (`src/decomp/system.c`, `sprites.c`, `audio.c`): bank switching,
   the controllers, PPU blanking, nametable fill, CHR uploads, the OAM clear, the random generator,

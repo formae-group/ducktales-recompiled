@@ -61,6 +61,9 @@ extern "C" {
 #define OBJ_KIND_BOULDER         0x24 /* a boulder that rolls right and pushes Scrooge (code) */
 #define OBJ_KIND_CEILING_HOPPER  0x25 /* an enemy that drops from the ceiling and hops at Scrooge (code) */
 #define OBJ_KIND_RISING_SHOT     0x27 /* a shot that flies up and sideways (code) */
+#define OBJ_KIND_MINES_BOSS      0x28 /* the African Mines boss (code) */
+#define OBJ_KIND_MOON_BOSS       0x29 /* the Moon boss (code) */
+#define OBJ_KIND_HIMALAYAS_BOSS  0x2A /* the Himalayas boss (code) */
 #define OBJ_KIND_DROPPING        0x2B /* something that drops and breaks on the floor (code) */
 #define OBJ_KIND_TREAT_SPOUT     0x2C /* throws out four treats when Scrooge is near (code) */
 #define OBJ_KIND_TREAT           0x2D /* a treat that gives an HP dot back (code) */
@@ -68,8 +71,11 @@ extern "C" {
 #define OBJ_KIND_THIEF           0x30 /* enemy: paces, takes money on contact (code) */
 #define OBJ_KIND_SHORT_THIEF     0x31 /* kind $30 with a shorter span (code) */
 #define OBJ_KIND_PICKPOCKET      0x32 /* enemy: walks at Scrooge, takes money on contact (code) */
+#define OBJ_KIND_TARGET          0x33 /* an object only a hit affects: it is beaten (code) */
+#define OBJ_KIND_LAUNCHER        0x34 /* a launcher that throws Scrooge up (code) */
 #define OBJ_KIND_TALKER          0x35 /* a character that shows a message (code) */
 #define OBJ_KIND_MOVING_PLATFORM 0x39 /* a platform that carries Scrooge (code) */
+#define OBJ_KIND_FINAL_STAND_IN  0x3A /* what the spawner makes of an object in the final arena (code) */
 #define OBJ_KIND_KEY_SPOT        0x41 /* a spot that needs the land's key item (code) */
 
 /* $0700 bits 0-3: the handler's step (code). */
