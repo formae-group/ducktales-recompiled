@@ -91,21 +91,30 @@ def source(rev, path):
 
 
 def decomp_sources(rev):
-    """Path under src/decomp/ without .c (objects/walkers) -> text, subfolders included."""
-    base = ROOT / 'src' / 'decomp'
-    if not rev:
-        return {
-            p.relative_to(base).with_suffix('').as_posix(): p.read_text(encoding='utf-8')
-            for p in sorted(base.rglob('*.c'))
+    """stem -> C text of src/decomp/; a subfolder's files are one text under the folder's name: its own
+    file (player/player.c) first, then the other .c files and its internal headers."""
+    if rev:
+        names = subprocess.run(
+            ['git', 'ls-tree', '-r', '--name-only', rev, 'src/decomp/'],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()
+        files = {Path(n).relative_to('src/decomp'): n for n in names}
+        files = {
+            p: source(rev, n) for p, n in files.items() if p.suffix == '.c' or (p.parent.parts and p.suffix == '.h')
         }
-    names = subprocess.run(
-        ['git', 'ls-tree', '-r', '--name-only', rev, 'src/decomp/'],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.split()
-    return {n[len('src/decomp/') : -len('.c')]: source(rev, n) for n in names if n.endswith('.c')}
+    else:
+        base = ROOT / 'src' / 'decomp'
+        paths = [*base.glob('*.c'), *base.glob('*/*.c'), *base.glob('*/*.h')]
+        files = {p.relative_to(base): p.read_text(encoding='utf-8') for p in paths}
+    out = {}
+    order = lambda p: (p.parent.as_posix(), p.suffix == '.h', p.stem != p.parent.name, p.name)  # noqa: E731
+    for path in sorted(files, key=order):
+        key = path.parent.name if path.parent.parts else path.stem
+        out[key] = out.get(key, '') + files[path]
+    return out
 
 
 class Code:
@@ -387,7 +396,7 @@ def main():
     )
     print(f'{"group":8} {"routines":>8} {"bytes":>8} {"of all":>7}')
     for group, stems in GROUPS.items():
-        mine = [e for e, (stem, _) in c_entries.items() if stem.split('/')[0] in stems]
+        mine = [e for e, (stem, _) in c_entries.items() if stem in stems]
         b = nbytes(set().union(*(reach[e] for e in mine)))
         print(f'{group:8} {len(mine):8} {b:8,} {100 * b / total:6.1f}%')
     print(f'{"total":8} {len(c_entries):8} {c:8,} {100 * c / total:6.1f}%  ({c:,} of {total:,} executed bytes)')
