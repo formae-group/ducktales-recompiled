@@ -71,13 +71,14 @@ DEFINE = re.compile(r'^#define (DT_\w+)\s+(0x[0-9A-Fa-f]+|\d+)\b(.*)$', re.M)
 TABLE = re.compile(r'^const DecompRoutine g\w+\[\] = \{(.*?)^\};', re.M | re.S)
 ENTRY = re.compile(r'\{\s*(\w+)\s*,\s*(?:NULL|"[^"]*")\s*,\s*"(\w+)"([^}]*)\}')
 MACRO = re.compile(
-    r'\b(?:ROUTINE|TASK)\(\s*(\w+)\s*,\s*(?:NULL|"[^"]*")\s*,\s*"(\w+)"|\bRESUME\(\s*(\w+)\s*,\s*"(\w+)"'
+    r'\b(?:ROUTINE|TASK)\(\s*(\w+)\s*,\s*(?:NULL|"[^"]*"|SITE\("[^"]*"\))\s*,\s*"(\w+)"|\bRESUME\(\s*(\w+)\s*,\s*"(\w+)"'
 )
 CALLED = re.compile(r'\b(?:Decomp_Call|Decomp_CallP|Decomp_Handoff|Call|Jsr|Jump)\(\s*(?:r\s*,\s*)?(DT_\w+)')
 POKES = 'decomp_pokes.cover'
 FUNCTION = re.compile(r'^\w[\w *]*?\b(\w+)\(([^;{]*?)\)\s*\{(.*?)^\}', re.M | re.S)
 CALL_ARG = re.compile(r'\bDecomp_CallP?\(\s*([^,]+?)\s*,')
 LOADS = {'LDA', 'LDX', 'LDY'}
+MACRO_IN = re.compile(r'\b(?:ROUTINE|TASK|RESUME)_IN\(\s*(\w+)\s*,\s*(\w+)\s*,\s*"(\w+)"')
 ENTER = re.compile(r'\bDecomp_Enter\(\s*(DT_\w+)')
 
 
@@ -264,6 +265,7 @@ def main():
         for block in TABLE.findall(text):
             found = [(m[1], m[2], re.search(r'\.bank\s*=\s*(\w+)', m[3])) for m in ENTRY.finditer(block)]
             found += [(m[1] or m[3], m[2] or m[4], None) for m in MACRO.finditer(block)]
+            found += [(m[2], m[3], m) for m in MACRO_IN.finditer(block)]
             for token, name, bank in found:
                 off = code.offset(value(bank[1]) if bank else None, value(token))
                 if off is None:
