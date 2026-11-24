@@ -255,9 +255,10 @@ which can only hold `a-z`, `0-9`, `-`, `_` and `.`, and a mod whose id is a Wind
 ### Hot reload
 
 About once a second the game checks `scripts/main.lua` of a folder mod, or the `.dtmod` archive.
-When it changed, the script starts again from scratch with the new text. A script that stopped
-with an error also starts again once you save a fix. Only scripts reload; tiles, palettes and
-sounds load at start.
+When its write time or size changed, the script starts again from scratch with the new text, and
+the log says *script reloaded*. A script that stopped with an error also starts again once you
+save a fix. Only the scripts of mods loaded at start reload: a mod that had no
+`scripts/main.lua` then, and tiles, palettes and sounds, need a restart.
 
 ## How it works
 

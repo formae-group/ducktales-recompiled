@@ -152,6 +152,8 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   full disk cannot leave half a store; a failed write is logged and tried again instead of lost.
   `--mods-dir` with a path that is not a folder, or a fifth folder, is refused instead of ignored,
   and `--mods-dump` creates the folder's missing parents.
+- Mods: hot reload compares the script's write time to the 100 ns instead of the second, so a
+  save of the same size within the second of the last one is no longer missed.
 
 ## [1.0.0] - 2026-11-23
 

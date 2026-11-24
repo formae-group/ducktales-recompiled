@@ -888,17 +888,19 @@ static long long file_stamp(const char *path)
 {
 #ifdef _WIN32
     wchar_t w[1024];
-    struct _stat64 st;
-    if (!MultiByteToWideChar(CP_UTF8, 0, path, -1, w, 1024) || _wstat64(w, &st)) {
+    WIN32_FILE_ATTRIBUTE_DATA st;
+    if (!MultiByteToWideChar(CP_UTF8, 0, path, -1, w, 1024) || !GetFileAttributesExW(w, GetFileExInfoStandard, &st)) {
         return -1;
     }
+    long long written = (long long)st.ftLastWriteTime.dwHighDateTime << 32 | st.ftLastWriteTime.dwLowDateTime;
+    return written * 31 + ((long long)st.nFileSizeHigh << 32 | st.nFileSizeLow);
 #else
     struct stat st;
     if (stat(path, &st)) {
         return -1;
     }
-#endif
     return (long long)st.st_mtime * 1000003 + (long long)st.st_size;
+#endif
 }
 
 /* A fresh state running scripts/main.lua; false with the reason. */
