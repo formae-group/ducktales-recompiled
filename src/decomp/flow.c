@@ -90,6 +90,13 @@
 #define SELECT_PAD_MOVE       (DT_PAD_UP | DT_PAD_DOWN)
 #define SELECT_LAND_NAME      0x6F /* action of slots 2 and 4: the land's name */
 #define SELECT_MESSAGE_PROMPT 0
+#define TEXT_PTR              0x10 /* scratch: the text's pointer */
+#define TEXT_LINE_LEN         0x1D /* a line: 30 tiles */
+#define TEXT_PIECE            0x20 /* from $A0 a piece of text, below it a run */
+#define TEXT_PIECE_FLAGGED    5
+#define TEXT_BLANKS           8
+#define TEXT_BOX              4
+#define TEXT_MESSAGE_BOX      9
 #define SELECT_LAND_STRING    2 /* string of land 0's name in the Land Select messages */
 #define CONSUMED_BYTES        0x20
 #define SELECT_MESSAGE_ALL    3 /* all five treasures held */
@@ -158,6 +165,7 @@
 #define gHudMoneyDirty   RAM_U8(DT_ADDR_HUD_MONEY_DIRTY)
 #define gHudTotalDirty   RAM_U8(DT_ADDR_HUD_TOTAL_DIRTY)
 #define gScene           RAM_U8(DT_ADDR_SCENE)
+#define gPaused          RAM_U8(DT_ADDR_PAUSE)
 #define gEnding          RAM_U8(DT_ADDR_ENDING)
 #define gPogoCeiling     RAM_U8(DT_ADDR_POGO_CEILING)
 #define gNoSpriteDma     RAM_U8(DT_ADDR_NO_SPRITE_DMA)
@@ -722,9 +730,114 @@ static void Death_Done(Regs *r)
     r->a = 0;
 }
 
+/* ---- bank 5: the pause and message box text ---- */
+
+static void Text_Line(Regs *r);
+static void PauseText_Framed(Regs *r);
+
+static uint8_t Peek(uint16_t addr)
+{
+    return addr < GAME_RAM_SIZE ? gRam[addr] : Rom(addr);
+}
+
+/* bank 5 $B591: text Y into the VRAM queue a line a frame. A text (pointers
+ * at DT_B5_TEXT_LO/HI, in ROM or RAM) is lines up to a 0: a PPU address, then
+ * up to $FF a tile below $80, $80-$9F a run of the next tile (n + 1 times),
+ * and from $A0 a piece of text n (low nibble): text n, but for n from 5 text
+ * 8 (blanks) while its flag (DT_B5_TEXT_FLAG/MASK) is clear. */
+static void Text_Lines(Regs *r)
+{
+    Decomp_Enter(DT_B5_TEXT_LINES, r->a, r->x, r->y);
+    gScratch(TEXT_PTR) = Rom((uint16_t)(DT_B5_TEXT_LO + r->y));
+    gScratch(TEXT_PTR + 1) = Rom((uint16_t)(DT_B5_TEXT_HI + r->y));
+    r->y = 0;
+    Text_Line(r);
+}
+
+/* $B59D: the next line, then a frame. */
+static void Text_Line(Regs *r)
+{
+    uint16_t text = Ram_GetU16(DT_ADDR_SCRATCH0 + TEXT_PTR, DT_ADDR_SCRATCH0 + TEXT_PTR + 1);
+    uint8_t *q = &gRam[DT_ADDR_VRAM_QUEUE];
+    uint8_t y = r->y;
+    r->a = Peek((uint16_t)(text + y));
+    if (!r->a) {
+        return;
+    }
+    q[0] = r->a;
+    q[1] = Peek((uint16_t)(text + ++y));
+    y++;
+    q[2] = TEXT_LINE_LEN;
+    uint8_t x = 0;
+    while ((r->a = Peek((uint16_t)(text + y))) != 0xFF) {
+        if (!(r->a & 0x80)) {
+            q[3 + x++] = r->a;
+        } else if ((r->a &= 0x7F) < TEXT_PIECE) {
+            gScratch(0) = r->a;
+            r->a = Peek((uint16_t)(text + ++y));
+            do {
+                q[3 + x++] = r->a;
+            } while (!(--gScratch(0) & 0x80));
+        } else {
+            gScratch(0) = y;
+            uint8_t piece = r->a & 0x0F;
+            if (piece >= TEXT_PIECE_FLAGGED) {
+                gScratch(1) = x;
+                if (!(RAM_U8(Rom((uint16_t)(DT_B5_TEXT_FLAG + piece))) & Rom((uint16_t)(DT_B5_TEXT_MASK + piece)))) {
+                    piece = TEXT_BLANKS;
+                }
+            }
+            gScratch(2) = Rom((uint16_t)(DT_B5_TEXT_LO + piece));
+            gScratch(3) = Rom((uint16_t)(DT_B5_TEXT_HI + piece));
+            uint16_t sub = (uint16_t)(gScratch(2) | gScratch(3) << 8);
+            uint8_t k = 0;
+            gScratch(1) = Peek(sub);
+            do {
+                r->a = Peek((uint16_t)(sub + ++k));
+                q[3 + x++] = r->a;
+            } while (!(--gScratch(1) & 0x80));
+            y = gScratch(0);
+        }
+        y++;
+    }
+    q[3 + x] = r->a;
+    gVramQueueReady = r->a;
+    r->x = x;
+    r->y = (uint8_t)(y + 1);
+    Yield(DT_B5_FLOW_TEXT_NEXT);
+}
+
+/* bank 5 $B618 */
+static void Text_LineNext(Regs *r)
+{
+    Decomp_Enter(DT_B5_FLOW_TEXT_NEXT, r->a, r->x, r->y);
+    Text_Line(r);
+}
+
+/* bank 5 $B580: the box (text 4), then the message box's frame in mode 15,
+ * else the pause text for $E6 (0: the HUD back, 1: PAUSE). */
+static void PauseText(Regs *r)
+{
+    Decomp_Enter(DT_B5_PAUSE_TEXT, r->a, r->x, r->y);
+    r->y = TEXT_BOX;
+    if (Gosub(Text_Lines, r, DT_B5_FLOW_PAUSE_BOX)) {
+        PauseText_Framed(r);
+    }
+}
+
+/* bank 5 $B585 */
+static void PauseText_Framed(Regs *r)
+{
+    Decomp_Enter(DT_B5_FLOW_PAUSE_BOX, r->a, r->x, r->y);
+    r->a = gPlayerMode;
+    r->y = gPlayerMode == DT_MODE_FROZEN ? TEXT_MESSAGE_BOX : gPaused;
+    Text_Lines(r);
+}
+
 /* ---- the frame loop ---- */
 
 static void FrameLoop_End(Regs *r);
+static void FrameLoop_Paused(Regs *r);
 static void BossTrigger(Regs *r);
 static void FrameLoop_AfterBossTrigger(Regs *r);
 static void LandLoad(Regs *r);
@@ -753,12 +866,24 @@ static void FrameLoop(Regs *r)
             Call(r, DT_CODE_OAM_CLEAR);
             SelectBank(r, DT_BANK_SPRITES);
             Call(r, DT_B5_BUILD_OAM);
-            Call(r, DT_B5_PAUSE_TEXT);
+            if (!Gosub(PauseText, r, DT_FLOW_PAUSED)) {
+                return;
+            }
         }
-        if (gPaused) {
-            FrameLoop_End(r);
-            return;
-        }
+        FrameLoop_Paused(r);
+        return;
+    }
+    Jsr(DT_CODE_PLAYER_UPDATE, DT_FLOW_AFTER_PLAYER, OUT_X);
+}
+
+/* $DB65: a paused frame only keeps the sprites. */
+static void FrameLoop_Paused(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_PAUSED, r->a, r->x, r->y);
+    r->a = gPaused;
+    if (gPaused) {
+        FrameLoop_End(r);
+        return;
     }
     Jsr(DT_CODE_PLAYER_UPDATE, DT_FLOW_AFTER_PLAYER, OUT_X);
 }
@@ -2501,6 +2626,7 @@ static void Run_RespawnEntry(Regs *r)
 #define TASK(addr, site, name, fn, locals)      { addr, site, name, fn, 0, true, locals, false }
 #define RESUME(addr, name, fn, locals)          { addr, NULL, name, fn, 0, true, locals, true }
 #define ROUTINE_IN(bank, addr, name, fn, out)   { addr, NULL, name, fn, out, false, 0, false, bank }
+#define TASK_AT(bank, addr, site, name, fn)     { addr, site, name, fn, 0, true, 0, false, bank }
 #define TASK_IN(bank, addr, name, fn)           { addr, NULL, name, fn, 0, true, 0, false, bank }
 #define RESUME_IN(bank, addr, name, fn, locals) { addr, NULL, name, fn, 0, true, locals, true, bank }
 
@@ -2516,7 +2642,12 @@ const DecompRoutine gFlowRoutines[] = {
     ROUTINE(DT_CODE_LAND_TABLES, SITE("D9CA"), "Land_ApplyTables", Land_ApplyTables, OUT_X | OUT_Y),
     ROUTINE(DT_CODE_LAND_PALETTE, SITE("D9F5"), "Land_LoadPalette", Run_LandPalette, OUT_X | OUT_Y),
     TASK(DT_CODE_FRAME_LOOP, SITE("DB36"), "FrameLoop", FrameLoop, 0),
+    RESUME(DT_FLOW_PAUSED, "FrameLoop_Paused", FrameLoop_Paused, 0),
     RESUME(DT_FLOW_AFTER_PLAYER, "FrameLoop_AfterPlayer", FrameLoop_AfterPlayer, 0),
+    TASK_AT(DT_BANK_SPRITES, DT_B5_PAUSE_TEXT, SITE("5.B580"), "PauseText", PauseText),
+    RESUME_IN(DT_BANK_SPRITES, DT_B5_FLOW_PAUSE_BOX, "PauseText_Framed", PauseText_Framed, 0),
+    TASK_IN(DT_BANK_SPRITES, DT_B5_TEXT_LINES, "Text_Lines", Text_Lines),
+    RESUME_IN(DT_BANK_SPRITES, DT_B5_FLOW_TEXT_NEXT, "Text_LineNext", Text_LineNext, 0),
     RESUME(DT_FLOW_AFTER_OBJECTS, "FrameLoop_AfterObjects", FrameLoop_AfterObjects, 0),
     RESUME(DT_FLOW_AFTER_CAMERA, "FrameLoop_AfterCamera", FrameLoop_AfterCamera, 0),
     RESUME(DT_FLOW_AFTER_BOSS_TRIGGER, "FrameLoop_AfterBossTrigger", FrameLoop_AfterBossTrigger, 0),
@@ -2642,6 +2773,6 @@ const int gFlowRoutineCount = sizeof gFlowRoutines / sizeof gFlowRoutines[0];
  * system.c) stop the isolated runs at their own sites. */
 const DecompStop gFlowStops[] = {
     STOP(DT_CODE_TASK_YIELD, "FFAC"),   STOP(DT_CODE_RESET, "FEE0"),     STOP(DT_B6_SPAWN, "AEA0.6"),
-    STOP(DT_CODE_FADE_IN_KEEP, "C27C"), STOP(DT_CODE_TASK_WAIT, "FFA5"), STOP(DT_B5_PAUSE_TEXT, "B580.5"),
+    STOP(DT_CODE_FADE_IN_KEEP, "C27C"), STOP(DT_CODE_TASK_WAIT, "FFA5"),
 };
 const int gFlowStopCount = sizeof gFlowStops / sizeof gFlowStops[0];

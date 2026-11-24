@@ -78,7 +78,9 @@ POKES = 'decomp_pokes.cover'
 FUNCTION = re.compile(r'^\w[\w *]*?\b(\w+)\(([^;{]*?)\)\s*\{(.*?)^\}', re.M | re.S)
 CALL_ARG = re.compile(r'\bDecomp_CallP?\(\s*([^,]+?)\s*,')
 LOADS = {'LDA', 'LDX', 'LDY'}
-MACRO_IN = re.compile(r'\b(?:ROUTINE|TASK|RESUME)_IN\(\s*(\w+)\s*,\s*(\w+)\s*,\s*"(\w+)"')
+MACRO_IN = re.compile(
+    r'\b(?:ROUTINE|TASK|RESUME)_(?:IN|AT)\(\s*(\w+)\s*,\s*(\w+)\s*,\s*(?:SITE\("[^"]*"\)\s*,\s*)?"(\w+)"'
+)
 ENTER = re.compile(r'\bDecomp_Enter\(\s*(DT_\w+)')
 
 
