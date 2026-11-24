@@ -26,8 +26,9 @@
  *                 app_ui.h)
  *   No slowdown   [Game] NoSlowdown: the runtime's lag mode
  *                 (NATIVE_LAG_NONE when on, NATIVE_LAG_FAITHFUL when off)
- *   decompiled    [Game] DecompiledCode, with No slowdown on only: the
- *   code          decompiled routines in replace mode (decomp/decomp_native.c);
+ *   decompiled    [Game] DecompiledCode, with No slowdown on only and in the
+ *   code          window only (off screen runs the recompiled code): the
+ *                 decompiled routines in replace mode (decomp/decomp_native.c);
  *                 a window session that ran them writes
  *                 decomp-session-<time>.txt at exit beside the cycle host's
  *                 replays (NESRECOMP_REPLAY_DIR, NESRECOMP_DIAGNOSTICS_DIR or
@@ -1308,6 +1309,8 @@ int ducktales_host_main(int argc, char **argv)
         cyc_settings_load(&s_set, s_set_path, stderr, &GAME);
         ducktales_host_load_audio_settings(s_set_path);
         s_set.bind.shortcut_off |= 1u << CYC_SC_DISK;
+    } else {
+        ducktales_host_set_decompiled(false);
     }
     for (int g = 0; g < game_n; g++) {
         bool ok = false;

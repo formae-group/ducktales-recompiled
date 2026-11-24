@@ -181,6 +181,15 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   bank 5 `$B76A` (the consumed-record bits from the progress flags) is decompiled as
   `Records_MarkTaken`.
 
+### Changed
+
+- The native player (`ducktales.exe`) starts with Decompiled code and No slowdown on. Settings →
+  Gameplay → Original mode, at the top of the page with a (?), turns both off for the recompiled
+  original with the console's slowdown, and turning it off turns both back on. `config.ini` now
+  carries `[Game] SettingsVersion = 2`; a file without it gets both on once, and a later choice,
+  Original mode included, is kept. Off-screen runs, `ducktales_cycle.exe` and the headless builds keep
+  the C off, so no hash, `quick_verify` or `verify_routes` result changes.
+
 ### Fixed
 
 - Extra lives at start had no effect with the decompiled code on: the decompiled title set-up

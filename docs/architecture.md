@@ -290,7 +290,8 @@ assets/brand/formae.png  the About page's logo, embedded by formae_ui_embed_file
 - The menu's layout follows Ship of Harkinian's: a bar of tabs (Settings, Enhancements, About) with
   Reset, Quit and Resume icon buttons on its right, and under it a sidebar of the tab's categories
   beside the chosen category's page. Settings has General (menu background opacity, controller
-  navigation), Graphics, Audio, Controls and Gameplay (No slowdown); Enhancements has Gameplay (the
+  navigation), Graphics, Audio, Controls and Gameplay (Original mode in the native player, No
+  slowdown, Decompiled code in the native player); Enhancements has Gameplay (the
   `DtEnhInfo` table, iterated) and Restore defaults. Pages are titled separators and ImGui's own
   checkboxes, sliders with -/+ buttons, combos and buttons; there are no tooltips or help lines.
   Reset and Quit ask in a modal first.

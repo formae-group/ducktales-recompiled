@@ -16,8 +16,11 @@
  *   mods              the [Mods] section, written last (mods/app_mods.h)
  *   extra voices      [Audio] MusicUnderEffects and OverlapEffects (off by
  *                     default), played by the native player only
- *   decompiled code   [Game] DecompiledCode (off by default), run by the
- *                     native player only and only with No slowdown on
+ *   decompiled code   [Game] DecompiledCode (window builds, default on), run
+ *                     by the native player only and only with No slowdown on
+ *   settings version  [Game] SettingsVersion: a config.ini saved before
+ *                     version 2 gets No slowdown and Decompiled code on, once
+ *                     (ducktales_host_upgrade_settings)
  *
  * A command-line value applies to that run only; config.ini keeps what the
  * player saved (ducktales_host_saved_value).
@@ -39,12 +42,14 @@ static int s_saved[DT_ENH_COUNT];
 static bool s_saved_ready;
 static bool s_saved_sprites = DT_SPRITES_DEFAULT;
 #if DUCKTALES_WINDOW
-static bool s_no_slowdown = true;
+static bool s_no_slowdown = true, s_decompiled = true;
 #else
-static bool s_no_slowdown = false;
+static bool s_no_slowdown = false, s_decompiled = false;
 #endif
 
-static bool s_music_under_effects, s_overlap_effects, s_decompiled;
+#define SETTINGS_VERSION 2
+static int s_settings_version;
+static bool s_music_under_effects, s_overlap_effects;
 
 bool ducktales_host_no_slowdown(void)
 {
@@ -153,6 +158,17 @@ void ducktales_host_set_no_slowdown(bool on)
     ducktales_host_apply_no_slowdown(on);
 }
 
+bool ducktales_host_upgrade_settings(void)
+{
+    if (s_settings_version >= SETTINGS_VERSION) {
+        return false;
+    }
+    s_settings_version = SETTINGS_VERSION;
+    s_no_slowdown = true;
+    s_decompiled = true;
+    return true;
+}
+
 static void saved_init(void)
 {
     if (s_saved_ready) {
@@ -208,6 +224,10 @@ void ducktales_host_load_game_setting(const char *key, const char *value)
         parse_on_off(value, &s_decompiled);
         return;
     }
+    if (!strcmp(key, "SettingsVersion")) {
+        s_settings_version = atoi(value);
+        return;
+    }
     for (int e = 0; e < DT_ENH_COUNT; e++) {
         const DtEnhInfo *in = dt_enh_info((DtEnh)e);
         if (strcmp(key, in->key)) {
@@ -234,6 +254,7 @@ void ducktales_host_load_game_setting(const char *key, const char *value)
 void ducktales_host_write_game_settings(FILE *f)
 {
     saved_init();
+    fprintf(f, "SettingsVersion = %d\n", SETTINGS_VERSION);
     for (int e = 0; e < DT_ENH_COUNT; e++) {
         char v[16];
         fprintf(f, "%s = %s\n", dt_enh_info((DtEnh)e)->key, dt_enh_format((DtEnh)e, s_saved[e], v, sizeof v));

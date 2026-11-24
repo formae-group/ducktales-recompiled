@@ -40,14 +40,23 @@ void ducktales_host_set_no_slowdown(bool on);
  * (ducktales_host.c) or the native runtime's lag mode (native_window.c). */
 void ducktales_host_apply_no_slowdown(bool on);
 
-/* Decompiled code (config.ini [Game] DecompiledCode, the Settings menu), off
- * by default: the native player runs the routines decompiled to C in place of
- * the recompiled ones (src/decomp/decomp_native.c), with No slowdown on only,
- * since the C does not take the console's cycles and would change where the
- * console lags. Every host keeps the key; the native player applies it with
- * No slowdown (ducktales_host_apply_no_slowdown). */
+/* Decompiled code (config.ini [Game] DecompiledCode, the Settings menu), on
+ * by default in the window build and off in the headless build: the native
+ * player runs the routines decompiled to C in place of the recompiled ones
+ * (src/decomp/decomp_native.c), with No slowdown on only, since the C does not
+ * take the console's cycles and would change where the console lags. Every
+ * host keeps the key; the native player applies it with No slowdown
+ * (ducktales_host_apply_no_slowdown) in its window, never off screen. The
+ * menu's Original mode turns both off. */
 bool ducktales_host_decompiled(void);
 void ducktales_host_set_decompiled(bool on);
+
+/* config.ini [Game] SettingsVersion, written as 2 with every save. After a
+ * config.ini without it (saved before Decompiled code was the default) is
+ * loaded, this turns No slowdown and Decompiled code on and returns true, so
+ * the caller saves the file once; a later choice, Original mode included, is
+ * kept. */
+bool ducktales_host_upgrade_settings(void);
 
 /* The native player's extra voices (config.ini [Audio] MusicUnderEffects and
  * OverlapEffects, the Audio page; native/native_voices.h), both off by

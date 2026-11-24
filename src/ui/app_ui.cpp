@@ -283,6 +283,18 @@ const ui::BindingTable &bindings()
 
 void page_gameplay()
 {
+#if DUCKTALES_NATIVE_PLAYER
+    ui::section("Mode");
+    bool original = !ducktales_host_no_slowdown();
+    if (ui::toggle("Original mode", &original,
+                   "Play the game as the console runs it: the recompiled original code, with the console's slowdown "
+                   "when many objects are on screen. Turns No slowdown and Decompiled code off; turning it off "
+                   "turns both back on.")) {
+        ducktales_host_set_decompiled(!original);
+        ducktales_host_set_no_slowdown(!original);
+        app_settings_changed();
+    }
+#endif
     ui::section("Speed");
     bool on = ducktales_host_no_slowdown();
     if (ui::toggle("No slowdown", &on,

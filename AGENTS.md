@@ -16,12 +16,15 @@ settings, presentation and enhancements. The goal is a polished PC port, not an 
   submodule moves to its new tag.
 - Never commit the ROM, generated C, `build*/`, `captures/`, frame logs, screenshots, recordings,
   WAVs or `config.ini`.
-- With every option at its original setting the machine must behave exactly as the console:
-  `tests/verify_routes.py` must pass with native, interpreter and oracle equal on every frame, at all
-  four alignments, with 100% native cycles.
+- In Original mode (No slowdown and Decompiled code off) with every enhancement off, the machine must
+  behave exactly as the console: `tests/verify_routes.py` must pass with native, interpreter and
+  oracle equal on every frame, at all four alignments, with 100% native cycles. The decompiled code,
+  the native player's default, is held to the original by the decomp tests (`decomp_test`,
+  `native_decomp_test`). The headless builds and off-screen runs keep the C off.
 - Presentation changes may alter only what the window shows, never the machine picture or any hash.
 - Gameplay changes are enhancements, off by default, hooked at a site declared in `config/game.toml`
-  with a length/CRC-32 content key (see docs/architecture.md, "Adding a behaviour change").
+  with a length/CRC-32 content key (see docs/architecture.md, "Adding a behaviour change"). No
+  slowdown is the one setting that changes timing and is on by default: the decompiled code needs it.
 - Never open a visible window on the developer's desktop. Use the headless builds, `--hidden` or the
   self-test modes.
 - Windows x64 only. Do not add Linux or macOS build paths.

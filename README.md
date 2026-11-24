@@ -37,6 +37,9 @@ ROM-derived code locally.
   ([docs/validation.md](docs/validation.md#native-synth)).
 - **No slowdown.** VBlank waits until the frame's logic is done, removing the console's lag frames
   without changing game logic.
+- **Decompiled code.** The player runs the game's routines decompiled to C, with No slowdown, by
+  default. Settings → Gameplay → Original mode turns both off and plays the recompiled original
+  with the console's slowdown.
 - **Modern presentation.** Direct3D 11, per-monitor DPI awareness, refresh-aware frame pacing,
   sharp scaling, 8:7 pixel aspect and overscan crop.
 - **Enhancements.** Optional gameplay changes, all off by default; when off, the original code runs.
@@ -147,7 +150,9 @@ choose a cell and press the new key or button: Escape cancels and Delete clears.
 | | Keep music under sound effects (native player only) | On, off (default) | `[Audio] MusicUnderEffects` |
 | | Overlapping sound effects (native player only) | On, off (default) | `[Audio] OverlapEffects` |
 | Settings, Controls | Player 1 keyboard and controller bindings, Menu shortcut | | `[Keyboard.*]`, `[Gamepad.*]` |
-| Settings, Gameplay | No slowdown | On (default), off | `[Game] NoSlowdown` |
+| Settings, Gameplay | Original mode (native player only): the recompiled original with the console's slowdown | On, off (default) | No slowdown and Decompiled code off |
+| | No slowdown | On (default), off | `[Game] NoSlowdown` |
+| | Decompiled code (native player only, with No slowdown on) | On (default), off | `[Game] DecompiledCode` |
 | Settings, Mods | Enable mods, the mod list (order and switches), Open mods folder, Rescan | Off (default), on | `[Mods] Enabled`, `[Mods] Order` |
 | Enhancements, Gameplay | The enhancements below | | `[Game]` |
 | Enhancements, Restore defaults | Restore the original game | | |

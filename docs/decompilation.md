@@ -15,9 +15,10 @@ port's own files and all switched off by default:
 
 The routines are checked in the cycle host (`build/headless`, and `ducktales_cycle.exe` of a window
 build). The game as players run it, `ducktales.exe` of `build/windows`, is the native runtime's
-player by default (`DUCKTALES_PLAYER=native`); there Settings → Gameplay → Decompiled code (off by
-default, with No slowdown only) runs them alone in place of the recompiled ones ("On the native
-runtime" below, [native-runtime.md](native-runtime.md#the-player-build)).
+player by default (`DUCKTALES_PLAYER=native`); there Settings → Gameplay → Decompiled code (on by
+default, with No slowdown only) runs them alone in place of the recompiled ones, and Original mode
+turns both off ("On the native runtime" below,
+[native-runtime.md](native-runtime.md#the-player-build)).
 
 Addresses are named only in `src/game/ducktales_symbols.h`. Status words (verified, code,
 hypothesis) are used as in [memory-map.md](memory-map.md). Code addresses are in bank 7 (the fixed
@@ -443,9 +444,12 @@ The C takes no CPU cycles, so the console's timing is not kept: the work of a fr
 and a land load behind a blank screen ends in fewer frames. With the console's lag that would
 remove lag the console has, so the mode runs only with No slowdown, where a logic step's result
 does not depend on how long it takes ([native-runtime.md](native-runtime.md#lag)). In the player,
-Settings → Gameplay → Decompiled code (`[Game] DecompiledCode`, off by default) is disabled while
-No slowdown is off, and its (?) says why; `ducktales_native --decomp replace` exits with code 2
-unless `--lag none` is given.
+Settings → Gameplay → Decompiled code (`[Game] DecompiledCode`, on by default with No slowdown) is
+disabled while No slowdown is off, and its (?) says why; Original mode, at the top of the page,
+turns both off for the recompiled original with the console's slowdown. A `config.ini` saved before
+the C was the default gets both on once (`[Game] SettingsVersion`). Off-screen runs of the player
+(`--frames N`) and every headless build keep the C off, so no hash or verification changes.
+`ducktales_native --decomp replace` exits with code 2 unless `--lag none` is given.
 
 `tests/native_decomp_test.py` runs each route off and on, with the same buttons strobe by strobe
 (`--latch-log`, `--latch-input`), and compares RAM after every logic step. On the 12 routes all

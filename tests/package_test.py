@@ -212,7 +212,7 @@ def main():
         )
         menu = list(shots.glob('menu_*.png'))
         check(
-            code == 0 and len(menu) == 14 and '[ducktales] menu closed' in log,
+            code == 0 and len(menu) == 15 and '[ducktales] menu closed' in log,
             f'the menu self-test draws every page from the unpacked folder ({len(menu)} PNGs)',
             log,
         )

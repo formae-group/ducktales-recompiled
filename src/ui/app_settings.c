@@ -57,6 +57,7 @@ static CycSettings s_launch; /* as the window started with it */
 static char s_path[1024];
 static AppLaunch s_flags;
 static bool s_loaded;
+static bool s_file_found;
 static bool s_unsaved; /* changed since the last write */
 static bool s_changed; /* changed since launch: reconcile after the host's saves */
 static bool s_host_saved;
@@ -93,7 +94,7 @@ static void ensure_loaded(void)
         snprintf(s_path, sizeof s_path, "%s", cyc_settings_default_path());
     }
     cyc_settings_default(&s_cfg);
-    cyc_settings_load(&s_cfg, s_path, NULL, &GAME_KEYS);
+    s_file_found = cyc_settings_load(&s_cfg, s_path, NULL, &GAME_KEYS);
     ducktales_host_load_audio_settings(s_path);
     s_launch = s_cfg;
     /* the host turns the FDS Disk shortcut off for a cartridge (cyc_sdl.c) */
@@ -120,6 +121,9 @@ void app_ui_configure(const AppLaunch *launch)
     ensure_loaded();
     if (!s_flags.off_screen) {
         app_mods_use_player_folders(s_path);
+        if (s_file_found && ducktales_host_upgrade_settings()) {
+            save_now();
+        }
     }
     AppPresentation p;
     app_present_get(&p);
