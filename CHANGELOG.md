@@ -187,6 +187,10 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   (contact tests, moves, modes, damage, message box) and `src/decomp/level/` (map, scroll, screen, row
   scroll, block draw, spawner), and `tests/decomp_test.py`'s case tables and builders move to
   `tests/decomp/`. Code moves only: no routine, behaviour or command line changes.
+- The mods sources are split by responsibility, with no change in behaviour: the script sandbox
+  into `fm_script.c`, `fm_script_state.c`, `fm_script_show.c` and `fm_script_store.c`, DuckTales'
+  side into `dt_mods.c`, `dt_mods_script.c` and `dt_mods_picture.c`, and `tests/mods_test.py` into
+  its steps under `tests/mods/`.
 - The native player (`ducktales.exe`) starts with Decompiled code and No slowdown on. Settings →
   Gameplay → Original mode, at the top of the page with a (?), turns both off for the recompiled
   original with the console's slowdown, and turning it off turns both back on. `config.ini` now
