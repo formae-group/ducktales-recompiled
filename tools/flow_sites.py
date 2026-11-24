@@ -1,9 +1,8 @@
 """Writes the game-flow block of config/game.toml from src/decomp/flow.c.
 
 The block holds a site for each flow routine that original code reaches
-(SITE("XXXX") in the table) and one for each routine the flow hands off to
-(STOP), where an isolated run of the original stops. Resume points have no
-site: the RTS observer starts them. The content key is the CRC of the first
+(SITE("XXXX") in the table). Resume points have no site: the RTS observer
+starts them. The content key is the CRC of the first
 8 bytes, read from the local ROM (never committed).
 
     py -3 -I tools/flow_sites.py
@@ -22,13 +21,7 @@ ROM = Path(default_rom())
 TOML = ROOT / "config" / "game.toml"
 HEAD = "# Game flow (src/decomp/flow.c"
 TAIL = "# END game flow"
-INTERNAL = {"E23C", "FEEE", "FEFB"}  # these sites also fire inside a routine
-NOTES = {
-    "C976": "The row scroll the row change ($E8C0, src/decomp/player.c) hands off to.",
-    "DFED": "What the message box ($ED05, src/decomp/player.c) hands off to besides task_wait:\n"
-    "the scene set-up of message $0B, the block draw of message $06 and the pause text.",
-    "FEEE": "The reset waits for the live PPU before Reset_Ready resumes the C.",
-}
+INTERNAL = {"FEEE", "FEF3"}  # these sites also fire inside a routine
 
 
 def main():
@@ -48,26 +41,15 @@ def main():
         "",
         HEAD + ', docs/decompilation.md "Task code"): the',
         "# entries of the main task's decompiled code that original code reaches (its",
-        "# resume points have no site: the RTS observer starts them), then the",
-        "# routines it hands off to, where an isolated run of the original stops.",
+        "# resume points have no site: the RTS observer starts them).",
         "",
     ]
     count = 0
-    for m in re.finditer(r'(?:ROUTINE|TASK)(?:_AT\(\w+, |\()(\w+), SITE\("([\w.]+)"\), "(\w+)"', src):
+    for m in re.finditer(r'(?:ROUTINE|TASK)(?:_AT\(\w+, |_POLL\(|\()(\w+), SITE\("([\w.]+)"\), "(\w+)"', src):
         sym, site, name = m.groups()
         addr = syms[sym]
         bank = int(site.split(".")[0]) if "." in site else 7
         out += [f"# {name}", "[[mod_function_hook]]", f'id = "ducktales.decomp.{site}"', f"addr = 0x{addr:04X}"]
-        out += ["length = 8", f"crc32 = 0x{crc(bank, addr):08X}"]
-        out += ["include_internal = true"] if site in INTERNAL else []
-        out += [""]
-        count += 1
-    for m in re.finditer(r'STOP\((\w+), "([\w.]+)"\)', src):
-        sym, site = m.groups()
-        addr = syms[sym]
-        bank = int(site.split(".")[1]) if "." in site else 7
-        out += [f"# {line}" for line in NOTES.get(site, "").splitlines()]
-        out += ["[[mod_function_hook]]", f'id = "ducktales.decomp.stop.{site}"', f"addr = 0x{addr:04X}"]
         out += ["length = 8", f"crc32 = 0x{crc(bank, addr):08X}"]
         out += ["include_internal = true"] if site in INTERNAL else []
         out += [""]

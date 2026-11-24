@@ -20,9 +20,14 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - Decompiled the ending's scene objects (bank 5 `$B380-$B50C`) and later frames
   (`$E1F9-$E28B`). Only the sprite-0 raster wait and timed PPU write stay in the original.
   The three long ending pokes exercise each variant through the end of the credits.
-- Decompiled the reset `$FEE0-$FF34` as task code; only the four-vblank PPU wait `$FEEE-$FEFA` stays in
-  the original. Task code in replace goes to the original when the NMI line has risen but the CPU has
-  not latched the edge yet, as on a warm reset at the frame boundary.
+- Decompiled the reset `$FEE0-$FF34` as task code. Task code in replace goes to the original when
+  the NMI line has risen but the CPU has not latched the edge yet, as on a warm reset at the frame
+  boundary.
+- Polling task code (`DecompRoutine.polls`): task routines that poll a device with `Decomp_BusWait`
+  are measured on a clocked snapshot in check and replace, and replace makes the C's bus operations at
+  the original's cycles (the NMI's measure and replay, generalized). The reset's four-VBlank wait
+  `$FEEE-$FEFA`, the credits' raster split `$E229-$E23B` and the frame loop's `$DC29` are now C; the
+  flow has 14 sites and no stop sites (`gFlowStops` is gone). `tests/decomp_test.py` has a `warm-reset` events case.
 - Bank 6's objects no longer call original code: the tile edits `$F4D8`/`$F506` are called as C,
   and the charger's bounce off a hidden block runs in C. `Bg_Probe` and the walks and fall now return
   the Y the original leaves (checked), which the charger, the block kicker and the boulder pass on.

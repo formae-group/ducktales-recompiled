@@ -71,7 +71,7 @@ DEFINE = re.compile(r'^#define (DT_\w+)\s+(0x[0-9A-Fa-f]+|\d+)\b(.*)$', re.M)
 TABLE = re.compile(r'^const DecompRoutine g\w+\[\] = \{(.*?)^\};', re.M | re.S)
 ENTRY = re.compile(r'\{\s*(\w+)\s*,\s*(?:NULL|"[^"]*")\s*,\s*"(\w+)"([^}]*)\}')
 MACRO = re.compile(
-    r'\b(?:ROUTINE|TASK)\(\s*(\w+)\s*,\s*(?:NULL|"[^"]*"|SITE\("[^"]*"\))\s*,\s*"(\w+)"|\bRESUME\(\s*(\w+)\s*,\s*"(\w+)"'
+    r'\b(?:ROUTINE|TASK|TASK_POLL)\(\s*(\w+)\s*,\s*(?:NULL|"[^"]*"|SITE\("[^"]*"\))\s*,\s*"(\w+)"|\bRESUME(?:_POLL)?\(\s*(\w+)\s*,\s*"(\w+)"'
 )
 CALLED = re.compile(r'\b(?:Decomp_Call|Decomp_CallP|Decomp_Handoff|Call|Jsr|Jump|Yield)\(\s*(?:r\s*,\s*)?(DT_\w+)')
 POKES = 'decomp_pokes.cover'

@@ -493,8 +493,7 @@ length = 8
 crc32 = 0xFAC618EC
 # Game flow (src/decomp/flow.c, docs/decompilation.md "Task code"): the
 # entries of the main task's decompiled code that original code reaches (its
-# resume points have no site: the RTS observer starts them), then the
-# routines it hands off to, where an isolated run of the original stops.
+# resume points have no site: the RTS observer starts them).
 
 # Hud_Reset
 [[mod_function_hook]]
@@ -573,12 +572,20 @@ addr = 0xFEE0
 length = 8
 crc32 = 0x446DE306
 
-# Reset_Ready
+# Reset_WaitVblank
 [[mod_function_hook]]
-id = "ducktales.decomp.FEFB"
-addr = 0xFEFB
+id = "ducktales.decomp.FEEE"
+addr = 0xFEEE
 length = 8
-crc32 = 0xE149A65C
+crc32 = 0x2D26B376
+include_internal = true
+
+# Reset_WaitVblankEnd
+[[mod_function_hook]]
+id = "ducktales.decomp.FEF3"
+addr = 0xFEF3
+length = 8
+crc32 = 0x7EB53C8A
 include_internal = true
 
 # Ending
@@ -588,13 +595,7 @@ addr = 0xE1AF
 length = 8
 crc32 = 0xD1E4F218
 
-# Ending_Split
-[[mod_function_hook]]
-id = "ducktales.decomp.E23C"
-addr = 0xE23C
-length = 8
-crc32 = 0x1F48102F
-include_internal = true
+# END game flow
 
 # Task_Schedule, the scheduler's entry
 [[mod_function_hook]]
@@ -609,16 +610,6 @@ id = "ducktales.decomp.FF38"
 addr = 0xFF38
 length = 8
 crc32 = 0xAACD8749
-
-# The reset waits for the live PPU before Reset_Ready resumes the C.
-[[mod_function_hook]]
-id = "ducktales.decomp.stop.FEEE"
-addr = 0xFEEE
-length = 8
-crc32 = 0x2D26B376
-include_internal = true
-
-# END game flow
 
 # Obj_ClimbDown
 [[mod_function_hook]]

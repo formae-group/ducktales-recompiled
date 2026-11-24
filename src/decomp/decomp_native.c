@@ -235,8 +235,12 @@ static bool task_replace(int i, const CycModRegs *in)
     cpu_set_p(rti              ? c.p
               : dc_handoff_set ? (dc_handoff_uses & OUT_P ? c.p : in->p)
                                : (uint8_t)((c.p & flags) | (in->p & ~flags)));
-    for (int k = 0; k < dc_stores; k++) {
-        cpu_write(dc_store[k].addr, dc_store[k].value, 0);
+    if (rt->polls) {
+        dc_play_ops(dc_played, (uint64_t)(dc_nops - dc_played) * OP_GAP, rt->addr);
+    } else {
+        for (int k = 0; k < dc_stores; k++) {
+            cpu_write(dc_store[k].addr, dc_store[k].value, 0);
+        }
     }
     dc_stats[i].compared++;
     dc_nested_compared();

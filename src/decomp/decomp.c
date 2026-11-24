@@ -417,9 +417,4 @@ NES_MOD_CONSTRUCTOR(dt_register_decomp_sites)
     dc_add_table(gSpriteRoutines, gSpriteRoutineCount);
     dc_add_table(gAudioRoutines, gAudioRoutineCount);
     dc_add_table(gNmiRoutines, gNmiRoutineCount);
-    for (int i = 0; i < gFlowStopCount; i++) {
-        if (!nes_mod_register_function_entry_plugin(gFlowStops[i].site_id, gFlowStops[i].addr, dc_on_entry)) {
-            dc_fail("a stop site could not be registered", gFlowStops[i].addr);
-        }
-    }
 }
