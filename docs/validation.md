@@ -393,6 +393,19 @@ through the land load, one death and respawn, climbing and row changes. 92 of th
 as C, and the log has no decomp error. The owner's verdict: "tudo perfeito". The native player
 (`ducktales.exe`) cannot run the decompiled C yet.
 
+**Objects batch on main 7bf545d** (main a856a27 with `decomp/objects` 01ed6f8 and the routine-cap
+fix, tree cd3306f). Before the fix, `add_table` stopped registering at 256 routines without an
+error, and this tree has 271, so the last tables would have gone unchecked; the cap is now 512 and
+a full table stops the run. main a856a27 registered 243, under the old cap. Gate with `--jobs 2`:
+
+- `quick_verify.py` native: 12/12 routes, 82,626 frames, 50.1 s. With `--runtime cycle`: 12/12,
+  82,626 frames, 489.9 s.
+- `decomp_test.py`, all modes, 5,145 s (three other agents' tests ran on the PC at the same time):
+  - check: 12/12 routes, 3,187,426 calls
+  - replace: 12/12 routes, 82,626 frames RAM-identical
+  - pokes: 45/45 in check and 45/45 in replace
+  - events: 2/2 in check and 2/2 in replace
+
 ## Release 1.0.0
 
 On main `8569c86` (the release tree before its changelog and documentation commit), 2026-11-23:
