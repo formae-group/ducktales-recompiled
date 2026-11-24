@@ -103,7 +103,8 @@ string(STRIP "${_lua_notice}" _lua_notice)
 string(APPEND _lua_notice "\n")
 file(WRITE "${CMAKE_BINARY_DIR}/lua-LICENSE.txt" "${_lua_notice}")
 # The decompiled routines and the core that runs them (docs/DECOMPILATION.md);
-# each host adds its backend: decomp_cycle.c or decomp_native.c.
+# each host adds its backend: decomp_cycle.c (with decomp_cycle_task.c,
+# decomp_cycle_nmi.c and decomp_cycle_clock.c) or decomp_native.c.
 set(_ducktales_decomp
     "${CMAKE_SOURCE_DIR}/src/decomp/decomp.c"
     "${CMAKE_SOURCE_DIR}/src/decomp/decomp_timing.c"
@@ -134,6 +135,9 @@ set(_ducktales_extras
     "${CMAKE_SOURCE_DIR}/src/host/ducktales_host.c"
     ${_ducktales_decomp}
     "${CMAKE_SOURCE_DIR}/src/decomp/decomp_cycle.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/decomp_cycle_task.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/decomp_cycle_nmi.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/decomp_cycle_clock.c"
     "${CMAKE_SOURCE_DIR}/src/host/ducktales_settings.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_render.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_cycle.c"

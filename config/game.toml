@@ -790,7 +790,7 @@ crc32 = 0xCC35B61B
 
 # RTI of the NMI handler: replace mode spends there the cycles a replaced
 # routine still owed when the NMI came, when the original's RTI runs
-# (src/decomp/decomp_cycle.c)
+# (src/decomp/decomp_cycle_nmi.c)
 [[mod_function_hook]]
 id = "ducktales.decomp.nmi-exit"
 addr = 0xC138
