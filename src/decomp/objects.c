@@ -3943,6 +3943,130 @@ static void Obj_SkyRope(uint8_t x)
     }
 }
 
+/* ---- kinds $3A and $3B, the final arena's stand-in (fixed bank) ---- */
+
+#define STAND_IN_Y         0x74
+#define STAND_IN_WAIT      0x78 /* frames hidden before it appears */
+#define STAND_IN_SHOW      0x3C /* frames blinking before it throws */
+#define STAND_IN_STAY      0xF0 /* frames it stays after the throw */
+#define STAND_IN_HITBOX    0x9B
+#define STAND_IN_BEATEN    0x2A /* the action of kind $3B */
+#define STAND_IN_SHOT_SLOT 14
+#define STAND_IN_SHOT      0x85 /* the thrown kind $11's action */
+#define STAND_IN_SHOT_Y    0x58
+#define STAND_IN_SHOT_BOX  0x90
+#define BEATEN_FRAME_TIMER 5
+#define BEATEN_STATE       0xB1
+#define BEATEN_WAIT        0xB4
+#define BEATEN_SCENE_STEP  0x0B /* mode 15's arena redraw */
+
+/* Kind $3A ($FA3F): what a boss becomes in the final arena (the spawner's
+ * stand-in, five hits, no prize). Hidden at Y $74, it waits 120 frames, then
+ * appears at a random one of 16 world X spots ($FB54; its random step adds
+ * the carry the dispatch left), blinking and facing Scrooge, for 60 frames.
+ * Then it throws a kind $11 (action $85) from slot 14, $10 px to the side it
+ * faces, stays 240 frames (the last 60 blinking) and hides for 60 frames
+ * before the next spot. A counted hit goes to the boss hit $F6D7; the last
+ * one makes it kind $3B. */
+static void Obj_FinalStandIn(uint8_t x, bool carry)
+{
+    static const uint8_t spots[16] = { 0x20, 0x50, 0x80, 0xB0, 0xE0, 0x20, 0x20, 0x20,
+                                       0x50, 0x50, 0x80, 0xB0, 0xB0, 0xE0, 0xE0, 0xE0 };
+    static const uint8_t throwX[2] = { 0x10, 0xF0 };
+    static const uint8_t facing[2] = { 0, OBJ_FLAG_FACING_RIGHT };
+
+    Decomp_Enter(DT_CODE_KIND_FINAL_STAND_IN, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0) {
+        if (Boss_Hit(&x)) {
+            gObjects->action[x] = STAND_IN_BEATEN;
+            gObjects->animTimer[x] = 0;
+            gObjects->animFrame[x] = 0;
+            gObjects->hitbox[x] = 0;
+            gObjects->state[x] = 0xA0;
+            gObjects->kind[x] = OBJ_KIND_STAND_IN_BEATEN;
+            return;
+        }
+        carry = false;
+    }
+    gObjects->animTimer[x] = 0;
+    if ((gObjects->state[x] & 0x0F) == 0) {
+        gObjects->y[x] = STAND_IN_Y;
+        gObjects->timer[x] = STAND_IN_WAIT;
+        RAM_U8(DT_ADDR_TRANSYLVANIA_BOSS_05EF) = 0x44;
+        gObjects->state[x]++;
+    }
+    if (gObjects->timer[x] != 0) {
+        if (--gObjects->timer[x] != 0) {
+            return;
+        }
+        gRandom(0) = (uint8_t)(gRandom(0) + gRandom(1) + carry);
+        gObjects->worldX[x] = spots[gRandom(0) & 0x0F];
+        gObjects->unk_06C0[x] = STAND_IN_SHOW;
+        gObjects->flags[x] |= OBJ_FLAG_BLINK;
+        gObjects->state[x] &= (uint8_t)~OBJ_STATUS_HIDDEN;
+        Obj_FaceScrooge(x);
+        gObjects->flags[x] = (uint8_t)((gObjects->flags[x] & ~OBJ_FLAG_FACING_RIGHT) | facing[gObjects->dir[x] & 1]);
+        return;
+    }
+    if (gObjects->unk_06C0[x] != 0) {
+        if (--gObjects->unk_06C0[x] != 0) {
+            return;
+        }
+        gObjects->flags[x] &= 0xF0;
+        gObjects->animFrame[x] = 1;
+        gObjects->hitbox[x] = STAND_IN_HITBOX;
+        uint8_t o = STAND_IN_SHOT_SLOT;
+        gObjects->y[o] = STAND_IN_SHOT_Y;
+        gObjects->animTimer[o] = 0;
+        gObjects->animFrame[o] = 0;
+        gObjects->unk_0690[o] = 0;
+        gObjects->state[o] = 0xA0;
+        gObjects->flags[o] = 0xA0;
+        gObjects->action[o] = STAND_IN_SHOT;
+        gObjects->kind[o] = OBJ_KIND_SWOOPER;
+        gObjects->hitbox[o] = STAND_IN_SHOT_BOX;
+        gObjects->worldPage[o] = gObjects->worldPage[x];
+        gObjects->dir[o] = gObjects->dir[x];
+        gObjects->worldX[o] = (uint8_t)(gObjects->worldX[x] + throwX[gObjects->dir[x] & 1]);
+        gObjects->unk_06D0[x] = STAND_IN_STAY;
+        return;
+    }
+    if (gObjects->unk_06D0[x] == STAND_IN_SHOW) {
+        gObjects->flags[x] |= OBJ_FLAG_BLINK;
+        gObjects->animFrame[x] = 0;
+    }
+    if (--gObjects->unk_06D0[x] != 0) {
+        return;
+    }
+    gObjects->hitbox[x] = 0;
+    gObjects->state[x] |= OBJ_STATUS_HIDDEN;
+    gObjects->timer[x] = STAND_IN_SHOW;
+}
+
+/* Kind $3B ($FBC9): the beaten stand-in. Once its action shows a frame past
+ * the first with the frame timer at 5, it hides (state $B1) for 180 frames,
+ * then is freed and starts mode 15's arena redraw (step $0B), the background
+ * below the split going off. */
+static void Obj_StandInBeaten(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_STAND_IN_BEATEN, 0x22, x, gObjects->kind[x]);
+    if ((gObjects->state[x] & 0x0F) == 0) {
+        if (gObjects->animFrame[x] == 0 || gObjects->animTimer[x] != BEATEN_FRAME_TIMER) {
+            return;
+        }
+        gObjects->state[x] = BEATEN_STATE;
+        gObjects->timer[x] = BEATEN_WAIT;
+    }
+    if (gObjects->timer[x] != 0) {
+        gObjects->timer[x]--;
+        return;
+    }
+    gObjects->state[x] = 0;
+    gPlayerMode = PLAYER_MODE_MESSAGE;
+    RAM_U8(DT_ADDR_BG_OFF_BELOW_SPLIT)++;
+    RAM_U8(DT_ADDR_SCENE_STEP) = BEATEN_SCENE_STEP;
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -4116,6 +4240,12 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
         case OBJ_KIND_SKY_ROPE:
             Obj_SkyRope(slot);
             break;
+        case OBJ_KIND_FINAL_STAND_IN:
+            Obj_FinalStandIn(slot, r->p & P_C);
+            break;
+        case OBJ_KIND_STAND_IN_BEATEN:
+            Obj_StandInBeaten(slot);
+            break;
         case OBJ_KIND_MOVING_PLATFORM:
             Obj_MovingPlatform(slot);
             break;
@@ -4139,12 +4269,6 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_22:
             *r = Decomp_CallP(DT_CODE_KIND_22, r->a, slot, r->y, r->p);
-            break;
-        case OBJ_KIND_FINAL_STAND_IN:
-            *r = Decomp_CallP(DT_CODE_KIND_3A, r->a, slot, r->y, r->p);
-            break;
-        case OBJ_KIND_3B:
-            *r = Decomp_CallP(DT_CODE_KIND_3B, r->a, slot, r->y, r->p);
             break;
         case OBJ_KIND_3C:
             *r = Decomp_CallP(DT_CODE_KIND_3C, r->a, slot, r->y, r->p);
@@ -4333,6 +4457,16 @@ static void Run_SkyFlyer(Regs *r)
 static void Run_SkyRope(Regs *r)
 {
     Obj_SkyRope(r->x);
+}
+
+static void Run_FinalStandIn(Regs *r)
+{
+    Obj_FinalStandIn(r->x, r->p & P_C);
+}
+
+static void Run_StandInBeaten(Regs *r)
+{
+    Obj_StandInBeaten(r->x);
 }
 
 static void Run_KeySpot(Regs *r)
@@ -4686,6 +4820,8 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_LAUNCHPAD_RIDE, NULL, "Obj_LaunchpadRide", Run_LaunchpadRide, 0 },
     { DT_CODE_KIND_SKY_FLYER, NULL, "Obj_SkyFlyer", Run_SkyFlyer, 0 },
     { DT_CODE_KIND_SKY_ROPE, NULL, "Obj_SkyRope", Run_SkyRope, 0 },
+    { DT_CODE_KIND_FINAL_STAND_IN, NULL, "Obj_FinalStandIn", Run_FinalStandIn, 0 },
+    { DT_CODE_KIND_STAND_IN_BEATEN, NULL, "Obj_StandInBeaten", Run_StandInBeaten, 0 },
     { DT_CODE_KIND_BLOCK_DWELLER, NULL, "Obj_BlockDweller", Run_BlockDweller, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_DWELLER_LINK_BLOCK, NULL, "Obj_DwellerLinkBlock", Run_DwellerLinkBlock, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_CEILING_HOPPER, NULL, "Obj_CeilingHopper", Run_CeilingHopper, 0, .bank = DT_BANK_OBJECTS },

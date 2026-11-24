@@ -86,7 +86,7 @@ extern "C" {
 #define OBJ_KIND_SKY_ROPE          0x38 /* scene 2: lifts Scrooge out of the land (code; name hypothesis) */
 #define OBJ_KIND_MOVING_PLATFORM   0x39 /* a platform that carries Scrooge (code) */
 #define OBJ_KIND_FINAL_STAND_IN    0x3A /* what the spawner makes of an object in the final arena (code) */
-#define OBJ_KIND_3B                0x3B /* (not studied; the original handler runs) */
+#define OBJ_KIND_STAND_IN_BEATEN   0x3B /* the beaten stand-in: starts mode 15's arena redraw (code) */
 #define OBJ_KIND_3C                0x3C /* (not studied; the original handler runs) */
 #define OBJ_KIND_3D                0x3D /* (not studied; the original handler runs) */
 #define OBJ_KIND_VISITOR           0x3E /* a character that comes once, holds Scrooge and leaves a kind $3F (code) */

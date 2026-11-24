@@ -713,8 +713,8 @@
 #define DT_CODE_KIND_17                   0x8E23 /* kind $17 */
 #define DT_CODE_KIND_21                   0x9EB3 /* kind $21 */
 #define DT_CODE_KIND_22                   0x9F3D /* kind $22 */
-#define DT_CODE_KIND_3A                   0xFA3F /* kind $3A (fixed bank) */
-#define DT_CODE_KIND_3B                   0xFBC9 /* kind $3B (fixed bank) */
+#define DT_CODE_KIND_FINAL_STAND_IN       0xFA3F /* kind $3A (fixed bank) */
+#define DT_CODE_KIND_STAND_IN_BEATEN      0xFBC9 /* kind $3B (fixed bank) */
 #define DT_CODE_KIND_3C                   0xFB68 /* kind $3C (fixed bank) */
 #define DT_CODE_KIND_3D                   0xFBFF /* kind $3D (fixed bank) */
 #define DT_CODE_KIND_40                   0xFD9E /* kind $40 (fixed bank) */

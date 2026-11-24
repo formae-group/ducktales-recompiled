@@ -98,6 +98,23 @@ SKY_ROPE = {
     0x633: 0x00,
     0x613: 0x00,
 }
+# kind $3A as the spawner makes it (hidden, action $84) in slot 3
+STAND_IN = {
+    0x703: 0xB0,
+    0x603: 0xA0,
+    0x623: 0x84,
+    0x713: 0x3A,
+    0x7D3: 0x00,
+    0x693: 0x00,
+    0x6B3: 0x00,
+    0x6C3: 0x00,
+    0x6D3: 0x00,
+    0x6F3: 0x00,
+    0x733: 0x00,
+    0x723: 0x60,
+    0x633: 0x00,
+    0x613: 0x00,
+}
 # name, {address: value} stored before POKE_FRAME (or {frame: {...}}), routines that must be compared,
 # optionally {frame: buttons} pad states added to the route
 POKES = [
@@ -134,6 +151,14 @@ POKES = [
     ('scene-2', {0x78: 0x82}, ['Scene_Placed', 'Scene_Done']),
     ('sky-rope', SKY_ROPE, ['Obj_SkyRope']),
     ('sky-rope-dying', SKY_ROPE | {0x39: 0x0D}, ['Obj_SkyRope']),
+    ('stand-in', STAND_IN, ['Obj_FinalStandIn'], None, 520),
+    (
+        'stand-in-beaten',
+        {POKE_FRAME: STAND_IN | {0xB1: 0x02}, POKE_FRAME + 10: {0x693: 0x01}, POKE_FRAME + 200: {0x693: 0x01}},
+        ['Obj_FinalStandIn', 'Boss_Hit', 'Obj_StandInBeaten'],
+        None,
+        420,
+    ),
     ('mode15-redraw', {0x39: 0x0F, 0x6E: 0x0B}, ['Mode15_Redraw', 'Mode15_ArenaChr', 'Mode15_Spawned']),
     ('final-trip', {100: {0x5E: 0x01}}, ['LandSelect_FinalScene', 'FinalTrip_Next', 'FinalTrip_Flashed']),
     ('all-treasures', {100: {0x5D: 0x01, 0xA0: 0x1F}}, ['LandSelect_Banked', 'LandSelect_FinalWait']),
