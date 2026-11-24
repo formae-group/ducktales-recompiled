@@ -588,6 +588,26 @@ stay on top.
 Not run on this tree: the full `verify_routes.py`, the full `decomp_test.py` (check, replace and
 pokes), and the window by eye.
 
+## Mods files split (2026-11-24)
+
+On `mods/split` (from 17142f1, merged with main 0939ea9), code moves only: `fm_script.c` into
+`fm_script_state.c`, `fm_script_show.c` and `fm_script_store.c`, `dt_mods.c` into `dt_mods_script.c`
+and `dt_mods_picture.c`, and `tests/mods_test.py` into `tests/mods/`. On the merged tree, with
+`--jobs 2`:
+
+- Headless, headless with developer diagnostics (`build/dev`) and windows builds without warnings;
+  `tools/format.py --check` clean.
+- `--decomp check`: 391 `decomp:` lines in 30 frames, no MISMATCH or TIMING in 300 frames.
+- `tests/quick_verify.py`: native 13/13 routes, 88,826 frames, 35.2 s; `--runtime cycle` 13/13,
+  88,826 frames, 341.0 s.
+- `tests/native_decomp_test.py`: all 13 routes, logic steps equal.
+- `tools/decomp_progress.py`: 100.0%, 391 routines, 28,371 of 28,371 bytes (player 3,626, objects
+  13,465, flow 3,901, level 3,643, system 3,463), as before.
+- `tests/mods_test.py`: all 82 checks pass (headless and native player); `mods_catalogue_test` 8/8;
+  `tests/window_smoke.py --build build/windows`: all passed.
+
+Not run on this tree: the full `verify_routes.py`, the full `decomp_test.py`, and the window by eye.
+
 ## Full decompilation (2026-11-24)
 
 Main d54b09b, with every executed PRG byte in a routine with C: `tools/decomp_progress.py` reports
