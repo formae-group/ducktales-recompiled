@@ -340,6 +340,23 @@ RAM-identical in replace mode.
 | `Bg_SnapFeet` | `$D4D6` | checked | 12 | 11 of 11 | not measured |
 | `Level_TileEdit` | `$F574` | checked | 9 | - | not measured |
 | `Chr_StreamRow` | `$C42C` | checked | 12 | 11 of 11 | not measured |
+| `Row_Scroll` (task code) | `$C976` | checked | 6 | - | not measured |
+| `Row_ScrollFrame` (task code) | `$C99D` | checked | 6 | - | not measured |
+| `Row_ScrollStepped` (task code) | `$C9FB` | checked | 6 | - | not measured |
+| `Row_ScrollNext` (task code) | `$CA09` | checked | 6 | - | not measured |
+| `Row_ScrollEnd` (task code) | `$CA22` | checked | 6 | - | not measured |
+| `Row_DrawStep` | `$CA4A` | checked | 6 | - | not measured |
+| `Row_KeptStep` | `$CA4E` | checked | 6 | - | not measured |
+| `Row_LastStep` | `$CA8B` | checked | 4 | - | not measured |
+| `Row_Draw` | `$CAA1` | checked | 6 | - | not measured |
+| `Row_QueueHeaders` | `$CB1E` | checked | 6 | - | not measured |
+| `Row_RightStep` | `$CB5A` | checked | 6 | - | not measured |
+| `Row_LeftStep` | `$CB6E` | checked | 6 | - | not measured |
+| `Row_DrawHalf` | `$CB94` | checked | 5 | - | not measured |
+| `Block_Draw` | `$D068` | checked | 1 | message-block | not measured |
+| `Block_Debris` | bank 4 `$BD80` | checked | 1 | message-block | not measured |
+| `Tile_EditByAction` | `$F4D8` | checked | 6 | - | not measured |
+| `Tile_EditBySlot` | `$F506` | checked | 1 | - | not measured |
 | `Nmi_Handler` | `$C000` | claimed (decomp/system): the NMI has no site form yet | - | - | - |
 | `Ppu_NmiOff` | `$C183` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
 | `Ppu_NmiOn` | `$C18D` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
@@ -358,6 +375,7 @@ RAM-identical in replace mode.
 | `Bank_Select` | `$FFDE` | checked | 12 | - | not measured |
 | `Bank_SelectTemp` | `$FFE0` | checked | 12 | - | not measured |
 | `Oam_Build` | bank 5 `$8000` | checked | 12 | - | not measured |
+| `Oam_DrawSlot` | bank 5 `$80BE` | checked | 12 | - | not measured |
 | `Text_DrawStrings` | bank 5 `$BAB0` | checked | 12 | - | not measured |
 | `Sound_Update` | bank 3 `$8000` | checked | 12 | - | not measured |
 | `Sound_Play` | bank 3 `$8003` | checked | 12 | - | not measured |
@@ -651,21 +669,21 @@ indirect jump or another routine's entry, and counts as C the routines only C re
 script's docstring gives every rule. `--rev` reads the C of another branch against the same
 coverage.
 
-On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **71.8%, 18,231 of 25,403 executed
-bytes**, in 262 routines (main 7bf545d after the objects batch, 12 routes and 45 poke cases).
+On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **79.0%, 20,060 of 25,403 executed
+bytes**, in 280 routines (decomp/level with main 1ab2759, 12 routes and 45 poke cases).
 
 | Group | Files | Routines | Executed bytes | Share |
 |---|---|---|---|---|
 | player | `player.c`, `motion.c`, `sound.c` | 53 | 3,569 | 14.0% |
 | objects | `objects.c`, `objcommon.c` | 90 | 7,671 | 30.2% |
 | flow | `flow.c` | 85 | 2,408 | 9.5% |
-| level | `level.c`, `collision.c` | 18 | 1,935 | 7.6% |
-| system | `system.c`, `sprites.c`, `audio.c` | 16 | 2,648 | 10.4% |
+| level | `level.c`, `collision.c` | 35 | 3,196 | 12.6% |
+| system | `system.c`, `sprites.c`, `audio.c` | 17 | 3,216 | 12.7% |
 
-317 of those bytes are also run by original routines (shared tails). `Input_ReadControllers` is
+263 of those bytes are also run by original routines (shared tails). `Input_ReadControllers` is
 not counted: replace mode gives every call to the original. The largest routines still original
 are the object kinds of bank 6 that `Obj_UpdateAll` hands to the original (`$A6D3` 469 bytes,
-`$A8D6` 466, `$AAE1` 342, `$AF2B` 263), bank 5 `$80BE` (381, under the entry `$8003`) and the NMI `$C000` (308).
+`$A8D6` 466, `$AAE1` 342, `$AF2B` 263) and the NMI `$C000` (308).
 
 ### Adding a routine
 

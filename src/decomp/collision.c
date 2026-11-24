@@ -123,8 +123,9 @@ static uint8_t Bg_SlipperyTile(int slot)
 }
 
 /* $D14D: a class-3 metatile: run the handler its id picks (the original
- * jumps through $00/$01). Returns what the probe loop tests for other
- * objects (bit 0 ends the probe). */
+ * jumps through $00/$01; every entry of the table is one of the seven
+ * handlers below, $D162 the last). Returns what the probe loop tests for
+ * other objects (bit 0 ends the probe). */
 static uint8_t Bg_SpecialTile(int slot)
 {
     uint8_t kind = Level_MetatileAt((uint8_t)slot) >> 4;
@@ -155,11 +156,8 @@ static uint8_t Bg_SpecialTile(int slot)
             return Bg_SlipperyTile(slot);
         case DT_CODE_SPECIAL_PIT:
             return Bg_PitTile(slot, (uint8_t)(handler >> 8));
-        case DT_CODE_SPECIAL_SOLID:
-            return Bg_Solid();
         default:
-            Decomp_RunOriginal();
-            return 1;
+            return Bg_Solid();
     }
 }
 

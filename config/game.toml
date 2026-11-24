@@ -266,6 +266,72 @@ addr = 0xC42C
 length = 8
 crc32 = 0xC14ABEE7
 
+# Tile_EditByAction and Tile_EditBySlot (bank 6 calls them)
+[[mod_function_hook]]
+id = "ducktales.decomp.F4D8"
+addr = 0xF4D8
+length = 8
+crc32 = 0x61EB8A02
+
+[[mod_function_hook]]
+id = "ducktales.decomp.F506"
+addr = 0xF506
+length = 8
+crc32 = 0x0057BA6D
+
+# Block_Draw (the message box $ED05 in player.c hands off to it, and its site also
+# stops the isolated runs of that task code)
+[[mod_function_hook]]
+id = "ducktales.decomp.D068"
+addr = 0xD068
+length = 8
+crc32 = 0x4E032F44
+
+# Row_Scroll (task code; the row change $E8C0 in player.c hands off to it, and its
+# site also stops the isolated runs of that task code)
+[[mod_function_hook]]
+id = "ducktales.decomp.C976"
+addr = 0xC976
+length = 8
+crc32 = 0x51C43FB5
+
+# The row scroll's step routines, reached through its pointers at $CA2A.
+
+# Row_DrawStep
+[[mod_function_hook]]
+id = "ducktales.decomp.CA4A"
+addr = 0xCA4A
+length = 8
+crc32 = 0x766DA69B
+
+# Row_KeptStep
+[[mod_function_hook]]
+id = "ducktales.decomp.CA4E"
+addr = 0xCA4E
+length = 8
+crc32 = 0xABEE62C0
+
+# Row_LastStep
+[[mod_function_hook]]
+id = "ducktales.decomp.CA8B"
+addr = 0xCA8B
+length = 8
+crc32 = 0xD7F35932
+
+# Row_RightStep
+[[mod_function_hook]]
+id = "ducktales.decomp.CB5A"
+addr = 0xCB5A
+length = 8
+crc32 = 0x6000C60F
+
+# Row_LeftStep
+[[mod_function_hook]]
+id = "ducktales.decomp.CB6E"
+addr = 0xCB6E
+length = 8
+crc32 = 0x6D1B63F7
+
 # Obj_UpdateAll (bank 6)
 [[mod_function_hook]]
 id = "ducktales.decomp.6.8000"
@@ -468,19 +534,6 @@ id = "ducktales.decomp.stop.FFA5"
 addr = 0xFFA5
 length = 8
 crc32 = 0x0FCE60E7
-
-# The row scroll the row change ($E8C0, src/decomp/player.c) hands off to.
-[[mod_function_hook]]
-id = "ducktales.decomp.stop.C976"
-addr = 0xC976
-length = 8
-crc32 = 0x51C43FB5
-
-[[mod_function_hook]]
-id = "ducktales.decomp.stop.D068"
-addr = 0xD068
-length = 8
-crc32 = 0x4E032F44
 
 [[mod_function_hook]]
 id = "ducktales.decomp.stop.B580.5"
