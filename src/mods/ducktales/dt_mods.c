@@ -431,9 +431,23 @@ void app_mods_move(int from, int to)
     fm_move(from, to);
 }
 
+static bool load_mod(AppMod *m, bool use, char *err, size_t cap);
+static void log_catalogue(void);
+
+/* The mods that are not loaded have their assets checked too, so the menu
+ * shows now what a restart would refuse. */
 void app_mods_rescan(void)
 {
     fm_rescan();
+    for (int i = 0; i < fm_count(); i++) {
+        FmMod *m = fm_get(i);
+        char err[300];
+        if (!m->loaded && !m->error[0] && !load_mod(m, false, err, sizeof err)) {
+            snprintf(m->error, sizeof m->error, "Not loaded: %s", err);
+        }
+    }
+    fm_log("Mods: rescan, %d found", fm_count());
+    log_catalogue();
 }
 
 bool app_mods_restart_needed(void)
@@ -490,14 +504,52 @@ typedef struct {
     size_t size;
 } PendingSound;
 
-/* Reads and checks every asset of a mod, then uses it whole: false with the reason. */
-static bool load_mod(AppMod *m, char *err, size_t cap)
+typedef struct {
+    uint64_t hash;
+    uint32_t palette;
+    int entry;
+} TileKey;
+
+static int by_key(const void *a, const void *b)
+{
+    const TileKey *x = a, *y = b;
+    if (x->hash != y->hash) {
+        return x->hash < y->hash ? -1 : 1;
+    }
+    return x->palette < y->palette ? -1 : x->palette > y->palette;
+}
+
+/* The archive's name of a tile file another one of the mod has the key of, or NULL. */
+static const char *same_tile(const FmArchive *a, const FmNesTile *tiles, const int *entries, int n)
+{
+    TileKey *keys = malloc((size_t)n * sizeof *keys + 1);
+    const char *twice = NULL;
+    if (!keys) {
+        return NULL;
+    }
+    for (int i = 0; i < n; i++) {
+        keys[i] = (TileKey){ tiles[i].hash, tiles[i].palette, entries[i] };
+    }
+    qsort(keys, (size_t)n, sizeof *keys, by_key);
+    for (int i = 1; i < n && !twice; i++) {
+        if (!by_key(&keys[i - 1], &keys[i])) {
+            twice = fm_archive_name(a, keys[i].entry);
+        }
+    }
+    free(keys);
+    return twice;
+}
+
+/* Reads and checks every asset of a mod, then uses it whole when use is set:
+ * false with the reason. */
+static bool load_mod(AppMod *m, bool use, char *err, size_t cap)
 {
     FmArchive a;
     if (!fm_archive_open(&a, m->path, m->folder, err, cap)) {
         return false;
     }
     FmNesTile *tiles = NULL;
+    int *tile_entries = NULL;
     int tile_n = 0;
     uint32_t *pals[LANDS + 1] = { NULL };
     PendingSound *sounds = NULL;
@@ -541,6 +593,20 @@ static bool load_mod(AppMod *m, char *err, size_t cap)
             ok = false;
             break;
         }
+        if (pal && pals[land]) {
+            snprintf(err, cap, "%s: the mod has another %s.pal.", n, land == LANDS ? "global" : LAND_NAMES[land]);
+            ok = false;
+            break;
+        }
+        for (int k = 0; k < sound_n && (music || sfx); k++) {
+            if (sounds[k].music == music && sounds[k].id == id) {
+                snprintf(err, cap, "%s: the mod has another file for %s %02X.", n, music ? "music" : "effect", id);
+                ok = false;
+            }
+        }
+        if (!ok) {
+            break;
+        }
         size_t size;
         uint8_t *data = fm_archive_read(&a, i, &size, err, cap);
         if (!data) {
@@ -560,12 +626,15 @@ static bool load_mod(AppMod *m, char *err, size_t cap)
                 ok = false;
             } else {
                 FmNesTile *grown = realloc(tiles, (size_t)(tile_n + 1) * sizeof *grown);
-                if (!grown) {
+                int *grown_entries = grown ? realloc(tile_entries, (size_t)(tile_n + 1) * sizeof *grown_entries) : NULL;
+                tiles = grown ? grown : tiles;
+                tile_entries = grown_entries ? grown_entries : tile_entries;
+                if (!grown || !grown_entries) {
                     free(argb);
                     ok = false;
                     snprintf(err, cap, "Out of memory.");
                 } else {
-                    tiles = grown;
+                    tile_entries[tile_n] = i;
                     tiles[tile_n++] = (FmNesTile){ hash, palette, w, h, argb };
                 }
             }
@@ -607,8 +676,13 @@ static bool load_mod(AppMod *m, char *err, size_t cap)
             }
         }
     }
+    const char *twice = ok ? same_tile(&a, tiles, tile_entries, tile_n) : NULL;
+    if (twice) {
+        snprintf(err, cap, "%s: the mod has another file for this tile and palette.", twice);
+        ok = false;
+    }
     fm_archive_close(&a);
-    if (ok) {
+    if (ok && use) {
         for (int i = 0; i < tile_n; i++) {
             fm_nes_tile_insert(&tiles[i]);
         }
@@ -645,8 +719,23 @@ static bool load_mod(AppMod *m, char *err, size_t cap)
         }
     }
     free(tiles);
+    free(tile_entries);
     free(sounds);
     return ok;
+}
+
+/* One line per mod: what it is, and what was loaded or why not. */
+static void log_catalogue(void)
+{
+    for (int i = 0; i < fm_count(); i++) {
+        const FmMod *m = fm_get(i);
+        if (m->error[0]) {
+            fm_log("Mod %s: %s", m->id, m->error);
+        } else {
+            fm_log("Mod %s: %s %s, %s%s%s", m->id, m->name, m->version, m->loaded ? "loaded" : "not loaded",
+                   m->enabled ? "" : ", switched off", m->folder ? ", folder" : "");
+        }
+    }
 }
 
 void app_mods_start(const uint8_t *prg, size_t prg_size)
@@ -656,6 +745,12 @@ void app_mods_start(const uint8_t *prg, size_t prg_size)
         return;
     }
     s_started = true;
+    char log[1100];
+    if (fm_enabled() && app_data_dir(log, sizeof log - 16)) {
+        fm_make_dir(log);
+        strcat(log, "\\mods.log");
+        fm_log_open(log);
+    }
     if (prg && prg_size) {
         uint8_t digest[32];
         char hex[65];
@@ -672,7 +767,7 @@ void app_mods_start(const uint8_t *prg, size_t prg_size)
             continue;
         }
         char err[300];
-        if (load_mod(m, err, sizeof err)) {
+        if (load_mod(m, true, err, sizeof err)) {
             m->loaded = true;
             used++;
             scripts += m->script;
@@ -681,15 +776,10 @@ void app_mods_start(const uint8_t *prg, size_t prg_size)
         }
     }
     fm_mark_loaded_set();
-    printf("[ducktales] Mods: %s, %d found, %d loaded (%zu tiles, %d palettes, sounds %s, %d scripts)\n",
-           fm_enabled() ? "on" : "off", fm_count(), used, fm_nes_tile_count(), s_palette_count,
-           app_mods_audio_active() ? "replaced" : "none", scripts);
-    for (int i = 0; i < fm_count(); i++) {
-        if (fm_get(i)->error[0]) {
-            printf("[ducktales] Mod %s: %s\n", fm_get(i)->id, fm_get(i)->error);
-        }
-    }
-    fflush(stdout);
+    fm_log("Mods: %s, %d found, %d loaded (%zu tiles, %d palettes, sounds %s, %d scripts)", fm_enabled() ? "on" : "off",
+           fm_count(), used, fm_nes_tile_count(), s_palette_count, app_mods_audio_active() ? "replaced" : "none",
+           scripts);
+    log_catalogue();
     for (int i = 0; i < fm_count(); i++) {
         if (fm_get(i)->loaded && fm_get(i)->script) {
             fm_script_add(fm_get(i));

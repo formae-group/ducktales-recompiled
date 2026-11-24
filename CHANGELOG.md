@@ -7,6 +7,9 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- Mods: with mods on, `mods.log` in the data folder holds the catalogue (each mod, loaded or why
+  not), the scripts' `dt.log` lines, toasts and errors, emptied at each start and capped at 4 MiB.
+  The window build has no console when started from Explorer, so `dt.log` went nowhere before.
 - Route `difficult_himalayas` (6,200 frames): `full_himalayas` on Difficult to the LAND CLEAR tally,
   the first route on Difficult; it passes `verify_routes` at the four alignments with 100% native cycles.
 - The native player writes a session summary when its Decompiled code ran: `decomp-session-<time>.txt`
@@ -132,6 +135,10 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   `Scripts/Main.lua` no longer showed as a script that then could not be found. mod.toml errors name
   the missing keys, a key set twice and a key that is not a quoted string, and a `prg_sha256` that is
   not 64 hex digits is reported as such instead of as a mod for another version of the game.
+- Mods: a mod with two files for the same tile key, land palette or sound id is refused with both
+  names' reason instead of using one of them silently. **Rescan** in the Mod Menu checks the files
+  of the mods that are not loaded, so a broken new mod shows why before a restart, and a mod refused
+  at start no longer lost its reason after a Rescan.
 
 ## [1.0.0] - 2026-11-23
 

@@ -176,8 +176,7 @@ static void count_hook(lua_State *L, lua_Debug *ar)
 
 static void log_line(const Script *s, const char *what, const char *text)
 {
-    printf("%s Mod %s: %s%.1000s\n", fm_log_prefix(), s->id, what, text);
-    fflush(stdout);
+    fm_log("Mod %s: %s%.1000s", s->id, what, text);
 }
 
 /* ---- the sandbox's replacements ---- */

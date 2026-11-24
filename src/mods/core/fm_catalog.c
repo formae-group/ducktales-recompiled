@@ -13,8 +13,16 @@
 #include "mods/core/fm_mods.h"
 
 #include <ctype.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
 
 #define MAX_FOLDERS 4
 
@@ -48,6 +56,51 @@ void fm_set_target(const char *sha256_hex)
 const char *fm_log_prefix(void)
 {
     return s_game.log_prefix;
+}
+
+static FILE *s_log;
+static size_t s_log_bytes;
+
+bool fm_log_open(const char *path)
+{
+    if (s_log) {
+        fclose(s_log);
+        s_log = NULL;
+    }
+#ifdef _WIN32
+    wchar_t w[1024];
+    s_log = MultiByteToWideChar(CP_UTF8, 0, path, -1, w, 1024) ? _wfopen(w, L"wb") : NULL;
+#else
+    s_log = fopen(path, "wb");
+#endif
+    s_log_bytes = 0;
+    return s_log != NULL;
+}
+
+void fm_log(const char *fmt, ...)
+{
+    char line[1200];
+    va_list ap;
+    va_start(ap, fmt);
+    int n = snprintf(line, sizeof line, "%s ", s_game.log_prefix);
+    vsnprintf(line + n, sizeof line - (size_t)n, fmt, ap);
+    va_end(ap);
+    printf("%s\n", line);
+    fflush(stdout);
+    if (!s_log) {
+        return;
+    }
+    size_t len = strlen(line) + 2;
+    if (s_log_bytes + len > FM_LOG_BYTES) {
+        fprintf(s_log, "%s Mods: the log is full (%u MiB); later lines go to the console only\r\n", s_game.log_prefix,
+                FM_LOG_BYTES >> 20);
+        fclose(s_log);
+        s_log = NULL;
+        return;
+    }
+    fprintf(s_log, "%s\r\n", line);
+    fflush(s_log);
+    s_log_bytes += len;
 }
 
 /* ---- small text helpers ---- */

@@ -40,6 +40,12 @@ void fm_configure(const FmGame *game);
 /* The running target's SHA-256 in lower-case hex; mods made for another are refused. */
 void fm_set_target(const char *sha256_hex);
 const char *fm_log_prefix(void);
+/* A line of the mods' log (the prefix and a newline are added): stdout, and
+ * the log file once fm_log_open started one, up to FM_LOG_BYTES. */
+#define FM_LOG_BYTES (4u << 20)
+void fm_log(const char *fmt, ...);
+/* Starts the log file at path, emptied; false when it cannot be written. */
+bool fm_log_open(const char *path);
 
 /* ---- small helpers ---- */
 

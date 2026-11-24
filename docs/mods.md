@@ -23,8 +23,15 @@ runs exactly as the console does.
 Mods higher in the list win: when two mods replace the same tile, palette or sound, the one nearer
 the top is used. A mod that cannot be loaded stays in the list with the reason under its name, in
 red, and its checkbox is off: it was made for another game or another PRG, the archive cannot be
-read, or one of its files is invalid. A mod whose script stopped is named under the list with the
-reason (see [Scripts](#scripts)).
+read, its mod.toml is invalid, one of its files is invalid, or it has two files for the same tile,
+palette or sound. **Rescan** checks the files of every mod that is not loaded yet, so a broken new
+mod shows its reason before you restart. A mod whose script stopped is named under the list with
+the reason (see [Scripts](#scripts)).
+
+With mods on, the game writes what it loaded, every refused mod with its reason, and the scripts'
+`dt.log` lines, toasts and errors to `mods.log` in the data folder (next to `config.ini`), emptied
+at each start and capped at 4 MiB. The same lines go to the console when the game runs from one.
+Attach that file to a bug report about a mod.
 
 The settings live in `config.ini`:
 
@@ -151,7 +158,7 @@ end)
 | `dt.set.<field>(value)` | Sets a writable field at the frame's end, inside handlers (see [Writing the game](#writing-the-game)) |
 | `dt.toast(text)` | Shows a short notice over the picture; returns `false` when it was refused (see [Toasts](#toasts)) |
 | `dt.store.get(key)`, `dt.store.set(key, value)` | The mod's own saved values (see [Store](#store)) |
-| `dt.log(...)` | Writes a line to the game's log (`print` does the same) |
+| `dt.log(...)` | Writes a line to `mods.log` and the console (`print` does the same) |
 | `dt.frame()` | Frames since the game started |
 | `dt.mod` | The mod's id |
 
