@@ -27,59 +27,73 @@ extern "C" {
 #define OBJ_STATUS_HIDDEN 0x10 /* not drawn (verified) */
 
 /* Object kinds ($0710), the index of the handler table. */
-#define OBJ_KIND_NONE            0x00 /* the handler is a bare RTS (code) */
-#define OBJ_KIND_HOPPER          0x01 /* enemy: walks and hops (code) */
-#define OBJ_KIND_WALKER          0x02 /* enemy: walks, turns at walls (code) */
-#define OBJ_KIND_THROWER         0x03 /* enemy: walks, hops, throws a shot (code) */
-#define OBJ_KIND_SHOT            0x04 /* kind 3's shot (code) */
-#define OBJ_KIND_WATCHER         0x05 /* enemy: stays, faces Scrooge (code) */
-#define OBJ_KIND_DANGLER         0x06 /* enemy: climbs to the ceiling, drops on Scrooge (code) */
-#define OBJ_KIND_SNAPPER         0x07 /* plant that catches Scrooge (code) */
-#define OBJ_KIND_BLOCK           0x08 /* block: solid to other objects, launched or opened by the cane (code) */
-#define OBJ_KIND_THROWN          0x09 /* a launched block (code) */
-#define OBJ_KIND_DROPPER         0x0A /* block that falls when Scrooge comes near (code) */
-#define OBJ_KIND_DEFEATED        0x0B /* a beaten enemy flying off (code) */
-#define OBJ_KIND_CRAWLER         0x0C /* enemy: waits for Scrooge to pass, walks (code) */
-#define OBJ_KIND_FLYER           0x0D /* enemy: weaving flyer (code) */
-#define OBJ_KIND_SWING           0x0E /* swinging hold Scrooge grabs with Up (code) */
-#define OBJ_KIND_LIFT            0x0F /* platform that rises and sinks (code) */
-#define OBJ_KIND_CHARGER         0x10 /* enemy: charges at Scrooge, bounces off walls and blocks (code) */
-#define OBJ_KIND_SWOOPER         0x11 /* enemy: drops to Scrooge's height and weaves (code) */
-#define OBJ_KIND_BLOCK_DWELLER   0x12 /* an enemy that lives in a block (code) */
-#define OBJ_KIND_PICKUP          0x13 /* an item Scrooge takes by touching it (code) */
-#define OBJ_KIND_HIDDEN_ITEM     0x14 /* an item that appears when touched (code) */
-#define OBJ_KIND_CHEST           0x15 /* a chest the cane opens (code) */
-#define OBJ_KIND_PATROLLER       0x18 /* enemy: walks a ledge, turns at its edges and at walls (code) */
-#define OBJ_KIND_POUNCER         0x19 /* enemy: flies in arcs, pounces on Scrooge (code) */
-#define OBJ_KIND_PIT_JUMPER      0x1A /* enemy: jumps out of a pit with a splash (code) */
-#define OBJ_KIND_BOUNCER         0x1B /* enemy: bounces towards Scrooge (code) */
-#define OBJ_KIND_LEAPER          0x1C /* enemy: walks a ledge, turns and leaps with a puff of dust (code) */
-#define OBJ_KIND_LEDGE_WALKER    0x1E /* enemy: walks a ledge, turns at its edges (code) */
-#define OBJ_KIND_PACER           0x1F /* enemy: paces left and right (code) */
-#define OBJ_KIND_BOBBER          0x20 /* enemy: bobs up and down in place (code) */
-#define OBJ_KIND_ROLLER          0x23 /* something that rolls left on the floor (code) */
-#define OBJ_KIND_BOULDER         0x24 /* a boulder that rolls right and pushes Scrooge (code) */
-#define OBJ_KIND_CEILING_HOPPER  0x25 /* an enemy that drops from the ceiling and hops at Scrooge (code) */
-#define OBJ_KIND_RISING_SHOT     0x27 /* a shot that flies up and sideways (code) */
-#define OBJ_KIND_MINES_BOSS      0x28 /* the African Mines boss (code) */
-#define OBJ_KIND_MOON_BOSS       0x29 /* the Moon boss (code) */
-#define OBJ_KIND_HIMALAYAS_BOSS  0x2A /* the Himalayas boss (code) */
-#define OBJ_KIND_DROPPING        0x2B /* something that drops and breaks on the floor (code) */
-#define OBJ_KIND_TREAT_SPOUT     0x2C /* throws out four treats when Scrooge is near (code) */
-#define OBJ_KIND_TREAT           0x2D /* a treat that gives an HP dot back (code) */
-#define OBJ_KIND_AMAZON_BOSS     0x2E /* the Amazon boss (code) */
-#define OBJ_KIND_DOOR            0x2F /* a door: warp request (code) */
-#define OBJ_KIND_THIEF           0x30 /* enemy: paces, takes money on contact (code) */
-#define OBJ_KIND_SHORT_THIEF     0x31 /* kind $30 with a shorter span (code) */
-#define OBJ_KIND_PICKPOCKET      0x32 /* enemy: walks at Scrooge, takes money on contact (code) */
-#define OBJ_KIND_TARGET          0x33 /* an object only a hit affects: it is beaten (code) */
-#define OBJ_KIND_LAUNCHER        0x34 /* a launcher that throws Scrooge up (code) */
-#define OBJ_KIND_TALKER          0x35 /* a character that shows a message (code) */
-#define OBJ_KIND_36              0x36 /* carries Scrooge left, then falls (code; not studied) */
-#define OBJ_KIND_37              0x37 /* flies left dropping objects (code; not studied) */
-#define OBJ_KIND_MOVING_PLATFORM 0x39 /* a platform that carries Scrooge (code) */
-#define OBJ_KIND_FINAL_STAND_IN  0x3A /* what the spawner makes of an object in the final arena (code) */
-#define OBJ_KIND_KEY_SPOT        0x41 /* a spot that needs the land's key item (code) */
+#define OBJ_KIND_NONE              0x00 /* the handler is a bare RTS (code) */
+#define OBJ_KIND_HOPPER            0x01 /* enemy: walks and hops (code) */
+#define OBJ_KIND_WALKER            0x02 /* enemy: walks, turns at walls (code) */
+#define OBJ_KIND_THROWER           0x03 /* enemy: walks, hops, throws a shot (code) */
+#define OBJ_KIND_SHOT              0x04 /* kind 3's shot (code) */
+#define OBJ_KIND_WATCHER           0x05 /* enemy: stays, faces Scrooge (code) */
+#define OBJ_KIND_DANGLER           0x06 /* enemy: climbs to the ceiling, drops on Scrooge (code) */
+#define OBJ_KIND_SNAPPER           0x07 /* plant that catches Scrooge (code) */
+#define OBJ_KIND_BLOCK             0x08 /* block: solid to other objects, launched or opened by the cane (code) */
+#define OBJ_KIND_THROWN            0x09 /* a launched block (code) */
+#define OBJ_KIND_DROPPER           0x0A /* block that falls when Scrooge comes near (code) */
+#define OBJ_KIND_DEFEATED          0x0B /* a beaten enemy flying off (code) */
+#define OBJ_KIND_CRAWLER           0x0C /* enemy: waits for Scrooge to pass, walks (code) */
+#define OBJ_KIND_FLYER             0x0D /* enemy: weaving flyer (code) */
+#define OBJ_KIND_SWING             0x0E /* swinging hold Scrooge grabs with Up (code) */
+#define OBJ_KIND_LIFT              0x0F /* platform that rises and sinks (code) */
+#define OBJ_KIND_CHARGER           0x10 /* enemy: charges at Scrooge, bounces off walls and blocks (code) */
+#define OBJ_KIND_SWOOPER           0x11 /* enemy: drops to Scrooge's height and weaves (code) */
+#define OBJ_KIND_BLOCK_DWELLER     0x12 /* an enemy that lives in a block (code) */
+#define OBJ_KIND_PICKUP            0x13 /* an item Scrooge takes by touching it (code) */
+#define OBJ_KIND_HIDDEN_ITEM       0x14 /* an item that appears when touched (code) */
+#define OBJ_KIND_CHEST             0x15 /* a chest the cane opens (code) */
+#define OBJ_KIND_16                0x16 /* (not studied; the original handler runs) */
+#define OBJ_KIND_17                0x17 /* (not studied; the original handler runs) */
+#define OBJ_KIND_PATROLLER         0x18 /* enemy: walks a ledge, turns at its edges and at walls (code) */
+#define OBJ_KIND_POUNCER           0x19 /* enemy: flies in arcs, pounces on Scrooge (code) */
+#define OBJ_KIND_PIT_JUMPER        0x1A /* enemy: jumps out of a pit with a splash (code) */
+#define OBJ_KIND_BOUNCER           0x1B /* enemy: bounces towards Scrooge (code) */
+#define OBJ_KIND_LEAPER            0x1C /* enemy: walks a ledge, turns and leaps with a puff of dust (code) */
+#define OBJ_KIND_BLOCK_KICKER      0x1D /* enemy: walks at Scrooge, kicks the blocks it runs into (code) */
+#define OBJ_KIND_LEDGE_WALKER      0x1E /* enemy: walks a ledge, turns at its edges (code) */
+#define OBJ_KIND_PACER             0x1F /* enemy: paces left and right (code) */
+#define OBJ_KIND_BOBBER            0x20 /* enemy: bobs up and down in place (code) */
+#define OBJ_KIND_21                0x21 /* (not studied; the original handler runs) */
+#define OBJ_KIND_22                0x22 /* (not studied; the original handler runs) */
+#define OBJ_KIND_ROLLER            0x23 /* something that rolls left on the floor (code) */
+#define OBJ_KIND_BOULDER           0x24 /* a boulder that rolls right and pushes Scrooge (code) */
+#define OBJ_KIND_CEILING_HOPPER    0x25 /* an enemy that drops from the ceiling and hops at Scrooge (code) */
+#define OBJ_KIND_TRANSYLVANIA_BOSS 0x26 /* the Transylvania boss (code) */
+#define OBJ_KIND_RISING_SHOT       0x27 /* a shot that flies up and sideways (code) */
+#define OBJ_KIND_MINES_BOSS        0x28 /* the African Mines boss (code) */
+#define OBJ_KIND_MOON_BOSS         0x29 /* the Moon boss (code) */
+#define OBJ_KIND_HIMALAYAS_BOSS    0x2A /* the Himalayas boss (code) */
+#define OBJ_KIND_DROPPING          0x2B /* something that drops and breaks on the floor (code) */
+#define OBJ_KIND_TREAT_SPOUT       0x2C /* throws out four treats when Scrooge is near (code) */
+#define OBJ_KIND_TREAT             0x2D /* a treat that gives an HP dot back (code) */
+#define OBJ_KIND_AMAZON_BOSS       0x2E /* the Amazon boss (code) */
+#define OBJ_KIND_DOOR              0x2F /* a door: warp request (code) */
+#define OBJ_KIND_THIEF             0x30 /* enemy: paces, takes money on contact (code) */
+#define OBJ_KIND_SHORT_THIEF       0x31 /* kind $30 with a shorter span (code) */
+#define OBJ_KIND_PICKPOCKET        0x32 /* enemy: walks at Scrooge, takes money on contact (code) */
+#define OBJ_KIND_TARGET            0x33 /* an object only a hit affects: it is beaten (code) */
+#define OBJ_KIND_LAUNCHER          0x34 /* a launcher that throws Scrooge up (code) */
+#define OBJ_KIND_TALKER            0x35 /* a character that shows a message (code) */
+#define OBJ_KIND_LAUNCHPAD_RIDE    0x36 /* scene 1, the ride home: carries Scrooge left, falls (code) */
+#define OBJ_KIND_SKY_FLYER         0x37 /* scene 2: flies left dropping objects, lets down kind $38 (code) */
+#define OBJ_KIND_SKY_ROPE          0x38 /* scene 2: lifts Scrooge out of the land (code; name hypothesis) */
+#define OBJ_KIND_MOVING_PLATFORM   0x39 /* a platform that carries Scrooge (code) */
+#define OBJ_KIND_FINAL_STAND_IN    0x3A /* what the spawner makes of an object in the final arena (code) */
+#define OBJ_KIND_STAND_IN_BEATEN   0x3B /* the beaten stand-in: starts mode 15's arena redraw (code) */
+#define OBJ_KIND_3C                0x3C /* (not studied; the original handler runs) */
+#define OBJ_KIND_3D                0x3D /* (not studied; the original handler runs) */
+#define OBJ_KIND_VISITOR           0x3E /* a character that comes once, holds Scrooge and leaves a kind $3F (code) */
+#define OBJ_KIND_PATH_OPENER       0x3F /* runs right to page 7, then lets Scrooge go and draws block record 6 (code) */
+#define OBJ_KIND_40                0x40 /* (not studied; the original handler runs) */
+#define OBJ_KIND_KEY_SPOT          0x41 /* a spot that needs the land's key item (code) */
+#define OBJ_KIND_42                0x42 /* (not studied; the original handler runs) */
 
 /* $0700 bits 0-3: the handler's step (code). */
 #define OBJ_STATE_STEP 0x0F

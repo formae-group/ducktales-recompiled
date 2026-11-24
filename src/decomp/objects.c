@@ -7,7 +7,8 @@
  * slot 1-15 (status bit 7), chosen by its kind through the handler table at
  * $802C/$806F. The slot cursor lives in RAM ($4A) because the original keeps
  * it there across the handler call. Kinds whose handler is decompiled run as
- * C; the others run the original handler through Decomp_CallP.
+ * C; the others call their original handler at its own address through
+ * Decomp_CallP. Kinds $43 and up have no handler entry and do nothing.
  *
  * Decompiled kinds: the Amazon's enemies (1-5, 7, $0A, $0C, $0D) and its
  * swinging hold ($0E), the Himalayas' dangler (6), Transylvania's swooper
@@ -20,10 +21,12 @@
  * run through Decomp_Call: the tile edit $F506.
  */
 #include "decomp/decomp.h"
+#include "decomp/level.h"
 #include "decomp/motion.h"
 #include "decomp/objcommon.h"
 #include "decomp/player.h"
 #include "decomp/sound.h"
+#include "decomp/system.h"
 
 #include "ducktales/events.h"
 #include "ducktales/game.h"
@@ -62,6 +65,7 @@
 #define SFX_BOSS_LAND    0x1E
 #define SFX_BOSS_TURN    0x23
 #define SFX_LAUNCH       0x28
+#define SFX_BOSS_SHOTS   0x1C
 
 #define gObjCursor        RAM_U8(DT_ADDR_OBJ_CURSOR)
 #define gScratch0         RAM_U8(DT_ADDR_SCRATCH0)
@@ -295,6 +299,23 @@ static void Obj_HitBlock(uint8_t x, uint8_t y)
     Obj_ResolveBlock(x);
 }
 
+/* $869D: launch block x unless a block was already opened or launched this
+ * frame ($5B); a hidden block gets its tile uncovered first. y is the
+ * caller's Y, which the tile edit keeps. */
+static void Obj_KickBlock(uint8_t x, uint8_t y)
+{
+    Decomp_Enter(DT_CODE_OBJ_KICK_BLOCK, 0, x, y);
+    if (gBlockOpened) {
+        return;
+    }
+    gBlockOpened++;
+    if (gObjects->state[x] & OBJ_STATUS_HIDDEN) {
+        gObjects->state[x] &= (uint8_t)~OBJ_STATUS_HIDDEN;
+        x = Obj_EditTile(x, gObjects->state[x], y);
+    }
+    Obj_LaunchBlock(x);
+}
+
 /* Kind 8 ($8668): a block. Off screen it stays only in poses $1D and $1E.
  * Scrooge's cane launches it (one block a frame, $5B) or, in pose $3F,
  * opens it; a counted blow ($0690) opens or breaks it. y is the kind the
@@ -311,15 +332,7 @@ static void Obj_Block(uint8_t x, uint8_t y)
             Obj_ResolveBlock(x);
             return;
         }
-        if (gBlockOpened) {
-            return;
-        }
-        gBlockOpened++;
-        if (gObjects->state[x] & OBJ_STATUS_HIDDEN) {
-            gObjects->state[x] &= (uint8_t)~OBJ_STATUS_HIDDEN;
-            x = Obj_EditTile(x, gObjects->state[x], gObjects->hitbox[x] & 0x7F);
-        }
-        Obj_LaunchBlock(x);
+        Obj_KickBlock(x, gObjects->hitbox[x] & 0x7F);
         return;
     }
     if (gObjects->unk_0690[x] == 0) {
@@ -3398,28 +3411,378 @@ static void Obj_AmazonBoss(uint8_t x, bool carry)
     }
 }
 
-/* ---- kinds $36 and $37 (fixed bank, not studied) ---- */
+/* The Transylvania boss rises again: step + 1, pose $2A, vertical velocity
+ * $0380. */
+static void Obj_TransylvaniaBossRise(uint8_t x)
+{
+    gObjects->state[x]++;
+    gObjects->action[x] = 0x2A;
+    ResetAnim(x);
+    Obj_SetVelocityY(x, 0x0380);
+}
 
-#define KIND36_SCENE     0x82 /* the special scene its fall requests */
-#define KIND36_BRAKE_X   0xB0 /* below this world X it slows down */
-#define KIND36_BRAKE     4
-#define KIND36_LEAVE_X   0x10
-#define KIND36_BRAKE_DIG 7 /* the money digit $0326 that makes it brake */
-#define KIND37_WAIT      0x3C
-#define KIND37_TOP_Y     0x50
-#define KIND37_STOP_X    0x70
-#define KIND37_GONE_Y    0x10
-#define KIND37_SCROLL    0x80
-#define KIND37_NEXT_SLOT 3
+/* Kind $26 ($A335): the Transylvania boss, by step through $A585/$A58A
+ * (steps 0-4; the bytes past it are other tables).
+ * Step 0 waits 60 frames, then rises. Step 1 turns to pose $5E at frame 1,
+ * timer 5 of pose $2A and picks a height ($A58F) with a random step; there
+ * it picks a random world X ($A597), a wait of 60 or 150 frames and a way.
+ * Step 2 flies the 14-entry weave of $A5A0 (an entry every 3 frames, its
+ * speed made positive), walls turning it, until the wait is over and it is
+ * within 4 px of that X. Step 3 drops to the floor (probe $1E) and faces
+ * Scrooge in pose $2A. Step 4 turns to pose $5D at frame 1, timer 5 for 15
+ * frames, then at frame 2 throws three shots (kind $27, slots 8-10, sound
+ * $1C) 16 px ahead, and 30 frames later rises again. A counted hit goes to
+ * the boss hit $F6D7; the last one beats it. */
+static void Obj_TransylvaniaBoss(uint8_t x)
+{
+    static const uint8_t heights[4] = { 0x68, 0x48, 0x88, 0x68 };
+    static const uint8_t waits[2] = { 0x3C, 0x96 };
+    static const uint8_t ways[2] = { OBJ_DIR_RIGHT, OBJ_DIR_LEFT };
+    static const uint8_t targets[8] = { 0x30, 0x50, 0x80, 0xB0, 0xD0, 0x30, 0x80, 0xD0 };
+    static const uint8_t weave[14] = { 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F,
+                                       0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17 };
+    static const uint8_t ahead[2] = { 0xF0, 0x10 };
+    static const uint8_t facing[2] = { 0, OBJ_FLAG_FACING_RIGHT };
+    static const uint16_t shotVy[3] = { 0x0000, 0x016A, 0x0200 };
+    static const uint16_t shotSpeed[3] = { 0x0200, 0x016A, 0x0000 };
 
-/* Kind $36 ($F869): Scrooge rides it (his Y and world X are its own) and the
+    Decomp_Enter(DT_CODE_KIND_TRANSYLVANIA_BOSS, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0 && Boss_Hit(&x)) {
+        Obj_Defeat(x);
+        return;
+    }
+    uint8_t step = Step(x);
+    gScratch0 = Rom((uint16_t)(DT_CODE_TRANSYLVANIA_BOSS_STEP_LO + step));
+    gScratch1 = Rom((uint16_t)(DT_CODE_TRANSYLVANIA_BOSS_STEP_HI + step));
+    switch (step) {
+        case 0:
+            RAM_U8(DT_ADDR_TRANSYLVANIA_BOSS_05EF) = 0x44;
+            gObjects->animTimer[x] = 0;
+            if (++gObjects->timer[x] == 0x3C) {
+                Obj_TransylvaniaBossRise(x);
+            }
+            return;
+        case 1:
+            if (gObjects->action[x] == 0x2A) {
+                if (gObjects->animFrame[x] == 0 || gObjects->animTimer[x] != 5) {
+                    return;
+                }
+                gObjects->action[x] = 0x5E;
+                ResetAnim(x);
+                gRandom(1) = (uint8_t)(gRandom(0) + gRandom(2) + 1);
+                gObjects->timer[x] = heights[gRandom(1) & 3];
+                return;
+            }
+            Obj_SubVelocityY(x);
+            if (gObjects->y[x] >= gObjects->timer[x]) {
+                return;
+            }
+            gRandom(2) = (uint8_t)(gRandom(1) + gRandom(3));
+            {
+                uint8_t i = gRandom(2) & 7;
+                gObjects->unk_06C0[x] = targets[i];
+                gObjects->timer[x] = waits[i & 1];
+                gObjects->unk_06D0[x] = 0;
+                gObjects->unk_06E0[x] = 0;
+                gObjects->dir[x] = ways[i & 1];
+            }
+            gObjects->state[x]++;
+            return;
+        case 2: {
+            if (gObjects->timer[x] != 0) {
+                gObjects->timer[x]--;
+            }
+            if (gObjects->unk_06D0[x] == 0) {
+                Obj_SetMotionIndex(x, weave[gObjects->unk_06E0[x]]);
+                if (gObjects->speed[x] & 0x80) {
+                    Obj_SetSpeed(x, (uint16_t)-Obj_GetSpeed(x));
+                }
+                if (++gObjects->unk_06E0[x] == 0x0E) {
+                    gObjects->unk_06E0[x] = 0;
+                }
+                gObjects->unk_06D0[x] = 3;
+            }
+            gObjects->unk_06D0[x]--;
+            uint16_t y = (uint16_t)((gObjects->y[x] << 8 | gObjects->yFrac[x]) + Obj_GetVelocityY(x));
+            gObjects->yFrac[x] = (uint8_t)y;
+            gObjects->y[x] = (uint8_t)(y >> 8);
+            if (gObjects->dir[x] & OBJ_DIR_LEFT) {
+                x = Obj_WalkLeft(x, 0x1B, 2);
+            } else {
+                x = Obj_WalkRight(x, 0x18, 2);
+            }
+            if (gObjects->timer[x] == 0 && AbsDiff(gObjects->worldX[x], gObjects->unk_06C0[x]) < 4) {
+                gObjects->state[x]++;
+                Obj_SetVelocityY(x, 0x0380);
+            }
+            if (gObjects->unk_06D0[x] == 0 && (gProbeHits & 1)) {
+                gObjects->dir[x] ^= 3;
+            }
+            return;
+        }
+        case 3:
+            x = Obj_ClimbDown(x, 0x1E, 2);
+            if (!(gProbeHits & 1)) {
+                return;
+            }
+            gObjects->action[x] = 0x2A;
+            ResetAnim(x);
+            gObjects->state[x]++;
+            Obj_FaceScrooge(x);
+            gObjects->flags[x] = (uint8_t)((gObjects->flags[x] & (uint8_t)~OBJ_FLAG_FACING_RIGHT) |
+                                           facing[gObjects->dir[x] & 1]);
+            return;
+        case 4:
+            if (gObjects->action[x] == 0x2A) {
+                if (gObjects->animFrame[x] == 0 || gObjects->animTimer[x] != 5) {
+                    return;
+                }
+                gObjects->action[x] = 0x5D;
+                ResetAnim(x);
+                gObjects->unk_06C0[x] = 0;
+                gObjects->timer[x] = 0x0F;
+                return;
+            }
+            if (gObjects->timer[x] != 0) {
+                gObjects->timer[x]--;
+                gObjects->animTimer[x] = 0;
+                return;
+            }
+            if (gObjects->unk_06C0[x] != 0) {
+                gObjects->state[x] &= 0xF0;
+                Obj_TransylvaniaBossRise(x);
+                return;
+            }
+            if (gObjects->animFrame[x] != 2) {
+                return;
+            }
+            gScratch0 = (uint8_t)(gObjects->worldX[x] + ahead[gObjects->dir[x] & 1]);
+            for (int i = 2; i >= 0; i--) {
+                uint8_t s = (uint8_t)(8 + i);
+                gObjects->state[s] = 0xA0;
+                gObjects->flags[s] = 0xA0;
+                gObjects->animTimer[s] = 0;
+                gObjects->animFrame[s] = 0;
+                gObjects->action[s] = 0x5F;
+                gObjects->y[s] = gObjects->y[x];
+                gObjects->worldPage[s] = gObjects->worldPage[x];
+                gObjects->worldX[s] = gScratch0;
+                gObjects->dir[s] = gObjects->dir[x];
+                Obj_SetVelocityY(s, shotVy[i]);
+                Obj_SetSpeed(s, shotSpeed[i]);
+                gObjects->kind[s] = OBJ_KIND_RISING_SHOT;
+                gObjects->hitbox[s] = 0x1D;
+            }
+            Sound_Request(SFX_BOSS_SHOTS, x);
+            gObjects->timer[x] = 0x1E;
+            gObjects->unk_06C0[x]++;
+            return;
+    }
+}
+
+/* Kind $1D ($9C46): the timed enemy ($4F holds its slot). On the floor
+ * (probe $4A) it waits until Scrooge is within $50 px, then walks at him at
+ * $0100 (probes $44/$47). Hitting a wall, a block in its way (pose $59) is
+ * kicked at frame 3 of the pose ahead of it, 2 px back, and it walks on at
+ * $0200 after frame 5; another wall or object speeds it up 1 px a frame.
+ * From then on it slows by $08 a frame, flipping status bit 6, and once the
+ * speed runs out it turns round at $02FF. Off screen, or hit (pose $58), it
+ * is beaten and $4F becomes $3C. The kick passes the Y the fall leaves,
+ * the probe count, as the original has it after a plain tile. */
+static void Obj_BlockKicker(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_BLOCK_KICKER, 0x22, x, gObjects->kind[x]);
+    if (!OnScreen(x) || gObjects->unk_0690[x] != 0) {
+        if (OnScreen(x)) {
+            gObjects->action[x] = 0x58;
+        }
+        gHeldSlot = 0x3C;
+        Obj_Defeat(x);
+        return;
+    }
+    x = Obj_Fall(x, 0x4A, 2);
+    if (!(gProbeHits & 1)) {
+        return;
+    }
+    if (Step(x) == 0) {
+        gObjects->animTimer[x] = 0;
+        if (Obj_DistanceX(x) >= 0x50) {
+            return;
+        }
+        Obj_SetVelocityY(x, 0);
+        gObjects->timer[x] = 0;
+        gObjects->unk_06C0[x] = 0;
+        Obj_SetSpeed(x, 0x0100);
+        Obj_FaceScrooge(x);
+        gObjects->state[x]++;
+        return;
+    }
+    if (gObjects->state[x] & 2) {
+        if (gObjects->animFrame[x] == 5) {
+            gObjects->state[x]--;
+            gObjects->action[x]--;
+            ResetAnim(x);
+            gObjects->speed[x] = 2;
+            gObjects->unk_06C0[x]++;
+            return;
+        }
+        if (gObjects->timer[x] == 0 || gObjects->animFrame[x] != 3) {
+            return;
+        }
+        gPlayerPushDir = gObjects->dir[x];
+        Obj_KickBlock(gObjects->timer[x], gProbeCount);
+        gObjects->timer[x] = 0;
+        return;
+    }
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        x = Obj_WalkRight(x, 0x44, 2);
+    } else {
+        x = Obj_WalkLeft(x, 0x47, 2);
+    }
+    if (gObjects->unk_06C0[x] != 0) {
+        if (gObjects->timer[x] != 0) {
+            return;
+        }
+        gObjects->state[x] ^= 0x40;
+        uint16_t speed = (uint16_t)(Obj_GetSpeed(x) - 8);
+        Obj_SetSpeed(x, speed);
+        if (!(speed & 0x8000)) {
+            return;
+        }
+        gObjects->timer[x] = 0xFF;
+        Obj_SetSpeed(x, 0x02FF);
+        gObjects->dir[x] ^= 3;
+        return;
+    }
+    if (!(gProbeHits & 1)) {
+        return;
+    }
+    if (Obj_HitOthers(x)) {
+        gObjects->action[x] = 0x58;
+        uint8_t o = gContactDepth;
+        if (gObjects->kind[o] == OBJ_KIND_BLOCK) {
+            gObjects->timer[x] = o;
+            gObjects->state[x]++;
+            gObjects->action[x]++;
+            gObjects->unk_06C0[x]++;
+            ResetAnim(x);
+            Obj_SetWorldX(x, (uint16_t)(Obj_GetWorldX(x) + ((gObjects->dir[x] & OBJ_DIR_LEFT) ? 2 : 0xFFFE)));
+            return;
+        }
+    }
+    gObjects->speed[x]++;
+    gObjects->unk_06C0[x]++;
+}
+
+/* Kind $3F (fixed bank $FD68): what kind $3E leaves. It moves right at 3 px
+ * a frame; at world X $0770 it is freed, lets Scrooge go (mode 0) and draws
+ * block record 6 ($D068), then maps bank 6 back. */
+static void Obj_PathOpener(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_PATH_OPENER, 0x22, x, gObjects->kind[x]);
+    if (Step(x) == 0) {
+        Obj_SetSpeed(x, 0x0300);
+    }
+    Obj_MoveRight(x);
+    if (gObjects->worldPage[x] != 0x07 || gObjects->worldX[x] < 0x70) {
+        return;
+    }
+    gObjects->state[x] = 0;
+    gPlayerMode = PLAYER_MODE_GROUND;
+    Block_Draw(6);
+    Bank_Select(DT_BANK_OBJECTS);
+}
+
+/* Kind $3E (fixed bank $FCA0): a character that comes once ($A1 set; bit 7
+ * marks it). With Scrooge within $38 px it takes its record, holds Scrooge
+ * (mode 14) and walks in from the camera's left edge at $0180, shown and
+ * harmless. Within $38 px of him it leaves a kind $3F (pose $7E) where it
+ * stands ($00 keeps its slot) and waits 180 frames; then, on screen, it
+ * falls (probe 6) and on the floor walks back left. Off screen it is freed. */
+static void Obj_Visitor(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_VISITOR, 0x22, x, gObjects->kind[x]);
+    if (Step(x) == 0) {
+        if (Obj_DistanceX(x) >= 0x38 || gProgressA1 == 0) {
+            return;
+        }
+        gProgressA1 |= 0x80;
+        Obj_MarkConsumed(x);
+        gPlayerMode = PLAYER_MODE_14;
+        gObjects->worldX[x] = gCameraX;
+        gObjects->worldPage[x] = gCameraPage;
+        gObjects->state[x] &= (uint8_t)~OBJ_STATUS_HIDDEN;
+        gObjects->state[x]++;
+        Obj_SetSpeed(x, 0x0180);
+        gObjects->hitbox[x] = 0;
+        return;
+    }
+    if (!(gObjects->state[x] & 2)) {
+        Obj_MoveRight(x);
+        gObjects->flags[x] |= OBJ_FLAG_FACING_RIGHT;
+        if (Obj_DistanceX(x) >= 0x38) {
+            return;
+        }
+        gObjects->state[x]++;
+        gObjects->timer[x] = 0xB4;
+        gScratch0 = x;
+        uint8_t o;
+        if (!Obj_FindFreeSlot(&o)) {
+            return;
+        }
+        gObjects->action[o] = 0x7E;
+        gObjects->y[o] = gObjects->y[x];
+        gObjects->worldX[o] = gObjects->worldX[x];
+        gObjects->worldPage[o] = gObjects->worldPage[x];
+        gObjects->animFrame[o] = 0;
+        gObjects->animTimer[o] = 0;
+        gObjects->state[o] = 0xA0;
+        gObjects->flags[o] = 0xA0;
+        gObjects->kind[o] = OBJ_KIND_PATH_OPENER;
+        return;
+    }
+    if (gObjects->timer[x] != 0) {
+        gObjects->timer[x]--;
+        return;
+    }
+    if (!OnScreen(x)) {
+        gObjects->state[x] = 0;
+        return;
+    }
+    x = Obj_Fall(x, 0x06, 2);
+    if (!(gProbeHits & 1)) {
+        return;
+    }
+    Obj_MoveLeft(x);
+    gObjects->flags[x] &= (uint8_t)~OBJ_FLAG_FACING_RIGHT;
+}
+
+/* ---- the scene objects, kinds $36 to $38 (fixed bank) ---- */
+
+#define RIDE_SCENE      0x82 /* the special scene its fall requests */
+#define RIDE_BRAKE_X    0xB0 /* below this world X it slows down */
+#define RIDE_BRAKE      4
+#define RIDE_LEAVE_X    0x10
+#define RIDE_BRAKE_DIG  7 /* the money digit $0326 that makes it brake */
+#define FLYER_WAIT      0x3C
+#define FLYER_TOP_Y     0x50
+#define FLYER_STOP_X    0x70
+#define FLYER_GONE_Y    0x10
+#define FLYER_SCROLL    0x80
+#define FLYER_NEXT_SLOT 3
+#define ROPE_ACTION     4
+#define ROPE_RISE       2
+#define ROPE_TOP_Y      0x10
+
+/* Kind $36 ($F869), Launchpad's ride home (scene 1; the name is a hypothesis
+ * from the scene): Scrooge rides it (his Y and world X are its own) and the
  * HUD time stands still. Step 1 moves left at speed 1; while the money digit
  * $0326 is 7 it brakes by 4/256 a frame below world X $B0 and stops, going to
  * step 2, otherwise the land is left once Scrooge is left of $10. Steps 2 and
  * 3 fall with gravity, requesting scene 2 while the fall does not wrap. */
-static void Obj_Kind36(uint8_t x)
+static void Obj_LaunchpadRide(uint8_t x)
 {
-    Decomp_Enter(DT_CODE_KIND_36, 0x22, x, gObjects->kind[x]);
+    Decomp_Enter(DT_CODE_KIND_LAUNCHPAD_RIDE, 0x22, x, gObjects->kind[x]);
     gObjects->animTimer[P_] = 0;
     gTickFrames = 0;
     if ((gObjects->state[x] & 0x0F) == 0) {
@@ -3436,7 +3799,7 @@ static void Obj_Kind36(uint8_t x)
         Obj_ApplyVelocityY(x);
         gObjects->y[P_] = gObjects->y[x];
         if (carry) {
-            RAM_U8(DT_ADDR_SCENE) = KIND36_SCENE;
+            RAM_U8(DT_ADDR_SCENE) = RIDE_SCENE;
         }
         return;
     }
@@ -3444,17 +3807,17 @@ static void Obj_Kind36(uint8_t x)
     (void)Alu_Sbc(gObjects->xFrac[x], gObjects->speedFrac[x], &p);
     gObjects->worldX[P_] = gObjects->worldX[x] = Alu_Sbc(gObjects->worldX[x], gObjects->speed[x], &p);
     gObjects->worldPage[P_] = gObjects->worldPage[x] = Alu_Sbc(gObjects->worldPage[x], 0, &p);
-    if (RAM_U8(DT_ADDR_MONEY_DIGITS + 2) != KIND36_BRAKE_DIG) {
-        if (gObjects->worldX[P_] < KIND36_LEAVE_X) {
+    if (RAM_U8(DT_ADDR_MONEY_DIGITS + 2) != RIDE_BRAKE_DIG) {
+        if (gObjects->worldX[P_] < RIDE_LEAVE_X) {
             RAM_U8(DT_ADDR_LAND_LEFT)++;
         }
         return;
     }
-    if (gObjects->worldX[x] >= KIND36_BRAKE_X) {
+    if (gObjects->worldX[x] >= RIDE_BRAKE_X) {
         return;
     }
     p = P_C;
-    gObjects->speedFrac[x] = Alu_Sbc(gObjects->speedFrac[x], KIND36_BRAKE, &p);
+    gObjects->speedFrac[x] = Alu_Sbc(gObjects->speedFrac[x], RIDE_BRAKE, &p);
     gObjects->speed[x] = Alu_Sbc(gObjects->speed[x], 0, &p);
     if ((gObjects->speed[x] | gObjects->speedFrac[x]) == 0) {
         gObjects->state[x]++;
@@ -3464,7 +3827,7 @@ static void Obj_Kind36(uint8_t x)
 /* $F99C: kind $37 drops an object (kind $13, action $28) from where it is
  * into the highest free slot of 15..9, falling at 4, and waits 30, 60 or 120
  * frames for the next. With no free slot it tries again next frame. */
-static void Kind37_Drop(uint8_t x)
+static void SkyFlyer_Drop(uint8_t x)
 {
     static const uint8_t gaps[8] = { 0x1E, 0x1E, 0x1E, 0x3C, 0x3C, 0x3C, 0x78, 0x78 };
     for (uint8_t o = OBJ_SLOTS - 1; o > 8; o--) {
@@ -3489,14 +3852,14 @@ static void Kind37_Drop(uint8_t x)
     }
 }
 
-/* Kind $37 ($F8F2): with Scrooge gone (status bit 7 clear) it requests the
+/* Kind $37 ($F8F2), in scene 2 (the sky scene): with Scrooge gone (status bit 7 clear) it requests the
  * pit death. It waits 60 frames, rises at 2 to Y $50 (the scripted camera
- * then scrolls left), moves left at speed 1 dropping objects (Kind37_Drop)
+ * then scrolls left), moves left at speed 1 dropping objects (SkyFlyer_Drop)
  * until world X $70 of page 0, where it puts kind $38 into slot 3, then rises
  * off the top and starts over. */
-static void Obj_Kind37(uint8_t x)
+static void Obj_SkyFlyer(uint8_t x)
 {
-    Decomp_Enter(DT_CODE_KIND_37, 0x22, x, gObjects->kind[x]);
+    Decomp_Enter(DT_CODE_KIND_SKY_FLYER, 0x22, x, gObjects->kind[x]);
     if (!(gObjects->flags[P_] & 0x80)) {
         Player_PitDeath();
         return;
@@ -3505,7 +3868,7 @@ static void Obj_Kind37(uint8_t x)
         gObjects->speedFrac[x] = 0;
         gObjects->vyFrac[x] = 0;
         gObjects->unk_06C0[x] = 0;
-        gObjects->timer[x] = KIND37_WAIT;
+        gObjects->timer[x] = FLYER_WAIT;
         gObjects->speed[x] = 1;
         gObjects->vy[x] = 2;
         gObjects->state[x]++;
@@ -3517,21 +3880,21 @@ static void Obj_Kind37(uint8_t x)
     switch (gObjects->state[x] & 0x0F) {
         case 2: {
             if (gObjects->unk_06C0[x] == 0) {
-                Kind37_Drop(x);
+                SkyFlyer_Drop(x);
             }
             gObjects->unk_06C0[x]--;
             Obj_MoveLeft(x);
-            if (gObjects->worldPage[x] != 0 || gObjects->worldX[x] >= KIND37_STOP_X) {
+            if (gObjects->worldPage[x] != 0 || gObjects->worldX[x] >= FLYER_STOP_X) {
                 return;
             }
             gObjects->state[x]++;
-            uint8_t o = KIND37_NEXT_SLOT;
+            uint8_t o = FLYER_NEXT_SLOT;
             gObjects->state[o] = 0xA0;
             gObjects->flags[o] = 0xA0;
             gObjects->action[o] = 0x5A;
             gObjects->worldX[o] = 0x30;
             gObjects->y[o] = 0x80;
-            gObjects->kind[o] = 0x38;
+            gObjects->kind[o] = OBJ_KIND_SKY_ROPE;
             gObjects->hitbox[o] = 0;
             gObjects->animTimer[o] = 0;
             gObjects->animFrame[o] = 0;
@@ -3540,19 +3903,168 @@ static void Obj_Kind37(uint8_t x)
         }
         case 3:
             Obj_SubVelocityY(x);
-            if (gObjects->y[x] < KIND37_GONE_Y) {
+            if (gObjects->y[x] < FLYER_GONE_Y) {
                 gObjects->state[x] = 0;
             }
             return;
         default:
             Obj_AddVelocityY(x);
-            if (gObjects->y[x] < KIND37_TOP_Y) {
+            if (gObjects->y[x] < FLYER_TOP_Y) {
                 return;
             }
             gObjects->state[x]++;
-            RAM_U8(DT_ADDR_SCENE_SCROLL) = KIND37_SCROLL;
+            RAM_U8(DT_ADDR_SCENE_SCROLL) = FLYER_SCROLL;
             return;
     }
+}
+
+/* Kind $38 ($F9F8): what kind $37 lets down into slot 3 (a rope, as a
+ * hypothesis). Once Scrooge touches it, unless he is dying (mode 13), he holds
+ * on: action 4, its world X, mode 14. From then on it rises 2 px a frame with
+ * him, and the land is left once it is above Y $10. */
+static void Obj_SkyRope(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_SKY_ROPE, 0x22, x, gObjects->kind[x]);
+    if ((gObjects->state[x] & 0x0F) == 0) {
+        if (!Obj_TouchScrooge(x) || gPlayerMode == PLAYER_MODE_DEATH) {
+            return;
+        }
+        gObjects->state[x]++;
+        gObjects->action[P_] = ROPE_ACTION;
+        gObjects->animFrame[P_] = 0;
+        gObjects->worldX[P_] = gObjects->worldX[x];
+        gObjects->worldPage[P_] = gObjects->worldPage[x];
+        gPlayerMode = PLAYER_MODE_14;
+    }
+    gObjects->animTimer[P_] = 0;
+    gObjects->y[P_] = gObjects->y[x] = (uint8_t)(gObjects->y[x] - ROPE_RISE);
+    if (gObjects->y[x] < ROPE_TOP_Y) {
+        RAM_U8(DT_ADDR_LAND_LEFT)++;
+    }
+}
+
+/* ---- kinds $3A and $3B, the final arena's stand-in (fixed bank) ---- */
+
+#define STAND_IN_Y         0x74
+#define STAND_IN_WAIT      0x78 /* frames hidden before it appears */
+#define STAND_IN_SHOW      0x3C /* frames blinking before it throws */
+#define STAND_IN_STAY      0xF0 /* frames it stays after the throw */
+#define STAND_IN_HITBOX    0x9B
+#define STAND_IN_BEATEN    0x2A /* the action of kind $3B */
+#define STAND_IN_SHOT_SLOT 14
+#define STAND_IN_SHOT      0x85 /* the thrown kind $11's action */
+#define STAND_IN_SHOT_Y    0x58
+#define STAND_IN_SHOT_BOX  0x90
+#define BEATEN_FRAME_TIMER 5
+#define BEATEN_STATE       0xB1
+#define BEATEN_WAIT        0xB4
+#define BEATEN_SCENE_STEP  0x0B /* mode 15's arena redraw */
+
+/* Kind $3A ($FA3F): what a boss becomes in the final arena (the spawner's
+ * stand-in, five hits, no prize). Hidden at Y $74, it waits 120 frames, then
+ * appears at a random one of 16 world X spots ($FB54; its random step adds
+ * the carry the dispatch left), blinking and facing Scrooge, for 60 frames.
+ * Then it throws a kind $11 (action $85) from slot 14, $10 px to the side it
+ * faces, stays 240 frames (the last 60 blinking) and hides for 60 frames
+ * before the next spot. A counted hit goes to the boss hit $F6D7; the last
+ * one makes it kind $3B. */
+static void Obj_FinalStandIn(uint8_t x, bool carry)
+{
+    static const uint8_t spots[16] = { 0x20, 0x50, 0x80, 0xB0, 0xE0, 0x20, 0x20, 0x20,
+                                       0x50, 0x50, 0x80, 0xB0, 0xB0, 0xE0, 0xE0, 0xE0 };
+    static const uint8_t throwX[2] = { 0x10, 0xF0 };
+    static const uint8_t facing[2] = { 0, OBJ_FLAG_FACING_RIGHT };
+
+    Decomp_Enter(DT_CODE_KIND_FINAL_STAND_IN, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0) {
+        if (Boss_Hit(&x)) {
+            gObjects->action[x] = STAND_IN_BEATEN;
+            gObjects->animTimer[x] = 0;
+            gObjects->animFrame[x] = 0;
+            gObjects->hitbox[x] = 0;
+            gObjects->state[x] = 0xA0;
+            gObjects->kind[x] = OBJ_KIND_STAND_IN_BEATEN;
+            return;
+        }
+        carry = false;
+    }
+    gObjects->animTimer[x] = 0;
+    if ((gObjects->state[x] & 0x0F) == 0) {
+        gObjects->y[x] = STAND_IN_Y;
+        gObjects->timer[x] = STAND_IN_WAIT;
+        RAM_U8(DT_ADDR_TRANSYLVANIA_BOSS_05EF) = 0x44;
+        gObjects->state[x]++;
+    }
+    if (gObjects->timer[x] != 0) {
+        if (--gObjects->timer[x] != 0) {
+            return;
+        }
+        gRandom(0) = (uint8_t)(gRandom(0) + gRandom(1) + carry);
+        gObjects->worldX[x] = spots[gRandom(0) & 0x0F];
+        gObjects->unk_06C0[x] = STAND_IN_SHOW;
+        gObjects->flags[x] |= OBJ_FLAG_BLINK;
+        gObjects->state[x] &= (uint8_t)~OBJ_STATUS_HIDDEN;
+        Obj_FaceScrooge(x);
+        gObjects->flags[x] = (uint8_t)((gObjects->flags[x] & ~OBJ_FLAG_FACING_RIGHT) | facing[gObjects->dir[x] & 1]);
+        return;
+    }
+    if (gObjects->unk_06C0[x] != 0) {
+        if (--gObjects->unk_06C0[x] != 0) {
+            return;
+        }
+        gObjects->flags[x] &= 0xF0;
+        gObjects->animFrame[x] = 1;
+        gObjects->hitbox[x] = STAND_IN_HITBOX;
+        uint8_t o = STAND_IN_SHOT_SLOT;
+        gObjects->y[o] = STAND_IN_SHOT_Y;
+        gObjects->animTimer[o] = 0;
+        gObjects->animFrame[o] = 0;
+        gObjects->unk_0690[o] = 0;
+        gObjects->state[o] = 0xA0;
+        gObjects->flags[o] = 0xA0;
+        gObjects->action[o] = STAND_IN_SHOT;
+        gObjects->kind[o] = OBJ_KIND_SWOOPER;
+        gObjects->hitbox[o] = STAND_IN_SHOT_BOX;
+        gObjects->worldPage[o] = gObjects->worldPage[x];
+        gObjects->dir[o] = gObjects->dir[x];
+        gObjects->worldX[o] = (uint8_t)(gObjects->worldX[x] + throwX[gObjects->dir[x] & 1]);
+        gObjects->unk_06D0[x] = STAND_IN_STAY;
+        return;
+    }
+    if (gObjects->unk_06D0[x] == STAND_IN_SHOW) {
+        gObjects->flags[x] |= OBJ_FLAG_BLINK;
+        gObjects->animFrame[x] = 0;
+    }
+    if (--gObjects->unk_06D0[x] != 0) {
+        return;
+    }
+    gObjects->hitbox[x] = 0;
+    gObjects->state[x] |= OBJ_STATUS_HIDDEN;
+    gObjects->timer[x] = STAND_IN_SHOW;
+}
+
+/* Kind $3B ($FBC9): the beaten stand-in. Once its action shows a frame past
+ * the first with the frame timer at 5, it hides (state $B1) for 180 frames,
+ * then is freed and starts mode 15's arena redraw (step $0B), the background
+ * below the split going off. */
+static void Obj_StandInBeaten(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_STAND_IN_BEATEN, 0x22, x, gObjects->kind[x]);
+    if ((gObjects->state[x] & 0x0F) == 0) {
+        if (gObjects->animFrame[x] == 0 || gObjects->animTimer[x] != BEATEN_FRAME_TIMER) {
+            return;
+        }
+        gObjects->state[x] = BEATEN_STATE;
+        gObjects->timer[x] = BEATEN_WAIT;
+    }
+    if (gObjects->timer[x] != 0) {
+        gObjects->timer[x]--;
+        return;
+    }
+    gObjects->state[x] = 0;
+    gPlayerMode = PLAYER_MODE_MESSAGE;
+    RAM_U8(DT_ADDR_BG_OFF_BELOW_SPLIT)++;
+    RAM_U8(DT_ADDR_SCENE_STEP) = BEATEN_SCENE_STEP;
 }
 
 /* ---- the dispatch ---- */
@@ -3561,7 +4073,8 @@ static void Obj_Kind37(uint8_t x)
  * JMP ($0000) vector), A = $22 (the low byte of the return it pushed),
  * X = slot and Y = kind. The flags are those of the loop: the caller's carry
  * for slot 1, the CPX of the loop for the others, and the V the previous
- * handler left. *r gets the registers an original handler returns with. */
+ * handler left. *r gets the registers an original handler returns with.
+ * Kinds $43 and up read past the table in the original; here they do nothing. */
 static void Obj_RunHandler(uint8_t slot, Regs *r)
 {
     uint8_t kind = gObjects->kind[slot];
@@ -3651,6 +4164,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
         case OBJ_KIND_LEAPER:
             Obj_Leaper(slot);
             break;
+        case OBJ_KIND_BLOCK_KICKER:
+            Obj_BlockKicker(slot);
+            break;
         case OBJ_KIND_LEDGE_WALKER:
             Obj_LedgeWalker(slot);
             break;
@@ -3668,6 +4184,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_CEILING_HOPPER:
             Obj_CeilingHopper(slot);
+            break;
+        case OBJ_KIND_TRANSYLVANIA_BOSS:
+            Obj_TransylvaniaBoss(slot);
             break;
         case OBJ_KIND_RISING_SHOT:
             Obj_RisingShot(slot);
@@ -3712,20 +4231,56 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
         case OBJ_KIND_TALKER:
             Obj_Talker(slot);
             break;
-        case OBJ_KIND_36:
-            Obj_Kind36(slot);
+        case OBJ_KIND_LAUNCHPAD_RIDE:
+            Obj_LaunchpadRide(slot);
             break;
-        case OBJ_KIND_37:
-            Obj_Kind37(slot);
+        case OBJ_KIND_SKY_FLYER:
+            Obj_SkyFlyer(slot);
+            break;
+        case OBJ_KIND_SKY_ROPE:
+            Obj_SkyRope(slot);
+            break;
+        case OBJ_KIND_FINAL_STAND_IN:
+            Obj_FinalStandIn(slot, r->p & P_C);
+            break;
+        case OBJ_KIND_STAND_IN_BEATEN:
+            Obj_StandInBeaten(slot);
             break;
         case OBJ_KIND_MOVING_PLATFORM:
             Obj_MovingPlatform(slot);
             break;
+        case OBJ_KIND_VISITOR:
+            Obj_Visitor(slot);
+            break;
+        case OBJ_KIND_PATH_OPENER:
+            Obj_PathOpener(slot);
+            break;
         case OBJ_KIND_KEY_SPOT:
             Obj_KeySpot(slot);
             break;
-        default:
-            *r = Decomp_CallP((uint16_t)(gScratch1 << 8 | gScratch0), r->a, slot, r->y, r->p);
+        case OBJ_KIND_16:
+            *r = Decomp_CallP(DT_CODE_KIND_16, r->a, slot, r->y, r->p);
+            break;
+        case OBJ_KIND_17:
+            *r = Decomp_CallP(DT_CODE_KIND_17, r->a, slot, r->y, r->p);
+            break;
+        case OBJ_KIND_21:
+            *r = Decomp_CallP(DT_CODE_KIND_21, r->a, slot, r->y, r->p);
+            break;
+        case OBJ_KIND_22:
+            *r = Decomp_CallP(DT_CODE_KIND_22, r->a, slot, r->y, r->p);
+            break;
+        case OBJ_KIND_3C:
+            *r = Decomp_CallP(DT_CODE_KIND_3C, r->a, slot, r->y, r->p);
+            break;
+        case OBJ_KIND_3D:
+            *r = Decomp_CallP(DT_CODE_KIND_3D, r->a, slot, r->y, r->p);
+            break;
+        case OBJ_KIND_40:
+            *r = Decomp_CallP(DT_CODE_KIND_40, r->a, slot, r->y, r->p);
+            break;
+        case OBJ_KIND_42:
+            *r = Decomp_CallP(DT_CODE_KIND_42, r->a, slot, r->y, r->p);
             break;
     }
 }
@@ -3889,14 +4444,29 @@ static void Run_DwellerLinkBlock(Regs *r)
     Obj_DwellerLinkBlock(r->x);
 }
 
-static void Run_Kind36(Regs *r)
+static void Run_LaunchpadRide(Regs *r)
 {
-    Obj_Kind36(r->x);
+    Obj_LaunchpadRide(r->x);
 }
 
-static void Run_Kind37(Regs *r)
+static void Run_SkyFlyer(Regs *r)
 {
-    Obj_Kind37(r->x);
+    Obj_SkyFlyer(r->x);
+}
+
+static void Run_SkyRope(Regs *r)
+{
+    Obj_SkyRope(r->x);
+}
+
+static void Run_FinalStandIn(Regs *r)
+{
+    Obj_FinalStandIn(r->x, r->p & P_C);
+}
+
+static void Run_StandInBeaten(Regs *r)
+{
+    Obj_StandInBeaten(r->x);
 }
 
 static void Run_KeySpot(Regs *r)
@@ -4017,6 +4587,31 @@ static void Run_SpawnRecord(Regs *r)
 static void Run_AmazonBoss(Regs *r)
 {
     Obj_AmazonBoss(r->x, r->p & P_C);
+}
+
+static void Run_TransylvaniaBoss(Regs *r)
+{
+    Obj_TransylvaniaBoss(r->x);
+}
+
+static void Run_BlockKicker(Regs *r)
+{
+    Obj_BlockKicker(r->x);
+}
+
+static void Run_KickBlock(Regs *r)
+{
+    Obj_KickBlock(r->x, r->y);
+}
+
+static void Run_PathOpener(Regs *r)
+{
+    Obj_PathOpener(r->x);
+}
+
+static void Run_Visitor(Regs *r)
+{
+    Obj_Visitor(r->x);
 }
 
 static void Run_Swooper(Regs *r)
@@ -4193,6 +4788,10 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_VISITOR, NULL, "Obj_Visitor", Run_Visitor, 0 },
+    { DT_CODE_KIND_PATH_OPENER, NULL, "Obj_PathOpener", Run_PathOpener, 0 },
+    { DT_CODE_KIND_BLOCK_KICKER, NULL, "Obj_BlockKicker", Run_BlockKicker, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_TRANSYLVANIA_BOSS, NULL, "Obj_TransylvaniaBoss", Run_TransylvaniaBoss, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_AMAZON_BOSS, NULL, "Obj_AmazonBoss", Run_AmazonBoss, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_SPAWN_RECORD, "ducktales.decomp.6.AF2B", "Obj_SpawnRecord", Run_SpawnRecord, OUT_X,
       .bank = DT_BANK_OBJECTS },
@@ -4218,8 +4817,11 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_PACER, NULL, "Obj_Pacer", Run_Pacer, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_MOVING_PLATFORM, NULL, "Obj_MovingPlatform", Run_MovingPlatform, 0 },
     { DT_CODE_KIND_KEY_SPOT, NULL, "Obj_KeySpot", Run_KeySpot, 0 },
-    { DT_CODE_KIND_36, NULL, "Obj_Kind36", Run_Kind36, 0 },
-    { DT_CODE_KIND_37, NULL, "Obj_Kind37", Run_Kind37, 0 },
+    { DT_CODE_KIND_LAUNCHPAD_RIDE, NULL, "Obj_LaunchpadRide", Run_LaunchpadRide, 0 },
+    { DT_CODE_KIND_SKY_FLYER, NULL, "Obj_SkyFlyer", Run_SkyFlyer, 0 },
+    { DT_CODE_KIND_SKY_ROPE, NULL, "Obj_SkyRope", Run_SkyRope, 0 },
+    { DT_CODE_KIND_FINAL_STAND_IN, NULL, "Obj_FinalStandIn", Run_FinalStandIn, 0 },
+    { DT_CODE_KIND_STAND_IN_BEATEN, NULL, "Obj_StandInBeaten", Run_StandInBeaten, 0 },
     { DT_CODE_KIND_BLOCK_DWELLER, NULL, "Obj_BlockDweller", Run_BlockDweller, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_DWELLER_LINK_BLOCK, NULL, "Obj_DwellerLinkBlock", Run_DwellerLinkBlock, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_CEILING_HOPPER, NULL, "Obj_CeilingHopper", Run_CeilingHopper, 0, .bank = DT_BANK_OBJECTS },
@@ -4241,6 +4843,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_OBJ_SET_MOTION, NULL, "Obj_SetMotionIndex", Run_SetMotionIndex, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_ENEMY_WALK, NULL, "Enemy_Walk", Run_EnemyWalk, OUT_X, .bank = DT_BANK_OBJECTS },
     { DT_CODE_OBJ_LAUNCH_BLOCK, NULL, "Obj_LaunchBlock", Run_LaunchBlock, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_OBJ_KICK_BLOCK, NULL, "Obj_KickBlock", Run_KickBlock, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_OBJ_RESOLVE_BLOCK, NULL, "Obj_ResolveBlock", Run_ResolveBlock, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_OBJ_BREAK, NULL, "Obj_Break", Run_Break, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_OBJ_SHATTER, NULL, "Obj_Shatter", Run_Shatter, 0, .bank = DT_BANK_OBJECTS },

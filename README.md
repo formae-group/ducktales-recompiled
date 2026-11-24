@@ -47,8 +47,8 @@ ROM-derived code locally.
 - **A start on decompilation.** A typed C API over the game's RAM, game events for mods, and
   C versions of Scrooge's per-frame routines and parts of the game loop and HUD. The cycle host can
   compare them with the original (`--decomp check`) or run them in its place
-  (`--decomp replace`). Off by default. Progress: 88.9% of the PRG bytes the routes and the poke
-  cases execute (22,659 of 25,489) are in routines with C (`tools/decomp_progress.py`,
+  (`--decomp replace`). Off by default. Progress: 97.7% of the PRG bytes the routes and the poke
+  cases execute (25,197 of 25,783) are in routines with C (`tools/decomp_progress.py`,
   [docs/decompilation.md](docs/decompilation.md#progress)).
 
 ## Supported ROM

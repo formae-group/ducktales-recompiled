@@ -85,6 +85,36 @@ MESSAGE_PRESSES = {
     **{POKE_FRAME + 120 + 30 * i: 'A' for i in range(19)},
     **{POKE_FRAME + 124 + 30 * i: '-' for i in range(19)},
 }
+# kind $38 in slot 3 at Scrooge's place in the Amazon at POKE_FRAME
+SKY_ROPE = {
+    0x703: 0xA0,
+    0x603: 0xA0,
+    0x623: 0x5A,
+    0x643: 0xA9,
+    0x723: 0x60,
+    0x733: 0x00,
+    0x713: 0x38,
+    0x7D3: 0x00,
+    0x633: 0x00,
+    0x613: 0x00,
+}
+# kind $3A as the spawner makes it (hidden, action $84) in slot 3
+STAND_IN = {
+    0x703: 0xB0,
+    0x603: 0xA0,
+    0x623: 0x84,
+    0x713: 0x3A,
+    0x7D3: 0x00,
+    0x693: 0x00,
+    0x6B3: 0x00,
+    0x6C3: 0x00,
+    0x6D3: 0x00,
+    0x6F3: 0x00,
+    0x733: 0x00,
+    0x723: 0x60,
+    0x633: 0x00,
+    0x613: 0x00,
+}
 # name, {address: value} stored before POKE_FRAME (or {frame: {...}}), routines that must be compared,
 # optionally {frame: buttons} pad states added to the route
 POKES = [
@@ -119,6 +149,16 @@ POKES = [
     ('hud-total', {0xAB: 0x01}, ['Hud_RefreshTotal']),
     ('scene-1', {0x78: 0x81}, ['Scene_Placed', 'Scene_Done']),
     ('scene-2', {0x78: 0x82}, ['Scene_Placed', 'Scene_Done']),
+    ('sky-rope', SKY_ROPE, ['Obj_SkyRope']),
+    ('sky-rope-dying', SKY_ROPE | {0x39: 0x0D}, ['Obj_SkyRope']),
+    ('stand-in', STAND_IN, ['Obj_FinalStandIn'], None, 520),
+    (
+        'stand-in-beaten',
+        {POKE_FRAME: STAND_IN | {0xB1: 0x02}, POKE_FRAME + 10: {0x693: 0x01}, POKE_FRAME + 200: {0x693: 0x01}},
+        ['Obj_FinalStandIn', 'Boss_Hit', 'Obj_StandInBeaten'],
+        None,
+        420,
+    ),
     ('mode15-redraw', {0x39: 0x0F, 0x6E: 0x0B}, ['Mode15_Redraw', 'Mode15_ArenaChr', 'Mode15_Spawned']),
     ('final-trip', {100: {0x5E: 0x01}}, ['LandSelect_FinalScene', 'FinalTrip_Next', 'FinalTrip_Flashed']),
     ('all-treasures', {100: {0x5D: 0x01, 0xA0: 0x1F}}, ['LandSelect_Banked', 'LandSelect_FinalWait']),
@@ -363,6 +403,38 @@ POKES = [
         'treasure-max',
         {0x39: 0x10, 0xC5: 0x80, 0x151: 0x00, 0x155: 0x01, 0x324: 0x09, 0x325: 0x09, 0x326: 0x09, 0x327: 0x09},
         ['Player_Treasure', 'Money_Max'],
+    ),
+    # slot 9 the timed enemy walking right at a block in slot 10: it kicks the block
+    (
+        'kicker-block',
+        {
+            0x709: 0xA1,
+            0x719: 0x1D,
+            0x629: 0x58,
+            0x649: 0xB4,
+            0x729: 0x50,
+            0x739: 0x00,
+            0x609: 0x80,
+            0x699: 0x00,
+            0x7D9: 0x91,
+            0x7E9: 0x01,
+            0x779: 0x01,
+            0x769: 0x00,
+            0x6C9: 0x00,
+            0x6B9: 0x00,
+            0x7C9: 0x00,
+            0x7B9: 0x00,
+            0x70A: 0xA0,
+            0x71A: 0x08,
+            0x62A: 0x1A,
+            0x64A: 0xB4,
+            0x72A: 0x68,
+            0x73A: 0x00,
+            0x60A: 0x80,
+            0x7DA: 0x80,
+            0x69A: 0x00,
+        },
+        ['Obj_BlockKicker', 'Obj_KickBlock', 'Obj_LaunchBlock'],
     ),
 ]
 

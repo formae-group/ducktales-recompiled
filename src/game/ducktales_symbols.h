@@ -371,6 +371,8 @@
 #define DT_ADDR_MINES_BOSS_05E7     0x05E7 /* set to $55 when the African Mines boss starts (code; meaning unknown) */
 #define DT_ADDR_HIMALAYAS_BOSS_05A0 0x05A0 /* set to $11 when the Himalayas boss starts (code; meaning unknown) */
 #define DT_ADDR_BOSS_05AF 0x05AF /* set to $44 when the Moon and Amazon bosses start (code; meaning unknown) */
+#define DT_ADDR_TRANSYLVANIA_BOSS_05EF \
+    0x05EF /* set to $44 while the Transylvania boss waits to start (code; meaning unknown) */
 #define DT_ADDR_SPAWN_TABLES \
     0x0060 /* $60-$69: pointers to the land's record tables: page, world X, row start, Y, type (code) */
 #define DT_ADDR_ROW_CHR_STATE    0x0050 /* row sprite-CHR stream state, negative = done (verified) */
@@ -673,117 +675,135 @@
 #define DT_ADDR_EXTRA_DOT_TAKEN   0x00AE /* the extra HP dot was taken in the Himalayas (code) */
 #define DT_ADDR_RANDOM            0x00C0 /* four random bytes, stepped by $C2E6 (code) */
 /* Handlers by kind (bank 6 unless noted) and their tables. */
-#define DT_CODE_HIT_HEIGHT           0x814A /* $80C1: half-heights by the thrower's hitbox (code) */
-#define DT_CODE_HIT_WIDTH            0x816A /* $80C1: half-widths (code) */
-#define DT_CODE_MOTION_VY            0x81A5 /* $818A: vertical velocity by index, 8.8 */
-#define DT_CODE_MOTION_SPEED         0x81E5 /* $818A: speed by index, 8.8 */
-#define DT_CODE_SNAPPER_HOLD_Y       0x8661 /* kind 7: Scrooge's Y offset when caught, by pose */
-#define DT_CODE_SNAPPER_HOLD_POSE    0x8663 /* kind 7: Scrooge's pose when caught */
-#define DT_CODE_SNAPPER_HITBOX       0x8665 /* kind 7: hitbox by animation frame */
-#define DT_CODE_KIND_BLOCK           0x8668 /* kind 8 */
-#define DT_CODE_KIND_THROWN          0x8722 /* kind 9 */
-#define DT_CODE_THROWN_STEP_LO       0x88FC /* kind 9's code by step, low bytes (9 entries) */
-#define DT_CODE_THROWN_STEP_HI       0x8905
-#define DT_CODE_BLOCK_LAUNCH         0x890E /* launch velocity, speed by pose - $1A, 4 bytes each */
-#define DT_CODE_KIND_DEFEATED        0x897B /* kind $0B */
-#define DT_CODE_KIND_PICKUP          0x8A59 /* kind $13 */
-#define DT_CODE_ITEM_TAKE_LO         0x8BFE /* what taking items $23-$29 does, low bytes */
-#define DT_CODE_ITEM_TAKE_HI         0x8C05
-#define DT_CODE_ITEM_SOUND           0x8C0C /* their sounds */
-#define DT_CODE_KIND_HIDDEN_ITEM     0x8C45 /* kind $14 */
-#define DT_CODE_KIND_CHEST           0x8D19 /* kind $15 */
-#define DT_CODE_ITEM_BY_INDEX        0x8FB8 /* item by $06B0 */
-#define DT_CODE_CHEST_ITEM           0x8FDA /* chest: 0 = no item shown, by land * 4 + $06B0 */
-#define DT_CODE_CHEST_RISE           0x9002 /* chest: Y offset when opened */
-#define DT_CODE_ITEM_BY_LAND         0x9016 /* item of a pose-$3F block by land * 3 + $06B0 */
-#define DT_CODE_DROP_BY_KIND         0x9025 /* item a beaten enemy may drop, by kind */
-#define DT_CODE_KIND_DOOR            0x9065 /* kind $2F */
-#define DT_CODE_FLYER_PATH           0x9215 /* kind $0D: motion index by step, 14 entries */
-#define DT_CODE_SWING_PATH           0x92ED /* kind $0E: motion index by step, bit 7 = long step, 36 entries */
-#define DT_CODE_SWING_FRAMES         0x9311 /* kind $0E: frames per step, short and long */
-#define DT_CODE_SWOOPER_PATH         0x9544 /* kind $11: motion index by step, 14 entries */
-#define DT_CODE_KIND_LIFT            0x9093 /* kind $0F */
-#define DT_CODE_KIND_TALKER          0xFDF5 /* kind $35 (fixed bank) */
-#define DT_CODE_KIND_36              0xF869 /* kind $36 (fixed bank) */
-#define DT_CODE_KIND_37              0xF8F2 /* kind $37 (fixed bank) */
-#define DT_CODE_KIND_HOPPER          0x8225 /* kind 1 */
-#define DT_CODE_KIND_WALKER          0x82AF /* kind 2 */
-#define DT_CODE_KIND_THROWER         0x830E /* kind 3 */
-#define DT_CODE_KIND_SHOT            0x8462 /* kind 4 */
-#define DT_CODE_KIND_WATCHER         0x8491 /* kind 5 */
-#define DT_CODE_KIND_DANGLER         0x84E5 /* kind 6 */
-#define DT_CODE_KIND_SNAPPER         0x8567 /* kind 7 */
-#define DT_CODE_KIND_DROPPER         0x8845 /* kind $0A */
-#define DT_CODE_KIND_CRAWLER         0x90EA /* kind $0C */
-#define DT_CODE_KIND_FLYER           0x916C /* kind $0D */
-#define DT_CODE_KIND_SWING           0x9225 /* kind $0E */
-#define DT_CODE_KIND_SWOOPER         0x9430 /* kind $11 */
-#define DT_CODE_KIND_AMAZON_BOSS     0xA5DB /* kind $2E */
-#define DT_CODE_KIND_LAUNCHER        0xADC1 /* kind $34 */
-#define DT_CODE_KIND_TARGET          0xADB9 /* kind $33 */
-#define DT_CODE_KIND_MOON_BOSS       0xAAE1 /* kind $29 */
-#define DT_CODE_KIND_HIMALAYAS_BOSS  0xA8D6 /* kind $2A */
-#define DT_CODE_KIND_MINES_BOSS      0xA6D3 /* kind $28 */
-#define DT_CODE_KIND_THIEF           0xAC3D /* kind $30 */
-#define DT_CODE_KIND_TREAT           0xA2BA /* kind $2D */
-#define DT_CODE_KIND_TREAT_SPOUT     0xA1E9 /* kind $2C */
-#define DT_CODE_KIND_ROLLER          0x9FEC /* kind $23 */
-#define DT_CODE_KIND_BOULDER         0xA024 /* kind $24 */
-#define DT_CODE_KIND_BOUNCER         0x9A81 /* kind $1B */
-#define DT_CODE_KIND_PIT_JUMPER      0x9956 /* kind $1A */
-#define DT_CODE_PIT_SPLASH_OUT       0x9A1E /* kind $1A: splash out of the pit */
-#define DT_CODE_PIT_SPLASH_IN        0x9A2A /* kind $1A: splash back into the pit */
-#define DT_CODE_KIND_PICKPOCKET      0xACBE /* kind $32 */
-#define DT_CODE_PICKPOCKET_WALK      0xAD56 /* kind $32: walk in the slot's direction */
-#define DT_CODE_PICKPOCKET_STEAL     0xAD6B /* kind $32: take 1 from the money's third digit */
-#define DT_CODE_KIND_POUNCER         0x973C /* kind $19 */
-#define DT_CODE_KIND_LEDGE_WALKER    0x9D8A /* kind $1E */
-#define DT_CODE_KIND_PACER           0x9DF7 /* kind $1F */
-#define DT_CODE_KIND_MOVING_PLATFORM 0xFE69 /* kind $39 (fixed bank) */
-#define DT_CODE_KIND_KEY_SPOT        0xFE50 /* kind $41 (fixed bank) */
-#define DT_CODE_KIND_BLOCK_DWELLER   0x9552 /* kind $12 */
-#define DT_CODE_DWELLER_LINK_BLOCK   0x9649 /* kind $12: find or make its block */
-#define DT_CODE_KIND_CEILING_HOPPER  0xA065 /* kind $25 */
-#define DT_CODE_CEILING_HOPPER_WALK  0xA1D4 /* kind $25: walk in the slot's direction */
-#define DT_CODE_KIND_DROPPING        0xAAC8 /* kind $2B */
-#define DT_CODE_KIND_RISING_SHOT     0xA5BE /* kind $27 */
-#define DT_CODE_KIND_LEAPER          0x9B10 /* kind $1C */
-#define DT_CODE_LEAPER_DUST          0x9C0A /* kind $1C: a puff of dust below the slot */
-#define DT_CODE_KIND_BOBBER          0x9E51 /* kind $20 */
-#define DT_CODE_KIND_CHARGER         0x9313 /* kind $10 */
-#define DT_CODE_KIND_PATROLLER       0x96D5 /* kind $18 */
-#define DT_CODE_OBJ_FIND_FREE_Y      0x80B3 /* highest free slot 15..1 in Y */
-#define DT_CODE_OBJ_HIT_OTHERS       0x80C1 /* the slot a thrown slot hits */
-#define DT_CODE_OBJ_SET_MOTION       0x818A /* vertical velocity and speed by index */
-#define DT_CODE_ENEMY_WALK           0x82F9 /* walk with probes $18 or $1B */
-#define DT_CODE_OBJ_LAUNCH_BLOCK     0x86B5 /* a block starts flying (kind 9) */
-#define DT_CODE_OBJ_HIT_BLOCK        0x86F7 /* a counted blow on a block */
-#define DT_CODE_OBJ_RESOLVE_BLOCK    0x870D /* open, leave or shatter a block */
-#define DT_CODE_THROWN_FALL          0x88BC /* kind 9: fall with probe $2D */
-#define DT_CODE_THROWN_WALK          0x88C8 /* kind 9: walk with probes $29 or $2B */
-#define DT_CODE_OBJ_BREAK            0x88DF /* pose $1C, then $88E4 */
-#define DT_CODE_OBJ_SHATTER          0x88E4 /* the debris animation */
-#define DT_CODE_OBJ_DEFEAT           0x8932 /* an enemy is beaten */
-#define DT_CODE_BOSS_HIT             0xF6D7 /* a counted hit on a boss; carry set when it beat it (code) */
-#define DT_CODE_OBJ_DRAW_BLOCK       0xF4D8 /* a spawned block's tiles into the background (code) */
-#define DT_CODE_SPAWN_RECORD         0xAF2B /* spawn one land record (code) */
-#define DT_CODE_SPAWN_TEMPLATES      0xBE16 /* 4-byte object templates by record type (code) */
-#define DT_CODE_OBJ_OPEN_BLOCK       0x8A11 /* an opened block or chest picks its item */
-#define DT_CODE_OBJ_BECOME_PICKUP    0x8A32 /* become a pickup now */
-#define DT_CODE_PICKUP_TAKE          0x8B21 /* Scrooge takes a pickup */
-#define DT_CODE_PICKUP_EXTRA_DOT     0x8B38 /* item $2B: one more HP dot */
-#define DT_CODE_HUD_RESTORE_DOT      0x8B82 /* the first lost HP dot becomes full */
-#define DT_CODE_MONEY_ADD            0x8BBF /* add A to money digit Y */
-#define DT_CODE_PICKUP_TREASURE      0x8C13 /* a land treasure */
-#define DT_CODE_OBJ_SHOW_ITEM        0x8CAC /* the slot shows item A */
-#define DT_CODE_OBJ_BECOME_BLOCK     0x8CE1 /* the slot becomes a block */
-#define DT_CODE_OBJ_DESPAWN          0xF179 /* free the slot (fixed bank) */
-#define DT_CODE_OBJ_SET_SPEED        0xF312 /* speed by index (fixed bank) */
-#define DT_CODE_OBJ_TOUCH_BLOCK_H    0xF332 /* the block a slot overlaps, horizontal (fixed bank) */
-#define DT_CODE_OBJ_TOUCH_BLOCK_V    0xF3B7 /* the same, vertical (fixed bank) */
-#define DT_CODE_OBJ_DISTANCE_Y       0xF7CC /* |Scrooge's Y - the slot's| (fixed bank) */
-#define DT_CODE_OBJ_DIFFICULT_ACTION 0xF822 /* actions on Difficult (fixed bank) */
-#define DT_CODE_MONEY_MAX            0xF83F /* money capped at 9,999,990 (fixed bank) */
+#define DT_CODE_HIT_HEIGHT                0x814A /* $80C1: half-heights by the thrower's hitbox (code) */
+#define DT_CODE_HIT_WIDTH                 0x816A /* $80C1: half-widths (code) */
+#define DT_CODE_MOTION_VY                 0x81A5 /* $818A: vertical velocity by index, 8.8 */
+#define DT_CODE_MOTION_SPEED              0x81E5 /* $818A: speed by index, 8.8 */
+#define DT_CODE_SNAPPER_HOLD_Y            0x8661 /* kind 7: Scrooge's Y offset when caught, by pose */
+#define DT_CODE_SNAPPER_HOLD_POSE         0x8663 /* kind 7: Scrooge's pose when caught */
+#define DT_CODE_SNAPPER_HITBOX            0x8665 /* kind 7: hitbox by animation frame */
+#define DT_CODE_KIND_BLOCK                0x8668 /* kind 8 */
+#define DT_CODE_KIND_THROWN               0x8722 /* kind 9 */
+#define DT_CODE_THROWN_STEP_LO            0x88FC /* kind 9's code by step, low bytes (9 entries) */
+#define DT_CODE_THROWN_STEP_HI            0x8905
+#define DT_CODE_BLOCK_LAUNCH              0x890E /* launch velocity, speed by pose - $1A, 4 bytes each */
+#define DT_CODE_KIND_DEFEATED             0x897B /* kind $0B */
+#define DT_CODE_KIND_PICKUP               0x8A59 /* kind $13 */
+#define DT_CODE_ITEM_TAKE_LO              0x8BFE /* what taking items $23-$29 does, low bytes */
+#define DT_CODE_ITEM_TAKE_HI              0x8C05
+#define DT_CODE_ITEM_SOUND                0x8C0C /* their sounds */
+#define DT_CODE_KIND_HIDDEN_ITEM          0x8C45 /* kind $14 */
+#define DT_CODE_KIND_CHEST                0x8D19 /* kind $15 */
+#define DT_CODE_ITEM_BY_INDEX             0x8FB8 /* item by $06B0 */
+#define DT_CODE_CHEST_ITEM                0x8FDA /* chest: 0 = no item shown, by land * 4 + $06B0 */
+#define DT_CODE_CHEST_RISE                0x9002 /* chest: Y offset when opened */
+#define DT_CODE_ITEM_BY_LAND              0x9016 /* item of a pose-$3F block by land * 3 + $06B0 */
+#define DT_CODE_DROP_BY_KIND              0x9025 /* item a beaten enemy may drop, by kind */
+#define DT_CODE_KIND_DOOR                 0x9065 /* kind $2F */
+#define DT_CODE_FLYER_PATH                0x9215 /* kind $0D: motion index by step, 14 entries */
+#define DT_CODE_SWING_PATH                0x92ED /* kind $0E: motion index by step, bit 7 = long step, 36 entries */
+#define DT_CODE_SWING_FRAMES              0x9311 /* kind $0E: frames per step, short and long */
+#define DT_CODE_SWOOPER_PATH              0x9544 /* kind $11: motion index by step, 14 entries */
+#define DT_CODE_KIND_LIFT                 0x9093 /* kind $0F */
+#define DT_CODE_KIND_TALKER               0xFDF5 /* kind $35 (fixed bank) */
+#define DT_CODE_KIND_LAUNCHPAD_RIDE       0xF869 /* kind $36 (fixed bank) */
+#define DT_CODE_KIND_SKY_FLYER            0xF8F2 /* kind $37 (fixed bank) */
+#define DT_CODE_KIND_SKY_ROPE             0xF9F8 /* kind $38 (fixed bank) */
+#define DT_CODE_KIND_16                   0x8DD1 /* kind $16 */
+#define DT_CODE_KIND_17                   0x8E23 /* kind $17 */
+#define DT_CODE_KIND_21                   0x9EB3 /* kind $21 */
+#define DT_CODE_KIND_22                   0x9F3D /* kind $22 */
+#define DT_CODE_KIND_FINAL_STAND_IN       0xFA3F /* kind $3A (fixed bank) */
+#define DT_CODE_KIND_STAND_IN_BEATEN      0xFBC9 /* kind $3B (fixed bank) */
+#define DT_CODE_KIND_3C                   0xFB68 /* kind $3C (fixed bank) */
+#define DT_CODE_KIND_3D                   0xFBFF /* kind $3D (fixed bank) */
+#define DT_CODE_KIND_40                   0xFD9E /* kind $40 (fixed bank) */
+#define DT_CODE_KIND_42                   0x8EE6 /* kind $42 */
+#define DT_CODE_KIND_HOPPER               0x8225 /* kind 1 */
+#define DT_CODE_KIND_WALKER               0x82AF /* kind 2 */
+#define DT_CODE_KIND_THROWER              0x830E /* kind 3 */
+#define DT_CODE_KIND_SHOT                 0x8462 /* kind 4 */
+#define DT_CODE_KIND_WATCHER              0x8491 /* kind 5 */
+#define DT_CODE_KIND_DANGLER              0x84E5 /* kind 6 */
+#define DT_CODE_KIND_SNAPPER              0x8567 /* kind 7 */
+#define DT_CODE_KIND_DROPPER              0x8845 /* kind $0A */
+#define DT_CODE_KIND_CRAWLER              0x90EA /* kind $0C */
+#define DT_CODE_KIND_FLYER                0x916C /* kind $0D */
+#define DT_CODE_KIND_SWING                0x9225 /* kind $0E */
+#define DT_CODE_KIND_SWOOPER              0x9430 /* kind $11 */
+#define DT_CODE_KIND_VISITOR              0xFCA0 /* kind $3E (fixed bank) */
+#define DT_CODE_KIND_PATH_OPENER          0xFD68 /* kind $3F (fixed bank) */
+#define DT_CODE_KIND_BLOCK_KICKER         0x9C46 /* kind $1D */
+#define DT_CODE_KIND_TRANSYLVANIA_BOSS    0xA335 /* kind $26 */
+#define DT_CODE_TRANSYLVANIA_BOSS_STEP_LO 0xA585 /* kind $26's code by step, low bytes (5 entries) */
+#define DT_CODE_TRANSYLVANIA_BOSS_STEP_HI 0xA58A
+#define DT_CODE_KIND_AMAZON_BOSS          0xA5DB /* kind $2E */
+#define DT_CODE_KIND_LAUNCHER             0xADC1 /* kind $34 */
+#define DT_CODE_KIND_TARGET               0xADB9 /* kind $33 */
+#define DT_CODE_KIND_MOON_BOSS            0xAAE1 /* kind $29 */
+#define DT_CODE_KIND_HIMALAYAS_BOSS       0xA8D6 /* kind $2A */
+#define DT_CODE_KIND_MINES_BOSS           0xA6D3 /* kind $28 */
+#define DT_CODE_KIND_THIEF                0xAC3D /* kind $30 */
+#define DT_CODE_KIND_TREAT                0xA2BA /* kind $2D */
+#define DT_CODE_KIND_TREAT_SPOUT          0xA1E9 /* kind $2C */
+#define DT_CODE_KIND_ROLLER               0x9FEC /* kind $23 */
+#define DT_CODE_KIND_BOULDER              0xA024 /* kind $24 */
+#define DT_CODE_KIND_BOUNCER              0x9A81 /* kind $1B */
+#define DT_CODE_KIND_PIT_JUMPER           0x9956 /* kind $1A */
+#define DT_CODE_PIT_SPLASH_OUT            0x9A1E /* kind $1A: splash out of the pit */
+#define DT_CODE_PIT_SPLASH_IN             0x9A2A /* kind $1A: splash back into the pit */
+#define DT_CODE_KIND_PICKPOCKET           0xACBE /* kind $32 */
+#define DT_CODE_PICKPOCKET_WALK           0xAD56 /* kind $32: walk in the slot's direction */
+#define DT_CODE_PICKPOCKET_STEAL          0xAD6B /* kind $32: take 1 from the money's third digit */
+#define DT_CODE_KIND_POUNCER              0x973C /* kind $19 */
+#define DT_CODE_KIND_LEDGE_WALKER         0x9D8A /* kind $1E */
+#define DT_CODE_KIND_PACER                0x9DF7 /* kind $1F */
+#define DT_CODE_KIND_MOVING_PLATFORM      0xFE69 /* kind $39 (fixed bank) */
+#define DT_CODE_KIND_KEY_SPOT             0xFE50 /* kind $41 (fixed bank) */
+#define DT_CODE_KIND_BLOCK_DWELLER        0x9552 /* kind $12 */
+#define DT_CODE_DWELLER_LINK_BLOCK        0x9649 /* kind $12: find or make its block */
+#define DT_CODE_KIND_CEILING_HOPPER       0xA065 /* kind $25 */
+#define DT_CODE_CEILING_HOPPER_WALK       0xA1D4 /* kind $25: walk in the slot's direction */
+#define DT_CODE_KIND_DROPPING             0xAAC8 /* kind $2B */
+#define DT_CODE_KIND_RISING_SHOT          0xA5BE /* kind $27 */
+#define DT_CODE_KIND_LEAPER               0x9B10 /* kind $1C */
+#define DT_CODE_LEAPER_DUST               0x9C0A /* kind $1C: a puff of dust below the slot */
+#define DT_CODE_KIND_BOBBER               0x9E51 /* kind $20 */
+#define DT_CODE_KIND_CHARGER              0x9313 /* kind $10 */
+#define DT_CODE_KIND_PATROLLER            0x96D5 /* kind $18 */
+#define DT_CODE_OBJ_FIND_FREE_Y           0x80B3 /* highest free slot 15..1 in Y */
+#define DT_CODE_OBJ_HIT_OTHERS            0x80C1 /* the slot a thrown slot hits */
+#define DT_CODE_OBJ_SET_MOTION            0x818A /* vertical velocity and speed by index */
+#define DT_CODE_ENEMY_WALK                0x82F9 /* walk with probes $18 or $1B */
+#define DT_CODE_OBJ_LAUNCH_BLOCK          0x86B5 /* a block starts flying (kind 9) */
+#define DT_CODE_OBJ_KICK_BLOCK            0x869D /* launch a block, one a frame ($5B) */
+#define DT_CODE_OBJ_HIT_BLOCK             0x86F7 /* a counted blow on a block */
+#define DT_CODE_OBJ_RESOLVE_BLOCK         0x870D /* open, leave or shatter a block */
+#define DT_CODE_THROWN_FALL               0x88BC /* kind 9: fall with probe $2D */
+#define DT_CODE_THROWN_WALK               0x88C8 /* kind 9: walk with probes $29 or $2B */
+#define DT_CODE_OBJ_BREAK                 0x88DF /* pose $1C, then $88E4 */
+#define DT_CODE_OBJ_SHATTER               0x88E4 /* the debris animation */
+#define DT_CODE_OBJ_DEFEAT                0x8932 /* an enemy is beaten */
+#define DT_CODE_BOSS_HIT                  0xF6D7 /* a counted hit on a boss; carry set when it beat it (code) */
+#define DT_CODE_OBJ_DRAW_BLOCK            0xF4D8 /* a spawned block's tiles into the background (code) */
+#define DT_CODE_SPAWN_RECORD              0xAF2B /* spawn one land record (code) */
+#define DT_CODE_SPAWN_TEMPLATES           0xBE16 /* 4-byte object templates by record type (code) */
+#define DT_CODE_OBJ_OPEN_BLOCK            0x8A11 /* an opened block or chest picks its item */
+#define DT_CODE_OBJ_BECOME_PICKUP         0x8A32 /* become a pickup now */
+#define DT_CODE_PICKUP_TAKE               0x8B21 /* Scrooge takes a pickup */
+#define DT_CODE_PICKUP_EXTRA_DOT          0x8B38 /* item $2B: one more HP dot */
+#define DT_CODE_HUD_RESTORE_DOT           0x8B82 /* the first lost HP dot becomes full */
+#define DT_CODE_MONEY_ADD                 0x8BBF /* add A to money digit Y */
+#define DT_CODE_PICKUP_TREASURE           0x8C13 /* a land treasure */
+#define DT_CODE_OBJ_SHOW_ITEM             0x8CAC /* the slot shows item A */
+#define DT_CODE_OBJ_BECOME_BLOCK          0x8CE1 /* the slot becomes a block */
+#define DT_CODE_OBJ_DESPAWN               0xF179 /* free the slot (fixed bank) */
+#define DT_CODE_OBJ_SET_SPEED             0xF312 /* speed by index (fixed bank) */
+#define DT_CODE_OBJ_TOUCH_BLOCK_H         0xF332 /* the block a slot overlaps, horizontal (fixed bank) */
+#define DT_CODE_OBJ_TOUCH_BLOCK_V         0xF3B7 /* the same, vertical (fixed bank) */
+#define DT_CODE_OBJ_DISTANCE_Y            0xF7CC /* |Scrooge's Y - the slot's| (fixed bank) */
+#define DT_CODE_OBJ_DIFFICULT_ACTION      0xF822 /* actions on Difficult (fixed bank) */
+#define DT_CODE_MONEY_MAX                 0xF83F /* money capped at 9,999,990 (fixed bank) */
 
 /* ---- hook sites of the event system (src/game/events.c) ----
  * config/game.toml declares each with a length/crc32 content key, so another
