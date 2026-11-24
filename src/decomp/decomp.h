@@ -138,7 +138,11 @@ int Decomp_RaiseEvent(int event);
  *   Decomp_SelectBank  bank_select: maps the bank for the Decomp_Calls that
  *       follow, and in replace mode writes the mapper for real.
  *   Decomp_Store  a store to a device register, made for real in replace
- *       mode.
+ *       mode. The Decomp_BusWrite writes of the routines a task routine
+ *       calls in C are its stores too.
+ *
+ * A task routine whose C another task routine's C reaches is compared as
+ * part of that one: it has no check of its own.
  *
  * Check mode runs the original from the same site until it reaches the same
  * routine at the same stack depth (a stop hook in the isolated call), and

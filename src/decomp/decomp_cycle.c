@@ -483,7 +483,7 @@ static void check_inner(int i, Regs in, bool drill)
     const DecompRoutine *rt = dc_routine[i];
     const DecompRoutine *top = dc_top;
     bool top_entered = dc_top_entered, run_original = dc_run_original, inner = s_inner;
-    int nops = dc_nops, view = Game_RomView();
+    int nops = dc_nops, stores = dc_stores, view = Game_RomView();
     uint8_t image[GAME_RAM_SIZE], orig_ram[GAME_RAM_SIZE];
     memcpy(image, gRam, GAME_RAM_SIZE);
     dc_top = rt;
@@ -500,6 +500,7 @@ static void check_inner(int i, Regs in, bool drill)
     dc_run_original = run_original;
     s_inner = inner;
     dc_nops = nops;
+    dc_stores = stores;
     if (s_ops_in_scope > dc_nops) {
         s_ops_in_scope = dc_nops;
     }
@@ -541,7 +542,7 @@ void Decomp_Enter(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
             return;
         }
         if (dc_routine[i]->task) {
-            dc_stats[i].calls++;
+            dc_enter_task(i, routine);
         } else if (dc_mode == DECOMP_CHECK && !dc_routine[i]->site_id) {
             check_inner(i, (Regs){ a, x, y, dc_entry_p }, false);
         }
@@ -666,6 +667,7 @@ static void run_task_original(const DecompRoutine *rt, const CycModRegs *in)
     }
     cyc_mod_allow_isolated_hooks(true);
     memset(&s_run, 0, sizeof s_run);
+    s_damage_replayed = 0;
     s_run.start = rt->addr;
     s_run.start_s = in->s;
     s_run.call_s = (uint8_t)(in->s + rt->locals + 2);
@@ -787,6 +789,7 @@ static void task_check(int i, const CycModRegs *in)
         task_report(rt, in, &c);
     }
     dc_stats[i].compared++;
+    dc_nested_compared();
 }
 
 /* Replace mode: the C's results stored, its device writes made and the
@@ -847,6 +850,7 @@ static bool task_replace(int i, const CycModRegs *in)
     }
     spend_cycles(rt->addr, s_run.cycles > (uint64_t)dc_stores ? s_run.cycles - (uint64_t)dc_stores : 1);
     dc_stats[i].compared++;
+    dc_nested_compared();
     cpu.pc = pc;
     return true;
 }
@@ -894,8 +898,8 @@ static void on_return(void)
 int dc_on_entry(uint16_t addr)
 {
     if (cyc_mod_isolated()) {
-        if (s_run_active) {
-            return task_isolated_site(addr);
+        if (s_run_active && task_isolated_site(addr)) {
+            return 1;
         }
         return addr == DT_SITE_DAMAGE && s_damage_replayed < dc_damage_raised && dc_damage_cancel[s_damage_replayed++];
     }

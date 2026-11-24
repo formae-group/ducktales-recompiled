@@ -36,6 +36,8 @@ BusOp dc_ops[MAX_BUS_OPS];
 int dc_nops, dc_played, dc_loads;
 DeviceStore dc_store[MAX_STORES];
 int dc_stores;
+bool dc_task;
+int dc_nested[MAX_NESTED], dc_nnested;
 bool dc_handoff_set;
 uint16_t dc_handoff;
 uint8_t dc_handoff_uses, dc_handoff_bank;
@@ -55,9 +57,16 @@ void dc_record(uint16_t addr, uint8_t value, bool write)
     dc_ops[dc_nops++] = (BusOp){ addr, value, write };
 }
 
+static void record_store(uint16_t addr, uint8_t value);
+
+/* Task code makes its device writes when it ends, so a write of a routine it
+ * calls in C is one of its stores too. */
 void Decomp_BusWrite(uint16_t addr, uint8_t value)
 {
     dc_record(addr, value, true);
+    if (dc_task) {
+        record_store(addr, value);
+    }
     Game_MapperWrite(addr, value);
     if (Game_RomView() >= 0) {
         dc_c_bank = (uint8_t)Game_RomView();
@@ -194,6 +203,8 @@ void dc_run_c(const DecompRoutine *rt, const CycModRegs *in, Regs *out)
     dc_cur_s = in->s;
     dc_handoff_set = false;
     dc_stores = 0;
+    dc_task = rt->task;
+    dc_nnested = 0;
     dc_c_begin();
     Regs r = { in->a, in->x, in->y, in->p };
     GameRam_Enter(dc_image);
@@ -231,6 +242,24 @@ int dc_find_routine(uint16_t addr, bool resume)
 bool dc_at_entry(const DecompRoutine *rt, uint16_t addr)
 {
     return rt->addr == addr && (addr >= 0xC000 || hw_prg_bank4(addr) >> 2 == rt->bank);
+}
+
+/* A task routine reached in C from another one: counted as called, and as
+ * compared when the one that reached it is (dc_nested_compared). */
+void dc_enter_task(int i, uint16_t routine)
+{
+    dc_stats[i].calls++;
+    if (dc_nnested == MAX_NESTED) {
+        dc_fail("too many task routines reached in C in one call", routine);
+    }
+    dc_nested[dc_nnested++] = i;
+}
+
+void dc_nested_compared(void)
+{
+    for (int k = 0; k < dc_nnested; k++) {
+        dc_stats[dc_nested[k]].compared++;
+    }
 }
 
 void dc_add_table(const DecompRoutine *table, int n)

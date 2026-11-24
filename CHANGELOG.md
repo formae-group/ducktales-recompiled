@@ -76,6 +76,14 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   `$D350` under the power-up.
 - `Player_Update`'s contract drops `OUT_HW`: the probe's bank switches are undone before it
   returns, and check and replace pass on the 12 routes without it.
+- `Player_Update` is task code: it calls the C of modes 15 and 16 and of the row change instead of
+  giving those calls to the original (`Decomp_RunOriginal`), so no call of `player.c` goes to the
+  original. The seven handlers on the way to the row change are task code checked with it. In task
+  code the `Decomp_BusWrite` writes of the routines it calls are its device stores (up to 64), and a
+  task routine reached from another one's C counts as compared with it.
+- The message box calls the C of the OAM clear `$C267` and the sprite builder (bank 5 `$8000`), and
+  bank 5 `$B76A` (the consumed-record bits from the progress flags) is decompiled as
+  `Records_MarkTaken`.
 
 ### Fixed
 

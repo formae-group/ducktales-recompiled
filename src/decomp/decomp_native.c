@@ -119,7 +119,7 @@ void Decomp_Enter(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
     for (int i = 0; i < dc_count; i++) {
         if (dc_routine[i]->addr == routine && (routine >= 0xC000 || dc_routine[i]->bank == dc_c_bank)) {
             if (dc_routine[i]->task) {
-                dc_stats[i].calls++;
+                dc_enter_task(i, routine);
             }
             return;
         }
@@ -169,8 +169,9 @@ static bool task_kept(uint16_t a, uint8_t s)
     return (a & 0xFF00) != 0x0100 || a < DT_ADDR_STACK_FLOOR || (uint8_t)a > s;
 }
 
-/* Task code: the C's results stored and its device operations and stores
- * made; then the CPU goes on where the C ends. False when the original runs
+/* Task code: the C's results stored and its device stores made (the device
+ * writes of the routines it calls in C among them, as on the cycle host);
+ * then the CPU goes on where the C ends. False when the original runs
  * instead. */
 static bool task_replace(int i, const CycModRegs *in)
 {
@@ -196,11 +197,11 @@ static bool task_replace(int i, const CycModRegs *in)
     cpu.y = c.y;
     cpu.s = s;
     cpu_set_p(dc_handoff_set ? in->p : (uint8_t)((c.p & flags) | (in->p & ~flags)));
-    dc_play_ops(dc_played, (uint64_t)(dc_nops - dc_played) * OP_GAP, rt->addr);
     for (int k = 0; k < dc_stores; k++) {
         cpu_write(dc_store[k].addr, dc_store[k].value, 0);
     }
     dc_stats[i].compared++;
+    dc_nested_compared();
     cpu.pc = pc;
     return true;
 }

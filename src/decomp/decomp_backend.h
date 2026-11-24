@@ -22,7 +22,8 @@
 
 #define MAX_ROUTINES 512
 #define MAX_BUS_OPS  16384
-#define MAX_STORES   8
+#define MAX_STORES   64
+#define MAX_NESTED   32
 
 typedef struct {
     uint64_t calls, compared, original;
@@ -62,6 +63,10 @@ extern BusOp dc_ops[MAX_BUS_OPS];
 extern int dc_nops, dc_played, dc_loads;
 extern DeviceStore dc_store[MAX_STORES];
 extern int dc_stores;
+/* Whether the routine dc_run_c runs is task code, and the task routines its
+ * C reached in C (their comparison is part of its own). */
+extern bool dc_task;
+extern int dc_nested[MAX_NESTED], dc_nnested;
 extern bool dc_handoff_set;
 extern uint16_t dc_handoff;
 extern uint8_t dc_handoff_uses, dc_handoff_bank;
@@ -73,6 +78,8 @@ void dc_run_c(const DecompRoutine *rt, const CycModRegs *in, Regs *out);
 bool dc_live(uint16_t a, uint8_t entry_s);
 int dc_find_routine(uint16_t addr, bool resume);
 bool dc_at_entry(const DecompRoutine *rt, uint16_t addr);
+void dc_enter_task(int i, uint16_t routine);
+void dc_nested_compared(void);
 void dc_report_stats(void);
 
 /* The backend's: the callback of every routine site and flow stop, the
