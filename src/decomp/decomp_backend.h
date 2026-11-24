@@ -25,7 +25,8 @@
 #define MAX_STORES   64
 #define MAX_NESTED   32
 #define MAX_READS    16
-#define MAX_TIME     8
+#define MAX_PATH     65536
+#define MAX_MARKS    16384
 
 typedef struct {
     uint64_t calls, compared, original;
@@ -84,16 +85,43 @@ extern bool dc_handoff_set;
 extern uint16_t dc_handoff;
 extern uint8_t dc_handoff_uses, dc_handoff_bank;
 
-/* The time the C stated (Decomp_Cycles, Decomp_Fetch): spans of cycles, each
- * starting with the fetch of the instruction at fetch (0: no fetch). */
+/* The original's path for the C of a timed routine (decomp_timing.c): each
+ * instruction with the cycle its fetch starts at and the mark it follows (an
+ * index into dc_marks), the cycles in all, and the cycle of each bus
+ * operation. */
 typedef struct {
-    uint16_t fetch;
-    uint16_t cycles;
-} TimeSpan;
+    uint16_t pc;
+    uint16_t mark;
+    uint32_t at;
+} TimeStep;
 
-extern TimeSpan dc_time[MAX_TIME];
-extern int dc_ntime;
+typedef struct {
+    const char *what;
+    const char *file; /* NULL for a mark the layer makes (an entry, a bus operation) */
+    int line;
+    uint16_t pc;
+} TimeMark;
+
+extern TimeStep dc_path[MAX_PATH];
+extern int dc_npath;
 extern uint64_t dc_cycles;
+extern uint32_t dc_op_at[MAX_BUS_OPS];
+extern TimeMark dc_marks[MAX_MARKS];
+extern int dc_nmarks;
+
+void dc_timing_begin(const DecompRoutine *rt);
+void dc_timing_end(const DecompRoutine *rt);
+bool dc_timing_on(void);
+/* A copy of a routine's C run inside another's (check mode's inner check)
+ * walks nothing. */
+void dc_timing_pause(bool pause);
+/* The C reached routine (Decomp_Enter of a routine it calls, Decomp_Call). */
+void dc_timing_enter(uint16_t routine, const char *what);
+/* The bank Decomp_SelectBank maps, at the mapper write the path reaches next. */
+void dc_timing_bank(uint8_t bank);
+/* Bus operation index, placed at the access the path reaches next. */
+void dc_timing_op(int index);
+const char *dc_mark_text(int mark, char *buf, size_t size);
 
 void dc_fail(const char *what, uint16_t routine);
 void dc_record(uint16_t addr, uint8_t value, bool write);

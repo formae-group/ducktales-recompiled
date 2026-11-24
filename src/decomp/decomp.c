@@ -46,9 +46,6 @@ int dc_nreads;
 bool dc_handoff_set;
 uint16_t dc_handoff;
 uint8_t dc_handoff_uses, dc_handoff_bank;
-TimeSpan dc_time[MAX_TIME];
-int dc_ntime;
-uint64_t dc_cycles;
 
 static char s_error[256];
 
@@ -82,17 +79,20 @@ void Decomp_BusWrite(uint16_t addr, uint8_t value)
     if (Game_RomView() >= 0) {
         dc_c_bank = (uint8_t)Game_RomView();
     }
+    dc_timing_op(dc_nops - 1);
 }
 
 void Decomp_BusRead(uint16_t addr)
 {
     dc_record(addr, 0, false);
+    dc_timing_op(dc_nops - 1);
 }
 
 void Decomp_BusWait(uint16_t addr, uint8_t mask, uint8_t want)
 {
     dc_record(addr, want, false);
     dc_ops[dc_nops - 1].wait = mask;
+    dc_timing_op(dc_nops - 1);
 }
 
 static void bus_wait(const BusOp *op)
@@ -190,25 +190,6 @@ void Decomp_Handoff(uint16_t routine, uint16_t resume, uint8_t uses)
     dc_handoff_set = true;
 }
 
-void Decomp_Cycles(unsigned cycles)
-{
-    if (dc_ntime) {
-        dc_time[dc_ntime - 1].cycles = (uint16_t)(dc_time[dc_ntime - 1].cycles + cycles);
-    } else {
-        dc_time[dc_ntime++] = (TimeSpan){ 0, (uint16_t)cycles };
-    }
-    dc_cycles += cycles;
-}
-
-void Decomp_Fetch(uint16_t addr)
-{
-    if (dc_ntime == MAX_TIME) {
-        dc_fail("too many fetches in one call", dc_top->addr);
-    }
-    dc_time[dc_ntime++] = (TimeSpan){ addr, 1 };
-    dc_cycles++;
-}
-
 static void record_store(uint16_t addr, uint8_t value)
 {
     if (dc_stores == MAX_STORES) {
@@ -222,6 +203,7 @@ static void record_store(uint16_t addr, uint8_t value)
 void Decomp_SelectBank(uint8_t bank)
 {
     Decomp_Call(DT_CODE_BANK_SELECT, bank, 0, 0);
+    dc_timing_bank(bank);
     dc_c_bank = bank;
     record_store((uint16_t)(DT_CODE_BANK_TABLE + bank), bank);
 }
@@ -279,20 +261,17 @@ void dc_run_c(const DecompRoutine *rt, const CycModRegs *in, Regs *out)
     dc_task = rt->task;
     dc_nnested = 0;
     dc_nreads = 0;
-    dc_ntime = 0;
-    dc_cycles = 0;
     dc_c_begin();
+    dc_timing_begin(rt);
     Regs r = { in->a, in->x, in->y, in->p };
     GameRam_Enter(dc_image);
     rt->run(&r);
+    dc_timing_end(rt);
     GameRam_Leave();
     Game_ResetRomView();
     dc_c_end();
     if (!dc_top_entered) {
         dc_fail("a decompiled routine does not start with Decomp_Enter", rt->addr);
-    }
-    if (!dc_run_original && rt->timed != (dc_ntime > 0)) {
-        dc_fail("a routine's C states cycles if and only if the routine is timed", rt->addr);
     }
     *out = r;
 }

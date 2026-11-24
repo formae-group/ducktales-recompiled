@@ -66,7 +66,7 @@ typedef struct DecompRoutine {
     bool resume;    /* task code: started where an RTS returns to its address, with no site */
     uint8_t bank;   /* entries below $C000: the bank mapped at $8000 */
     bool interrupt; /* task code of the NMI handler: its C ends in RTI, not RTS */
-    bool timed;     /* task code: its C states the original's cycles (Decomp_Cycles) */
+    bool timed;     /* its C marks the original's decisions (DC_BR, DC_JUMP, DC_EA): checked against its cycles */
     bool polls;     /* task code that polls a device (Decomp_BusWait): measured and replayed with the clock */
 } DecompRoutine;
 
@@ -194,16 +194,28 @@ void Decomp_KeepStackRam(void);
 void Decomp_SelectBank(uint8_t bank);
 void Decomp_Store(uint16_t addr, uint8_t value);
 
-/* The original's time, for task code whose cycle count the runtimes keep (the
- * scheduler): Decomp_Cycles(n) is n of the original's CPU cycles, and
- * Decomp_Fetch(addr) the cycle in which it fetches the instruction at addr,
- * which the native runtime's lag accounting and step dump observe. A routine
- * that states its time reads nothing but RAM and its registers. Check mode
- * compares the sum with the original's cycles; the native runtime spends
- * them, and gives the call to the original when VBlank would come during
- * them, as the cycle host does. */
-void Decomp_Cycles(unsigned cycles);
-void Decomp_Fetch(uint16_t addr);
+/* Timing (docs/decompilation.md "Timing"): the C of a timed routine
+ * (DecompRoutine.timed) marks each decision of the original that the ROM
+ * alone does not tell, and the layer walks the original's instructions between
+ * the marks (decomp_timing.c), so it knows the original's path, its cycles and
+ * the cycle of each bus operation. Each mark names the address of an original
+ * instruction, as a hex literal:
+ *   DC_BR(pc, cond)      the conditional branch at pc is taken when cond is
+ *                        true; returns cond, to use as the if or loop condition
+ *   DC_JUMP(pc, target)  the indirect jump at pc (or an RTS or RTI used as
+ *                        one) goes to target
+ *   DC_EA(pc, addr)      the indexed read at pc (abs,X, abs,Y or (zp),Y) reads
+ *                        addr, so a page crossing costs its cycle; for (zp),Y
+ *                        the pointer is read from RAM as the C has it then
+ * Outside a timed routine's call they only return cond. Check mode fails at
+ * the first cycle where the walked path differs from the original's, naming
+ * the mark (TIMING). */
+bool Decomp_Branch(uint16_t pc, bool taken, const char *file, int line);
+void Decomp_Jump(uint16_t pc, uint16_t target, const char *file, int line);
+void Decomp_Address(uint16_t pc, uint16_t addr, const char *file, int line);
+#define DC_BR(pc, cond)     Decomp_Branch((pc), (cond) != 0, __FILE__, __LINE__)
+#define DC_JUMP(pc, target) Decomp_Jump((pc), (target), __FILE__, __LINE__)
+#define DC_EA(pc, addr)     Decomp_Address((pc), (addr), __FILE__, __LINE__)
 
 /* N and Z of a value, the flags of a load. */
 static inline uint8_t Flags_NZ(uint8_t p, uint8_t v)

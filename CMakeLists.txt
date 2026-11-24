@@ -106,6 +106,7 @@ file(WRITE "${CMAKE_BINARY_DIR}/lua-LICENSE.txt" "${_lua_notice}")
 # each host adds its backend: decomp_cycle.c or decomp_native.c.
 set(_ducktales_decomp
     "${CMAKE_SOURCE_DIR}/src/decomp/decomp.c"
+    "${CMAKE_SOURCE_DIR}/src/decomp/decomp_timing.c"
     "${CMAKE_SOURCE_DIR}/src/decomp/motion.c"
     "${CMAKE_SOURCE_DIR}/src/decomp/sound.c"
     "${CMAKE_SOURCE_DIR}/src/decomp/player.c"

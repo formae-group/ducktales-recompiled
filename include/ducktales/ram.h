@@ -55,6 +55,8 @@ bool GameRam_Open(void);
  * $8000 (no side effects; I/O reads 0). For data tables the game reads at
  * run time, such as the map grid at ($20). */
 uint8_t Game_ReadRom(uint16_t addr);
+/* A byte of PRG: bank's at $8000-$BFFF, the fixed bank's at $C000-$FFFF. */
+uint8_t Game_ReadPrg(uint8_t bank, uint16_t addr);
 /* A write to the mapper as decompiled code makes it (Decomp_BusWrite): from
  * then on Game_ReadRom reads $8000-$BFFF from the bank it selects, until
  * Game_ResetRomView. */

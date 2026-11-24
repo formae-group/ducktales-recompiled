@@ -62,23 +62,6 @@
 #define STACK_TOP         0xFF
 #define TASK_REGS         (OUT_A | OUT_X | OUT_Y | OUT_P)
 
-/* The scheduler's cycles (Decomp_Cycles), path by path. */
-#define SCHEDULE_CYCLES    4  /* LDX #$FF, TXS */
-#define PASS_SETUP         6  /* after the fetch at $FF38: LDX #0, STX $90, LDY #4 */
-#define SLOT_IDLE          21 /* LDA $80,X, CMP #4, BCS, four INX, DEY, BNE taken */
-#define LAST_SLOT_IDLE     20 /* the same, its BNE not taken */
-#define PASS_AGAIN         3  /* JMP $FF38 */
-#define SLOT_READY         9  /* LDA $80,X, CMP #4, BCS taken */
-#define NMI_CAME           6  /* LDA $90, BNE taken */
-#define NMI_NOT_CAME       5  /* LDA $90, BNE */
-#define SLOT_TAKEN         21 /* DEY, TYA, EOR #3, STA $91, LDY $80,X, LDA #2, STA $80,X, CPY #8 */
-#define START_LOAD         16 /* BNE, the entry into $93/$94 */
-#define START_JUMP         4  /* JMP ($93) after its fetch */
-#define RESUME_LOAD        14 /* BNE taken, LDA $82,X, TAX, TXS, LDA $91 */
-#define RESUME_CONTROLLERS 8  /* BNE, JSR $C1AB */
-#define RESUME_PULL        12 /* PLA, TAY, PLA, TAX */
-#define RESUME_RETURN      5  /* RTS after its fetch */
-
 #define TASK_BYTE(x, field) RAM_U8((uint8_t)(DT_ADDR_TASKS + (field) + (x)))
 
 static uint16_t rom_pointer(uint16_t lo_table, uint16_t hi_table, uint8_t index)
@@ -188,9 +171,11 @@ static void Ppu_FillNametable(uint8_t nt, uint8_t tile, uint8_t attribute)
 void Oam_Clear(void)
 {
     Decomp_Enter(DT_CODE_OAM_CLEAR, 0, 0, 0);
-    for (unsigned entry = gSplitEnabled ? OAM_SPLIT_ENTRY : 0; entry < 0x100; entry += 4) {
+    uint8_t entry = DC_BR(0xC269, !gSplitEnabled) ? 0 : OAM_SPLIT_ENTRY;
+    do {
         RAM_U8(DT_ADDR_OAM + entry) = OAM_PARKED_Y;
-    }
+        entry = (uint8_t)(entry + 4);
+    } while (DC_BR(0xC276, entry));
 }
 
 /* ---- the fades: task code (docs/decompilation.md "Task code") ---- */
@@ -355,7 +340,6 @@ static void Task_Schedule(Regs *r)
     r->x = STACK_TOP;
     r->p = Flags_NZ(r->p, r->x);
     Decomp_SetStack(r->x);
-    Decomp_Cycles(SCHEDULE_CYCLES);
     Decomp_Handoff(DT_CODE_SCHEDULER_PASS, 0, TASK_REGS);
 }
 
@@ -368,62 +352,53 @@ static void Task_Schedule(Regs *r)
 static void Task_Pass(Regs *r)
 {
     Decomp_Enter(DT_CODE_SCHEDULER_PASS, r->a, r->x, r->y);
-    Decomp_Fetch(DT_CODE_SCHEDULER_PASS);
-    Decomp_Cycles(PASS_SETUP);
     r->x = 0;
     gSchedulerPass = r->x;
     r->y = TASK_SLOTS;
     for (;;) {
         r->a = TASK_BYTE(r->x, TASK_STATE);
         r->p = Flags_Cmp(r->p, r->a, DT_TASK_READY);
-        if (r->a >= DT_TASK_READY) {
+        if (DC_BR(0xFF42, r->a >= DT_TASK_READY)) {
             break;
         }
         r->x = (uint8_t)(r->x + TASK_SLOT_BYTES);
         r->y--;
         r->p = Flags_NZ(r->p, r->y);
-        if (!r->y) {
-            Decomp_Cycles(LAST_SLOT_IDLE + PASS_AGAIN);
+        if (!DC_BR(0xFF49, r->y)) {
             Decomp_Handoff(DT_CODE_SCHEDULER_PASS, 0, TASK_REGS);
             return;
         }
-        Decomp_Cycles(SLOT_IDLE);
     }
-    Decomp_Cycles(SLOT_READY);
     r->a = gSchedulerPass;
     r->p = Flags_NZ(r->p, r->a);
-    if (r->a) {
-        Decomp_Cycles(NMI_CAME);
+    if (DC_BR(0xFF50, r->a)) {
         Decomp_Handoff(DT_CODE_SCHEDULER_PASS, 0, TASK_REGS);
         return;
     }
-    Decomp_Cycles(NMI_NOT_CAME + SLOT_TAKEN);
     r->y--;
     r->a = (uint8_t)(r->y ^ (TASK_SLOTS - 1));
     gTaskCurrent = r->a;
     r->y = TASK_BYTE(r->x, TASK_STATE);
     TASK_BYTE(r->x, TASK_STATE) = DT_TASK_RUNNING;
     r->p = Flags_Cmp(r->p, r->y, DT_TASK_NEW);
-    if (r->y == DT_TASK_NEW) {
+    if (!DC_BR(0xFF60, r->y != DT_TASK_NEW)) {
         gTaskEntry[0] = TASK_BYTE(r->x, TASK_STACK);
         r->a = TASK_BYTE(r->x, TASK_ENTRY_HI);
         gTaskEntry[1] = r->a;
         r->p = Flags_NZ(r->p, r->a);
-        Decomp_Cycles(START_LOAD);
-        Decomp_Fetch(DT_CODE_SCHEDULER_JUMP);
-        Decomp_Cycles(START_JUMP);
-        Decomp_Handoff((uint16_t)(gTaskEntry[1] << 8 | gTaskEntry[0]), 0, TASK_REGS);
+        uint16_t entry = (uint16_t)(gTaskEntry[1] << 8 | gTaskEntry[0]);
+        DC_JUMP(0xFF6A, entry);
+        Decomp_Handoff(entry, 0, TASK_REGS);
         return;
     }
     r->x = TASK_BYTE(r->x, TASK_STACK);
     Decomp_SetStack(r->x);
     r->a = gTaskCurrent;
     r->p = Flags_NZ(r->p, r->a);
-    if (r->a) {
+    if (DC_BR(0xFF73, r->a)) {
         Decomp_RunOriginal();
         return;
     }
-    Decomp_Cycles(RESUME_LOAD + RESUME_CONTROLLERS);
     Decomp_Handoff(DT_CODE_READ_CONTROLLERS, DT_SCHEDULER_PULL, TASK_REGS);
 }
 
@@ -436,9 +411,6 @@ static void Task_Resume(Regs *r)
     r->a = Decomp_Pull();
     r->x = r->a;
     r->p = Flags_NZ(r->p, r->x);
-    Decomp_Cycles(RESUME_PULL);
-    Decomp_Fetch(DT_CODE_SCHEDULER_RTS);
-    Decomp_Cycles(RESUME_RETURN);
 }
 
 /* $C2E6: one step of the 32-bit shift register $C0-$C3 (feedback from bit 1
@@ -647,7 +619,7 @@ const DecompRoutine gSystemRoutines[] = {
     { DT_CODE_SCREEN_OFF, "ducktales.decomp.C197", "Ppu_Blank", Run_PpuBlank, OUT_HW },
     { DT_CODE_SCREEN_ON, "ducktales.decomp.C1A1", "Ppu_Unblank", Run_PpuUnblank, OUT_HW },
     { DT_CODE_NT_FILL, "ducktales.decomp.C203", "Ppu_FillNametable", Run_FillNametable, OUT_HW },
-    { DT_CODE_OAM_CLEAR, "ducktales.decomp.C267", "Oam_Clear", Run_OamClear, 0 },
+    { DT_CODE_OAM_CLEAR, "ducktales.decomp.C267", "Oam_Clear", Run_OamClear, 0, .timed = true },
     { DT_CODE_RANDOM, "ducktales.decomp.C2E6", "Random_Next", Run_RandomNext, OUT_X | OUT_Y },
     { DT_CODE_FADE_IN, "ducktales.decomp.C279", "Palette_FadeIn", Palette_FadeIn, FADE_RETURNS, true, 0, false },
     { DT_CODE_FADE_IN_KEEP, "ducktales.decomp.C27C", "Palette_FadeInKeep", Palette_FadeInKeep, FADE_RETURNS, true, 0,

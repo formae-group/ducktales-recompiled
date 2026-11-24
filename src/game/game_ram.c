@@ -114,6 +114,16 @@ uint8_t Game_ReadRom(uint16_t addr)
     return cyc_mod_peek(addr);
 }
 
+uint8_t Game_ReadPrg(uint8_t bank, uint16_t addr)
+{
+    if (addr < 0x8000 || !load_prg()) {
+        return 0;
+    }
+    size_t banks = s_prg_size / 0x4000;
+    size_t b = addr >= 0xC000 ? banks - 1 : bank % banks;
+    return s_prg[b * 0x4000 + (addr & 0x3FFF)];
+}
+
 void Game_MapperWrite(uint16_t addr, uint8_t value)
 {
     if (addr < 0x8000 || !load_prg()) {

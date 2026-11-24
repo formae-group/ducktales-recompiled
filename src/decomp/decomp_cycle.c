@@ -280,6 +280,7 @@ Regs Decomp_Call(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
 
 Regs Decomp_CallP(uint16_t routine, uint8_t a, uint8_t x, uint8_t y, uint8_t p)
 {
+    dc_timing_enter(routine, "Decomp_Call");
     CycModRegs r = { a, x, y, dc_cur_s, p, 0 };
     if (!call_in_scope(routine, &r)) {
         dc_fail("an original routine called from C did not return", routine);
@@ -307,6 +308,7 @@ uint8_t Decomp_BusLoad(uint16_t addr)
         dc_play_ops(s_ops_in_scope, (uint64_t)(dc_nops - s_ops_in_scope + 1) * SCOPE_OP_GAP, addr);
         value = cpu_read(addr, 0);
         dc_record(addr, value, false);
+        dc_timing_op(dc_nops - 1);
         s_ops_in_scope = dc_nops;
         return value;
     }
@@ -314,6 +316,7 @@ uint8_t Decomp_BusLoad(uint16_t addr)
     s_early += dc_play_ops(dc_played, gap, dc_top->addr);
     value = cpu_read(addr, 0);
     dc_record(addr, value, false);
+    dc_timing_op(dc_nops - 1);
     dc_played = dc_nops;
     return value;
 }
@@ -328,6 +331,9 @@ static uint8_t isolated_read(uint16_t pc, uint16_t addr, uint8_t value)
     }
     return value;
 }
+
+static bool s_fresh;
+static void timing_check(const DecompRoutine *rt, const CycModRegs *in);
 
 /* The original routine alone on the machine's state: its RAM into s_orig,
  * its registers into *out; returns its cycle count, 0 when it did not
@@ -506,6 +512,9 @@ static void check(int i, const CycModRegs *in)
     if (rt->out & OUT_HW) {
         check_hw(rt, in, cycles);
     }
+    if (rt->timed) {
+        timing_check(rt, in);
+    }
     dc_stats[i].compared++;
 }
 
@@ -529,7 +538,9 @@ static void check_inner(int i, Regs in, bool drill)
     s_inner = !drill;
     Regs c = in;
     GameRam_Enter(image);
+    dc_timing_pause(true);
     rt->run(&c);
+    dc_timing_pause(false);
     GameRam_Leave();
     bool entered = dc_top_entered, original = dc_run_original;
     dc_top = top;
@@ -571,6 +582,7 @@ void Decomp_Enter(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
         dc_top_entered = true;
         return;
     }
+    dc_timing_enter(routine, "Decomp_Enter");
     for (int i = 0; i < dc_count; i++) {
         if (dc_routine[i]->addr != routine || (routine < 0xC000 && dc_routine[i]->bank != dc_c_bank)) {
             continue;
@@ -723,14 +735,15 @@ static void run_task_original(const DecompRoutine *rt, const CycModRegs *in)
 {
     const uint8_t *ram = cyc_cpu_ram();
     unsigned bank = hw_prg_bank4(0x8000);
-    if (dc_ntime && s_timed.rt == rt && s_timed.in.a == in->a && s_timed.in.x == in->x && s_timed.in.y == in->y &&
+    s_fresh = false;
+    if (rt->timed && s_timed.rt == rt && s_timed.in.a == in->a && s_timed.in.x == in->x && s_timed.in.y == in->y &&
         s_timed.in.s == in->s && s_timed.in.p == in->p && s_timed.bank == bank &&
         !memcmp(s_timed.ram, ram, GAME_RAM_SIZE)) {
         s_run = s_timed.run;
         memcpy(s_orig, s_timed.orig, GAME_RAM_SIZE);
         return;
     }
-    if (dc_ntime) {
+    if (rt->timed) {
         s_timed.rt = rt;
         s_timed.in = *in;
         s_timed.bank = bank;
@@ -760,6 +773,7 @@ static void run_task_original(const DecompRoutine *rt, const CycModRegs *in)
     cyc_mod_stats(&before);
     CycModRegs r = *in;
     r.s = s_run.call_s;
+    s_fresh = true;
     s_run.returned = cyc_mod_call(DT_CODE_RTS, &r) && !s_run.fixup;
     cyc_mod_stats(&after);
     s_run_active = false;
@@ -770,7 +784,7 @@ static void run_task_original(const DecompRoutine *rt, const CycModRegs *in)
     }
     memcpy(s_orig, cyc_cpu_ram(), GAME_RAM_SIZE);
     cyc_mod_isolate_end();
-    if (dc_ntime) {
+    if (rt->timed) {
         s_timed.run = s_run;
         memcpy(s_timed.orig, s_orig, GAME_RAM_SIZE);
     }
@@ -796,8 +810,7 @@ static bool task_live(uint16_t a)
 
 static bool task_same(const DecompRoutine *rt, const Regs *c)
 {
-    if (!s_run.returned || dc_handoff_set != s_run.stopped || s_run.io != (uint64_t)dc_stores ||
-        (dc_ntime && dc_cycles != s_run.cycles)) {
+    if (!s_run.returned || dc_handoff_set != s_run.stopped || s_run.io != (uint64_t)dc_stores) {
         return false;
     }
     for (uint16_t a = 0; a < GAME_RAM_SIZE; a++) {
@@ -843,7 +856,7 @@ static void task_report(const DecompRoutine *rt, const CycModRegs *in, const Reg
                                  : "did not return");
     }
     fprintf(stderr, "[decomp]   device writes original %llu decompiled %d\n", (unsigned long long)s_run.io, dc_stores);
-    if (dc_ntime) {
+    if (rt->timed) {
         fprintf(stderr, "[decomp]   cycles original %llu decompiled %llu\n", (unsigned long long)s_run.cycles,
                 (unsigned long long)dc_cycles);
     }
@@ -900,6 +913,11 @@ static void task_check(int i, const CycModRegs *in)
     if (!task_same(rt, &c)) {
         task_report(rt, in, &c);
     }
+    if (rt->timed && s_fresh) {
+        timing_check(rt, in);
+    } else if (rt->timed && dc_cycles != s_run.cycles) {
+        dc_fail("TIMING: the C's path takes other cycles than the original's last run with this entry", rt->addr);
+    }
     dc_stats[i].compared++;
     dc_nested_compared();
 }
@@ -924,7 +942,7 @@ static bool task_replace(int i, const CycModRegs *in)
     if (!s_run.returned || dc_handoff_set != s_run.stopped) {
         dc_fail("the original task routine did not end where the C does in an isolated call", rt->addr);
     }
-    if (dc_ntime && dc_cycles != s_run.cycles) {
+    if (rt->timed && !dc_nops && dc_cycles != s_run.cycles) {
         dc_fail("the cycles the C states are not the original's", rt->addr);
     }
     bool rti = rt->interrupt && !dc_handoff_set;
@@ -1323,6 +1341,7 @@ static struct {
     unsigned n;
     bool fetch;
     uint16_t routine;
+    bool leave_start; /* a stop at the start counts only after the first instruction */
 
     struct {
         uint32_t offset;
@@ -1425,7 +1444,7 @@ static ClockEnd clock_measure(uint16_t routine, uint16_t stop_pc, uint8_t stop_s
             end = CLOCK_INTERRUPTED;
             break;
         }
-        if (cpu.pc == stop_pc) {
+        if (cpu.pc == stop_pc && (s_timing.n || !s_timing.leave_start)) {
             end = cpu.s == stop_s ? CLOCK_REACHED : CLOCK_MISSED;
             break;
         }
@@ -1461,6 +1480,167 @@ static ClockEnd clock_measure(uint16_t routine, uint16_t stop_pc, uint8_t stop_s
     cyc_cpu_rts_observer = return_hook;
     cyc_ring_muted = muted;
     return end;
+}
+
+/* ---- the original's time for timed routines (decomp_timing.c) ---- */
+
+/* Calls of timed routines whose original met an interrupt or the frame end
+ * before it got where the C ends, so their path was not compared. */
+static uint64_t s_timing_unmeasured;
+
+static void timing_summary(void)
+{
+    if (s_timing_unmeasured) {
+        printf("decomp: timing not compared on %llu calls interrupted before they ended\n",
+               (unsigned long long)s_timing_unmeasured);
+    }
+}
+
+static void show_path(const char *who, bool original, int from, int to)
+{
+    fprintf(stderr, "[decomp]   %s", who);
+    for (int k = from; k < to; k++) {
+        if (original) {
+            fprintf(stderr, " $%04X@%d", s_timing.cycles[k].addr, k);
+        } else {
+            fprintf(stderr, " $%04X@%u", dc_path[k].pc, dc_path[k].at);
+        }
+    }
+    fprintf(stderr, "\n");
+}
+
+/* The first difference between the C's walked path and the original's run:
+ * instruction i of the C's path against the fetch at cycle k of the
+ * original's (n cycles in all), or what. */
+static void timing_report(const DecompRoutine *rt, const CycModRegs *in, int i, int k, int n, const char *what)
+{
+    char mark[256];
+    fprintf(stderr, "[decomp] TIMING %s ($%04X) at frame %llu, entry A=%02X X=%02X Y=%02X S=%02X P=%02X\n", rt->name,
+            rt->addr, (unsigned long long)cyc_ring_frame, in->a, in->x, in->y, in->s, in->p);
+    if (what) {
+        fprintf(stderr, "[decomp]   %s\n", what);
+    } else if (k < n && i < dc_npath) {
+        fprintf(stderr,
+                "[decomp]   instruction %d: the original fetches $%04X at cycle %d, the C's path $%04X at cycle %u\n",
+                i, s_timing.cycles[k].addr, k, dc_path[i].pc, dc_path[i].at);
+    } else if (k < n) {
+        fprintf(stderr,
+                "[decomp]   instruction %d: the original goes on to $%04X at cycle %d, where the C's path ends\n", i,
+                s_timing.cycles[k].addr, k);
+    } else if (i < dc_npath) {
+        fprintf(stderr, "[decomp]   instruction %d: the original ends at cycle %d, the C's path goes on to $%04X\n", i,
+                n, dc_path[i].pc);
+    } else {
+        fprintf(stderr, "[decomp]   the original takes %d cycles, the C's path %llu\n", n,
+                (unsigned long long)dc_cycles);
+    }
+    int at = i < dc_npath ? i : dc_npath - 1;
+    if (!what && i > 0 && i <= dc_npath && k > 0 && (i == dc_npath || dc_path[i].pc == s_timing.cycles[k].addr)) {
+        fprintf(stderr,
+                "[decomp]   the instruction at $%04X takes other cycles: a page crossing needs DC_EA, a branch DC_BR\n",
+                dc_path[i - 1].pc);
+    }
+    fprintf(stderr, "[decomp]   the C's path there follows %s\n",
+            dc_mark_text(at >= 0 ? (int16_t)dc_path[at].mark : -1, mark, sizeof mark));
+    if (!what) {
+        int fetches[8], nf = 0;
+        for (int c = k; c >= 0 && nf < 5; c--) {
+            if (c < n && s_timing.cycles[c].fetch) {
+                fetches[nf++] = c;
+            }
+        }
+        fprintf(stderr, "[decomp]   original:");
+        for (int f = nf - 1; f >= 0; f--) {
+            fprintf(stderr, " $%04X@%d", s_timing.cycles[fetches[f]].addr, fetches[f]);
+        }
+        fprintf(stderr, "\n");
+        show_path("the C's: ", false, i > 4 ? i - 4 : 0, i + 1 < dc_npath ? i + 1 : dc_npath);
+    }
+    fflush(stderr);
+    exit(3);
+}
+
+/* The instruction of the C's path that cycle falls in. */
+static int step_at(uint32_t cycle)
+{
+    int i = 0;
+    while (i + 1 < dc_npath && dc_path[i + 1].at <= cycle) {
+        i++;
+    }
+    return i;
+}
+
+/* Check mode: the C's walked path against the original run on the machine
+ * from the same state (clock_measure, restored afterwards) until it gets
+ * where the C ends: each instruction's address and fetch cycle, the total,
+ * then each device access (address, direction, value and cycle). Cycles
+ * count without DMA, which the bus adds where the original's would come. */
+static void timing_check(const DecompRoutine *rt, const CycModRegs *in)
+{
+    uint16_t stop_pc;
+    uint8_t stop_s;
+    if (dc_handoff_set) {
+        stop_pc = dc_handoff;
+        stop_s = dc_cur_s;
+    } else if (rt->interrupt) {
+        s_timing_unmeasured++;
+        return;
+    } else {
+        stop_s = (uint8_t)(in->s + rt->locals + 2);
+        const uint8_t *ram = cyc_cpu_ram();
+        stop_pc = (uint16_t)((ram[0x100 | (uint8_t)(stop_s - 1)] | ram[0x100 | stop_s] << 8) + 1);
+    }
+    uint64_t duration;
+    s_timing.leave_start = true;
+    ClockEnd end = clock_measure(rt->addr, stop_pc, stop_s, 0, &duration, NULL, NULL);
+    s_timing.leave_start = false;
+    if (end != CLOCK_REACHED) {
+        s_timing_unmeasured++;
+        return;
+    }
+    int n = (int)s_timing.n, i = 0, k = 0;
+    for (; k < n; k++) {
+        if (!s_timing.cycles[k].fetch) {
+            continue;
+        }
+        if (i == dc_npath || dc_path[i].pc != s_timing.cycles[k].addr || dc_path[i].at != (uint32_t)k) {
+            timing_report(rt, in, i, k, n, NULL);
+        }
+        i++;
+    }
+    if (i != dc_npath || dc_cycles != (uint64_t)n) {
+        timing_report(rt, in, i, k, n, NULL);
+    }
+    int j = 0;
+    for (k = 0; k < n; k++) {
+        uint16_t addr = s_timing.cycles[k].addr;
+        bool write = s_timing.cycles[k].kind == 'W';
+        uint8_t value = s_timing.cycles[k].value;
+        if (addr < 0x2000 || (addr >= 0x4020 && !(write && addr >= 0x8000))) {
+            continue;
+        }
+        if (j == dc_nops || dc_ops[j].addr != addr || dc_ops[j].write != write || (write && dc_ops[j].value != value) ||
+            dc_op_at[j] != (uint32_t)k) {
+            char msg[200];
+            if (j == dc_nops) {
+                snprintf(msg, sizeof msg, "bus operation %d: the original %s $%04X at cycle %d, the C makes no more", j,
+                         write ? "writes" : "reads", addr, k);
+            } else {
+                snprintf(msg, sizeof msg,
+                         "bus operation %d: the original %s $%04X=%02X at cycle %d, the C %s $%04X=%02X at %u", j,
+                         write ? "writes" : "reads", addr, value, k, dc_ops[j].write ? "writes" : "reads",
+                         dc_ops[j].addr, dc_ops[j].value, dc_op_at[j]);
+            }
+            timing_report(rt, in, step_at(j < dc_nops ? dc_op_at[j] : (uint32_t)k), 0, n, msg);
+        }
+        j++;
+    }
+    if (j != dc_nops) {
+        char msg[160];
+        snprintf(msg, sizeof msg, "bus operation %d: the C %s $%04X at cycle %u, the original makes no more", j,
+                 dc_ops[j].write ? "writes" : "reads", dc_ops[j].addr, dc_op_at[j]);
+        timing_report(rt, in, step_at(dc_op_at[j]), 0, n, msg);
+    }
 }
 
 /* Report the first bus operation that could not be placed at its original
@@ -1777,6 +1957,7 @@ bool Decomp_SetMode(DecompMode mode)
     if (!registered && mode != DECOMP_OFF) {
         registered = true;
         atexit(dc_report_stats);
+        atexit(timing_summary);
     }
     dc_mode = mode;
     const char *only = getenv("DT_DECOMP_ONLY");

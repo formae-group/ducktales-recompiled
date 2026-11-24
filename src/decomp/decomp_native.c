@@ -67,6 +67,7 @@ Regs Decomp_Call(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
  * and the bus operations it made so far. */
 Regs Decomp_CallP(uint16_t routine, uint8_t a, uint8_t x, uint8_t y, uint8_t p)
 {
+    dc_timing_enter(routine, "Decomp_Call");
     if (!s_scope) {
         if (!native_isolate_begin()) {
             dc_fail("cannot open an isolated call", routine);
@@ -101,6 +102,7 @@ uint8_t Decomp_BusLoad(uint16_t addr)
     dc_play_ops(dc_played, (uint64_t)(dc_nops - dc_played + 1) * OP_GAP, dc_top->addr);
     uint8_t value = cpu_read(addr, 0);
     dc_record(addr, value, false);
+    dc_timing_op(dc_nops - 1);
     dc_played = dc_nops;
     return value;
 }
@@ -114,6 +116,7 @@ void Decomp_Enter(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
         dc_top_entered = true;
         return;
     }
+    dc_timing_enter(routine, "Decomp_Enter");
     for (int i = 0; i < dc_count; i++) {
         if (dc_routine[i]->addr == routine && (routine >= 0xC000 || dc_routine[i]->bank == dc_c_bank)) {
             if (dc_routine[i]->task) {
@@ -181,20 +184,18 @@ static bool task_kept(uint16_t a, uint8_t s)
     return (a & 0xFF00) != 0x0100 || a < DT_ADDR_STACK_FLOOR || dc_keep_stack_ram || (uint8_t)a > s;
 }
 
-/* The time the C stated (Decomp_Cycles), spent as the original spends it: its
- * fetches, which the lag accounting and the step dump observe, and reads of
- * the routine's first byte for the rest. */
-static void spend_time(uint16_t addr)
+/* The original's path for a timed routine's C (decomp_timing.c), spent as the
+ * original spends it: the fetch of each instruction, which the lag accounting
+ * and the step dump observe, then reads of its next byte for its other
+ * cycles. */
+static void spend_path(void)
 {
-    for (int k = 0; k < dc_ntime; k++) {
-        unsigned n = dc_time[k].cycles;
-        if (dc_time[k].fetch) {
-            uint8_t opcode;
-            (void)cpu_fetch(dc_time[k].fetch, &opcode);
-            n--;
-        }
-        while (n--) {
-            (void)cpu_read(addr, 0);
+    for (int k = 0; k < dc_npath; k++) {
+        uint64_t end = k + 1 < dc_npath ? dc_path[k + 1].at : dc_cycles;
+        uint8_t opcode;
+        (void)cpu_fetch(dc_path[k].pc, &opcode);
+        for (uint64_t c = dc_path[k].at + 1; c < end; c++) {
+            (void)cpu_read((uint16_t)(dc_path[k].pc + 1), 0);
         }
     }
 }
@@ -209,11 +210,14 @@ static bool task_replace(int i, const CycModRegs *in)
     Regs c;
     dc_run_c(rt, in, &c);
     dc_stats[i].calls++;
-    if (dc_run_original || (dc_ntime && (cpu.nmi_edge || cpu.do_nmi || native_vblank_within(dc_cycles)))) {
+    bool timed = rt->timed && !dc_nops;
+    if (dc_run_original || (timed && (cpu.nmi_edge || cpu.do_nmi || native_vblank_within(dc_cycles)))) {
         dc_stats[i].original++;
         return false;
     }
-    spend_time(rt->addr);
+    if (timed) {
+        spend_path();
+    }
     store_image(task_kept, dc_cur_s);
     const uint8_t *ram = native_cpu_ram();
     uint8_t s = dc_cur_s;

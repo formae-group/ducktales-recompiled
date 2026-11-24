@@ -242,16 +242,13 @@ call can do. `flow.c` decompiles that code as **task code** (`DecompRoutine.task
   the stop (without the entry RTS) and jumps there. A call that would run into VBlank or past the
   frame end goes to the original, as for the other routines: the NMI steps state the task code
   uses (the random generator, the scratch bytes).
-- **Timed** task code (`DecompRoutine.timed`: the scheduler's `Task_Schedule` `$FF35`, `Task_Pass`
-  `$FF38` and the resume point `Task_Resume` `$FF78`) states the original's time and reads only RAM
-  and its registers: `Decomp_Cycles(n)` is n CPU cycles, `Decomp_Fetch(addr)` the cycle that fetches
-  the instruction at addr. Check compares the sum with the original's cycles up to the hand-off (an
-  idle pass identical to the last one reuses its isolated run). The native runtime spends the
-  cycles, fetching each stated address so that its lag accounting and step dump (`$FF38`, `$FF6A`,
-  `$FF7C`) see them, and gives the call to the original when an NMI edge is pending or VBlank would
-  come during them. An empty pass hands off to `$FF38` again, so the idle loop goes to the original
-  for the pass the frame boundary falls in. After `Input_ReadControllers`' RTS to `$FF78` the native
-  runtime chains into `Task_Resume`.
+- **Timed** task code (see Timing: the scheduler's `Task_Schedule` `$FF35`, `Task_Pass` `$FF38` and
+  the resume point `Task_Resume` `$FF78`): the native runtime spends the walked path's cycles,
+  fetching each instruction so that its lag accounting and step dump (`$FF38`, `$FF6A`, `$FF7C`) see
+  them, and gives the call to the original when an NMI edge is pending or VBlank would come during
+  them. An empty pass hands off to `$FF38` again, so the idle loop goes to the original for the pass
+  the frame boundary falls in. After `Input_ReadControllers`' RTS to `$FF78` the native runtime
+  chains into `Task_Resume`.
 - A task routine called from another's C is not checked on its own: the caller's comparison covers
   it up to the hand-off. Its calls are counted.
 - **Polling** task code (`DecompRoutine.polls`, `TASK_POLL`/`RESUME_POLL`) polls a device with
@@ -364,6 +361,64 @@ leave the jump vector in `$00/$01` as the original's loop does.
 | `Task_Schedule`, `Task_Pass`, `Task_Resume` (timed task code) | the slots `$80-$8F` and `$90` | A, X, Y and P at each hand-off; S at `$FF` or the task's saved S | a new task starts at its entry (`JMP ($93)`), a waiting one after `Input_ReadControllers` at `$FF78`; a waiting task in a slot other than 0 goes to the original |
 | `Nmi_Handler` (interrupt routine) | the interrupted A, X, Y and P | A, X, Y and P after the RTI; hardware | see Interrupt routines |
 | `Nmi_Return` (interrupt routine) | none | A, X, Y and P after the RTI | see Interrupt routines |
+
+### Timing
+
+For the C to run in place of the original with the console's lag, it must take the original's time:
+the same cycles, its device accesses at the same cycles, and the instruction boundaries where an
+interrupt can land. The C of a **timed** routine (`DecompRoutine.timed`) does not count cycles; it
+marks each decision of the original that the ROM alone does not tell, and the layer
+(`src/decomp/decomp_timing.c`) walks the original's instructions between the marks:
+
+| Mark (`decomp.h`) | Where | What the walker does |
+|---|---|---|
+| `DC_BR(pc, cond)` | the C's decision for the conditional branch at `pc`, used as the condition itself: `if (DC_BR(0xFF42, a >= 4))`, `while (DC_BR(0xD123, --y))` | 2 cycles, +1 when taken, +1 more when the target is on another page; goes on at the target or after the branch. Returns `cond` |
+| `DC_JUMP(pc, target)` | an indirect jump at `pc` (`JMP ($93)`), or an RTS or RTI used as a jump | goes on at `target` |
+| `DC_EA(pc, addr)` | an indexed read (`abs,X`, `abs,Y`, `(zp),Y`) whose page crossing happens: `addr` is the address read | +1 cycle when `addr` is on another page than the base (for `(zp),Y` the pointer as the C's RAM has it then) |
+
+Between marks the walker follows the ROM (the bank the C has mapped): fall-through, `JMP`, `JSR`
+into the routine called (its C, called from the caller's C, goes on walking it) and `RTS` back.
+`Decomp_Enter` of a routine the C calls, `Decomp_Call`, each bus operation (placed at the device
+access the path reaches next, at its last cycle) and `Decomp_SelectBank` (at the mapper write) are
+marks of their own, and the call ends at the hand-off or at the routine's RTS. A branch, an indirect
+jump or a device access the path reaches with no mark stops the game with a `TIMING` error naming
+the C line of the last mark. An indexed read with no `DC_EA` costs no crossing. A polling routine
+(`Decomp_BusWait`) cannot be timed yet.
+
+The walk gives the original's path (each instruction and the cycle its fetch starts at), its total
+and the cycle of each bus operation, without DMA cycles: the bus adds those where the original's
+would come.
+
+- **Check mode** runs the original from the machine's own state until it gets where the C ends
+  (`clock_measure`, the clocked run the NMI and the polls use, restored afterwards) and compares
+  every instruction's address and fetch cycle, the total, and every device access (address,
+  direction, value and cycle) with the walk. The first difference stops the game:
+
+  ```text
+  [decomp] TIMING Task_Pass ($FF38) at frame 6, entry A=00 X=FF Y=00 S=FF P=A4
+  [decomp]   instruction 7: the original fetches $FF45 at cycle 17, the C's path $FF45 at cycle 18
+  [decomp]   the instruction at $FF44 takes other cycles: a page crossing needs DC_EA, a branch DC_BR
+  [decomp]   the C's path there follows DC_BR($FF42) at src/decomp/system.c:359
+  [decomp]   original: $FF3E@7 $FF40@11 $FF42@13 $FF44@15 $FF45@17
+  [decomp]   the C's:  $FF3E@7 $FF40@11 $FF42@13 $FF44@15 $FF45@18
+  ```
+
+  A call whose original meets an interrupt or the frame end before it gets there is not compared;
+  the run prints their number (`decomp: timing not compared on N calls`). A task routine called
+  again with the same registers, bank and RAM reuses the comparison of its last call.
+- **The native runtime** spends the path of a timed task routine without bus operations: the fetch
+  of each instruction, then reads of its next byte. The other timed routines keep their time as
+  before until the runtimes spend it (the C default plan).
+
+`tools/decomp_timing.py ROUTINE` lists a routine's original code with each instruction's cycles and
+the marks it needs (branches, indirect jumps, indexed reads that can cross a page, device
+accesses, calls), and whether the routine's C has them; `--summary [--file F]` counts the branches
+and missing `DC_BR` of every routine.
+
+Timed so far: the scheduler (task code) and `Oam_Clear` `$C267` (a routine with a site). On the 13
+routes check compares their path on every call it measures (Task_Pass 1,482,753 calls in
+`decomp_test`'s 600-frame segments, `Oam_Clear` 6,429), and the native step dumps and lag logs are
+byte-identical to those of main 902ef07.
 
 ### On the native runtime
 
@@ -896,6 +951,8 @@ unexecuted bytes in 99 blocks, all behind branches of executed routines (no tabl
    from your ROM. Never commit the bytes.
 5. Run `tests/decomp_test.py` (all modes) and `tests/verify_routes.py` with
    `DUCKTALES_DECOMP=check`. If the routes do not reach a branch, add a poke case.
+6. Time it (Timing): mark its branches, indirect jumps and crossing reads (`tools/decomp_timing.py`),
+   set `.timed = true`, and run check mode until it reports no `TIMING`.
 
 ## Verification
 

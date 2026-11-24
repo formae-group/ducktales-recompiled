@@ -8,9 +8,15 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 ### Added
 
 - Decompiled the scheduler `$FF35-$FF7C` as timed task code (`Task_Schedule`, `Task_Pass`,
-  `Task_Resume`): its C states the original's cycles (`Decomp_Cycles`, `Decomp_Fetch`), which check
-  compares and the native runtime spends, giving the call to the original when an NMI is pending or
-  VBlank would come during them. The native step dumps and lag logs are unchanged on all 13 routes.
+  `Task_Resume`), whose time the native runtime spends, giving the call to the original when an NMI
+  is pending or VBlank would come during it. The native step dumps and lag logs are unchanged on all
+  13 routes.
+- Timing for decompiled code (docs/decompilation.md "Timing"): the C of a timed routine marks the
+  original's branches, indirect jumps and page-crossing reads (`DC_BR`, `DC_JUMP`, `DC_EA`), and
+  `src/decomp/decomp_timing.c` walks the ROM between the marks for the original's path, cycles and
+  bus-operation cycles. Check mode compares them with the original run on the machine, instruction by
+  instruction, and stops at the first difference with the C line of the mark. The scheduler is the
+  first timed code; `tools/decomp_timing.py` lists the marks a routine needs.
 - 20 decompilation poke cases cover launched blocks, pouncers, the snapper grab, pickup respawn,
   the final stand-in spawn, and smaller object, collision, row-boundary and controller branches no
   existing route or poke case reached.
