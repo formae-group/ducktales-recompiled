@@ -209,7 +209,7 @@ call can do. `flow.c` decompiles that code as **task code** (`DecompRoutine.task
   enters through an RTS (`$FFAB`) whose return the observer moves to the start, at the routine's
   true S, with the isolated call's return address in place of the routine's own (at S + locals
   + 1). When the C hands off, the original stops where it reaches the same routine at the same
-  depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`, 5 of
+  depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`, 4 of
   them). Check compares RAM, the stack down to that depth, the registers the hand-off uses and the
   number of device writes.
 - Replace mode stores the C's results, makes its device writes, spends the original's cycles up to
@@ -413,6 +413,7 @@ RAM-identical in replace mode.
 | `Mem_FillPages` | `$C24F` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
 | `Oam_Clear` | `$C267` | checked | 12 | - | not measured |
 | `Palette_FadeIn` (task code) | `$C279` | checked | 12 | - | not measured |
+| `Palette_FadeInKeep` (task code) | `$C27C` | checked | 0 | ending | not measured |
 | `Palette_FadeOut` (task code) | `$C282` | checked | 12 | - | not measured |
 | `Palette_FadeWait` (resume point after `task_yield`) | `$C2B2` | checked | 12 | - | not measured |
 | `Random_Next` | `$C2E6` | checked | 12 | - | not measured |
@@ -466,8 +467,8 @@ in bank 5 the pause and message box text (`$B580-$B61B`), the Land Select messag
 (`$B800-$B86B`) and the clearing of the consumed-record bits (`$B760`). Not yet: the ending's later frames (`$E1F9-$E28B`: the credits scroll with a raster split polled on
 `$2002`, which `Ending` gives to the original) and the Select refill `$E2FE` (Scrooge's); the
 scene palette tables `$E127-$E132` and `$E143-$E1AE` are read by `Palette_LoadScene` (system.c).
-The flow has 16 sites: 11 entries that original code reaches and 5 stop sites (`task_yield`
-`$FFAC`, `task_wait` `$FFA5`, the reset `$FEE0`, the spawner `$AEA0` and the fade in `$C27C`).
+The flow has 15 sites: 11 entries that original code reaches and 4 stop sites (`task_yield`
+`$FFAC`, `task_wait` `$FFA5`, the reset `$FEE0` and the spawner `$AEA0`).
 
 Not decompiled yet, and still run as the original from the C:
 
