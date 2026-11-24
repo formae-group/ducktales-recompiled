@@ -49,6 +49,7 @@
 #define DT_ADDR_POWER_FRAMES    0x0076 /* its 16-bit frame counter, low byte first (hypothesis) */
 #define DT_ADDR_FINAL_ARENA     0x007B /* 5 = final arena (verified) */
 #define DT_ADDR_BOSS_CHECKPOINT 0x007C /* 5 in the boss-checkpoint screen (verified) */
+#define DT_CHECKPOINT_SET       5      /* $DC04's value for it (verified) */
 #define DT_ADDR_INVULNERABLE    0x007D /* frames of invulnerability after a hit (verified) */
 #define DT_ADDR_RESPAWN         0x007E /* respawn/warp request, bit 7 + table index (verified) */
 #define DT_ADDR_TREASURES       0x00A0 /* land treasures, bit n = land n (verified bits 0-4) */
@@ -173,6 +174,7 @@
 #define DT_ADDR_CAMERA_X        0x00F2 /* camera X low, page in DT_ADDR_CAMERA_PAGE */
 #define DT_ADDR_CAMERA_PAGE     0x00F3
 #define DT_ADDR_LAND            0x00F6 /* 0-4 lands, 5 Land Select, 6+ other screens */
+#define DT_LANDS                5      /* lands 0-4; music 0-4 is each land's own (game-state.md) */
 #define DT_LAND_HUD_TABLE_OFF   9      /* $F6 value whose top of frame keeps sprites at $0000 */
 #define DT_HUD_MIN_SCROOGE_Y    0x44   /* the builder adds the HUD only with Scrooge's Y >= this */
 #define DT_HUD_BAND_Y           0x30   /* objects but slot 0 lose sprites above this unless $0600 bit 4 */
@@ -876,6 +878,20 @@
  * (docs/decompilation.md "Events"). */
 #define DT_SITE_BOSS_HIT    0xF6DD
 #define DT_SITE_BOSS_HIT_ID "ducktales.event.boss-hit"
+
+/* Bank 6 $8932 (Obj_Defeat, src/decomp/objects.c): the entry of the routine
+ * the enemy kinds jump to (28 JMPs in bank 6) when an enemy is beaten; X is
+ * its slot. Its 8 bytes are found in no other bank at $8932, so the content
+ * key also checks that bank 6 is mapped. */
+#define DT_SITE_ENEMY_DEFEATED    0x8932
+#define DT_SITE_ENEMY_DEFEATED_ID "ducktales.event.enemy-defeated"
+
+/* Bank 6 $8B21 (Pickup_Take): the entry of the routine that gives Scrooge a
+ * pickup he touched; X is its slot and $0620,X the item. The instruction
+ * before it is an RTS, so nothing falls into it; unique to bank 6 at $8B21
+ * as above. */
+#define DT_SITE_ITEM_COLLECTED    0x8B21
+#define DT_SITE_ITEM_COLLECTED_ID "ducktales.event.item-collected"
 
 /* The RTI of the NMI handler ($C000), its only exit: replace mode spends
  * there the cycles a replaced routine still owed when the NMI came

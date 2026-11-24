@@ -14,7 +14,8 @@
  *      (fine X changes before its end), is drawn again from the nametable
  *      with its own starting scroll. The opaque pixels of sprite 0 (the split
  *      sprite) over the backdrop are drawn in the backdrop colour too. A
- *      palette mod's colours apply to these pixels; its tiles do not.
+ *      palette mod's colours apply to these pixels; its tiles do not, and
+ *      the scripts' toast and drawings stay over them.
  *   2. Overscan: the rows and columns cut off.
  *   3. Scaling: with nearest pixels and square pixels the cropped picture goes
  *      to the host as it is (its nearest and integer scaling apply). Otherwise
@@ -372,6 +373,7 @@ const uint32_t *app_present_picture(int out_w, int out_h, bool integer_scale, in
     memcpy(s.base, src, (size_t)sw * sh * sizeof *src);
     if (s_p.clean_split) {
         clean_split(s.base, sw, sh);
+        app_mods_keep_overlay(s.base, src, sw, sh);
     }
     for (int y = 0; y < ch; y++) {
         memmove(s.base + (size_t)y * cw, s.base + (size_t)(y + y0) * sw + x0, (size_t)cw * sizeof *s.base);

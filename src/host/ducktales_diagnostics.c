@@ -58,7 +58,13 @@ static FILE *s_events_log, *s_ram_log;
 static EventResult log_event(EventId id, void *user)
 {
     (void)user;
-    fprintf(s_events_log, "frame=%lu event=%s\n", (unsigned long)cyc_ring_frame, Events_Name(id));
+    const EventArg *args;
+    int n = Events_Args(&args);
+    fprintf(s_events_log, "frame=%lu event=%s", (unsigned long)cyc_ring_frame, Events_Name(id));
+    for (int i = 0; i < n; i++) {
+        fprintf(s_events_log, " %s=%ld", args[i].name, (long)args[i].value);
+    }
+    fputc('\n', s_events_log);
     return EVENT_CONTINUE;
 }
 

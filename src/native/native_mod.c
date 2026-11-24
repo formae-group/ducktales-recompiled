@@ -5,6 +5,7 @@
  */
 #include "native/native_runtime.h"
 
+#include "cpu6502.h"
 #include "cyc_core.h"
 #include "cyc_mod.h"
 
@@ -30,6 +31,11 @@ bool cyc_mod_peek_ok(uint16_t addr, uint8_t *value)
 bool cyc_mod_poke(uint16_t addr, uint8_t value)
 {
     return native_poke(addr, value);
+}
+
+void cyc_mod_regs(CycModRegs *out)
+{
+    *out = (CycModRegs){ cpu.a, cpu.x, cpu.y, cpu.s, cpu_get_p(0), cpu.pc };
 }
 
 size_t cyc_mod_copy_cart_payload(uint8_t *out, size_t capacity)

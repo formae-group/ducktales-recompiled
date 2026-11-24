@@ -127,6 +127,8 @@ void Decomp_FrameEnd(void);
 /* Raise an event from decompiled code that replaces the code its site is
  * in (replace mode only: in check mode the original runs without hooks). */
 int Decomp_RaiseEvent(int event);
+/* The same for an event about the object in slot (Events_RaiseSlot). */
+void Decomp_RaiseSlotEvent(int event, uint8_t slot);
 
 /* Task code (docs/decompilation.md "Task code"): the game's tasks wait for
  * frames (task_yield), switch banks and drive the PPU, which no isolated call

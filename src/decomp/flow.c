@@ -1230,11 +1230,13 @@ static void Title_FadeIn(Regs *r)
     Jsr(DT_CODE_FADE_IN, DT_FLOW_TITLE_LIT, 0);
 }
 
-/* $D591: the lives group of the HUD as a game starts it. */
+/* $D591: the lives group of the HUD as a game starts it (lives = 2), then
+ * EVENT_NEW_GAME, raised by the original at $D59C. */
 static void Title_Lit(Regs *r)
 {
     Decomp_Enter(DT_FLOW_TITLE_LIT, r->a, r->x, r->y);
     CopyRom(DT_ADDR_HUD_GROUP_LIVES, DT_DATA_HUD_LIVES, DT_HUD_LIVES_LEN);
+    Decomp_RaiseEvent(EVENT_NEW_GAME);
     r->a = Rom(DT_DATA_HUD_LIVES);
     r->y = 0xFF;
     Yield(DT_FLOW_TITLE_READY);

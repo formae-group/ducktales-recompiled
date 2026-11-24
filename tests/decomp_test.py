@@ -28,7 +28,14 @@
            compared at least once, and stock against replace as above.
   events   (needs --dev-build) enhancements whose event a decompiled routine
            raises itself (EVENTS below): check mode, and the same options
-           with --decomp off against --decomp replace as above.
+           with --decomp off against --decomp replace as above. Then the
+           routes in SEQUENCES run with --dt-events-log, which handles every
+           event and logs its frame and values, with --decomp off, check and
+           replace: the three logs must be equal line for line (each event
+           once per occurrence: in check mode only the original raises them,
+           in replace mode only the C), and in check mode as many
+           enemy-defeated and item-collected events as calls of Obj_Defeat
+           and Pickup_Take.
 
     py -3 -I tests/decomp_test.py --build build/headless [--dev-build build/headless-dev]
            [--routes tests/routes/X.txt ...] [--modes check replace pokes events] [--jobs 2]
@@ -48,6 +55,7 @@ the checks on.
 
 import argparse
 import concurrent.futures
+import itertools
 import re
 import subprocess
 import sys
@@ -866,7 +874,13 @@ POKES = [
 EVENTS = [
     ('no-damage', 'moon_intro', ['--no-damage', 'on'], ['Player_Knockback']),
     ('jump-scale-125', 're_amazon_moves', ['--jump-scale', '125'], ['Player_StartJump']),
+    ('start-lives-5', 'amazon_intro', ['--start-lives', '5'], []),
 ]
+
+# Routes whose event logs must be equal with --decomp off, check and replace,
+# and the routines whose calls each event counts in check mode.
+SEQUENCES = ['full_moon', 'full_amazon']
+EVENT_CALLS = {'enemy-defeated': 'Obj_Defeat', 'item-collected': 'Pickup_Take'}
 
 
 def route_frames(path):
@@ -952,6 +966,12 @@ def event_case(name, route, options, want):
     return {'name': name, 'route': path, 'frames': route_frames(path), 'extra': options, 'want': want}
 
 
+def sequence_case(route):
+    path = ROOT / 'tests' / 'routes' / f'{route}.txt'
+    want = list(EVENT_CALLS.values())
+    return {'name': f'{route}-sequence', 'route': path, 'frames': route_frames(path), 'extra': [], 'want': want}
+
+
 def run(exe, rom, case, extra):
     cmd = [str(exe), rom, '--frames', str(case['frames']), '--input', str(case['route']), *case['extra'], *extra]
     return subprocess.run(cmd, capture_output=True, text=True)
@@ -998,10 +1018,48 @@ def ram_diff(logs):
             result = f'frame {frame}: {shown}'
     for log in logs:
         log.unlink()
-    return result, f'{frames} idle={idle}'
+    return result, f'frames={frames} idle={idle}'
+
+
+def run_sequence(dev, rom, case, tmp, label):
+    """The event logs of --decomp off, check and replace, which must be equal."""
+    out, logs = {}, {}
+    for mode in ('off', 'check', 'replace'):
+        path = Path(tmp) / f'{label}.{case["name"]}.{mode}.events'
+        p = run(dev, rom, case, ['--decomp', mode, '--dt-events-log', str(path)])
+        logs[mode] = path.read_text().splitlines() if path.exists() else []
+        path.unlink(missing_ok=True)
+        if mode == 'check':
+            ok, stats, err = check_result(p, case)
+            calls = {name: s[0] for (name, _), s in stats.items()}
+            for event, routine in EVENT_CALLS.items():
+                n = sum(f' event={event} ' in f'{line} ' for line in logs['check'])
+                if n != calls.get(routine, 0):
+                    err.append(f'{n} {event} events, {calls.get(routine, 0)} calls of {routine}')
+            out['check'] = (ok and not err, stats, err)
+        elif p.returncode:
+            failure = f'{mode} run failed (exit {p.returncode}): {p.stderr[-500:]}'
+            out.setdefault('check', (False, {}, [failure]))
+            out['replace'] = failure, ''
+            return out
+    off = logs['off']
+    first = next(
+        (
+            f'{mode}, event {i + 1}: {a} / {b}'
+            for mode in ('check', 'replace')
+            for i, (a, b) in enumerate(itertools.zip_longest(off, logs[mode], fillvalue='(none)'))
+            if a != b
+        ),
+        None,
+    )
+    kinds = len({line.split(' event=')[1].split()[0] for line in off if ' event=' in line})
+    out['replace'] = first, f'events={len(off)} kinds={kinds}'
+    return out
 
 
 def run_case(exe, dev, rom, case, modes, tmp, label):
+    if case['name'].endswith('-sequence'):
+        return run_sequence(dev, rom, case, tmp, label)
     out = {}
     logs = [Path(tmp) / f'{label}.{case["name"]}.{mode}.ram' for mode in ('base', 'replace')]
     base = None
@@ -1048,7 +1106,7 @@ def print_replaces(label, cases, results, failed):
     for case in cases:
         result, frames = results[id(case)].result()['replace']
         print(
-            f'{label:8s} {case["name"]:24s} {"PASS" if result is None else "FAIL"}  frames={frames}'
+            f'{label:8s} {case["name"]:24s} {"PASS" if result is None else "FAIL"}  {frames}'
             + ('' if result is None else f'  first difference: {result}'),
             flush=True,
         )
@@ -1081,7 +1139,7 @@ def main():
         start, state = idle_state(golden, POKE_ROUTE, case['first'])
         if state:
             case['extra'] = ['--load-state', str(state), *case['extra']]
-    events = [event_case(*e) for e in EVENTS]
+    events = [event_case(*e) for e in EVENTS] + [sequence_case(r) for r in SEQUENCES]
     exe = ROOT / args.build / args.config / 'ducktales.exe'
     dev = ROOT / args.dev_build / args.config / 'ducktales.exe' if args.dev_build else None
     groups = [

@@ -153,6 +153,10 @@ dt.on("timer-tick", function()
     end
 end)
 
+dt.on("enemy-defeated", function(e)
+    dt.log("beaten", e.kind, "at", e.x, e.y)
+end)
+
 dt.on("frame", function(frame)
     if frame % 600 == 0 then
         dt.log("money", dt.state.money)
@@ -164,27 +168,47 @@ end)
 
 | Name | What it is |
 |---|---|
-| `dt.on(event, fn)` | Calls `fn` at every `event`, in the order handlers were added; mods higher in the list run first |
+| `dt.on(event, fn)` | Calls `fn` at every `event`, in the order handlers were added; mods higher in the list run first. A game event's `fn` gets a table: `e.name` and the event's values |
 | `dt.CANCEL` | Returned by a handler of a cancelable event: the event is cancelled. Returned for an event that cannot be cancelled, it is ignored and the log says so once |
 | `dt.state` | The game's state, read only, inside handlers (fields below) |
 | `dt.set.<field>(value)` | Sets a writable field at the frame's end, inside handlers (see [Writing the game](#writing-the-game)) |
+| `dt.objects()`, `dt.camera()` | The live object slots and the camera, read only, inside handlers (see [Objects and the camera](#objects-and-the-camera)) |
 | `dt.toast(text)` | Shows a short notice over the picture; returns `false` when it was refused (see [Toasts](#toasts)) |
+| `dt.draw.text(x, y, text[, color])`, `dt.draw.rect(x, y, w, h, color)` | Draws over the presented picture for one frame (see [Drawing](#drawing)) |
 | `dt.store.get(key)`, `dt.store.set(key, value)` | The mod's own saved values (see [Store](#store)) |
 | `dt.log(...)` | Writes a line to `mods.log` and the console (`print` does the same) |
 | `dt.frame()` | Frames since the game started |
 | `dt.mod` | The mod's id |
 
-The events are the game's events (`include/ducktales/events.h`) and `frame`:
+The events are the game's events (`include/ducktales/events.h`) and `frame`. A game event's
+handler gets a table with the event's `name` and the values below (`function(e) ... e.slot ...`):
 
-| Event | When | Cancel |
-|---|---|---|
-| `frame` | After every machine frame; the handler gets the frame number | |
-| `player-damaged` | A hit is about to cost an HP dot | No dot is lost (the knock-back still happens) |
-| `life-lost` | A death is about to cost a life | The lives count stays |
-| `timer-tick` | A frame of the HUD timer elapses | The HUD second does not advance |
-| `boss-hit` | A hit is about to count against a boss | The hits left stay |
-| `new-game` | The title's set-up reset the HUD | Not cancelable |
-| `jump-start` | A jump copied the take-off velocity into Scrooge's | Not cancelable |
+| Event | When | Values | Cancel |
+|---|---|---|---|
+| `frame` | After every machine frame; the handler gets the frame number | | |
+| `player-damaged` | A hit is about to cost an HP dot | | No dot is lost (the knock-back still happens) |
+| `life-lost` | A death is about to cost a life | | The lives count stays |
+| `timer-tick` | A frame of the HUD timer elapses | | The HUD second does not advance |
+| `boss-hit` | A hit is about to count against a boss | | The hits left stay |
+| `boss-defeated` | The hit that counts is the boss's last (after the `boss-hit` handlers, and not when one of them cancelled) | `land` | Not cancelable |
+| `enemy-defeated` | An enemy is beaten | `slot`, `kind`, `x`, `y` | Not cancelable |
+| `item-collected` | Scrooge takes a pickup (an item, a diamond, a treasure) | `slot`, `item`, `x`, `y` | Not cancelable |
+| `land-start` | A land was loaded (from Land Select, or another land sent Scrooge there); not after a death | `land` | Not cancelable |
+| `land-clear` | The land is left with its "clear" result (not by the Launchpad ride home) | `land` | Not cancelable |
+| `checkpoint` | Scrooge reached his land's boss checkpoint | `land` | Not cancelable |
+| `money-changed` | The HUD money differs from the last frame that showed it | `money`, `delta` | Not cancelable |
+| `new-game` | The title's set-up reset the HUD | | Not cancelable |
+| `jump-start` | A jump copied the take-off velocity into Scrooge's | | Not cancelable |
+
+`slot` is the object's slot (1-15), `kind` its type (`$0710`), `item` the pickup's item
+(`$0620`; the land treasures are `$6F` and up, see [game-state.md](game-state.md)), `x` its world X
+and `y` its Y on the screen, as `dt.state.x` and `y` are Scrooge's. `land` is 0 (The Amazon) to 4
+(The Moon). `money-changed` gives the new `money` and the `delta`; several additions in one frame,
+and the time bonus counted at the end of a land, come as one event per frame that changed it.
+
+`land-start`, `land-clear`, `checkpoint` and `money-changed` are seen at the end of the frame,
+before the `frame` handlers; the others run at the moment the game does it, inside the frame. Every
+event fires once per occurrence with the decompiled code on or off.
 
 `dt.state` fields: `land`, `lives`, `hp`, `hp_max`, `money` (`nil` while the HUD digits are
 not drawn), `time` (the HUD's 0-999), `difficulty`, `paused` (boolean), `boss_hits`,
@@ -197,6 +221,37 @@ field is an error.
 A handler that only reads, logs, toasts or uses the store leaves the machine exactly as it was
 (`tests/mods_test.py` compares the per-frame hashes). Cancelling an event or `dt.set` changes the
 game, as the matching enhancement does.
+
+### Objects and the camera
+
+`dt.objects()` returns an array with a table for every live object slot (Scrooge is slot 0):
+`slot`, `kind`, `action` (for a pickup, its item), `state`, `x` (world X), `y` (Y on the screen)
+and `screen_x` (X on the screen). `dt.camera()` returns `x` (the world X of the camera's left
+edge), `row` (the map row) and `screen` (the screen index, row * 8 + page). Both read the game
+when they are called, only inside handlers, and change nothing. The object tables are in
+[docs/memory-map.md](memory-map.md).
+
+```lua
+dt.on("frame", function()
+    for _, o in ipairs(dt.objects()) do
+        if o.slot ~= 0 then
+            dt.draw.rect(o.screen_x, o.y - 2, 8, 1, 0xFFFF00) -- a mark over every object
+        end
+    end
+end)
+```
+
+### Drawing
+
+`dt.draw.rect(x, y, w, h, color)` fills a rectangle and `dt.draw.text(x, y, text[, color])` writes
+text in the toast font (3x5 capitals, 4 pixels a character, the characters and `?` rule of
+[Toasts](#toasts), at most 64 characters), at picture pixels (256 x 240, the top left is 0, 0).
+`color` is `0xRRGGBB`; text is white without one. What the handlers draw during a frame is shown
+over the next presented picture, after the mods' tiles and palettes and under the toast, and then
+forgotten, so a script draws again every frame for something to stay. A mod may draw 64 things a
+frame: past that the call returns `false` and the log says so once. Drawing clipped by the picture's
+edge is fine. Like toasts, drawings never reach the machine's picture, screenshots taken from it,
+or any hash (`tests/mods_test.py` compares the per-frame hashes with a drawing script).
 
 ### Writing the game
 
@@ -291,9 +346,11 @@ Both hosts and the native player call the same entry points:
 - **Sound.** At the end of each frame the sound driver's request ids in RAM start and stop the
   replacements; the mixer mutes the channels the driver gave the request and adds the decoded file.
 - **Scripts.** Each mod gets its own `lua_State` with a capped allocator and a count hook. A game
-  event's hook site is on only while a handler for it exists, as the enhancements do. At the end of
-  each frame (including the frames the open menu runs) the `frame` handlers run and the queued
-  `dt.set` writes are applied in one RAM transaction.
+  event's hook site is on only while a handler for it exists, as the enhancements do; the events
+  seen at the frame's end read RAM only while one has a handler. At the end of each frame
+  (including the frames the open menu runs) those events are raised, then the `frame` handlers run,
+  the queued `dt.set` writes are applied in one RAM transaction and the frame's drawings replace
+  the shown ones.
 
 The tests are in `tests/mods_test.py`, `tests/mods_catalogue_test.c` and `tests/window_smoke.py`.
 They generate their fixtures in scratch folders, and the tile templates come from the player's own

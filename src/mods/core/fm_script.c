@@ -6,9 +6,11 @@
  *   libraries  base without dofile and loadfile (load reads text only, print
  *              writes to the log), string without dump, table, math, utf8 and
  *              coroutine. io, os, package and debug are not even linked.
- *   dt         dt.on(event, fn) for "frame" and the game's events, dt.CANCEL,
- *              dt.state (the game's fields, read only), dt.set.<field>(v) for
- *              the fields the game declares writable, dt.toast(text),
+ *   dt         dt.on(event, fn) for "frame" and the game's events (a game
+ *              event's handler gets a table: its name and values), dt.CANCEL,
+ *              dt.state (the game's fields, read only), dt.<query>() (the
+ *              game's records, read only), dt.set.<field>(v) for the fields
+ *              the game declares writable, dt.toast(text), dt.draw.text/rect,
  *              dt.store.get/set, dt.log, dt.mod and dt.frame()
  *   writes     dt.set checks the value against the state when it is called
  *              and queues it; the queue is applied at the frame's end, after
@@ -17,6 +19,9 @@
  *              every SCRIPT_TOAST_GAP frames, SCRIPT_TOAST_CHARS characters
  *              (UTF-8 code points, control characters as spaces);
  *              the game draws it on its presentation, never the machine's
+ *   draw       dt.draw.text and dt.draw.rect collect a frame's drawings, at
+ *              most FM_DRAW_PER_MOD a mod; at the frame's end they become
+ *              what fm_draws gives the game for the next picture
  *   store      strings, numbers and booleans per mod, kept in
  *              <store_dir>/<id>.ini, at most SCRIPT_STORE_BYTES; written once
  *              a second when changed and at exit
@@ -89,6 +94,8 @@ typedef struct {
     bool stopped;
     char why[300];
     uint64_t last_toast;
+    int draws; /* dt.draw calls this frame */
+    bool draw_warned;
     bool store_loaded, store_dirty, store_failed;
     StoreItem *store;
     int store_count;
@@ -113,6 +120,11 @@ static int s_write_count;
 static char s_toast_title[128], s_toast_body[SCRIPT_TOAST_CHARS * 4 + 1];
 static int s_toast_frames;
 static bool s_exit_hooked;
+static FmDraw s_drawing[FM_DRAW_MAX], s_drawn[FM_DRAW_MAX];
+static Script *s_drawing_by[FM_DRAW_MAX];
+static int s_drawing_count, s_drawn_count;
+static const FmArg *s_args;
+static int s_nargs;
 
 static Script *script_of(lua_State *L)
 {
@@ -318,6 +330,20 @@ static int sb_frame(lua_State *L)
     return 1;
 }
 
+/* text cut to chars UTF-8 code points, control characters as spaces. */
+static void copy_text(char *out, size_t cap, const char *text, int chars)
+{
+    size_t n = 0;
+    for (int seen = 0; text[n] && n + 1 < cap; n++) {
+        unsigned char c = (unsigned char)text[n];
+        if ((c & 0xC0) != 0x80 && seen++ == chars) {
+            break;
+        }
+        out[n] = c < 0x20 || c == 0x7F ? ' ' : (char)c;
+    }
+    out[n] = 0;
+}
+
 static int sb_toast(lua_State *L)
 {
     const char *text = luaL_checkstring(L, 1);
@@ -327,19 +353,127 @@ static int sb_toast(lua_State *L)
         return 1;
     }
     s->last_toast = s_frame ? s_frame : 1;
-    size_t n = 0;
-    for (int chars = 0; text[n] && n + 1 < sizeof s_toast_body; n++) {
-        unsigned char c = (unsigned char)text[n];
-        if ((c & 0xC0) != 0x80 && chars++ == SCRIPT_TOAST_CHARS) {
-            break;
-        }
-        s_toast_body[n] = c < 0x20 || c == 0x7F ? ' ' : (char)c;
-    }
-    s_toast_body[n] = 0;
+    copy_text(s_toast_body, sizeof s_toast_body, text, SCRIPT_TOAST_CHARS);
     snprintf(s_toast_title, sizeof s_toast_title, "%s", s->name);
     s_toast_frames = SCRIPT_TOAST_FRAMES;
     log_line(s, "toast: ", s_toast_body);
     lua_pushboolean(L, 1);
+    return 1;
+}
+
+/* ---- dt.draw ---- */
+
+static uint32_t check_color(lua_State *L, int arg)
+{
+    lua_Integer c = luaL_checkinteger(L, arg);
+    luaL_argcheck(L, c >= 0 && c <= 0xFFFFFF, arg, "a colour is 0xRRGGBB");
+    return (uint32_t)c;
+}
+
+/* A slot for this frame's drawing, or NULL (logged once) past the caps. */
+static FmDraw *add_draw(lua_State *L)
+{
+    Script *s = script_of(L);
+    if (s->draws == FM_DRAW_PER_MOD || s_drawing_count == FM_DRAW_MAX) {
+        if (!s->draw_warned) {
+            s->draw_warned = true;
+            char text[120];
+            snprintf(text, sizeof text, "dt.draw: more than %d drawings in one frame; the rest are not shown",
+                     s->draws == FM_DRAW_PER_MOD ? FM_DRAW_PER_MOD : FM_DRAW_MAX);
+            log_line(s, "", text);
+        }
+        return NULL;
+    }
+    s->draws++;
+    s_drawing_by[s_drawing_count] = s;
+    FmDraw *d = &s_drawing[s_drawing_count++];
+    memset(d, 0, sizeof *d);
+    return d;
+}
+
+/* Coordinates far off the picture are as good as any other off it. */
+static int clamp(lua_Integer v)
+{
+    return v < -0x10000 ? -0x10000 : v > 0x10000 ? 0x10000 : (int)v;
+}
+
+static int sb_draw_text(lua_State *L)
+{
+    lua_Integer x = luaL_checkinteger(L, 1), y = luaL_checkinteger(L, 2);
+    const char *text = luaL_checkstring(L, 3);
+    uint32_t color = lua_isnoneornil(L, 4) ? 0xFFFFFF : check_color(L, 4);
+    FmDraw *d = add_draw(L);
+    if (d) {
+        *d = (FmDraw){ true, (int)clamp(x), (int)clamp(y), 0, 0, color, "" };
+        copy_text(d->str, sizeof d->str, text, FM_DRAW_CHARS);
+    }
+    lua_pushboolean(L, d != NULL);
+    return 1;
+}
+
+static int sb_draw_rect(lua_State *L)
+{
+    lua_Integer x = luaL_checkinteger(L, 1), y = luaL_checkinteger(L, 2);
+    lua_Integer w = luaL_checkinteger(L, 3), h = luaL_checkinteger(L, 4);
+    uint32_t color = check_color(L, 5);
+    FmDraw *d = add_draw(L);
+    if (d) {
+        *d = (FmDraw){ false, (int)clamp(x), (int)clamp(y), (int)clamp(w), (int)clamp(h), color, "" };
+    }
+    lua_pushboolean(L, d != NULL);
+    return 1;
+}
+
+/* The frame's drawings become the shown ones; a stopped script's are dropped. */
+static void finish_drawing(void)
+{
+    s_drawn_count = 0;
+    for (int i = 0; i < s_drawing_count; i++) {
+        if (!s_drawing_by[i]->stopped) {
+            s_drawn[s_drawn_count++] = s_drawing[i];
+        }
+    }
+    s_drawing_count = 0;
+    for (int i = 0; i < s_script_count; i++) {
+        s_scripts[i]->draws = 0;
+    }
+}
+
+int fm_draws(const FmDraw **draws)
+{
+    *draws = s_drawn;
+    return s_drawn_count;
+}
+
+/* ---- dt.<query>() ---- */
+
+static void push_record(lua_State *L, const FmQuery *q, const long long *values)
+{
+    lua_createtable(L, 0, q->field_count);
+    for (int f = 0; f < q->field_count; f++) {
+        lua_pushinteger(L, (lua_Integer)values[f]);
+        lua_setfield(L, -2, q->fields[f]);
+    }
+}
+
+/* dt.<query>(): upvalue 1 is the query's index. */
+static int sb_query(lua_State *L)
+{
+    const FmQuery *q = &s_game.queries[lua_tointeger(L, lua_upvalueindex(1))];
+    if (!s_game.state_open || !s_game.state_open()) {
+        return luaL_error(L, "dt.%s: the game's state is read in dt.on callbacks", q->name);
+    }
+    long long values[FM_QUERY_VALUES];
+    int n = q->read(values);
+    if (!q->list) {
+        push_record(L, q, values);
+        return 1;
+    }
+    lua_createtable(L, n, 0);
+    for (int i = 0; i < n; i++) {
+        push_record(L, q, &values[i * q->field_count]);
+        lua_rawseti(L, -2, i + 1);
+    }
     return 1;
 }
 
@@ -750,6 +884,18 @@ static int setup(lua_State *L)
     set_function(L, "set", sb_store_set);
     seal(L, "dt.store");
     lua_setfield(L, -2, "store");
+
+    lua_newtable(L);
+    set_function(L, "text", sb_draw_text);
+    set_function(L, "rect", sb_draw_rect);
+    seal(L, "dt.draw");
+    lua_setfield(L, -2, "draw");
+
+    for (int i = 0; i < s_game.query_count; i++) {
+        lua_pushinteger(L, i);
+        lua_pushcclosure(L, sb_query, 1);
+        lua_setfield(L, -2, s_game.queries[i].name);
+    }
     lua_setfield(L, -2, "dt");
     lua_pop(L, 1);
 
@@ -776,7 +922,13 @@ static int dispatch(lua_State *L)
         if (e == FRAME_BIT) {
             lua_pushinteger(L, frame);
         } else {
+            lua_createtable(L, 0, s_nargs + 1);
             lua_pushstring(L, s_game.events[e].name);
+            lua_setfield(L, -2, "name");
+            for (int a = 0; a < s_nargs; a++) {
+                lua_pushinteger(L, (lua_Integer)s_args[a].value);
+                lua_setfield(L, -2, s_args[a].name);
+            }
         }
         s->steps = SCRIPT_INSTRUCTIONS / HOOK_STEP;
         lua_call(L, 1, 1);
@@ -837,14 +989,17 @@ static bool live(const Script *s, int bit)
     return s->L && !s->stopped && (s->wants & 1ull << bit);
 }
 
-bool fm_scripts_event(int event)
+bool fm_scripts_event(int event, const FmArg *args, int nargs)
 {
     bool cancel = false;
+    s_args = args;
+    s_nargs = nargs;
     for (int i = 0; i < s_script_count; i++) {
         if (event >= 0 && event < s_game.event_count && live(s_scripts[i], event)) {
             cancel |= run(s_scripts[i], event);
         }
     }
+    s_nargs = 0;
     return cancel;
 }
 
@@ -1080,6 +1235,7 @@ void fm_scripts_frame(void)
         s_game.end_frame();
     }
     s_write_count = 0;
+    finish_drawing();
     time_t now = time(NULL);
     if (now != s_checked) {
         s_checked = now;
