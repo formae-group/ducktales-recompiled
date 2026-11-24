@@ -588,6 +588,21 @@ stay on top.
 Not run on this tree: the full `verify_routes.py`, the full `decomp_test.py` (check, replace and
 pokes), and the window by eye.
 
+## Full decompilation (2026-11-24)
+
+Main d54b09b, with every executed PRG byte in a routine with C: `tools/decomp_progress.py` reports
+100%, 28,371 of 28,371 bytes executed by the 13 routes and 92 poke cases, in 391 routines, with no
+original routine reached.
+
+| Check | Result |
+|---|---|
+| `tests/decomp_test.py` (every route, all modes, 1,454 s with 2 jobs) | check 13/13 (16,263,223 calls compared), replace 13/13 (88,826 frames), pokes 92/92 in check and replace, events 12/12 (warm reset, start lives, and the full_moon and full_amazon event logs equal with --decomp off, check and replace) |
+| `tests/quick_verify.py` (native) | 13/13, 88,826 frames |
+| `tests/native_decomp_test.py` | 13/13, logic steps equal |
+| `--decomp check --frames 300` | no mismatch; 391 routines report at 30 frames |
+
+Not run on this tree: the full `tests/verify_routes.py` (last run on 21a7ffb with 12 routes).
+
 ## Not verified
 
 - The full `tests/verify_routes.py`, `tests/enhancements_test.py` and `tests/decomp_test.py` on

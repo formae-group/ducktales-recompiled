@@ -856,7 +856,7 @@ script's docstring gives every rule. `--rev` reads the C of another branch again
 coverage.
 
 On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **100%, 28,371 of 28,371 executed
-bytes**, in 391 routines (decomp/flow on main 0d8b498, 13 routes and 92 poke cases).
+bytes**, in 391 routines (main d54b09b, 13 routes and 92 poke cases).
 
 | Group | Files | Routines | Executed bytes | Share |
 |---|---|---|---|---|
