@@ -141,6 +141,11 @@ uint64_t dc_frame(void)
     return cyc_ring_frame;
 }
 
+bool Decomp_ConsoleTiming(void)
+{
+    return true;
+}
+
 void dc_c_begin(void)
 {
     s_scope = false;

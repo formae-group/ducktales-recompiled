@@ -41,6 +41,11 @@ uint64_t dc_frame(void)
     return native_frame_number();
 }
 
+bool Decomp_ConsoleTiming(void)
+{
+    return false;
+}
+
 void dc_c_begin(void)
 {
     s_scope = false;

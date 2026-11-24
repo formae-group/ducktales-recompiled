@@ -76,13 +76,14 @@ static void Bank_Select(uint8_t bank)
  * The controllers latch the strobe and shift on APU cycles, which do not run
  * in an isolated call: there the original reads one unchanging bit, so its
  * cycle count (which depends on the buttons through the final masks) is not
- * the console's. Replace mode therefore gives this call to the original;
- * check mode compares the C with the original on the bits an isolated call
- * reads. */
+ * the console's. Replace mode on the cycle host therefore gives this call to
+ * the original; check mode compares the C with the original on the bits an
+ * isolated call reads. On the native runtime, which keeps no cycle counts,
+ * the C reads the controllers on the bus. */
 static void Input_ReadControllers(void)
 {
     Decomp_Enter(DT_CODE_READ_CONTROLLERS, 0, 0, 0);
-    if (Decomp_Mode() == DECOMP_REPLACE) {
+    if (Decomp_Mode() == DECOMP_REPLACE && Decomp_ConsoleTiming()) {
         Decomp_RunOriginal();
         return;
     }

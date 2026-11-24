@@ -74,6 +74,10 @@ typedef enum DecompMode {
 
 bool Decomp_SetMode(DecompMode mode);
 DecompMode Decomp_Mode(void);
+/* Whether replace mode keeps the console's timing: true on the cycle host,
+ * which spends each replaced call's original cycle count; false on the native
+ * runtime, where the C runs alone (decomp_native.c). */
+bool Decomp_ConsoleTiming(void);
 bool Decomp_ParseMode(const char *text, DecompMode *out);
 
 /* The first statement of every routine's C, with the registers the original
