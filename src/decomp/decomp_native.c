@@ -12,8 +12,11 @@
  * stack below the routine's return excepted), the C's device operations made
  * on the bus and its contract's registers set, and the routine returns as its
  * RTS would. Task code goes on where its C ends: the routine it hands off to,
- * or its RTS, after its device stores. A call whose C gives it to the
- * original (Decomp_RunOriginal) runs the original.
+ * or its RTS, after its device stores. An interrupt routine goes on where its
+ * RTI returns; the NMI handler's bus operations (its sprite-0 wait polls
+ * PPUSTATUS for real) are made after its RAM is stored, so that its sprite
+ * DMA sends the OAM shadow it wrote. A call whose C gives it to the original
+ * (Decomp_RunOriginal) runs the original.
  *
  * The C's cycles are not the original's, so where VBlank falls in a logic step
  * changes: the player allows the mode only with No slowdown, where a step's
@@ -209,6 +212,36 @@ static bool task_replace(int i, const CycModRegs *in)
     return true;
 }
 
+/* The NMI handler: its RAM, its bus operations, then its RTI. */
+static void nmi_replace(int i, const CycModRegs *in)
+{
+    const DecompRoutine *rt = dc_routine[i];
+    Regs c;
+    dc_run_c(rt, in, &c);
+    dc_stats[i].calls++;
+    if (dc_run_original) {
+        dc_stats[i].original++;
+        return;
+    }
+    store_image(task_kept, dc_cur_s);
+    dc_play_ops(dc_played, (uint64_t)(dc_nops - dc_played) * OP_GAP, rt->addr);
+    const uint8_t *ram = native_cpu_ram();
+    uint8_t s = dc_cur_s;
+    cpu.a = c.a;
+    cpu.x = c.x;
+    cpu.y = c.y;
+    cpu_set_p(ram[0x100 | (uint8_t)(s + 1)]);
+    cpu.pc = (uint16_t)(ram[0x100 | (uint8_t)(s + 2)] | ram[0x100 | (uint8_t)(s + 3)] << 8);
+    cpu.s = (uint8_t)(s + 3);
+    dc_stats[i].compared++;
+    native_nmi_return();
+}
+
+bool dc_isolated(void)
+{
+    return native_isolated();
+}
+
 /* The RTS observer: starts the C of a resume point the RTS returned to (and of
  * the next one, when that C returns). */
 static void on_return(void)
@@ -242,6 +275,10 @@ int dc_on_entry(uint16_t addr)
             continue;
         }
         CycModRegs in = regs();
+        if (dc_routine[i]->interrupt && !dc_routine[i]->task) {
+            nmi_replace(i, &in);
+            return 0;
+        }
         if (dc_routine[i]->task) {
             task_replace(i, &in);
             return 0;

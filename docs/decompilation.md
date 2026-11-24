@@ -235,8 +235,26 @@ return address come off the stack above its last pull (S + 1 to S + 3), as is.
 - The native runtime ends the NMI at the fetch of the RTI at `$C138` (its lag and NMI-audit
   accounting); a C that makes the RTI tells it with `native_nmi_return()`.
 
-So far the handler's exit is C: `Nmi_Return` (`$C132`, `PLA TAY PLA TAX PLA PLP RTI`, a site
-after the bank select `$FFDE` returns), with the body before it still the original's.
+The whole handler is C: `Nmi_Handler` (`$C000`, a site), and for an NMI whose body went to the
+original its exit alone, `Nmi_Return` (`$C132`, `PLA TAY PLA TAX PLA PLP RTI`, a site after the bank
+select `$FFDE` returns). A second sound request for the speed or fade id (they read the Y the driver
+left) gives `Nmi_Handler`'s call to the original.
+
+- The sprite-0 wait is a bus operation of its own, `Decomp_BusWait(addr, mask, want)`: reads of `addr`
+  until `(value & mask) == want`, a failure after 60,000.
+- `Nmi_Handler` cannot run in an isolated call: that has no clock, so the sprite-0 hit never comes and
+  a sprite DMA or a `$2005` write never lands. Check mode runs its C at the NMI and makes its bus
+  operations on the machine from a snapshot (`cyc_snapshot_take`), with the clock running and the wait
+  real; it keeps what they left and restores the snapshot. Then the original runs for real, and at its
+  RTI (the `$C138` site) check compares RAM (the stack below the handler's entry S left out), A, X, Y,
+  S and P's N, V, Z and C, CIRAM, palette RAM, CHR RAM, OAM, the PRG bank, the PPU's control and mask
+  bits, t, fine X and write latch, the APU's written registers (`$4000`-`$400F` as written, the DMC's
+  settings, the `$4015` enables, the frame counter's mode), and the writes to `$2006`, `$2007` and
+  `$4000`-`$4017` (not `$4014` or `$4016`) in order: the C's from its bus operations, the original's
+  from the trace's cycle observer (`cyc_trace_cycle_hook`; the trace's hash and cycle count are put
+  back after). v, OAMADDR and the APU's clocked counters move with time and are not compared.
+- Replace mode on the cycle host gives `Nmi_Handler`'s call to the original until its bus operations
+  are made at the original's cycles; the native runtime runs the C.
 
 ### Calling contract
 
@@ -286,6 +304,7 @@ leave the jump vector in `$00/$01` as the original's loop does.
 | `Task_Create` | A = slot | none | reset reads nothing after it |
 | `Task_CurrentSlot`, `Task_SlotOffset` | none; A = slot | X | called from the task primitives' C |
 | `Task_Yield`, `Task_Wait` (task code) | X, Y (kept on the stack); X = frames | none: they hand off to the scheduler `$FF35` | `Task_WaitNext` (`$FFA8`, the resume point) returns A, X, Y and P as its RTS leaves them |
+| `Nmi_Handler` (interrupt routine) | the interrupted A, X, Y and P | A, X, Y and P after the RTI; hardware | see Interrupt routines |
 | `Nmi_Return` (interrupt routine) | none | A, X, Y and P after the RTI | see Interrupt routines |
 
 ### On the native runtime
@@ -456,6 +475,7 @@ RAM-identical in replace mode.
 | `Task_Wait` (task code) | `$FFA5` | checked | 8 | - | not measured |
 | `Task_WaitNext` (resume point after `task_yield`) | `$FFA8` | checked | 8 | - | not measured |
 | `Task_Yield` (task code) | `$FFAC` | checked | 12 | - | not measured |
+| `Nmi_Handler` (interrupt routine) | `$C000` | checked | 13 | - | not measured |
 | `Nmi_Return` (interrupt routine) | `$C132` | checked | 13 | - | not measured |
 | `Oam_Build` | bank 5 `$8000` | checked | 12 | - | not measured |
 | `Oam_DrawSlot` | bank 5 `$80BE` | checked | 12 | - | not measured |

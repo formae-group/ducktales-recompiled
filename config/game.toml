@@ -735,6 +735,13 @@ bank = 3
 length = 8
 crc32 = 0xD13796E4
 
+# Nmi_Handler, the NMI vector (an interrupt routine)
+[[mod_function_hook]]
+id = "ducktales.decomp.C000"
+addr = 0xC000
+length = 8
+crc32 = 0x83598D0D
+
 # Nmi_Return, the NMI handler's exit (an interrupt routine)
 [[mod_function_hook]]
 id = "ducktales.decomp.C132"

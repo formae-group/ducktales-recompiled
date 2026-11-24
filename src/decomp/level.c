@@ -244,7 +244,7 @@ uint8_t Vram_FlushQueue(void)
     return Vram_Upload(DT_ADDR_VRAM_QUEUE);
 }
 
-static void Vram_FlushTileEdits(void)
+void Vram_FlushTileEdits(void)
 {
     Decomp_Enter(DT_CODE_TILE_EDIT_FLUSH, 0, 0, 0);
     gTileEditReady = 0;

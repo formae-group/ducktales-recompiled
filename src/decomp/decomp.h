@@ -104,6 +104,10 @@ void Decomp_RunOriginal(void);
  * switches the bank Game_ReadRom sees for the rest of the routine. */
 void Decomp_BusWrite(uint16_t addr, uint8_t value);
 void Decomp_BusRead(uint16_t addr);
+/* A device poll (the NMI's sprite-0 wait): addr is read until its bits in
+ * mask equal want. Made for real in replace mode; on an isolated copy of the
+ * machine, where no clock runs, it is one read. */
+void Decomp_BusWait(uint16_t addr, uint8_t mask, uint8_t want);
 /* A device read whose value the C needs (the controllers): made at once with
  * the recorded operations before it, in the C's isolated copy in check mode
  * and on the bus in replace mode. A routine that gives its call to the
