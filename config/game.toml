@@ -151,21 +151,21 @@ addr = 0xEB5E
 length = 8
 crc32 = 0xE8776DC5
 
-# Player_RowChange (task code, src/decomp/player.c)
+# Player_RowChange (task code, src/decomp/player/modes.c)
 [[mod_function_hook]]
 id = "ducktales.decomp.E8C0"
 addr = 0xE8C0
 length = 8
 crc32 = 0x7F4AD69A
 
-# Player_Message (task code, src/decomp/player.c)
+# Player_Message (task code, src/decomp/player/message.c)
 [[mod_function_hook]]
 id = "ducktales.decomp.ED05"
 addr = 0xED05
 length = 8
 crc32 = 0x721CC2F3
 
-# Player_Treasure (task code, src/decomp/player.c)
+# Player_Treasure (task code, src/decomp/player/message.c)
 [[mod_function_hook]]
 id = "ducktales.decomp.EF62"
 addr = 0xEF62
@@ -179,7 +179,7 @@ addr = 0xEBB4
 length = 8
 crc32 = 0xDB4C6AB4
 
-# Camera, scrolling and level (src/decomp/level.c, collision.c). The sites of
+# Camera, scrolling and level (src/decomp/level/, collision.c). The sites of
 # $C71D, $C830, $EFE2, $CF93 and $C42C also stop the isolated runs of the game
 # flow's task code, which hands off to them.
 
@@ -326,7 +326,7 @@ addr = 0xF506
 length = 8
 crc32 = 0x0057BA6D
 
-# Block_Draw (the message box $ED05 in player.c hands off to it, and its site also
+# Block_Draw (the message box $ED05 in player/message.c hands off to it, and its site also
 # stops the isolated runs of that task code)
 [[mod_function_hook]]
 id = "ducktales.decomp.D068"
@@ -334,7 +334,7 @@ addr = 0xD068
 length = 8
 crc32 = 0x4E032F44
 
-# Row_Scroll (task code; the row change $E8C0 in player.c hands off to it, and its
+# Row_Scroll (task code; the row change $E8C0 in player/modes.c hands off to it, and its
 # site also stops the isolated runs of that task code)
 [[mod_function_hook]]
 id = "ducktales.decomp.C976"

@@ -91,11 +91,9 @@ def source(rev, path):
 
 
 def decomp_sources(rev):
-    """{module: text}: each .c file of src/decomp/, and each subfolder's .h and .c files as one module named
-    after the folder (src/decomp/flow/ is flow)."""
-    if not rev:
-        names = sorted(p.relative_to(ROOT).as_posix() for p in (ROOT / 'src' / 'decomp').rglob('*.[ch]'))
-    else:
+    """stem -> C text of src/decomp/; a subfolder's files are one text under the folder's name: its own
+    file (player/player.c) first, then the other .c files and its internal headers."""
+    if rev:
         names = subprocess.run(
             ['git', 'ls-tree', '-r', '--name-only', rev, 'src/decomp/'],
             cwd=ROOT,
@@ -103,13 +101,20 @@ def decomp_sources(rev):
             text=True,
             check=True,
         ).stdout.split()
-    sources = {}
-    for n in sorted(names):
-        parts = Path(n).relative_to('src/decomp').parts
-        if (len(parts) == 1 and n.endswith('.c')) or (len(parts) == 2 and n.endswith(('.c', '.h'))):
-            key = Path(n).stem if len(parts) == 1 else parts[0]
-            sources[key] = sources.get(key, '') + source(rev, n) + '\n'
-    return sources
+        files = {Path(n).relative_to('src/decomp'): n for n in names}
+        files = {
+            p: source(rev, n) for p, n in files.items() if p.suffix == '.c' or (p.parent.parts and p.suffix == '.h')
+        }
+    else:
+        base = ROOT / 'src' / 'decomp'
+        paths = [*base.glob('*.c'), *base.glob('*/*.c'), *base.glob('*/*.h')]
+        files = {p.relative_to(base): p.read_text(encoding='utf-8') for p in paths}
+    out = {}
+    order = lambda p: (p.parent.as_posix(), p.suffix == '.h', p.stem != p.parent.name, p.name)  # noqa: E731
+    for path in sorted(files, key=order):
+        key = path.parent.name if path.parent.parts else path.stem
+        out[key] = out.get(key, '') + files[path]
+    return out
 
 
 class Code:

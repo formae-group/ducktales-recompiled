@@ -1,6 +1,6 @@
 """Timing marks for a decompiled routine (docs/DECOMPILATION.md "Timing").
 
-For a routine of the tables in src/decomp/ (its .c files and those of its subfolders), walks its original code in the ROM from its entry
+For a routine of the tables in src/decomp/ (and its subfolders), walks its original code in the ROM from its entry
 (fall-through, both ways of each branch, JMP; not into the routines it calls) and lists every
 instruction with its cycles and what the routine's C must say about it to be timed:
 
@@ -139,27 +139,30 @@ def function(text, func):
     return text[m.start() : i], text.count('\n', 0, m.start()) + 1
 
 
-def module_files(path):
-    """The file and, in a subfolder of src/decomp/ (a module split into files), the folder's other .c and .h files."""
-    if path.parent == ROOT / 'src' / 'decomp':
-        return [path]
-    return [path] + [p for p in sorted(path.parent.glob('*.[ch]')) if p != path]
+def source_text(file):
+    """The C of file; for a file in a subfolder, the folder's files with file first, then its internal headers."""
+    path = ROOT / 'src' / 'decomp' / file
+    if path.parent.name == 'decomp':
+        return path.read_text(encoding='utf-8')
+    others = sorted(p for p in path.parent.glob('*.c') if p != path) + sorted(path.parent.glob('*.h'))
+    return ''.join(p.read_text(encoding='utf-8') for p in [path, *others])
 
 
 def defining_file(path, func):
-    """Where func is defined, relative to src/decomp/: the table's file or another file of its module."""
-    for p in module_files(path):
-        if function(p.read_text(encoding='utf-8'), func)[0]:
-            path = p
-            break
+    """Where func is defined, relative to src/decomp/: the table's file or another file of its subfolder."""
+    if path.parent != ROOT / 'src' / 'decomp':
+        for p in sorted(path.parent.glob('*.c')):
+            if function(p.read_text(encoding='utf-8'), func)[0]:
+                path = p
+                break
     return path.relative_to(ROOT / 'src' / 'decomp').as_posix()
 
 
 def body(file, func):
-    """The C of func with the functions of the same module it calls, two calls deep (an adapter's helper)."""
-    texts = [p.read_text(encoding='utf-8') for p in module_files(ROOT / 'src' / 'decomp' / file)]
-    text = '\n'.join(texts)
-    src, line = function(texts[0], func)
+    """The C of func with the functions of the same file (or subfolder) it calls, two calls deep (an
+    adapter's helper)."""
+    text = source_text(file)
+    src, line = function(text, func)
     seen, todo = {func}, [src]
     for _ in range(2):
         found = []
