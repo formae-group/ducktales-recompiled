@@ -24,6 +24,7 @@
 #include "decomp/objcommon.h"
 #include "decomp/sound.h"
 
+#include "ducktales/events.h"
 #include "ducktales/game.h"
 #include "ducktales/hud.h"
 #include "ducktales/objects.h"
@@ -2757,13 +2758,58 @@ static void Obj_Thief(uint8_t x)
     gObjects->timer[x] = (uint8_t)(gObjects->unk_06D0[x] << 1);
 }
 
-/* $F6D7, not decompiled yet: a counted hit on a boss (the boss-hit event's
- * site is in it). Carry set when the hit beat it. */
+#define BOSS_COOLDOWN        0x78 /* frames before the next hit counts */
+#define BOSS_ACTION_NO_PRIZE 0x84
+#define PRIZE_X              0x80
+#define PRIZE_Y              0xB8
+#define PRIZE_STATE          0xB1
+#define PRIZE_TIMER          0x3C
+
+/* $F6D7: a hit on a boss. While its cooldown $06F0 runs the hit only counts
+ * it down, and the blink (flag bit 1, and $0690) ends with it. A counted hit
+ * raises EVENT_BOSS_HIT, takes one of the hits left $B1 and starts the
+ * cooldown, blinking; the last one beats the boss: unless its action is $84,
+ * its prize appears at the arena's middle (a hidden item in a chest, in a
+ * free slot or else slot 1). True (carry) when the hit beat it; X is kept. */
 static bool Boss_Hit(uint8_t *x)
 {
-    Regs r = Decomp_Call(DT_CODE_BOSS_HIT, 0, *x, 0);
-    *x = r.x;
-    return r.p & P_C;
+    uint8_t slot = *x;
+    Decomp_Enter(DT_CODE_BOSS_HIT, 0, slot, 0);
+    if (gObjects->bossCooldown[slot] != 0) {
+        if (--gObjects->bossCooldown[slot] == 0) {
+            gObjects->unk_0690[slot] = 0;
+            gObjects->flags[slot] &= (uint8_t)~OBJ_FLAG_BLINK;
+        }
+        return false;
+    }
+    Decomp_RaiseEvent(EVENT_BOSS_HIT);
+    if (--gBossHits != 0) {
+        gObjects->bossCooldown[slot] = BOSS_COOLDOWN;
+        gObjects->flags[slot] |= OBJ_FLAG_BLINK;
+        return false;
+    }
+    if (gObjects->action[slot] == BOSS_ACTION_NO_PRIZE) {
+        return true;
+    }
+    gScratch0 = slot;
+    uint8_t o;
+    if (!Obj_FindFreeSlot(&o)) {
+        o = 1;
+    }
+    gObjects->y[o] = PRIZE_Y;
+    gObjects->worldPage[o] = gCameraPage;
+    gObjects->worldX[o] = PRIZE_X;
+    gObjects->unk_0690[o] = 0;
+    gObjects->animTimer[o] = 0;
+    gObjects->animFrame[o] = 0;
+    gObjects->hitbox[o] = 0;
+    gObjects->bossCooldown[o] = 0;
+    gObjects->state[o] = PRIZE_STATE;
+    gObjects->flags[o] = PRIZE_STATE & 0xF0;
+    gObjects->action[o] = OBJ_ACTION_CHEST;
+    gObjects->kind[o] = OBJ_KIND_HIDDEN_ITEM;
+    gObjects->unk_06C0[o] = PRIZE_TIMER;
+    return true;
 }
 
 /* Kind $28 ($A6D3): the African Mines boss. It lands in the middle of the
@@ -3935,6 +3981,11 @@ static void Run_MoneyAdd(Regs *r)
     Money_Add(r->a, r->y);
 }
 
+static void Run_BossHit(Regs *r)
+{
+    SetCarry(r, Boss_Hit(&r->x));
+}
+
 static void Run_RefillHp(Regs *r)
 {
     Hud_RefillHp();
@@ -4029,6 +4080,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_HUD_RESTORE_DOT, NULL, "Hud_RestoreDot", Run_RestoreDot, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_MONEY_ADD, NULL, "Money_Add", Run_MoneyAdd, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_HP_REFILL, "ducktales.decomp.F812", "Hud_RefillHp", Run_RefillHp, OUT_A | OUT_Y },
+    { DT_CODE_BOSS_HIT, "ducktales.decomp.F6D7", "Boss_Hit", Run_BossHit, OUT_X | OUT_C },
     { DT_CODE_MONEY_MAX, "ducktales.decomp.F83F", "Money_Max", Run_MoneyMax, OUT_A | OUT_Y },
 };
 const int gObjectRoutineCount = sizeof gObjectRoutines / sizeof gObjectRoutines[0];

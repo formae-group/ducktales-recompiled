@@ -18,14 +18,16 @@
  *
  * Original routines called from here: through Decomp_Call the sprite builder
  * (bank 5 $8000), the pause text (bank 5 $B580), the Land Select messages
- * (bank 5 $B800/$B81C), the spawner set-up (bank 6 $AE60), $C267, $C2E6, $F2C7,
- * $F812 and $F84A; handed off to: task_yield and task_wait, the camera $EFE2, the
+ * (bank 5 $B800/$B81C), the spawner set-up (bank 6 $AE60), $C267, $C2E6 and
+ * $F812; the object clear $F2C7 is objcommon.c's C and the TOTAL cap $F84A
+ * this file's; handed off to: task_yield and task_wait, the camera $EFE2, the
  * object spawner (bank 6 $AEA0), the fades $C279/$C282, $C197/$C1A1, $C42C,
  * $C78F, $C830, the object code (bank 6 $8000), Scrooge's update $E354 and
  * the routines of this subsystem that are not decompiled yet (the ending's later frames, reset).
  */
 #include "decomp/decomp.h"
 #include "decomp/motion.h"
+#include "decomp/objcommon.h"
 #include "decomp/sound.h"
 
 #include "ducktales/events.h"
@@ -625,7 +627,7 @@ static void Death_Place(Regs *r)
 static void Death_Placed(Regs *r)
 {
     Decomp_Enter(DT_FLOW_DEATH_PLACED, r->a, r->x, r->y);
-    Call(r, DT_CODE_CLEAR_OBJECTS);
+    r->a = Obj_ClearSlots(&r->x);
     Decomp_Push(gLand);
     Decomp_Push(gMapRow);
     if (gRespawn >= RESPAWN_LIFE) {
@@ -808,7 +810,7 @@ static void FrameLoop_AfterBossTrigger(Regs *r)
     }
     gLandRedirect = 0;
     if (!(redirect & 0x80)) {
-        Call(r, DT_CODE_CLEAR_OBJECTS);
+        r->a = Obj_ClearSlots(&r->x);
         gLand = LAND_TRANSYLVANIA;
         r->x = LAND_TRANSYLVANIA;
         LandLoad(r);
@@ -964,7 +966,7 @@ static void Title_Filled(Regs *r)
 {
     Decomp_Enter(DT_FLOW_TITLE_FILLED, r->a, r->x, r->y);
     Call(r, DT_CODE_OAM_CLEAR);
-    Call(r, DT_CODE_CLEAR_OBJECTS);
+    r->a = Obj_ClearSlots(&r->x);
     SelectBank(r, DT_BANK_SPRITES);
     r->x = TITLE_STRINGS;
     Jsr(DT_B5_PPU_STRINGS, DT_FLOW_TITLE_STRINGS, OUT_X);
@@ -1136,7 +1138,7 @@ static void BossTrigger(Regs *r)
     }
     gStreamRequest = dir;
     r->a = dir;
-    Call(r, DT_CODE_CLEAR_OBJECTS);
+    r->a = Obj_ClearSlots(&r->x);
     Decomp_Push(gLand);
     Decomp_Push(gMapRow);
     if (treasures == ALL_TREASURES) {
@@ -1245,7 +1247,7 @@ static void LandLoad_Filled(Regs *r)
 {
     Decomp_Enter(DT_FLOW_LOAD_FILLED, r->a, r->x, r->y);
     Land_ApplyTables(r);
-    Call(r, DT_CODE_CLEAR_OBJECTS);
+    r->a = Obj_ClearSlots(&r->x);
     Jsr(DT_CODE_DRAW_START, DT_FLOW_LOAD_DRAWN, 0);
 }
 
@@ -1430,6 +1432,17 @@ static void BankTransfer(Regs *r)
     BankTransfer_To(r, BANK_TOTAL_PPU, BANK_MONEY_PPU);
 }
 
+/* $F84A: TOTAL's five digits set to 9. */
+static void Total_Max(Regs *r)
+{
+    Decomp_Enter(DT_CODE_TOTAL_MAX, r->a, r->x, r->y);
+    for (int i = TOTAL_DIGITS - 1; i >= 0; i--) {
+        RAM_U8(DT_ADDR_TOTAL_DIGITS + i) = 9;
+    }
+    r->a = 9;
+    r->y = 0xFF;
+}
+
 /* $FFC7: the same transfer as the ending starts, shown in the HUD (TOTAL at
  * $206C, the money at $2043). */
 static void Ending_BankTransfer(Regs *r)
@@ -1484,7 +1497,7 @@ static void BankTransfer_Steps(Regs *r)
         r->a = 0;
         r->x = 0xFF;
         if (carry) {
-            Call(r, DT_CODE_TOTAL_MAX);
+            Total_Max(r);
             for (int i = TOTAL_DIGITS - 1; i >= 0; i--) {
                 total[i] = r->a;
             }
@@ -1556,7 +1569,7 @@ static void LandSelect_ScreenOff(Regs *r)
 {
     Decomp_Enter(DT_FLOW_SELECT_SCREEN_OFF, r->a, r->x, r->y);
     Call(r, DT_CODE_OAM_CLEAR);
-    Call(r, DT_CODE_CLEAR_OBJECTS);
+    r->a = Obj_ClearSlots(&r->x);
     r->a = gLand;
     Decomp_Push(gLand);
     r->x = LAND_SELECT_SCREEN;
@@ -1826,7 +1839,7 @@ static void Scene_Faded(Regs *r)
 static void Scene_ScreenOff(Regs *r)
 {
     Decomp_Enter(DT_FLOW_SCENE_SCREEN_OFF, r->a, r->x, r->y);
-    Call(r, DT_CODE_CLEAR_OBJECTS);
+    r->a = Obj_ClearSlots(&r->x);
     gRam[DT_ADDR_TILESET_BANK] = SCENE_TILESET;
     r->a = SCENE_TILESET;
     SelectBank(r, DT_BANK_OBJECTS);
@@ -2056,7 +2069,7 @@ static void Mode15_Stream(Regs *r);
 static void Mode15_Redraw(Regs *r)
 {
     Decomp_Enter(DT_CODE_MESSAGE_SCENE, r->a, r->x, r->y);
-    Call(r, DT_CODE_CLEAR_OBJECTS);
+    r->a = Obj_ClearSlots(&r->x);
     gStreamPos = 0;
     gRowChrState = 0;
     gStreamScreen = M15_SCREEN;
@@ -2237,7 +2250,7 @@ static void EndingScreen_Faded(Regs *r)
     gStreamPage = 0;
     r->a = gEndingScreen;
     if (gEndingScreen != ENDING_SCREEN_TEXT) {
-        Call(r, DT_CODE_CLEAR_OBJECTS);
+        r->a = Obj_ClearSlots(&r->x);
         gObjects->state[0] = 0;
         gObjects->state[1] = 0;
         r->a = 0;
@@ -2425,6 +2438,7 @@ const DecompRoutine gFlowRoutines[] = {
     ROUTINE(DT_CODE_TIMER_TICK, NULL, "Timer_Tick", Timer_Tick, 0),
     ROUTINE(DT_CODE_HUD_MONEY, NULL, "Hud_RefreshMoney", Hud_RefreshMoney, 0),
     ROUTINE(DT_CODE_HUD_TOTAL, NULL, "Hud_RefreshTotal", Hud_RefreshTotal, 0),
+    ROUTINE(DT_CODE_TOTAL_MAX, NULL, "Total_Max", Total_Max, OUT_A | OUT_Y),
     ROUTINE(DT_CODE_HUD_TEMPLATE, SITE("D60A"), "Hud_Reset", Hud_Reset, 0),
     ROUTINE(DT_CODE_LAND_TABLES, SITE("D9CA"), "Land_ApplyTables", Land_ApplyTables, OUT_X | OUT_Y),
     ROUTINE(DT_CODE_LAND_PALETTE, SITE("D9F5"), "Land_LoadPalette", Run_LandPalette, OUT_X | OUT_Y),

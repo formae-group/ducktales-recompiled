@@ -964,7 +964,7 @@ static void Row_Scroll(Regs *r)
     gChrStream = 0;
     r->a = 0;
     r->x = side;
-    Row_Call(r, DT_CODE_CLEAR_OBJECTS);
+    r->a = Obj_ClearSlots(&r->x);
     Row_Call(r, DT_CODE_OAM_CLEAR);
     Row_Yield(DT_CODE_ROW_SCROLL_FRAME);
 }
