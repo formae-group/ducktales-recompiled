@@ -1,5 +1,5 @@
 /*
- * objects/internal.h - what the files of the object system share
+ * objects/objects_internal.h - what the files of the object system share
  * (src/decomp/objects/, docs/DECOMPILATION.md "Objects"): the sound ids and
  * RAM names the handlers use, the small helpers every family calls, and the
  * routines one file calls in another.

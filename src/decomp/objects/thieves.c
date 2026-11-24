@@ -2,7 +2,7 @@
  * objects/thieves.c - the enemies that take Scrooge's money: the thief (kinds $30
  * and $31) and the pickpocket ($32) with its walk and theft.
  */
-#include "decomp/objects/internal.h"
+#include "decomp/objects/objects_internal.h"
 
 /* $AD56: the pickpocket's walk, in its direction with probes $18 or $1B. */
 static uint8_t Obj_PickpocketWalk(uint8_t x)

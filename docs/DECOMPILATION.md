@@ -694,7 +694,7 @@ task code runs.
 `src/decomp/objects/` (bank 6 and the fixed bank's kinds) and `src/decomp/objcommon.c` (fixed bank) decompile the
 object system. `objects/dispatch.c` has the update, the dispatch and the record spawn; `blocks.c`,
 `items.c`, `enemies.c`, `walkers.c`, `thieves.c`, `flyers.c`, `hazards.c`, `props.c`, `bosses.c` and
-`scenes.c` each hold one family's handlers with their adapters and routine table; `internal.h` has
+`scenes.c` each hold one family's handlers with their adapters and routine table; `objects_internal.h` has
 what they share. The frame loop maps bank 6 and calls `Obj_UpdateAll` (`$8000`) at `$DB78`, its only
 caller. It loads the objects' gravity (`$EF = $40`), then walks slots 1-15 with the cursor in `$4A`
 and, for every slot whose status `$0700` has bit 7 set, jumps to the handler of its kind (`$0710`)

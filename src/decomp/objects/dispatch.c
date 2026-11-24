@@ -16,7 +16,7 @@
  * may have a hook site, including the dispatch and the fixed-bank movement
  * helpers.
  */
-#include "decomp/objects/internal.h"
+#include "decomp/objects/objects_internal.h"
 
 /* $AF2B: spawn land record y (the spawner $AEA0 calls it for the records
  * entering the window $00-$03) unless its consumed bit is set, it lies left

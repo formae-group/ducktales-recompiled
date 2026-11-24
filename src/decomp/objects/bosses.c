@@ -2,7 +2,7 @@
  * objects/bosses.c - the land bosses and the boss hit: African Mines,
  * Himalayas, Moon (with its target and launcher), Amazon and Transylvania.
  */
-#include "decomp/objects/internal.h"
+#include "decomp/objects/objects_internal.h"
 
 #define BOSS_COOLDOWN        0x78 /* frames before the next hit counts */
 #define BOSS_ACTION_NO_PRIZE 0x84

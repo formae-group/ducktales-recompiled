@@ -3,7 +3,7 @@
  * throwers, the charger, pacers and ledge walkers, the leaper, the bouncer
  * and the block kicker.
  */
-#include "decomp/objects/internal.h"
+#include "decomp/objects/objects_internal.h"
 
 /* Kind 1 ($8225): an enemy that walks towards where Scrooge was at 1 px a
  * frame and jumps ($0400) whenever it lands. Hit: pose $0C, beaten. */

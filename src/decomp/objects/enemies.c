@@ -3,7 +3,7 @@
  * its drop, the motion table index, the beaten test, the plain walk and the
  * free-slot search of bank 6.
  */
-#include "decomp/objects/internal.h"
+#include "decomp/objects/objects_internal.h"
 
 /* $89DA: a defeated enemy may drop an item: one time in four by the random
  * bytes ($C1 += $C0 + carry), when its kind has one ($9025) and a slot is

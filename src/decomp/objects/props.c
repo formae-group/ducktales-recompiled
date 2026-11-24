@@ -3,7 +3,7 @@
  * talker, the swinging hold, the key spot, the moving platform, the cart and
  * the visitor with the path it opens.
  */
-#include "decomp/objects/internal.h"
+#include "decomp/objects/objects_internal.h"
 
 /* Kind $0F ($9093): a platform that rises to Y $68 then sinks to $A8 at
  * 1.5 px a frame, carrying Scrooge down 2 px a frame when he stands near

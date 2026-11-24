@@ -2,7 +2,7 @@
  * objects/items.c - what Scrooge collects: money and HP, the pickup (kind $13),
  * the hidden item ($14) and the chest with its variants ($15-$17, $42).
  */
-#include "decomp/objects/internal.h"
+#include "decomp/objects/objects_internal.h"
 
 /* $F83F: money is capped at 9,999,990 (the four high digits set to 9). */
 void Money_Max(void)

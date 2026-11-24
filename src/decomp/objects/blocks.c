@@ -3,7 +3,7 @@
  * a thrown slot hitting others, breaking, opening, launching and kicking a
  * block, and kind 8 (the block) and kind 9 (a launched block).
  */
-#include "decomp/objects/internal.h"
+#include "decomp/objects/objects_internal.h"
 
 /* Scrooge swinging the cane, on the frame it reaches out (frame 3), at the
  * slot: the test the breakable kinds make. The contact test only runs once

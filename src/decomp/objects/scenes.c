@@ -3,7 +3,7 @@
  * $36-$38, $3A-$3D and $40): Launchpad's ride, the sky scene, the final
  * stand-in, the climber, the talker a hit wakes and the final treasure.
  */
-#include "decomp/objects/internal.h"
+#include "decomp/objects/objects_internal.h"
 
 /* ---- the scene objects, kinds $36 to $38 (fixed bank) ---- */
 

@@ -3,7 +3,7 @@
  * the block dweller, the boulder, the roller and the treat spout with its
  * treats.
  */
-#include "decomp/objects/internal.h"
+#include "decomp/objects/objects_internal.h"
 
 /* Kind 7 ($8567): a plant that snaps at Scrooge within $0B px. Caught
  * (within 7 px), he is held hurt (mode 5, $7D = $44) at its mouth; when

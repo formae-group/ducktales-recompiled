@@ -3,7 +3,7 @@
  * flyers, the dangler and swooper, the bobber, rising and dropping shots, the
  * ceiling hopper, the pouncer, the pit jumper and the hop walker.
  */
-#include "decomp/objects/internal.h"
+#include "decomp/objects/objects_internal.h"
 
 /* Kind $0D ($916C): a flyer that heads towards where Scrooge was and
  * weaves through 14 motion entries ($9215), 5 frames each, without
