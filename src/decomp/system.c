@@ -30,6 +30,8 @@
 #define gFadeStep       RAM_U8(DT_ADDR_FADE_STEP)
 #define gFadeFrames     RAM_U8(DT_ADDR_FADE_FRAMES)
 #define gFadeLevel      RAM_U8(DT_ADDR_FADE_LEVEL)
+#define gTaskCurrent    RAM_U8(DT_ADDR_TASK_CURRENT)
+#define gTaskEntry      (&gRam[DT_ADDR_TASK_ENTRY])
 
 #define MASK_SHOWN        0x1E
 #define OAM_PARKED_Y      0xF8
@@ -49,6 +51,15 @@
 #define FADE_IN_STEP      0xF0 /* -0x10 */
 #define FADE_OUT_STEP     0x10
 #define FADE_OUT_DONE     0x50
+#define TASK_STATE        0
+#define TASK_WAIT         1
+#define TASK_STACK        2 /* the saved S, or a new task's entry low byte */
+#define TASK_ENTRY_HI     3
+#define TASK_WAITING      1
+#define TASK_NEW          8
+#define YIELD_FRAMES      1
+
+#define TASK_BYTE(x, field) RAM_U8((uint8_t)(DT_ADDR_TASKS + (field) + (x)))
 
 static uint16_t rom_pointer(uint16_t lo_table, uint16_t hi_table, uint8_t index)
 {
@@ -239,6 +250,78 @@ static void Palette_FadeWait(Regs *r)
         }
     }
     r->p = p;
+}
+
+/* ---- the task primitives (docs/functions.md); task_yield and task_wait are
+ * task code ---- */
+
+/* $FFA1: X = A * 4, the offset of task slot A in $80-$8F; A keeps it. */
+static void Task_SlotOffset(Regs *r)
+{
+    Decomp_Enter(DT_CODE_TASK_SLOT, r->a, r->x, r->y);
+    r->p = (uint8_t)((r->p & ~P_C) | (r->a >> 6 & P_C));
+    r->a = (uint8_t)(r->a << 2);
+    r->x = r->a;
+    r->p = Flags_NZ(r->p, r->x);
+}
+
+/* $FF9F: the running task's slot offset. */
+static void Task_CurrentSlot(Regs *r)
+{
+    Decomp_Enter(DT_CODE_TASK_CURRENT, r->a, r->x, r->y);
+    r->a = gTaskCurrent;
+    Task_SlotOffset(r);
+}
+
+/* $FF7D (task_create, A = slot): the scheduler starts the slot at the entry
+ * in $93/$94. */
+static void Task_Create(Regs *r)
+{
+    Decomp_Enter(DT_CODE_TASK_CREATE, r->a, r->x, r->y);
+    Task_SlotOffset(r);
+    TASK_BYTE(r->x, TASK_STACK) = gTaskEntry[0];
+    TASK_BYTE(r->x, TASK_ENTRY_HI) = gTaskEntry[1];
+    r->a = TASK_NEW;
+    TASK_BYTE(r->x, TASK_STATE) = r->a;
+    r->p = Flags_NZ(r->p, r->a);
+}
+
+/* $FFAC (task_yield): the running task waits a frame. X and Y go on its
+ * stack and its S into its slot, and the scheduler runs the next task; it
+ * returns into this one once the NMI has counted the wait out. */
+static void Task_Yield(Regs *r)
+{
+    Decomp_Enter(DT_CODE_TASK_YIELD, r->a, r->x, r->y);
+    gTaskEntry[0] = YIELD_FRAMES;
+    Decomp_Push(r->x);
+    Decomp_Push(r->y);
+    Task_CurrentSlot(r);
+    TASK_BYTE(r->x, TASK_WAIT) = gTaskEntry[0];
+    TASK_BYTE(r->x, TASK_STATE) = TASK_WAITING;
+    r->a = r->y = r->x;
+    r->x = Decomp_Stack();
+    r->p = Flags_NZ(r->p, r->x);
+    TASK_BYTE(r->y, TASK_STACK) = r->x;
+    Decomp_Handoff(DT_CODE_SCHEDULER, 0, 0);
+}
+
+/* $FFA5 (task_wait): task_yield X times (256 for X = 0). */
+static void Task_Wait(Regs *r)
+{
+    Decomp_Enter(DT_CODE_TASK_WAIT, r->a, r->x, r->y);
+    Decomp_PushReturn(DT_TASK_WAIT_NEXT);
+    Task_Yield(r);
+}
+
+/* $FFA8, where task_yield returns into task_wait with X and Y back. */
+static void Task_WaitNext(Regs *r)
+{
+    Decomp_Enter(DT_TASK_WAIT_NEXT, r->a, r->x, r->y);
+    r->x--;
+    r->p = Flags_NZ(r->p, r->x);
+    if (r->x) {
+        Task_Wait(r);
+    }
 }
 
 /* $C2E6: one step of the 32-bit shift register $C0-$C3 (feedback from bit 1
@@ -459,5 +542,11 @@ const DecompRoutine gSystemRoutines[] = {
     { DT_CODE_PALETTE_SCENE, "ducktales.decomp.F76D", "Palette_LoadScene", Run_PaletteLoadScene, 0 },
     { DT_CODE_DRAW_STRINGS, "ducktales.decomp.5.BAB0", "Text_DrawStrings", Run_TextDrawStrings, OUT_HW,
       .bank = STRINGS_BANK },
+    { DT_CODE_TASK_SLOT, NULL, "Task_SlotOffset", Task_SlotOffset, OUT_X },
+    { DT_CODE_TASK_CURRENT, NULL, "Task_CurrentSlot", Task_CurrentSlot, OUT_X },
+    { DT_CODE_TASK_CREATE, "ducktales.decomp.FF7D", "Task_Create", Task_Create, 0 },
+    { DT_CODE_TASK_YIELD, "ducktales.decomp.FFAC", "Task_Yield", Task_Yield, 0, true, 0, false },
+    { DT_CODE_TASK_WAIT, "ducktales.decomp.FFA5", "Task_Wait", Task_Wait, 0, true, 0, false },
+    { DT_TASK_WAIT_NEXT, NULL, "Task_WaitNext", Task_WaitNext, OUT_A | OUT_X | OUT_Y | OUT_P, true, 0, true },
 };
 const int gSystemRoutineCount = sizeof gSystemRoutines / sizeof gSystemRoutines[0];

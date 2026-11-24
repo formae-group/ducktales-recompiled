@@ -141,8 +141,9 @@ int Decomp_RaiseEvent(int event);
  *   Decomp_PushReturn / Decomp_PullReturn  a JSR and RTS between two task
  *       routines in C, so that a handoff inside the callee leaves the stack
  *       the original would; Decomp_HandedOff says whether the callee did.
- *   Decomp_Push / Decomp_Pull / Decomp_SetStack  the task's stack (PHA, PLA,
- *       TXS): values a routine keeps across a yield live there.
+ *   Decomp_Push / Decomp_Pull / Decomp_SetStack / Decomp_Stack  the task's
+ *       stack (PHA, PLA, TXS, TSX): values a routine keeps across a yield
+ *       live there.
  *   Decomp_SelectBank  bank_select: maps the bank for the Decomp_Calls that
  *       follow, and in replace mode writes the mapper for real.
  *   Decomp_Store  a store to a device register, made for real in replace
@@ -164,6 +165,7 @@ bool Decomp_HandedOff(void);
 void Decomp_Push(uint8_t value);
 uint8_t Decomp_Pull(void);
 void Decomp_SetStack(uint8_t s);
+uint8_t Decomp_Stack(void);
 void Decomp_SelectBank(uint8_t bank);
 void Decomp_Store(uint16_t addr, uint8_t value);
 

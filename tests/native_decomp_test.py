@@ -15,7 +15,12 @@ and compares RAM after every logic step of the off run: it must be equal except 
 only the NMI handler uses, the NMI-facing bytes tests/lag_modes.py allows (ALLOWED) and the NMI's
 own counters in NMI_STATE. The C costs no CPU cycles, so a land load behind a blank screen ends in
 fewer frames and the NMI runs a different number of times before a logic step; what it counts
-differs, what the task computes does not. It also fails when the on run calls no decompiled routine.
+differs, what the task computes does not. For the same reason the VBlank NMI can fall between
+task_yield's stores and the scheduler's pass where the step is taken, and count the yield's wait out
+before it: the yielding slot (in $91) is then (state 4, wait 0) on where it is (1, 1) off. Those two
+bytes are excepted at that step only, the slot must be equal on the next step, and the steps where
+it happened are counted ("NMI-counted yields"). It also fails when the on run calls no decompiled
+routine.
 
     py -3 -I tests/native_decomp_test.py --build build/headless [--routes R ...] [--jobs 2]
 """
@@ -37,6 +42,10 @@ NMI_STATE = {
     0x92: 'frame counter, incremented by every NMI',
     **{a: 'sound driver zero page (bank 3, run by the NMI; docs/audio.md "Driver RAM")' for a in range(0xD0, 0xE6)},
 }
+TASK_SLOTS = 0x80
+TASK_RUNNING = 0x91
+YIELDED = (1, 1)  # task_yield's state and one-frame wait
+COUNTED = (4, 0)  # the same slot after the NMI counted the wait out
 CALLS = re.compile(
     r'^decomp: mode=replace routine=\S+ addr=\$[0-9A-F]{4} calls=(\d+) compared=\d+ original=(\d+)$', re.M
 )
@@ -75,8 +84,15 @@ def report(route, p, out):
     off, on = lag_modes.read_steps(Path(f'{s}.off.steps')), lag_modes.read_steps(Path(f'{s}.on.steps'))
     n = min(len(off), len(on))
     first = {}
+    counted, unequal_after = 0, []
     for k in range(n):
         x = (int.from_bytes(off[k], 'big') ^ int.from_bytes(on[k], 'big')) & keep
+        slot = TASK_SLOTS + 4 * (off[k][TASK_RUNNING] & 3)
+        if tuple(off[k][slot : slot + 2]) == YIELDED and tuple(on[k][slot : slot + 2]) == COUNTED:
+            counted += 1
+            x &= ~(0xFFFF << (8 * (0x7FF - slot - 1)))
+            if k + 1 >= n or off[k + 1][slot : slot + 4] != on[k + 1][slot : slot + 4]:
+                unequal_after.append(k)
         while x:
             byte = (x.bit_length() - 1) // 8
             first.setdefault(0x7FF - byte, k)
@@ -84,15 +100,18 @@ def report(route, p, out):
     bad = {a: k for a, k in first.items() if a not in lag_modes.ALLOWED and a not in NMI_STATE}
     print(
         f'== {route.stem}: {n} logic steps compared ({len(off)} off, {len(on)} on); decompiled calls {total:,}, '
-        f'given to the original {original:,}; {len(private)} NMI-only bytes and the stack ignored'
+        f'given to the original {original:,}; {len(private)} NMI-only bytes and the stack ignored; '
+        f'NMI-counted yields {counted}'
     )
     if first:
         print('    differ (first step): ' + at(first.items()))
     if bad:
         print('    NOT ALLOWED: ' + at(bad.items()))
+    if unequal_after:
+        print('    NMI-counted yield with its slot unequal on the next step: ' + ' '.join(map(str, unequal_after)))
     if n < len(off):
         print(f'    the decompiled run ended {len(off) - n} logic steps early')
-    return not bad and total > 0 and n == len(off) > 0
+    return not bad and not unequal_after and total > 0 and n == len(off) > 0
 
 
 def main():

@@ -90,6 +90,12 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   original. The seven handlers on the way to the row change are task code checked with it. In task
   code the `Decomp_BusWrite` writes of the routines it calls are its device stores (up to 64), and a
   task routine reached from another one's C counts as compared with it.
+- Decompiled: the task primitives (`src/decomp/system.c`): `task_create` `$FF7D` with the slot offsets
+  `$FF9F`/`$FFA1`, and `task_yield` `$FFAC` and `task_wait` `$FFA5` (resume point `$FFA8`) as task code. Their
+  sites replace the flow's stops there; `task_yield`'s C hands off to the scheduler `$FF35`, which has a
+  stop. A site or stop that cannot be registered (NESRecomp's 128-hook cap) now fails at start-up.
+  `tests/native_decomp_test.py` excepts and counts the NMI-counted yield (docs/decompilation.md "On the
+  native runtime").
 - Decompiled: object kinds `$36` (`$F869`) and `$37` (`$F8F2`, with its drop `$F99C`) of the fixed bank,
   reached in the Launchpad scenes. `tests/decomp_test.py` has a `clear-keep` poke case for the object
   clear's Transylvania branch (slots 14 and 15 kept).
