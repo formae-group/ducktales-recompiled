@@ -7,6 +7,10 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- The native player writes a session summary when its Decompiled code ran: `decomp-session-<time>.txt`
+  in `diagnostics/` beside the replays, with the frames played, the decomp error that stopped the game
+  if any, and every routine's calls and calls given to the original (`decomp:` lines). None is written
+  with the option off.
 - The object spawner of bank 6 is decompiled (`src/decomp/level.c`): the table set-up `$AE20`/`$AE22`,
   the reset `$AE60`, the per-frame window update `$AEA0` and the timed spawns at the camera's edge
   `$B0AB`. `$AEA0`'s site replaces the flow's stop there.

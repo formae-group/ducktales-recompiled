@@ -412,6 +412,22 @@ PC). Its check, replace and events lines and the routine table of the 12 routes 
 for line to the run above; the 45 poke cases pass in check and in replace from frame 1,500.
 Beforehand, `re_amazon_moves` in check mode and stock gave byte-identical RAM logs (2,128 frames).
 
+**Per-routine process on main (2026-11-23).** From main 1ab2759 on, each decompiled routine is merged
+after its own `--changed` checks, build and `quick_verify.py` native; the full `decomp_test.py`
+runs on main. On main fc462ad (objects, flow, level, player and the native runtime merged, 325
+routines, 87.3%): all passed in 1,312 s, with `--jobs 2`:
+
+- check: 12/12 routes, 3,556,280 calls
+- replace: 12/12 routes, 82,626 frames RAM-identical
+- pokes: 48/48 in check and 48/48 in replace
+- events: 2/2 in check and 2/2 in replace
+
+Owner playtests on the same day: `ducktales_cycle.exe --decomp check` on main 5f34aa9 (15,410
+frames, 772,193 calls compared, no mismatch) and a59a409 (13,167 frames, 667,296 calls, all
+compared, none given to the original, no mismatch); and `ducktales.exe` with Decompiled code and
+No slowdown on, at fc462ad, where the owner saw no difference ("pra mim tava perfeito"; that build
+wrote no session summary yet).
+
 ## Release 1.0.0
 
 On main `8569c86` (the release tree before its changelog and documentation commit), 2026-11-23:
