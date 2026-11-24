@@ -51,13 +51,15 @@ void native_output_volume(int percent);
 void native_output_hold(unsigned reasons, bool on);
 /* Drops what is queued (a loaded state: the queued sound is the old one's). */
 void native_output_flush(void);
-/* One frame's mix, n samples. */
-void native_output_push(const double *mix, size_t n);
-/* The device's next n samples. game, when not NULL, gets the mix sample each
- * one was made from (after the queue's resampling, before volume and
- * limiter), or INT16_MIN where the device played no mix sample: what
- * tests/audio_output_test.py compares the output's sample-to-sample steps
- * with. */
+/* One frame's mix, n samples. game, when not NULL, is the same frame without
+ * the mods' files (the synth's own sound): what native_output_pull reports
+ * the output against; NULL for the mix itself. */
+void native_output_push(const double *mix, const double *game, size_t n);
+/* The device's next n samples. game, when not NULL, gets half the game sample
+ * (native_output_push) each one was made from, after the queue's resampling
+ * (halved so a mix up to +6 dBFS fits), or INT16_MIN where the device played
+ * no queued sample: what tests/audio_output_test.py compares the output's
+ * sample-to-sample steps with. */
 void native_output_pull(int16_t *out, int16_t *game, size_t n);
 /* Samples queued. */
 size_t native_output_queued(void);

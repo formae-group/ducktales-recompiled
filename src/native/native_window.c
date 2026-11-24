@@ -22,7 +22,8 @@
  *   menu          the open menu calls menu_tick each menu frame: the game
  *                 frames due at 60.0988 Hz run with no buttons pressed and
  *                 their sound is queued, so the game keeps running behind the
- *                 menu ([Game] MenuPausesGame stops it, app_ui.h)
+ *                 menu ([Game] MenuPausesGame stops it and holds the sound,
+ *                 app_ui.h)
  *   No slowdown   [Game] NoSlowdown: the runtime's lag mode
  *                 (NATIVE_LAG_NONE when on, NATIVE_LAG_FAITHFUL when off)
  *   decompiled    [Game] DecompiledCode, with No slowdown on only: the
@@ -33,11 +34,16 @@
  *   pacing        each frame at its deadline (1 / 60.0988 s); VSync as
  *                 [Display] VSync says (FramePacing resolves it at launch),
  *                 off while fast-forwarding or --uncapped
- *   sound         native_audio_frame per frame, queued at 48 kHz with at
- *                 most 100 ms waiting; none while fast-forwarding. When late
- *                 frames let the queue fall below the device buffer plus one
- *                 frame, the frame is stretched to refill it, so the device
- *                 never runs dry
+ *   sound         native_audio_mix per frame, with the mods' files, through
+ *                 the output stage (native_output.h: volume ramp, limiter,
+ *                 queue pacing, fades) to the device's callback at 48 kHz.
+ *                 The sound is held (faded out, nothing queued) while
+ *                 fast-forwarding, with [Audio] off, while the menu pauses
+ *                 the game, and from a click on the window's frame (a move,
+ *                 a resize or its buttons, which Windows runs in a loop of
+ *                 its own that stops the frame loop) until the next frame;
+ *                 F9 fades out and drops what was queued; closing fades out
+ *                 before the device closes
  *   scheduling    Windows: no power throttling (EcoQoS, timer coalescing),
  *                 the frame loop in the MMCSS "Games" class and a 1 ms timer,
  *                 so an unfocused window keeps its pace
@@ -210,12 +216,16 @@ static size_t frame_sound(int16_t *pcm, size_t cap, int rate)
     return n;
 }
 
-/* The same before the 16-bit clamp, for the output stage (native_output.h). */
-static size_t frame_mix(double *mix, size_t cap, int rate)
+/* The same before the 16-bit clamp, for the output stage (native_output.h);
+ * game, when not NULL, gets the synth's part alone. */
+static size_t frame_mix(double *mix, double *game, size_t cap, int rate)
 {
     apply_voices();
     native_audio_set_mute(s_frame_mute);
     size_t n = native_audio_mix(native_last_frame(), mix, cap);
+    if (game) {
+        memcpy(game, mix, n * sizeof *mix);
+    }
     app_mods_audio_add(mix, n, rate);
     return n;
 }
@@ -304,8 +314,9 @@ static void sim_wav_header(void)
     }
 }
 
-/* The device's pulls up to time t: the output and the mix it came from, as
- * a stereo WAV (left the output, right the mix or -32768). */
+/* The device's pulls up to time t: the output and the synth's sound it came
+ * from, as a stereo WAV (left the output, right half the synth's sample or
+ * -32768). */
 static void sim_device_until(double t)
 {
     static int16_t out[8192], game[8192], pair[16384];
@@ -468,10 +479,10 @@ static int run_off_screen(long frames, const char *input, int lag, const char *p
             wav_samples += (uint32_t)n;
         }
         if (s_sim.f) {
-            static double mix[NATIVE_AUDIO_MAX_FRAME_SAMPLES];
-            size_t n = frame_mix(mix, NATIVE_AUDIO_MAX_FRAME_SAMPLES, AUDIO_RATE);
+            static double mix[NATIVE_AUDIO_MAX_FRAME_SAMPLES], game[NATIVE_AUDIO_MAX_FRAME_SAMPLES];
+            size_t n = frame_mix(mix, game, NATIVE_AUDIO_MAX_FRAME_SAMPLES, AUDIO_RATE);
             if (push) {
-                native_output_push(mix, n);
+                native_output_push(mix, game, n);
             }
             sim_frame_end(frame);
         }
@@ -868,53 +879,63 @@ static void scheduling_end(void)
 }
 #endif
 
-/* Stretches pcm[0..n) over m >= n samples by linear interpolation. */
-static void stretch(int16_t *pcm, size_t n, size_t m)
-{
-    if (n < 2 || m <= n) {
-        return;
-    }
-    for (size_t i = m; i-- > 0;) {
-        double x = (double)i * (double)(n - 1) / (double)(m - 1);
-        size_t j = (size_t)x;
-        double frac = x - (double)j;
-        int16_t a = pcm[j], b = pcm[j + 1 < n ? j + 1 : j];
-        pcm[i] = (int16_t)(a + (b - a) * frac);
-    }
-}
-
 static SDL_AudioDeviceID s_dev;
 static SDL_AudioSpec s_have;
 
-static void queue_audio(bool fast)
+static void SDLCALL audio_callback(void *data, Uint8 *stream, int len)
 {
-    int16_t pcm[4096];
-    size_t n = frame_sound(pcm, sizeof pcm / sizeof pcm[0], s_dev ? s_have.freq : AUDIO_RATE);
-    size_t queued = s_dev ? SDL_GetQueuedAudioSize(s_dev) / sizeof pcm[0] : 0;
-    if (!s_dev || !n || fast || !s_set.audio_enabled || queued >= (size_t)s_have.freq / 10) {
-        return;
-    }
-    size_t low = (size_t)s_have.samples + n;
-    if (queued < low) {
-        size_t m = n + (low - queued);
-        if (m > 2 * n) {
-            m = 2 * n;
-        }
-        stretch(pcm, n, m);
-        n = m;
-    }
-    if (s_set.volume < 100) {
-        for (size_t i = 0; i < n; i++) {
-            pcm[i] = (int16_t)(pcm[i] * s_set.volume / 100);
-        }
-    }
-    app_ui_audio(pcm, n);
-    SDL_QueueAudio(s_dev, pcm, (Uint32)(n * sizeof pcm[0]));
+    (void)data;
+    native_output_pull((int16_t *)stream, NULL, (size_t)len / sizeof(int16_t));
 }
 
-static int menu_tick(void)
+static void audio_hold(unsigned reasons, bool on)
+{
+    if (s_dev) {
+        SDL_LockAudioDevice(s_dev);
+        native_output_hold(reasons, on);
+        SDL_UnlockAudioDevice(s_dev);
+    }
+}
+
+/* The frame's sound to the output stage; a frame that runs releases the
+ * holds of the menu and of the window's own loops. */
+static void queue_audio(bool fast)
+{
+    static double mix[NATIVE_AUDIO_MAX_FRAME_SAMPLES];
+    size_t n = frame_mix(mix, NULL, NATIVE_AUDIO_MAX_FRAME_SAMPLES, s_dev ? s_have.freq : AUDIO_RATE);
+    if (!s_dev) {
+        return;
+    }
+    int volume = app_ui_volume();
+    SDL_LockAudioDevice(s_dev);
+    native_output_volume(volume >= 0 ? volume : s_set.volume);
+    native_output_hold(NATIVE_OUTPUT_HOLD_MENU | NATIVE_OUTPUT_HOLD_WINDOW, false);
+    native_output_hold(NATIVE_OUTPUT_HOLD_FAST, fast);
+    native_output_hold(NATIVE_OUTPUT_HOLD_OFF, !s_set.audio_enabled);
+    native_output_push(mix, NULL, n);
+    SDL_UnlockAudioDevice(s_dev);
+}
+
+#ifdef _WIN32
+/* A click on the window's frame starts one of Windows' own loops (a move, a
+ * resize, a caption button) inside the event pump, and no frame runs until
+ * it ends: the sound is held before it starts instead of running dry. */
+static void SDLCALL window_message(void *data, void *hwnd, unsigned int message, Uint64 wparam, Sint64 lparam)
+{
+    (void)data, (void)hwnd, (void)wparam, (void)lparam;
+    if (message == WM_NCLBUTTONDOWN || message == WM_NCRBUTTONDOWN) {
+        audio_hold(NATIVE_OUTPUT_HOLD_WINDOW, true);
+    }
+}
+#endif
+
+static int menu_tick(bool run)
 {
     static Uint64 next;
+    audio_hold(NATIVE_OUTPUT_HOLD_MENU, !run);
+    if (!run) {
+        return 0;
+    }
     const Uint64 freq = SDL_GetPerformanceFrequency(), frame_ticks = (Uint64)((double)freq / FRAME_HZ);
     const Uint64 now = SDL_GetPerformanceCounter();
     if (next == 0 || now > next + 4 * frame_ticks) {
@@ -966,9 +987,14 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
     want.format = AUDIO_S16SYS;
     want.channels = 1;
     want.samples = 1024;
+    want.callback = audio_callback;
     SDL_AudioDeviceID dev = SDL_OpenAudioDevice(NULL, 0, &want, &s_have, 0);
     s_dev = dev;
     native_audio_reset(dev ? s_have.freq : AUDIO_RATE);
+    native_output_reset(dev ? s_have.freq : AUDIO_RATE, dev ? s_have.samples : 1024);
+#ifdef _WIN32
+    SDL_SetWindowsMessageHook(window_message, NULL);
+#endif
     app_ui_set_menu_tick(menu_tick);
     if (dev) {
         SDL_PauseAudioDevice(dev, 0);
@@ -1001,7 +1027,9 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
             } else if (ev.type == SDL_KEYDOWN && !ev.key.repeat && ev.key.keysym.scancode == SDL_SCANCODE_F9) {
                 load_state();
                 if (dev) {
-                    SDL_ClearQueuedAudio(dev);
+                    SDL_LockAudioDevice(dev);
+                    native_output_flush();
+                    SDL_UnlockAudioDevice(dev);
                 }
             }
         }
@@ -1020,6 +1048,7 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
         }
         if (edge[CYC_SC_FULLSCREEN]) {
             s_set.fullscreen = s_set.fullscreen ? 0 : 1;
+            audio_hold(NATIVE_OUTPUT_HOLD_WINDOW, true);
             apply_fullscreen();
             save_settings();
         }
@@ -1071,8 +1100,21 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
     }
     scheduling_end();
     app_ui_set_menu_tick(NULL);
+#ifdef _WIN32
+    SDL_SetWindowsMessageHook(NULL, NULL);
+#endif
     save_settings();
     if (dev) {
+        audio_hold(NATIVE_OUTPUT_HOLD_QUIT, true);
+        for (int i = 0; i < 50; i++) {
+            SDL_LockAudioDevice(dev);
+            bool quiet = native_output_quiet();
+            SDL_UnlockAudioDevice(dev);
+            if (quiet) {
+                break;
+            }
+            SDL_Delay(2);
+        }
         SDL_CloseAudioDevice(dev);
         s_dev = 0;
     }
