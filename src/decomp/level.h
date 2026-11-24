@@ -19,3 +19,4 @@ uint8_t Level_MetatileAt(uint8_t x);
 uint8_t Scroll_StreamBlocks(void);
 uint8_t Vram_FlushQueue(void);
 uint8_t Camera_Update(uint8_t x);
+void Block_Draw(uint8_t record);

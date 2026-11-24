@@ -79,6 +79,8 @@ extern "C" {
 #define OBJ_KIND_TALKER            0x35 /* a character that shows a message (code) */
 #define OBJ_KIND_MOVING_PLATFORM   0x39 /* a platform that carries Scrooge (code) */
 #define OBJ_KIND_FINAL_STAND_IN    0x3A /* what the spawner makes of an object in the final arena (code) */
+#define OBJ_KIND_VISITOR           0x3E /* a character that comes once, holds Scrooge and leaves a kind $3F (code) */
+#define OBJ_KIND_PATH_OPENER       0x3F /* runs right to page 7, then lets Scrooge go and draws block record 6 (code) */
 #define OBJ_KIND_KEY_SPOT          0x41 /* a spot that needs the land's key item (code) */
 
 /* $0700 bits 0-3: the handler's step (code). */

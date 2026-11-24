@@ -20,9 +20,11 @@
  * run through Decomp_Call: the tile edit $F506.
  */
 #include "decomp/decomp.h"
+#include "decomp/level.h"
 #include "decomp/motion.h"
 #include "decomp/objcommon.h"
 #include "decomp/sound.h"
+#include "decomp/system.h"
 
 #include "ducktales/events.h"
 #include "ducktales/game.h"
@@ -3669,6 +3671,89 @@ static void Obj_BlockKicker(uint8_t x)
     gObjects->unk_06C0[x]++;
 }
 
+/* Kind $3F (fixed bank $FD68): what kind $3E leaves. It moves right at 3 px
+ * a frame; at world X $0770 it is freed, lets Scrooge go (mode 0) and draws
+ * block record 6 ($D068), then maps bank 6 back. */
+static void Obj_PathOpener(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_PATH_OPENER, 0x22, x, gObjects->kind[x]);
+    if (Step(x) == 0) {
+        Obj_SetSpeed(x, 0x0300);
+    }
+    Obj_MoveRight(x);
+    if (gObjects->worldPage[x] != 0x07 || gObjects->worldX[x] < 0x70) {
+        return;
+    }
+    gObjects->state[x] = 0;
+    gPlayerMode = PLAYER_MODE_GROUND;
+    Block_Draw(6);
+    Bank_Select(DT_BANK_OBJECTS);
+}
+
+/* Kind $3E (fixed bank $FCA0): a character that comes once ($A1 set; bit 7
+ * marks it). With Scrooge within $38 px it takes its record, holds Scrooge
+ * (mode 14) and walks in from the camera's left edge at $0180, shown and
+ * harmless. Within $38 px of him it leaves a kind $3F (pose $7E) where it
+ * stands ($00 keeps its slot) and waits 180 frames; then, on screen, it
+ * falls (probe 6) and on the floor walks back left. Off screen it is freed. */
+static void Obj_Visitor(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_VISITOR, 0x22, x, gObjects->kind[x]);
+    if (Step(x) == 0) {
+        if (Obj_DistanceX(x) >= 0x38 || gProgressA1 == 0) {
+            return;
+        }
+        gProgressA1 |= 0x80;
+        Obj_MarkConsumed(x);
+        gPlayerMode = PLAYER_MODE_14;
+        gObjects->worldX[x] = gCameraX;
+        gObjects->worldPage[x] = gCameraPage;
+        gObjects->state[x] &= (uint8_t)~OBJ_STATUS_HIDDEN;
+        gObjects->state[x]++;
+        Obj_SetSpeed(x, 0x0180);
+        gObjects->hitbox[x] = 0;
+        return;
+    }
+    if (!(gObjects->state[x] & 2)) {
+        Obj_MoveRight(x);
+        gObjects->flags[x] |= OBJ_FLAG_FACING_RIGHT;
+        if (Obj_DistanceX(x) >= 0x38) {
+            return;
+        }
+        gObjects->state[x]++;
+        gObjects->timer[x] = 0xB4;
+        gScratch0 = x;
+        uint8_t o;
+        if (!Obj_FindFreeSlot(&o)) {
+            return;
+        }
+        gObjects->action[o] = 0x7E;
+        gObjects->y[o] = gObjects->y[x];
+        gObjects->worldX[o] = gObjects->worldX[x];
+        gObjects->worldPage[o] = gObjects->worldPage[x];
+        gObjects->animFrame[o] = 0;
+        gObjects->animTimer[o] = 0;
+        gObjects->state[o] = 0xA0;
+        gObjects->flags[o] = 0xA0;
+        gObjects->kind[o] = OBJ_KIND_PATH_OPENER;
+        return;
+    }
+    if (gObjects->timer[x] != 0) {
+        gObjects->timer[x]--;
+        return;
+    }
+    if (!OnScreen(x)) {
+        gObjects->state[x] = 0;
+        return;
+    }
+    x = Obj_Fall(x, 0x06, 2);
+    if (!(gProbeHits & 1)) {
+        return;
+    }
+    Obj_MoveLeft(x);
+    gObjects->flags[x] &= (uint8_t)~OBJ_FLAG_FACING_RIGHT;
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -3834,6 +3919,12 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_MOVING_PLATFORM:
             Obj_MovingPlatform(slot);
+            break;
+        case OBJ_KIND_VISITOR:
+            Obj_Visitor(slot);
+            break;
+        case OBJ_KIND_PATH_OPENER:
+            Obj_PathOpener(slot);
             break;
         case OBJ_KIND_KEY_SPOT:
             Obj_KeySpot(slot);
@@ -4138,6 +4229,16 @@ static void Run_KickBlock(Regs *r)
     Obj_KickBlock(r->x, r->y);
 }
 
+static void Run_PathOpener(Regs *r)
+{
+    Obj_PathOpener(r->x);
+}
+
+static void Run_Visitor(Regs *r)
+{
+    Obj_Visitor(r->x);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -4312,6 +4413,8 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_VISITOR, NULL, "Obj_Visitor", Run_Visitor, 0 },
+    { DT_CODE_KIND_PATH_OPENER, NULL, "Obj_PathOpener", Run_PathOpener, 0 },
     { DT_CODE_KIND_BLOCK_KICKER, NULL, "Obj_BlockKicker", Run_BlockKicker, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_TRANSYLVANIA_BOSS, NULL, "Obj_TransylvaniaBoss", Run_TransylvaniaBoss, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_AMAZON_BOSS, NULL, "Obj_AmazonBoss", Run_AmazonBoss, 0, .bank = DT_BANK_OBJECTS },

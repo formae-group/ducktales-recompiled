@@ -1052,7 +1052,7 @@ static void Block_Debris(void)
     Sound_Request(SFX_BREAK, slot);
 }
 
-static void Block_Draw(uint8_t record)
+void Block_Draw(uint8_t record)
 {
     Decomp_Enter(DT_CODE_BLOCK_DRAW, 0, 0, record);
     gBlockRecord = record;

@@ -63,7 +63,7 @@ static void Bank_SelectTemp(uint8_t bank)
 }
 
 /* $FFDE */
-static void Bank_Select(uint8_t bank)
+void Bank_Select(uint8_t bank)
 {
     Decomp_Enter(DT_CODE_BANK_SELECT, bank, 0, 0);
     gBank = bank;

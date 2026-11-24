@@ -698,6 +698,8 @@
 #define DT_CODE_KIND_FLYER                0x916C /* kind $0D */
 #define DT_CODE_KIND_SWING                0x9225 /* kind $0E */
 #define DT_CODE_KIND_SWOOPER              0x9430 /* kind $11 */
+#define DT_CODE_KIND_VISITOR              0xFCA0 /* kind $3E (fixed bank) */
+#define DT_CODE_KIND_PATH_OPENER          0xFD68 /* kind $3F (fixed bank) */
 #define DT_CODE_KIND_BLOCK_KICKER         0x9C46 /* kind $1D */
 #define DT_CODE_KIND_TRANSYLVANIA_BOSS    0xA335 /* kind $26 */
 #define DT_CODE_TRANSYLVANIA_BOSS_STEP_LO 0xA585 /* kind $26's code by step, low bytes (5 entries) */
