@@ -425,6 +425,20 @@ addr = 0xD630
 length = 8
 crc32 = 0xDACBE679
 
+# Mode15_Redraw
+[[mod_function_hook]]
+id = "ducktales.decomp.DFED"
+addr = 0xDFED
+length = 8
+crc32 = 0x0971742F
+
+# Ending
+[[mod_function_hook]]
+id = "ducktales.decomp.E1AF"
+addr = 0xE1AF
+length = 8
+crc32 = 0xD1E4F218
+
 [[mod_function_hook]]
 id = "ducktales.decomp.stop.FFAC"
 addr = 0xFFAC
@@ -444,10 +458,10 @@ length = 8
 crc32 = 0x2CF3FD6D
 
 [[mod_function_hook]]
-id = "ducktales.decomp.stop.E1AF"
-addr = 0xE1AF
+id = "ducktales.decomp.stop.C27C"
+addr = 0xC27C
 length = 8
-crc32 = 0xD1E4F218
+crc32 = 0x22C37620
 
 [[mod_function_hook]]
 id = "ducktales.decomp.stop.FFA5"
@@ -455,26 +469,12 @@ addr = 0xFFA5
 length = 8
 crc32 = 0x0FCE60E7
 
-[[mod_function_hook]]
-id = "ducktales.decomp.stop.BE00.4"
-addr = 0xBE00
-length = 8
-crc32 = 0xB8A217BC
-
 # The row scroll the row change ($E8C0, src/decomp/player.c) hands off to.
 [[mod_function_hook]]
 id = "ducktales.decomp.stop.C976"
 addr = 0xC976
 length = 8
 crc32 = 0x51C43FB5
-
-# What the message box ($ED05, src/decomp/player.c) hands off to besides task_wait:
-# the scene set-up of message $0B, the block draw of message $06 and the pause text.
-[[mod_function_hook]]
-id = "ducktales.decomp.stop.DFED"
-addr = 0xDFED
-length = 8
-crc32 = 0x0971742F
 
 [[mod_function_hook]]
 id = "ducktales.decomp.stop.D068"

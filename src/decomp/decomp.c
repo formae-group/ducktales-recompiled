@@ -1043,10 +1043,17 @@ static bool task_replace(int i, const CycModRegs *in)
     return true;
 }
 
+/* Whether the CPU at addr is at the routine's entry: for a routine of the
+ * switchable window, with its bank mapped. */
+static bool at_entry(const DecompRoutine *rt, uint16_t addr)
+{
+    return rt->addr == addr && (addr >= 0xC000 || hw_prg_bank4(addr) >> 2 == rt->bank);
+}
+
 static int find_routine(uint16_t addr, bool resume)
 {
     for (int i = 0; i < s_count; i++) {
-        if (s_routine[i]->addr == addr && s_routine[i]->resume == resume) {
+        if (s_routine[i]->resume == resume && (resume ? at_entry(s_routine[i], addr) : s_routine[i]->addr == addr)) {
             return i;
         }
     }
@@ -1078,6 +1085,9 @@ static void on_return(void)
             return;
         }
         int i = find_routine(pc, true);
+        if (i < 0) {
+            return;
+        }
         CycModRegs in;
         cyc_mod_regs(&in);
         if (s_mode == DECOMP_CHECK) {
@@ -1088,13 +1098,6 @@ static void on_return(void)
             return;
         }
     }
-}
-
-/* Whether the CPU at addr is at the routine's entry: for a routine of the
- * switchable window, with its bank mapped. */
-static bool at_entry(const DecompRoutine *rt, uint16_t addr)
-{
-    return rt->addr == addr && (addr >= 0xC000 || hw_prg_bank4(addr) >> 2 == rt->bank);
 }
 
 static int on_entry(uint16_t addr)
@@ -1139,9 +1142,6 @@ static void add_table(const DecompRoutine *table, int n)
             nes_mod_register_function_entry_plugin(table[i].site_id, table[i].addr, on_entry);
         }
         if (table[i].resume) {
-            if (table[i].addr < 0xC000) {
-                fail("a resume point outside the fixed bank", table[i].addr);
-            }
             s_resume[table[i].addr >> 3] |= (uint8_t)(1u << (table[i].addr & 7));
         }
     }
