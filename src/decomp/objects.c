@@ -344,7 +344,7 @@ static uint8_t Obj_ThrownWalk(uint8_t x)
 }
 
 /* Kind 9 ($8722): a launched block, by step ($0700 bits 0-3) through the
- * table at $88FC/$8905. It rises then falls (vdir), moves, and breaks
+ * table at $88FC/$8905 (steps 0-8; the words past it point into RAM). It rises then falls (vdir), moves, and breaks
  * against a wall or the floor or on the first object it hits; some steps
  * become a pickup or a block again. */
 static void Obj_Thrown(uint8_t x)
@@ -451,9 +451,6 @@ static void Obj_Thrown(uint8_t x)
             if (gProbeHits & 1) {
                 gObjects->kind[x] = OBJ_KIND_BLOCK;
             }
-            return;
-        default:
-            Decomp_Call(at, gScratch(1), x, step);
             return;
     }
 }
@@ -611,9 +608,6 @@ static void Pickup_Take(uint8_t x)
             gKeyItems |= gLand == 4 ? 4 : 2;
             gSceneStep = gLand == 4 ? 0x10 : 0x0E;
             gPlayerMode = PLAYER_MODE_MESSAGE;
-            break;
-        default:
-            Decomp_Call(at, gScratch(1), x, i);
             break;
     }
 }
