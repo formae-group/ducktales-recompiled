@@ -13,3 +13,4 @@ void Oam_Clear(void);
 uint8_t Oam_Build(void);
 /* $FFDE: map PRG bank at $8000 and remember it in $E7. */
 void Bank_Select(uint8_t bank);
+void Bank_SelectTemp(uint8_t bank);

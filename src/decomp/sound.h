@@ -16,3 +16,5 @@
 
 uint8_t Sound_Request(uint8_t id, uint8_t x);
 uint8_t Music_Request(uint8_t id, uint8_t x);
+void Sound_Play(uint8_t id, uint8_t y);
+void Sound_Update(void);

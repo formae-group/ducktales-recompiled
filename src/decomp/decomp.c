@@ -19,6 +19,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define WAIT_READS_MAX 60000 /* two frames of reads */
+
 const DecompRoutine *dc_routine[MAX_ROUTINES];
 RoutineStats dc_stats[MAX_ROUTINES];
 int dc_count;
@@ -59,7 +61,7 @@ void dc_record(uint16_t addr, uint8_t value, bool write)
     if (dc_nops == MAX_BUS_OPS) {
         dc_fail("too many bus operations in one call", addr);
     }
-    dc_ops[dc_nops++] = (BusOp){ addr, value, write };
+    dc_ops[dc_nops++] = (BusOp){ addr, value, write, 0 };
 }
 
 static void record_store(uint16_t addr, uint8_t value);
@@ -83,6 +85,21 @@ void Decomp_BusRead(uint16_t addr)
     dc_record(addr, 0, false);
 }
 
+void Decomp_BusWait(uint16_t addr, uint8_t mask, uint8_t want)
+{
+    dc_record(addr, want, false);
+    dc_ops[dc_nops - 1].wait = mask;
+}
+
+static void bus_wait(const BusOp *op)
+{
+    for (uint32_t reads = 0; (cpu_read(op->addr, 0) & op->wait) != op->value; reads++) {
+        if (reads == WAIT_READS_MAX) {
+            dc_fail("a device wait did not end", dc_top->addr);
+        }
+    }
+}
+
 /* The recorded bus operations from index from on, made on the machine (or
  * on the isolated copy inside a scope), with spare reads of addr spread
  * evenly between them: the PPU acts on a $2006 or $2007 write a few cycles
@@ -97,6 +114,8 @@ uint64_t dc_play_ops(int from, uint64_t spare, uint16_t addr)
         }
         if (dc_ops[i].write) {
             cpu_write(dc_ops[i].addr, dc_ops[i].value, 0);
+        } else if (dc_ops[i].wait && !dc_isolated()) {
+            bus_wait(&dc_ops[i]);
         } else {
             (void)cpu_read(dc_ops[i].addr, 0);
         }
