@@ -75,6 +75,9 @@ set(_ducktales_mods
     "${CMAKE_SOURCE_DIR}/src/mods/core/fm_catalog.c"
     "${CMAKE_SOURCE_DIR}/src/mods/core/fm_codec.c"
     "${CMAKE_SOURCE_DIR}/src/mods/core/fm_script.c"
+    "${CMAKE_SOURCE_DIR}/src/mods/core/fm_script_show.c"
+    "${CMAKE_SOURCE_DIR}/src/mods/core/fm_script_state.c"
+    "${CMAKE_SOURCE_DIR}/src/mods/core/fm_script_store.c"
     "${CMAKE_SOURCE_DIR}/src/mods/nes/fm_nes.c"
     "${CMAKE_SOURCE_DIR}/src/mods/ducktales/dt_mods.c"
     "${CMAKE_SOURCE_DIR}/src/mods/ducktales/dt_mods_audio.c")
@@ -94,7 +97,12 @@ list(TRANSFORM _lua_sources APPEND ".c")
 add_library(ducktales_lua STATIC ${_lua_sources})
 target_include_directories(ducktales_lua PUBLIC "${LUA_ROOT}")
 set_target_properties(ducktales_lua PROPERTIES LINKER_LANGUAGE C)
-set_property(SOURCE "${CMAKE_SOURCE_DIR}/src/mods/core/fm_script.c" APPEND PROPERTY INCLUDE_DIRECTORIES "${LUA_ROOT}")
+set_property(SOURCE
+    "${CMAKE_SOURCE_DIR}/src/mods/core/fm_script.c"
+    "${CMAKE_SOURCE_DIR}/src/mods/core/fm_script_show.c"
+    "${CMAKE_SOURCE_DIR}/src/mods/core/fm_script_state.c"
+    "${CMAKE_SOURCE_DIR}/src/mods/core/fm_script_store.c"
+    APPEND PROPERTY INCLUDE_DIRECTORIES "${LUA_ROOT}")
 # The licence the package carries: lua.h's own notice.
 file(READ "${LUA_ROOT}/lua.h" _lua_header)
 string(REGEX MATCH "\n\\* Copyright \\(C\\) 1994-[^\n]*\n(\\*[^\n]*\n)*" _lua_notice "${_lua_header}")

@@ -38,14 +38,17 @@
  *   reload     once a second the script (a folder mod) or the archive is
  *              checked; when it changed, the script starts again from scratch
  *              (its store stays).
+ *   files      fm_script.c: the sandbox, the limits, the events and the
+ *              frame; fm_script_state.c: dt.state, dt.set and dt.<query>();
+ *              fm_script_show.c: dt.toast and dt.draw; fm_script_store.c:
+ *              dt.store; fm_script_internal.h: what they share
  */
-#include "mods/core/fm_mods.h"
+#include "mods/core/fm_script_internal.h"
 
 #include "lauxlib.h"
 #include "lua.h"
 #include "lualib.h"
 
-#include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -65,68 +68,21 @@
 #define SCRIPT_MEMORY       ((size_t)16 << 20)
 #define SCRIPT_EVENTS       63
 #define FRAME_BIT           63
-#define SCRIPT_WRITES       256
-#define SCRIPT_TOAST_FRAMES 180
-#define SCRIPT_TOAST_GAP    60
-#define SCRIPT_TOAST_CHARS  64
-#define SCRIPT_STORE_BYTES  (64 * 1024)
-#define STORE_KEY_MAX       64
 
-typedef struct {
-    char key[STORE_KEY_MAX + 1];
-    char *value; /* "s:text" (escaped), "i:123", "n:1.5" or "b:true" */
-} StoreItem;
-
-typedef struct {
-    char id[64];
-    char name[128];
-    char path[1024];  /* the archive or folder */
-    char watch[1024]; /* the file whose change reloads the script */
-    bool folder;
-    long long stamp;
-    lua_State *L;
-    int handlers;    /* registry ref: a table of handler lists, event + 1 (the frame's at SCRIPT_EVENTS + 1) */
-    uint64_t wants;  /* bit per event, FRAME_BIT for "frame" */
-    uint64_t warned; /* bit per event: a dt.CANCEL it cannot take was reported */
-    size_t memory;
-    bool over;  /* the last growth was refused */
-    long steps; /* hook steps left in this callback */
-    bool stopped;
-    char why[300];
-    uint64_t last_toast;
-    int draws; /* dt.draw calls this frame */
-    bool draw_warned;
-    bool store_loaded, store_dirty, store_failed;
-    StoreItem *store;
-    int store_count;
-    size_t store_bytes;
-} Script;
-
-typedef struct {
-    Script *script;
-    int field;
-    long long value;
-} Write;
-
-static FmScriptGame s_game;
-static Script *s_scripts[FM_MAX_MODS];
-static int s_script_count;
+FmScriptGame s_game;
+Script *s_scripts[FM_MAX_MODS];
+int s_script_count;
 static bool s_registered[SCRIPT_EVENTS];
 static bool s_dirty;
-static uint64_t s_frame;
+uint64_t s_frame;
 static time_t s_checked;
-static Write s_writes[SCRIPT_WRITES];
-static int s_write_count;
-static char s_toast_title[128], s_toast_body[SCRIPT_TOAST_CHARS * 4 + 1];
-static int s_toast_frames;
+Write s_writes[SCRIPT_WRITES];
+int s_write_count;
 static bool s_exit_hooked;
-static FmDraw s_drawing[FM_DRAW_MAX], s_drawn[FM_DRAW_MAX];
-static Script *s_drawing_by[FM_DRAW_MAX];
-static int s_drawing_count, s_drawn_count;
 static const FmArg *s_args;
 static int s_nargs;
 
-static Script *script_of(lua_State *L)
+Script *script_of(lua_State *L)
 {
     void *ud = NULL;
     lua_getallocf(L, &ud);
@@ -190,7 +146,7 @@ static void count_hook(lua_State *L, lua_Debug *ar)
     luaL_error(L, "%s", s->why);
 }
 
-static void log_line(const Script *s, const char *what, const char *text)
+void log_line(const Script *s, const char *what, const char *text)
 {
     fm_log("Mod %s: %s%.1000s", s->id, what, text);
 }
@@ -328,467 +284,6 @@ static int sb_frame(lua_State *L)
 {
     lua_pushinteger(L, (lua_Integer)s_frame);
     return 1;
-}
-
-/* text cut to chars UTF-8 code points, control characters as spaces. */
-static void copy_text(char *out, size_t cap, const char *text, int chars)
-{
-    size_t n = 0;
-    for (int seen = 0; text[n] && n + 1 < cap; n++) {
-        unsigned char c = (unsigned char)text[n];
-        if ((c & 0xC0) != 0x80 && seen++ == chars) {
-            break;
-        }
-        out[n] = c < 0x20 || c == 0x7F ? ' ' : (char)c;
-    }
-    out[n] = 0;
-}
-
-static int sb_toast(lua_State *L)
-{
-    const char *text = luaL_checkstring(L, 1);
-    Script *s = script_of(L);
-    if (s->last_toast && s_frame - s->last_toast < SCRIPT_TOAST_GAP) {
-        lua_pushboolean(L, 0);
-        return 1;
-    }
-    s->last_toast = s_frame ? s_frame : 1;
-    copy_text(s_toast_body, sizeof s_toast_body, text, SCRIPT_TOAST_CHARS);
-    snprintf(s_toast_title, sizeof s_toast_title, "%s", s->name);
-    s_toast_frames = SCRIPT_TOAST_FRAMES;
-    log_line(s, "toast: ", s_toast_body);
-    lua_pushboolean(L, 1);
-    return 1;
-}
-
-/* ---- dt.draw ---- */
-
-static uint32_t check_color(lua_State *L, int arg)
-{
-    lua_Integer c = luaL_checkinteger(L, arg);
-    luaL_argcheck(L, c >= 0 && c <= 0xFFFFFF, arg, "a colour is 0xRRGGBB");
-    return (uint32_t)c;
-}
-
-/* A slot for this frame's drawing, or NULL (logged once) past the caps. */
-static FmDraw *add_draw(lua_State *L)
-{
-    Script *s = script_of(L);
-    if (s->draws == FM_DRAW_PER_MOD || s_drawing_count == FM_DRAW_MAX) {
-        if (!s->draw_warned) {
-            s->draw_warned = true;
-            char text[120];
-            snprintf(text, sizeof text, "dt.draw: more than %d drawings in one frame; the rest are not shown",
-                     s->draws == FM_DRAW_PER_MOD ? FM_DRAW_PER_MOD : FM_DRAW_MAX);
-            log_line(s, "", text);
-        }
-        return NULL;
-    }
-    s->draws++;
-    s_drawing_by[s_drawing_count] = s;
-    FmDraw *d = &s_drawing[s_drawing_count++];
-    memset(d, 0, sizeof *d);
-    return d;
-}
-
-/* Coordinates far off the picture are as good as any other off it. */
-static int clamp(lua_Integer v)
-{
-    return v < -0x10000 ? -0x10000 : v > 0x10000 ? 0x10000 : (int)v;
-}
-
-static int sb_draw_text(lua_State *L)
-{
-    lua_Integer x = luaL_checkinteger(L, 1), y = luaL_checkinteger(L, 2);
-    const char *text = luaL_checkstring(L, 3);
-    uint32_t color = lua_isnoneornil(L, 4) ? 0xFFFFFF : check_color(L, 4);
-    FmDraw *d = add_draw(L);
-    if (d) {
-        *d = (FmDraw){ true, (int)clamp(x), (int)clamp(y), 0, 0, color, "" };
-        copy_text(d->str, sizeof d->str, text, FM_DRAW_CHARS);
-    }
-    lua_pushboolean(L, d != NULL);
-    return 1;
-}
-
-static int sb_draw_rect(lua_State *L)
-{
-    lua_Integer x = luaL_checkinteger(L, 1), y = luaL_checkinteger(L, 2);
-    lua_Integer w = luaL_checkinteger(L, 3), h = luaL_checkinteger(L, 4);
-    uint32_t color = check_color(L, 5);
-    FmDraw *d = add_draw(L);
-    if (d) {
-        *d = (FmDraw){ false, (int)clamp(x), (int)clamp(y), (int)clamp(w), (int)clamp(h), color, "" };
-    }
-    lua_pushboolean(L, d != NULL);
-    return 1;
-}
-
-/* The frame's drawings become the shown ones; a stopped script's are dropped. */
-static void finish_drawing(void)
-{
-    s_drawn_count = 0;
-    for (int i = 0; i < s_drawing_count; i++) {
-        if (!s_drawing_by[i]->stopped) {
-            s_drawn[s_drawn_count++] = s_drawing[i];
-        }
-    }
-    s_drawing_count = 0;
-    for (int i = 0; i < s_script_count; i++) {
-        s_scripts[i]->draws = 0;
-    }
-}
-
-int fm_draws(const FmDraw **draws)
-{
-    *draws = s_drawn;
-    return s_drawn_count;
-}
-
-/* ---- dt.<query>() ---- */
-
-static void push_record(lua_State *L, const FmQuery *q, const long long *values)
-{
-    lua_createtable(L, 0, q->field_count);
-    for (int f = 0; f < q->field_count; f++) {
-        lua_pushinteger(L, (lua_Integer)values[f]);
-        lua_setfield(L, -2, q->fields[f]);
-    }
-}
-
-/* dt.<query>(): upvalue 1 is the query's index. */
-static int sb_query(lua_State *L)
-{
-    const FmQuery *q = &s_game.queries[lua_tointeger(L, lua_upvalueindex(1))];
-    if (!s_game.state_open || !s_game.state_open()) {
-        return luaL_error(L, "dt.%s: the game's state is read in dt.on callbacks", q->name);
-    }
-    long long values[FM_QUERY_VALUES];
-    int n = q->read(values);
-    if (!q->list) {
-        push_record(L, q, values);
-        return 1;
-    }
-    lua_createtable(L, n, 0);
-    for (int i = 0; i < n; i++) {
-        push_record(L, q, &values[i * q->field_count]);
-        lua_rawseti(L, -2, i + 1);
-    }
-    return 1;
-}
-
-static int state_index(lua_State *L)
-{
-    const char *k = luaL_checkstring(L, 2);
-    for (int i = 0; i < s_game.field_count; i++) {
-        const FmField *f = &s_game.fields[i];
-        if (strcmp(k, f->name)) {
-            continue;
-        }
-        if (!s_game.state_open || !s_game.state_open()) {
-            return luaL_error(L, "dt.state.%s: the game's state is read in dt.on callbacks", k);
-        }
-        long long v = 0;
-        if (!f->get(&v)) {
-            lua_pushnil(L);
-        } else if (f->boolean) {
-            lua_pushboolean(L, v != 0);
-        } else {
-            lua_pushinteger(L, (lua_Integer)v);
-        }
-        return 1;
-    }
-    return luaL_error(L, "dt.state has no field \"%s\"", k);
-}
-
-static int read_only(lua_State *L)
-{
-    return luaL_error(L, "%s is read only", lua_tostring(L, lua_upvalueindex(1)));
-}
-
-/* dt.set.<field>(value): upvalue 1 is the field's index. */
-static int sb_set(lua_State *L)
-{
-    const FmField *f = &s_game.fields[lua_tointeger(L, lua_upvalueindex(1))];
-    lua_Integer v = f->boolean ? lua_toboolean(L, 1) : luaL_checkinteger(L, 1);
-    if (!s_game.state_open || !s_game.state_open()) {
-        return luaL_error(L, "dt.set.%s is called in dt.on callbacks", f->name);
-    }
-    char err[160];
-    if (!f->check((long long)v, err, sizeof err)) {
-        return luaL_error(L, "dt.set.%s(%I): %s", f->name, v, err);
-    }
-    if (s_write_count == SCRIPT_WRITES) {
-        return luaL_error(L, "dt.set: more than %d writes in one frame", SCRIPT_WRITES);
-    }
-    s_writes[s_write_count++] = (Write){ script_of(L), (int)(f - s_game.fields), (long long)v };
-    return 0;
-}
-
-/* ---- dt.store ---- */
-
-static bool device_name(const char *id)
-{
-    static const char *const NAMES[] = { "con", "prn", "aux", "nul" };
-    char base[64];
-    size_t n = strcspn(id, ".");
-    snprintf(base, sizeof base, "%.*s", (int)n, id);
-    for (size_t i = 0; i < sizeof NAMES / sizeof NAMES[0]; i++) {
-        if (!strcmp(base, NAMES[i])) {
-            return true;
-        }
-    }
-    return (!strncmp(base, "com", 3) || !strncmp(base, "lpt", 3)) && strlen(base) == 4 &&
-           isdigit((unsigned char)base[3]);
-}
-
-static bool store_path(const Script *s, char *out, size_t cap)
-{
-    if (!s_game.store_dir || !s_game.store_dir[0] || !fm_valid_id(s->id) || device_name(s->id)) {
-        return false;
-    }
-    snprintf(out, cap, "%s/%s.ini", s_game.store_dir, s->id);
-    return true;
-}
-
-static StoreItem *store_find(Script *s, const char *key)
-{
-    for (int i = 0; i < s->store_count; i++) {
-        if (!strcmp(s->store[i].key, key)) {
-            return &s->store[i];
-        }
-    }
-    return NULL;
-}
-
-static size_t item_bytes(const char *key, const char *value)
-{
-    return strlen(key) + strlen(value) + 4;
-}
-
-/* Puts key = value (value malloc'd, taken; NULL removes); false when the store would pass its cap. */
-static bool store_put(Script *s, const char *key, char *value)
-{
-    StoreItem *it = store_find(s, key);
-    size_t now = s->store_bytes - (it ? item_bytes(it->key, it->value) : 0) + (value ? item_bytes(key, value) : 0);
-    if (value && now > SCRIPT_STORE_BYTES) {
-        free(value);
-        return false;
-    }
-    if (!value) {
-        if (it) {
-            free(it->value);
-            *it = s->store[--s->store_count];
-        }
-    } else if (it) {
-        free(it->value);
-        it->value = value;
-    } else {
-        StoreItem *grown = realloc(s->store, (size_t)(s->store_count + 1) * sizeof *grown);
-        if (!grown) {
-            free(value);
-            return false;
-        }
-        s->store = grown;
-        snprintf(s->store[s->store_count].key, sizeof s->store[0].key, "%s", key);
-        s->store[s->store_count++].value = value;
-    }
-    s->store_bytes = now;
-    return true;
-}
-
-static bool valid_key(const char *key)
-{
-    size_t n = strlen(key);
-    if (!n || n > STORE_KEY_MAX) {
-        return false;
-    }
-    for (size_t i = 0; i < n; i++) {
-        if (!isalnum((unsigned char)key[i]) && key[i] != '_' && key[i] != '-' && key[i] != '.') {
-            return false;
-        }
-    }
-    return true;
-}
-
-static void store_load(Script *s)
-{
-    if (s->store_loaded) {
-        return;
-    }
-    s->store_loaded = true;
-    char path[1200];
-    size_t size;
-    char *text = store_path(s, path, sizeof path) ? (char *)fm_read_file(path, &size) : NULL;
-    if (!text) {
-        return;
-    }
-    int dropped = 0;
-    for (char *line = strtok(text, "\r\n"); line; line = strtok(NULL, "\r\n")) {
-        char *eq = strstr(line, " = ");
-        if (!eq) {
-            continue;
-        }
-        *eq = 0;
-        const char *v = eq + 3;
-        if (valid_key(line) && strlen(v) >= 2 && v[1] == ':' && strchr("sinb", v[0])) {
-            char *copy = malloc(strlen(v) + 1);
-            if (copy) {
-                strcpy(copy, v);
-            }
-            dropped += !copy || !store_put(s, line, copy);
-        }
-    }
-    free(text);
-    if (dropped) {
-        char why[100];
-        snprintf(why, sizeof why, ": %d keys past %d bytes were dropped", dropped, SCRIPT_STORE_BYTES);
-        log_line(s, path, why);
-    }
-}
-
-/* Writes the store to <id>.ini.tmp, then puts it in place of <id>.ini, so a
- * crash or a full disk never leaves half a file; a failure keeps it dirty
- * (tried again a second later) and is logged once. */
-static void store_write(Script *s)
-{
-    char path[1200], tmp[1210];
-    if (!s->store_dirty || !store_path(s, path, sizeof path)) {
-        return;
-    }
-    snprintf(tmp, sizeof tmp, "%s.tmp", path);
-    fm_make_dir(s_game.store_dir);
-#ifdef _WIN32
-    wchar_t w[1210], wt[1210];
-    bool named = MultiByteToWideChar(CP_UTF8, 0, path, -1, w, 1210) &&
-                 MultiByteToWideChar(CP_UTF8, 0, tmp, -1, wt, 1210);
-    FILE *f = named ? _wfopen(wt, L"wb") : NULL;
-#else
-    FILE *f = fopen(tmp, "wb");
-#endif
-    bool ok = f != NULL;
-    if (f) {
-        fprintf(f, "; dt.store of the mod %s\n", s->id);
-        for (int i = 0; i < s->store_count; i++) {
-            fprintf(f, "%s = %s\n", s->store[i].key, s->store[i].value);
-        }
-        ok = !ferror(f);
-        ok = fclose(f) == 0 && ok;
-    }
-#ifdef _WIN32
-    ok = ok && MoveFileExW(wt, w, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
-    if (!ok && named) {
-        DeleteFileW(wt);
-    }
-#else
-    ok = ok && rename(tmp, path) == 0;
-    if (!ok) {
-        remove(tmp);
-    }
-#endif
-    s->store_dirty = !ok;
-    if (!ok && !s->store_failed) {
-        log_line(s, "dt.store could not be written to ", path);
-    }
-    s->store_failed = !ok;
-}
-
-static int sb_store_get(lua_State *L)
-{
-    const char *key = luaL_checkstring(L, 1);
-    Script *s = script_of(L);
-    store_load(s);
-    StoreItem *it = store_find(s, key);
-    if (!it) {
-        lua_pushnil(L);
-        return 1;
-    }
-    const char *v = it->value + 2;
-    if (it->value[0] == 'i') {
-        lua_pushinteger(L, (lua_Integer)strtoll(v, NULL, 10));
-    } else if (it->value[0] == 'n') {
-        lua_pushnumber(L, (lua_Number)strtod(v, NULL));
-    } else if (it->value[0] == 'b') {
-        lua_pushboolean(L, !strcmp(v, "true"));
-    } else {
-        luaL_Buffer b;
-        luaL_buffinit(L, &b);
-        for (; *v; v++) {
-            if (*v == '\\' && v[1]) {
-                v++;
-                luaL_addchar(&b, *v == 'n' ? '\n' : *v == 'r' ? '\r' : *v == '0' ? '\0' : *v);
-            } else {
-                luaL_addchar(&b, *v);
-            }
-        }
-        luaL_pushresult(&b);
-    }
-    return 1;
-}
-
-static int sb_store_set(lua_State *L)
-{
-    const char *key = luaL_checkstring(L, 1);
-    Script *s = script_of(L);
-    if (!valid_key(key)) {
-        return luaL_error(L, "dt.store: a key is 1-%d characters of A-Z, a-z, 0-9, '_', '-' and '.'", STORE_KEY_MAX);
-    }
-    char path[1200];
-    if (!store_path(s, path, sizeof path)) {
-        return luaL_error(L, "dt.store: this mod has no store (its id cannot name a file)");
-    }
-    store_load(s);
-    char *value = NULL;
-    int type = lua_type(L, 2);
-    if (type == LUA_TNUMBER) {
-        char num[64];
-        if (lua_isinteger(L, 2)) {
-            snprintf(num, sizeof num, "i:%lld", (long long)lua_tointeger(L, 2));
-        } else {
-            snprintf(num, sizeof num, "n:%.17g", (double)lua_tonumber(L, 2));
-        }
-        value = malloc(strlen(num) + 1);
-        if (value) {
-            strcpy(value, num);
-        }
-    } else if (type == LUA_TBOOLEAN) {
-        const char *b = lua_toboolean(L, 2) ? "b:true" : "b:false";
-        value = malloc(strlen(b) + 1);
-        if (value) {
-            strcpy(value, b);
-        }
-    } else if (type == LUA_TSTRING) {
-        size_t n;
-        const char *t = lua_tolstring(L, 2, &n);
-        if (n > SCRIPT_STORE_BYTES) {
-            return luaL_error(L, "dt.store: more than %d bytes", SCRIPT_STORE_BYTES);
-        }
-        value = malloc(2 * n + 3);
-        if (value) {
-            char *o = value;
-            *o++ = 's';
-            *o++ = ':';
-            for (size_t i = 0; i < n; i++) {
-                char c = t[i];
-                if (c == '\\' || c == '\n' || c == '\r' || c == '\0') {
-                    *o++ = '\\';
-                    c = c == '\n' ? 'n' : c == '\r' ? 'r' : c == '\0' ? '0' : c;
-                }
-                *o++ = c;
-            }
-            *o = 0;
-        }
-    } else if (type != LUA_TNIL) {
-        return luaL_error(L, "dt.store: values are strings, numbers and booleans (got %s)", luaL_typename(L, 2));
-    }
-    if (type != LUA_TNIL && !value) {
-        return luaL_error(L, "dt.store: out of memory");
-    }
-    if (!store_put(s, key, value)) {
-        return luaL_error(L, "dt.store: more than %d bytes", SCRIPT_STORE_BYTES);
-    }
-    s->store_dirty = true;
-    return 0;
 }
 
 /* ---- the state ---- */
@@ -1245,14 +740,4 @@ void fm_scripts_frame(void)
     if (s_dirty) {
         sync_events();
     }
-}
-
-bool fm_toast(char *title, size_t title_cap, char *body, size_t body_cap)
-{
-    if (s_toast_frames <= 0) {
-        return false;
-    }
-    snprintf(title, title_cap, "%s", s_toast_title);
-    snprintf(body, body_cap, "%s", s_toast_body);
-    return true;
 }
