@@ -11,6 +11,13 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   per step of play, where `Player_Update` returns in the frame loop (one hook site, `$DB6F`, and the
   decompiled frame loop raises it itself), and `dt.set` in a game event's handler writes at once.
   Every write is logged, identical repeats counted in one line.
+- Script mods can tune Scrooge's physics (docs/MODS.md "Tunables"): `dt.tune.gravity`,
+  `walk_speed`, `jump_velocity` and `pogo_velocity`, `nil` for the game's value, the highest mod
+  in the order in force. Three hook sites right after the game's stores (`$E358`, `$E4A3`,
+  `$E6AD`), on only while a mod sets the value; the take-off velocity is replaced at the frame's
+  end. The decompiled player code reads them in replace mode (`Tune_Value`), so `--decomp` check
+  and replace stay equal (docs/DECOMPILATION.md "Tunables"). `dt.set.invulnerable` is writable,
+  refused where the knock-back would never end.
 - Decompiled the scheduler `$FF35-$FF7C` as timed task code (`Task_Schedule`, `Task_Pass`,
   `Task_Resume`), whose time the native runtime spends, giving the call to the original when an NMI
   is pending or VBlank would come during it. The native step dumps and lag logs are unchanged on all

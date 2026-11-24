@@ -190,6 +190,13 @@ typedef struct {
     void (*set)(long long value);
 } FmField;
 
+/* dt.tune.<name>: a number the game uses in place of its own while a script
+ * sets one, from lo to hi. */
+typedef struct {
+    const char *name;
+    long long lo, hi;
+} FmTune;
+
 /* A value a game event carries: the handler's table has it as e.<name>. */
 typedef struct {
     const char *name;
@@ -217,6 +224,11 @@ typedef struct {
     int field_count;
     const FmQuery *queries;
     int query_count;
+    const FmTune *tunes;
+    int tune_count;
+    /* The value in force of tunes[tune] changed: on with value (the highest
+     * mod's in the order that set it), or off for the game's own. */
+    void (*tune)(int tune, bool on, long long value);
     bool (*state_open)(void);           /* the game's state can be read now */
     void (*listen)(int event, bool on); /* turns a game event's site on or off */
     void (*begin_frame)(void);          /* opens the frame-end window: "frame" handlers and dt.set writes */

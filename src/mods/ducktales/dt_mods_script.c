@@ -10,6 +10,7 @@
  *              dt.camera() = QUERIES, read and written through the game API
  *              (ducktales/hud.h, game.h, player.h, objects.h) inside a RAM
  *              transaction
+ *   tunes      dt.tune = TUNES below, Scrooge's tunables (ducktales/tune.h)
  *   store      dt.store in the data folder's mods-data
  */
 #include "mods/app_mods.h"
@@ -20,6 +21,7 @@
 #include "ducktales/hud.h"
 #include "ducktales/objects.h"
 #include "ducktales/player.h"
+#include "ducktales/tune.h"
 #include "game/ducktales_symbols.h"
 #include "ui/app_rom.h"
 
@@ -228,6 +230,34 @@ static void set_time(long long v)
     gRam[DT_ADDR_TIME_DIGITS + 8] = (uint8_t)(v % 10);
 }
 
+#define KNOCKBACK_END     0x3C /* the knock-back ends when $7D counts down to it ($EB00) */
+#define INVULNERABLE_HELD 0x80 /* with this bit $7D does not count down ($E358) */
+
+/* During the knock-back $7D must count down to KNOCKBACK_END to end it, and
+ * at 0 the knock-back takes another hit; while Scrooge waits in mode 5 it
+ * must count down to 0. */
+static bool check_invulnerable(long long v, char *err, size_t cap)
+{
+    if (!in_range(v, 0, 255, err, cap)) {
+        return false;
+    }
+    if (gPlayerMode == PLAYER_MODE_KNOCKBACK && (v <= KNOCKBACK_END || v >= INVULNERABLE_HELD)) {
+        snprintf(err, cap, "during the knock-back it is %d to %d (it ends at %d)", KNOCKBACK_END + 1,
+                 INVULNERABLE_HELD - 1, KNOCKBACK_END);
+        return false;
+    }
+    if (gPlayerMode == PLAYER_MODE_HURT && v >= INVULNERABLE_HELD) {
+        snprintf(err, cap, "while Scrooge is hurt it is below %d", INVULNERABLE_HELD);
+        return false;
+    }
+    return true;
+}
+
+static void set_invulnerable(long long v)
+{
+    gPlayerInvulnerable = (uint8_t)v;
+}
+
 static const FmField FIELDS[] = {
     { "land", false, get_land, NULL, NULL },
     { "lives", false, get_lives, check_lives, set_lives },
@@ -244,7 +274,7 @@ static const FmField FIELDS[] = {
     { "pad_new", false, get_pad_new, NULL, NULL },
     { "music", false, get_music, NULL, NULL },
     { "mode", false, get_mode, NULL, NULL },
-    { "invulnerable", false, get_invulnerable, NULL, NULL },
+    { "invulnerable", false, get_invulnerable, check_invulnerable, set_invulnerable },
     { "x", false, get_x, NULL, NULL },
     { "y", false, get_y, NULL, NULL },
 };
@@ -288,6 +318,21 @@ static const FmQuery QUERIES[] = {
     { "objects", true, OBJECT_FIELD_COUNT, OBJECT_FIELDS, read_objects },
     { "camera", false, (int)(sizeof CAMERA_FIELDS / sizeof CAMERA_FIELDS[0]), CAMERA_FIELDS, read_camera },
 };
+
+/* 8.8 fixed point: 256 is one pixel per frame. No walk faster than the
+ * slippery floor's top speed $0280, and no take-off or pogo velocity above
+ * 16 pixels a frame (JumpScale's 400% take-off is $12EC). */
+static const FmTune TUNES[TUNE_COUNT] = {
+    [TUNE_GRAVITY] = { "gravity", 0x10, 0xFF },
+    [TUNE_WALK_SPEED] = { "walk_speed", 0x40, 0x280 },
+    [TUNE_POGO_VELOCITY] = { "pogo_velocity", 0x100, 0x1000 },
+    [TUNE_JUMP_VELOCITY] = { "jump_velocity", 0x100, 0x1000 },
+};
+
+static void tune(int t, bool on, long long value)
+{
+    Tune_Set((TuneId)t, on ? (int32_t)value : TUNE_UNSET);
+}
 
 static EventResult on_event(EventId id, void *user)
 {
@@ -333,6 +378,9 @@ void dt_mods_configure(void)
         .field_count = (int)(sizeof FIELDS / sizeof FIELDS[0]),
         .queries = QUERIES,
         .query_count = (int)(sizeof QUERIES / sizeof QUERIES[0]),
+        .tunes = TUNES,
+        .tune_count = TUNE_COUNT,
+        .tune = tune,
         .state_open = GameRam_Open,
         .listen = listen,
         .begin_frame = GameRam_Begin,

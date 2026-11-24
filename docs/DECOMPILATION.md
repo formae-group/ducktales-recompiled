@@ -121,6 +121,47 @@ not raise `EVENT_NEW_GAME` before, so StartLives had no effect with the decompil
 routines on, and that `full_moon` and `full_amazon` log the same events, frame for frame and with
 the same values, with `--decomp off`, `check` and `replace`.
 
+## Tunables
+
+`include/ducktales/tune.h` lets a mod replace four numbers of Scrooge's physics (`dt.tune` in
+[MODS.md](MODS.md)). Each is a value the game stores again every time it uses it, so replacing it
+at the store changes nothing else. While a tunable is unset nothing changes: three own a
+`[[mod_function_hook]]` site that is enabled only while it is set, and the fourth is left alone.
+
+| Tunable | The game's | Where the game stores it | Site |
+|---|---|---|---|
+| `TUNE_GRAVITY` | `$33` | `LDA #$33` / `STA $EF` at the start of `Player_Update` (`$E354`); `$F2B5` subtracts `$EF` from Scrooge's velocity, and the object dispatch stores its own gravity before the objects move | `$E358`, `ducktales.tune.gravity` |
+| `TUNE_WALK_SPEED` | `$0180` | slot 0's speed `$0760`/`$0770` in the normal walk (`$E495`-`$E4A0`); the push of `$73` that follows adds `$0180` as immediates and keeps it | `$E4A3` (`JMP $E551`), `ducktales.tune.walk-speed` |
+| `TUNE_POGO_VELOCITY` | `$05A8` | slot 0's velocity `$07B0`/`$07C0` at a pogo bounce in the air handler (`$E6A3`-`$E6AC`) | `$E6AD`, `ducktales.tune.pogo-velocity` |
+| `TUNE_JUMP_VELOCITY` | `$04BB` | `$0790`/`$07A0`, stored by the land set-up at `$D813`-`$D81C` (the only stores to them in any bank) and copied into the velocity at each take-off (`$E3F2`) | none |
+
+Evidence: no branch, `JMP`, `JSR` or address table in any bank points at `$E358`, `$E4A3` or
+`$E6AD`, so each is reached only by falling through from the stores before it, and the next
+instruction reads neither A nor the stored bytes before the site has replaced them. Each site
+stores the tuned value over the game's (`cyc_mod_poke`) and lets the instruction run. The
+take-off velocity is replaced by `Tune_FrameEnd` after each machine frame, after the scripts:
+while it is set and `$07A0:$0790` holds `$04BB` (or the value tuned before), the tuned value is
+stored, and once it is unset the game's is put back where the tuned one still is.
+
+**With the decompiled code.** The C reads the tunables where the original's stores are:
+`Tune_Value(TUNE_GRAVITY, PLAYER_GRAVITY)` in `Player_Update`, `Tune_Value(TUNE_WALK_SPEED,
+WALK_SPEED)` in `Player_WalkNormal` (not in the push, which keeps `$0180` as the original does) and
+`Tune_Value(TUNE_POGO_VELOCITY, POGO_BOUNCE_VY)` at the bounce in `Player_Air`
+(`src/decomp/player/player_internal.h`). `Tune_Value` gives the tuned value in replace mode only,
+as `Decomp_RaiseEvent` raises only there. So:
+
+- in `off` the sites store the tuned values in the original code;
+- in `check` the C and the original in its isolated call both use the game's values (a site
+  changes nothing inside check mode's isolated call), and then the original runs on the machine,
+  where the site stores the tuned value;
+- in `replace` the C uses the tuned values, and the measuring call (task code such as
+  `Player_Update` runs it with hook sites on) and an original that runs instead for the frame end
+  get them from the sites, so the cycles spent are those of the tuned path.
+
+`tests/mods_test.py` step 11 runs a script that tunes all four and writes the invulnerability
+with `--decomp off`, `check` and `replace`: the same log, no mismatch, and the same RAM outside the
+stack on every frame. The four cost 3 of the 128 hook sites (112 in use with them).
+
 ## Decompiled routines
 
 ### How a routine replaces the recompiled one

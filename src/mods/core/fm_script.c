@@ -10,8 +10,9 @@
  *              event's handler gets a table: its name and values), dt.CANCEL,
  *              dt.state (the game's fields, read only), dt.<query>() (the
  *              game's records, read only), dt.set.<field>(v) for the fields
- *              the game declares writable, dt.toast(text), dt.draw.text/rect,
- *              dt.store.get/set, dt.log, dt.mod and dt.frame()
+ *              the game declares writable, dt.tune.<name> (the game's
+ *              tunables), dt.toast(text), dt.draw.text/rect, dt.store.get/set,
+ *              dt.log, dt.mod and dt.frame()
  *   writes     dt.set checks the value against the state when it is called.
  *              In a game event's handler it writes at once, inside the
  *              event's RAM transaction; in a "frame" handler it is queued,
@@ -382,6 +383,15 @@ static int setup(lua_State *L)
     lua_setfield(L, -2, "set");
 
     lua_newtable(L);
+    lua_newtable(L);
+    set_function(L, "__index", fm_script_tune_index);
+    set_function(L, "__newindex", fm_script_tune_newindex);
+    lua_pushliteral(L, "dt.tune");
+    lua_setfield(L, -2, "__metatable");
+    lua_setmetatable(L, -2);
+    lua_setfield(L, -2, "tune");
+
+    lua_newtable(L);
     set_function(L, "get", fm_script_sb_store_get);
     set_function(L, "set", fm_script_sb_store_set);
     seal(L, "dt.store");
@@ -517,6 +527,16 @@ static void close_script(Script *s)
     lua_close(s->L);
     s->L = NULL;
     fm_script_flush_writes(s);
+    s->write_logs = 0;
+    for (int t = 0; t < fm_script_game.tune_count; t++) {
+        if (s->tuned & 1u << t) {
+            char text[160];
+            snprintf(text, sizeof text, "dt.tune.%s = nil (the script ended)", fm_script_game.tunes[t].name);
+            fm_script_log_line(s, "", text);
+        }
+    }
+    s->tuned = 0;
+    fm_script_sync_tunes();
     s->wants = 0;
     s_dirty = true;
 }
@@ -636,6 +656,9 @@ void fm_scripts_configure(const FmScriptGame *game)
     fm_script_game = *game;
     if (fm_script_game.event_count > SCRIPT_EVENTS) {
         fm_script_game.event_count = SCRIPT_EVENTS;
+    }
+    if (fm_script_game.tune_count > SCRIPT_TUNES) {
+        fm_script_game.tune_count = SCRIPT_TUNES;
     }
 }
 

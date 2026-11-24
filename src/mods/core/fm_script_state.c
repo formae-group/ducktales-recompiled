@@ -5,16 +5,21 @@
  * game's records (FmQuery), read only. All of them work in dt.on callbacks
  * only. In a game event's handler dt.set writes at once, inside the event's
  * RAM transaction; in a "frame" handler it queues the write for fm_script.c
- * to apply at the frame's end. Every write is logged: the first one to a
- * target and every change of its value get a line, and identical repeats
- * are counted in one line with the next change, every SCRIPT_WRITE_FLUSH
- * frames (fm_script.c) and at exit.
+ * to apply at the frame's end. dt.tune.<name> = v (FmTune) works anywhere:
+ * the game gets the value of the highest mod in the order that set one, and
+ * its own again once none does (nil, or the script stopped). Every write and
+ * tune is logged: the first one to a target and every change of its value
+ * get a line, and identical repeats are counted in one line with the next
+ * change, every SCRIPT_WRITE_FLUSH frames (fm_script.c) and at exit.
  */
 #include "mods/core/fm_script_internal.h"
 
 #include "lauxlib.h"
 
+#include <limits.h>
 #include <string.h>
+
+#define TUNE_NIL LLONG_MIN /* the logged value of dt.tune.<name> = nil */
 
 static void push_record(lua_State *L, const FmQuery *q, const long long *values)
 {
@@ -106,7 +111,7 @@ static void flush_write(Script *s, WriteLog *w)
         return;
     }
     char text[160];
-    snprintf(text, sizeof text, "%s(%lld) repeated %ld more times", w->key, w->value, w->repeats);
+    snprintf(text, sizeof text, "%s repeated %ld more times", w->label, w->repeats);
     fm_script_log_line(s, "", text);
     w->repeats = 0;
 }
@@ -114,7 +119,7 @@ static void flush_write(Script *s, WriteLog *w)
 /* Logs text for a write of value to key, unless it repeats the last value
  * written there: the first write and every change get a line, and repeats
  * are counted and logged with the next change or flush. */
-void fm_script_log_write(Script *s, const char *key, long long value, const char *text)
+void fm_script_log_write(Script *s, const char *key, long long value, const char *label, const char *text)
 {
     WriteLog *w = NULL;
     for (int i = 0; i < s->write_logs && !w; i++) {
@@ -137,6 +142,7 @@ void fm_script_log_write(Script *s, const char *key, long long value, const char
         w = &s->write_log[s->write_logs++];
         snprintf(w->key, sizeof w->key, "%s", key);
     }
+    snprintf(w->label, sizeof w->label, "%s", label);
     w->value = value;
     w->repeats = 0;
     fm_script_log_line(s, "", text);
@@ -155,12 +161,101 @@ void fm_script_apply(Script *s, const FmField *f, long long value)
     long long was = 0;
     bool known = f->get(&was);
     f->set(value);
-    char key[48], text[160];
+    char key[48], label[64], text[160];
     snprintf(key, sizeof key, "dt.set.%s", f->name);
+    snprintf(label, sizeof label, "%s(%lld)", key, value);
     if (known) {
-        snprintf(text, sizeof text, "%s(%lld), was %lld", key, value, was);
+        snprintf(text, sizeof text, "%s, was %lld", label, was);
     } else {
-        snprintf(text, sizeof text, "%s(%lld)", key, value);
+        snprintf(text, sizeof text, "%s", label);
     }
-    fm_script_log_write(s, key, value, text);
+    fm_script_log_write(s, key, value, label, text);
+}
+
+/* The script whose value of tune t is in force: the first in the order (the
+ * highest mod) that set one; NULL when none did. */
+static const Script *tune_owner(int t)
+{
+    for (int i = 0; i < fm_script_script_count; i++) {
+        const Script *s = fm_script_scripts[i];
+        if (s->L && !s->stopped && (s->tuned & 1u << t)) {
+            return s;
+        }
+    }
+    return NULL;
+}
+
+void fm_script_sync_tunes(void)
+{
+    static bool s_on[SCRIPT_TUNES];
+    static long long s_value[SCRIPT_TUNES];
+    for (int t = 0; t < fm_script_game.tune_count; t++) {
+        const Script *owner = tune_owner(t);
+        long long value = owner ? owner->tune[t] : 0;
+        if ((owner != NULL) == s_on[t] && value == s_value[t]) {
+            continue;
+        }
+        s_on[t] = owner != NULL;
+        s_value[t] = value;
+        if (fm_script_game.tune) {
+            fm_script_game.tune(t, s_on[t], value);
+        }
+    }
+}
+
+static int tune_of(lua_State *L, const char *name)
+{
+    for (int t = 0; t < fm_script_game.tune_count; t++) {
+        if (!strcmp(name, fm_script_game.tunes[t].name)) {
+            return t;
+        }
+    }
+    luaL_Buffer b;
+    luaL_buffinit(L, &b);
+    for (int t = 0; t < fm_script_game.tune_count; t++) {
+        luaL_addstring(&b, t ? ", " : "");
+        luaL_addstring(&b, fm_script_game.tunes[t].name);
+    }
+    luaL_pushresult(&b);
+    return luaL_error(L, "dt.tune has no tunable \"%s\" (%s)", name, lua_tostring(L, -1));
+}
+
+/* dt.tune.<name>: the value in force, nil while the game uses its own. */
+int fm_script_tune_index(lua_State *L)
+{
+    int t = tune_of(L, luaL_checkstring(L, 2));
+    const Script *owner = tune_owner(t);
+    if (owner) {
+        lua_pushinteger(L, (lua_Integer)owner->tune[t]);
+    } else {
+        lua_pushnil(L);
+    }
+    return 1;
+}
+
+/* dt.tune.<name> = value or nil. */
+int fm_script_tune_newindex(lua_State *L)
+{
+    int t = tune_of(L, luaL_checkstring(L, 2));
+    const FmTune *tune = &fm_script_game.tunes[t];
+    Script *s = fm_script_of(L);
+    char key[48], label[64];
+    snprintf(key, sizeof key, "dt.tune.%s", tune->name);
+    if (lua_isnil(L, 3)) {
+        s->tuned &= ~(1u << t);
+        snprintf(label, sizeof label, "%s = nil", key);
+        fm_script_log_write(s, key, TUNE_NIL, label, label);
+    } else {
+        lua_Integer v = luaL_checkinteger(L, 3);
+        if (v < tune->lo || v > tune->hi) {
+            return luaL_error(L, "%s = %I: out of range %I to %I", key, v, (lua_Integer)tune->lo,
+                              (lua_Integer)tune->hi);
+        }
+        s->tune[t] = (long long)v;
+        s->tuned |= 1u << t;
+        snprintf(label, sizeof label, "%s = %lld", key, (long long)v);
+        fm_script_log_write(s, key, (long long)v, label, label);
+    }
+    fm_script_sync_tunes();
+    return 0;
 }

@@ -172,6 +172,7 @@ end)
 | `dt.CANCEL` | Returned by a handler of a cancelable event: the event is cancelled. Returned for an event that cannot be cancelled, it is ignored and the log says so once |
 | `dt.state` | The game's state, read only, inside handlers (fields below) |
 | `dt.set.<field>(value)` | Sets a writable field, inside handlers: at once in a game event's handler, at the frame's end in a `frame` handler (see [Writing the game](#writing-the-game)) |
+| `dt.tune.<name>` | Scrooge's physics: assign a number to use in place of the game's, `nil` for the game's again; reads give the value in force or `nil` (see [Tunables](#tunables)) |
 | `dt.objects()`, `dt.camera()` | The live object slots and the camera, read only, inside handlers (see [Objects and the camera](#objects-and-the-camera)) |
 | `dt.toast(text)` | Shows a short notice over the picture; returns `false` when it was refused (see [Toasts](#toasts)) |
 | `dt.draw.text(x, y, text[, color])`, `dt.draw.rect(x, y, w, h, color)` | Draws over the presented picture for one frame (see [Drawing](#drawing)) |
@@ -267,6 +268,7 @@ or any hash (`tests/mods_test.py` compares the per-frame hashes with a drawing s
 | `hp` | 0 to `hp_max` | The HUD's HP dots: the first `hp` full, the rest lost |
 | `money` | 0 to 9,999,990, a multiple of 10, while the HUD shows money | The money digits, leading zeros blank as the game draws them |
 | `time` | 0 to 999 | The HUD time digits |
+| `invulnerable` | 0 to 255; during the knock-back (`mode` 6) 61 to 127, while hurt (`mode` 5) below 128 | Scrooge's invulnerability frames (`$7D`): while not 0 hits do not hurt him and his sprite flickers. It counts down once a step; 128 and up do not count down. The knock-back ends when it reaches 60, and a hit at 0 starts another, so values that would never end it are refused |
 
 The value is checked when `dt.set` is called, and a value out of range is an error (catchable
 with `pcall`). Calls are only allowed inside handlers:
@@ -293,6 +295,41 @@ dt.on("update", function()
     end
 end)
 ```
+
+A hit's cost needs no field of its own: a `player-damaged` handler can return `dt.CANCEL` (no dot
+is lost) or set `hp` itself.
+
+### Tunables
+
+`dt.tune` holds numbers of Scrooge's physics that the game reloads every time it uses them. All
+are 8.8 fixed point: 256 is one pixel per frame (per step of play), so `0x180` is 1.5.
+
+| Name | The game's | Values | What it is |
+|---|---|---|---|
+| `gravity` | `0x33` | `0x10` to `0xFF` | What his vertical velocity loses each step in the air (jumps, falls, bounces); the enemies keep their own |
+| `walk_speed` | `0x180` | `0x40` to `0x280` | His speed walking on normal ground (slippery floor keeps its own speeds; `0x280` is its top) |
+| `jump_velocity` | `0x4BB` | `0x100` to `0x1000` | His take-off velocity when he jumps |
+| `pogo_velocity` | `0x5A8` | `0x100` to `0x1000` | His velocity when he bounces on the pogo cane |
+
+```lua
+dt.tune.gravity = 0x20             -- floatier jumps from now on
+dt.on("land-start", function(e)
+    dt.tune.walk_speed = e.land == 4 and 0x200 or nil -- faster on the Moon only
+end)
+```
+
+Assigning works anywhere, also outside handlers; a value out of range or an unknown name is an
+error (catchable with `pcall`). The value holds until the script assigns another or `nil`, or
+stops (an error, a reload, the game closing): then the game uses its own again. When several mods
+set the same tunable, the one highest in the list is in force, and reading `dt.tune.<name>` in
+any mod gives that value. Like `dt.set`, **a tunable is a gameplay change**: every assignment is
+logged as `dt.tune.gravity = 32` (`dt.tune.gravity = nil`), identical repeats are counted in one
+line as for writes, and a script that stops logs `dt.tune.gravity = nil (the script ended)`.
+
+`gravity`, `walk_speed` and `pogo_velocity` take effect where the game stores them, the next
+time it does (each step in the air, each step of walking, each bounce). `jump_velocity` is the
+value the land's set-up stores for every jump of the land: it is replaced at the end of the frame,
+so it applies from the next jump on.
 
 ### Toasts
 
@@ -352,9 +389,9 @@ save a fix. Only the scripts of mods loaded at start reload: a mod that had no
 
 | Folder | What it holds |
 |---|---|
-| `core/` | Knows no game. `fm_mods.h` is its interface: the package format and catalogue (`fm_catalog.c`: folders, `mod.toml`, order, switches, restart check), the archive and folder reader (`fm_archive.c`), PNG, OGG, WAV and deflate on stb (`fm_codec.c`) and the Lua sandbox with the generic script API (`fm_script.c`: `dt.on`, cancel, log, limits, hot reload; `fm_script_state.c`: `dt.state`, `dt.set` and the queries over the fields and records the game describes; `fm_script_show.c`: toast and `dt.draw`; `fm_script_store.c`: store; `fm_script_internal.h`: what they share) |
+| `core/` | Knows no game. `fm_mods.h` is its interface: the package format and catalogue (`fm_catalog.c`: folders, `mod.toml`, order, switches, restart check), the archive and folder reader (`fm_archive.c`), PNG, OGG, WAV and deflate on stb (`fm_codec.c`) and the Lua sandbox with the generic script API (`fm_script.c`: `dt.on`, cancel, log, limits, hot reload; `fm_script_state.c`: `dt.state`, `dt.set`, `dt.tune` and the queries over the fields, tunables and records the game describes; `fm_script_show.c`: toast and `dt.draw`; `fm_script_store.c`: store; `fm_script_internal.h`: what they share) |
 | `nes/` | NES games: tile keys, the replacement tile table, `.pal` palettes and tile templates (`fm_nes.c`) |
-| `ducktales/` | This game: what the assets mean and how they are loaded (`dt_mods.c`), painted (`dt_mods_picture.c`, with the toast and `dt.draw` overlay) and mixed (`dt_mods_audio.c`); the event list, the `dt.state` and writable fields, the queries and the store folder (`dt_mods_script.c`) |
+| `ducktales/` | This game: what the assets mean and how they are loaded (`dt_mods.c`), painted (`dt_mods_picture.c`, with the toast and `dt.draw` overlay) and mixed (`dt_mods_audio.c`); the event list, the `dt.state` and writable fields, the tunables, the queries and the store folder (`dt_mods_script.c`) |
 | `app_mods.h` | The interface the hosts and the menu call |
 
 Both hosts and the native player call the same entry points:
@@ -374,6 +411,14 @@ Both hosts and the native player call the same entry points:
   (including the frames the open menu runs) those events are raised, then the `frame` handlers run,
   the queued `dt.set` writes are applied in one RAM transaction and the frame's drawings replace
   the shown ones.
+- **Tunables.** `src/game/tune.c` (`include/ducktales/tune.h`) owns them. `gravity`,
+  `walk_speed` and `pogo_velocity` each have a hook site right after the game's stores of its
+  value (`$E358`, `$E4A3`, `$E6AD`), on only while a mod sets it, which stores the tuned value
+  over the game's; the decompiled player code reads the same value there in replace mode
+  (`Tune_Value`). `jump_velocity` has no site: at the end of each frame, after the scripts, the
+  take-off velocity the land set-up stored (`$07A0:$0790`) is replaced while it holds the game's
+  value, and put back once the tunable is `nil`. See "Tunables" in
+  [docs/DECOMPILATION.md](DECOMPILATION.md).
 
 The tests are in `tests/mods_test.py` (its steps in `tests/mods/`), `tests/mods_catalogue_test.c` and `tests/window_smoke.py`.
 They generate their fixtures in scratch folders, and the tile templates come from the player's own

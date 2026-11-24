@@ -12,16 +12,18 @@
 #define SCRIPT_WRITES     256
 #define STORE_KEY_MAX     64
 #define SCRIPT_WRITE_KEYS 32
+#define SCRIPT_TUNES      16
 
 typedef struct {
     char key[STORE_KEY_MAX + 1];
     char *value; /* "s:text" (escaped), "i:123", "n:1.5" or "b:true" */
 } StoreItem;
 
-/* The last value a mod wrote to one target and the identical writes since it
- * was logged. */
+/* The last value a mod wrote to one target, how its line names it, and the
+ * identical writes since it was logged. */
 typedef struct {
     char key[48];
+    char label[64];
     long long value;
     long repeats;
 } WriteLog;
@@ -51,6 +53,8 @@ typedef struct {
     size_t store_bytes;
     WriteLog write_log[SCRIPT_WRITE_KEYS];
     int write_logs;
+    long long tune[SCRIPT_TUNES];
+    uint32_t tuned; /* bit per tune: set by this script */
 } Script;
 
 typedef struct {
@@ -70,14 +74,19 @@ extern bool fm_script_in_event; /* a game event's handlers are running */
 Script *fm_script_of(lua_State *L);
 void fm_script_log_line(const Script *s, const char *what, const char *text);
 
-/* fm_script_state.c: dt.state, dt.set and dt.<query>() */
+/* fm_script_state.c: dt.state, dt.set, dt.tune and dt.<query>() */
 int fm_script_sb_query(lua_State *L);
 int fm_script_state_index(lua_State *L);
 int fm_script_read_only(lua_State *L);
 int fm_script_sb_set(lua_State *L);
 void fm_script_apply(Script *s, const FmField *f, long long value);
-void fm_script_log_write(Script *s, const char *key, long long value, const char *text);
+/* label names the write in its repeat line ("dt.set.lives(7)"). */
+void fm_script_log_write(Script *s, const char *key, long long value, const char *label, const char *text);
 void fm_script_flush_writes(Script *s);
+int fm_script_tune_index(lua_State *L);
+int fm_script_tune_newindex(lua_State *L);
+/* Gives the game the tunes' values in force where they changed. */
+void fm_script_sync_tunes(void);
 
 /* fm_script_show.c: dt.toast and dt.draw */
 extern int fm_script_toast_frames;

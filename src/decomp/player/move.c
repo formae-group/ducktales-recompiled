@@ -202,7 +202,7 @@ static void Player_Move(uint8_t dir)
 void Player_WalkNormal(uint8_t x)
 {
     gPlayerMomentumDir = 0;
-    Obj_SetSpeed(P_, WALK_SPEED);
+    Obj_SetSpeed(P_, Tune_Value(TUNE_WALK_SPEED, WALK_SPEED));
     if (gPlayerPushRight) {
         gPlayerPushRight = 0;
         if (!(gPadHeld & (DT_PAD_LEFT | DT_PAD_RIGHT))) {

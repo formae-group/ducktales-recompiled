@@ -37,11 +37,15 @@ templates come from the player's own ROM through --mods-dump and are deleted wit
      shows its rectangle and text over the presented picture and stops at 64 a frame; with all of
      it running the per-frame machine hashes equal a run without mods, and the native player logs
      the same events in the same frames;
- 11. gameplay scripts on amazon_intro (headless, and the native player when it is built): the
+ 11. gameplay scripts (headless, and the native player when it is built): on amazon_intro the
      "update" event once per step of play, dt.set in a game event's handler written at once and
-     logged, identical repeats counted in one line; on the headless build the same script with
-     --decomp off, check and replace logs the same writes and finds no mismatch, and with the
-     developer build (--dev-build) replace keeps the RAM of off outside the stack on every frame.
+     logged, identical repeats counted in one line; on a short Amazon route each of Scrooge's
+     tunables (dt.tune) changes its fall, walk, jump or pogo bounce against a run without it, nil
+     gives the game's value back, the highest mod in the order wins and the limits are refused;
+     on the headless build scripts that write, tune and set the invulnerability in a knock-back
+     (refused where it would never end) log the same lines with --decomp off, check and replace,
+     find no mismatch, and with the developer build (--dev-build) replace keeps the RAM of off
+     outside the stack on every frame.
 
     py -3 -I tests/mods_test.py --build build/headless [--dev-build build/headless-dev]
 """

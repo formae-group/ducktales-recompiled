@@ -40,6 +40,7 @@
 
 #include "decomp/decomp.h"
 #include "ducktales/events.h"
+#include "ducktales/tune.h"
 #include "game/enhancements.h"
 #include "host/ducktales_host.h"
 #include "host/ducktales_sprites.h"
@@ -133,6 +134,7 @@ void player_run_frame(uint8_t pad0, uint8_t pad1)
     }
     Events_FrameEnd();
     app_mods_scripts_frame();
+    Tune_FrameEnd();
     app_mods_dump_frame();
 }
 

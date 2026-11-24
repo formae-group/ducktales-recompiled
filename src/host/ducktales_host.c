@@ -44,6 +44,7 @@
 
 #include "decomp/decomp.h"
 #include "ducktales/events.h"
+#include "ducktales/tune.h"
 #include "game/enhancements.h"
 #include "host/ducktales_diagnostics.h"
 #include "host/ducktales_host.h"
@@ -205,6 +206,7 @@ static void frame_end(void *ctx)
     }
     Events_FrameEnd();
     app_mods_scripts_frame();
+    Tune_FrameEnd();
     app_mods_dump_frame();
     dt_ramhash_frame_end();
     dt_diag_frame_end();

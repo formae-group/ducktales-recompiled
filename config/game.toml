@@ -85,6 +85,28 @@ addr = 0xDB6F
 length = 8
 crc32 = 0x37C7B055
 
+# Tunables (src/game/tune.c, docs/DECOMPILATION.md "Tunables"): the
+# instruction right after the stores of a value the game reloads, reached
+# only by falling through from them; enabled only while a mod sets the value.
+# In Player_Update: after LDA #$33 / STA $EF (gravity).
+[[mod_function_hook]]
+id = "ducktales.tune.gravity"
+addr = 0xE358
+length = 8
+crc32 = 0xAA996935
+# In the normal walk: the JMP $E551 after the speed $0180 was stored.
+[[mod_function_hook]]
+id = "ducktales.tune.walk-speed"
+addr = 0xE4A3
+length = 8
+crc32 = 0xD26A5BA5
+# In the pogo bounce: after the velocity $05A8 was stored.
+[[mod_function_hook]]
+id = "ducktales.tune.pogo-velocity"
+addr = 0xE6AD
+length = 8
+crc32 = 0xB0D4F858
+
 # Decompiled routines (src/decomp/, docs/DECOMPILATION.md): a site at the
 # entry of each routine that original code calls (routines only decompiled
 # code calls have none), enabled only with --decomp check or replace.

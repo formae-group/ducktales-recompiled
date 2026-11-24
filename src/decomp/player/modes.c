@@ -261,7 +261,7 @@ void Player_Air(void)
                      (gPadHeld & DT_PAD_B) && (!RAM_U8(DT_ADDR_POGO_CEILING) || gObjects->y[P_] < POGO_CEILING_Y);
             if (bounce) {
                 Sound_Request(SFX_POGO_BOUNCE, x);
-                Obj_SetVelocityY(P_, POGO_BOUNCE_VY);
+                Obj_SetVelocityY(P_, Tune_Value(TUNE_POGO_VELOCITY, POGO_BOUNCE_VY));
                 gObjects->action[P_] = PLAYER_ACTION_POGO;
                 gObjects->animTimer[P_] = 0;
                 gObjects->pose[P_] = 2;

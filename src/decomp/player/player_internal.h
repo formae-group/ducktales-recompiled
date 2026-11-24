@@ -17,6 +17,7 @@
 #include "ducktales/hud.h"
 #include "ducktales/objects.h"
 #include "ducktales/player.h"
+#include "ducktales/tune.h"
 
 #define P_ PLAYER_SLOT
 
@@ -67,6 +68,16 @@
 #define gScratch(i)    RAM_U8(DT_ADDR_SCRATCH0 + (i))
 #define gHudTotalDirty RAM_U8(DT_ADDR_HUD_TOTAL_DIRTY)
 #define gTotalDigit(i) RAM_U8(DT_ADDR_TOTAL_DIGITS + (i))
+
+/* A tunable at the point its site replaces the game's value: the tuned value
+ * in replace mode, the game's otherwise (in off and check mode the site
+ * stores the tuned value on the machine, so check compares the C with an
+ * original that has the game's). */
+static inline uint16_t Tune_Value(TuneId id, uint16_t original)
+{
+    int32_t v = Tune_Get(id);
+    return v != TUNE_UNSET && Decomp_Mode() == DECOMP_REPLACE ? (uint16_t)v : original;
+}
 
 static inline void Player_SetAction(uint8_t action)
 {

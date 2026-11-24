@@ -138,6 +138,7 @@
  * jump starts (verified, docs/ARCHITECTURE.md "Jump experiment"). */
 #define DT_ADDR_JUMP_VY_FRAC 0x0790
 #define DT_ADDR_JUMP_VY      0x07A0
+#define DT_JUMP_VY_STOCK     0x04BB /* stored by the land set-up at $D813-$D81C, their only stores */
 
 /* ---- HUD (docs/MEMORY-MAP.md "Other RAM") ---- */
 #define DT_ADDR_TIME_DIGITS   0x0151 /* HUD time hundreds; tens at +4, ones at +8 (verified) */
@@ -899,6 +900,21 @@
  * step of play, message boxes included. */
 #define DT_SITE_UPDATE    DT_FLOW_AFTER_PLAYER
 #define DT_SITE_UPDATE_ID "ducktales.event.update"
+
+/* Tunables (ducktales/tune.h): each site is the instruction right after the
+ * stores of the game's value, reached only by falling through from them (no
+ * branch, jump or address table in any bank points at it). */
+/* In Player_Update ($E354): after LDA #$33 / STA $EF, the frame's gravity. */
+#define DT_SITE_TUNE_GRAVITY    0xE358
+#define DT_SITE_TUNE_GRAVITY_ID "ducktales.tune.gravity"
+/* In the normal walk ($E495): the JMP $E551 after slot 0's speed $0760/$0770
+ * was set to $0180. */
+#define DT_SITE_TUNE_WALK    0xE4A3
+#define DT_SITE_TUNE_WALK_ID "ducktales.tune.walk-speed"
+/* In the air handler's pogo bounce ($E6A3): after slot 0's velocity
+ * $07B0/$07C0 was set to $05A8. */
+#define DT_SITE_TUNE_POGO    0xE6AD
+#define DT_SITE_TUNE_POGO_ID "ducktales.tune.pogo-velocity"
 
 /* The RTI of the NMI handler ($C000), its only exit: replace mode spends
  * there the cycles a replaced routine still owed when the NMI came

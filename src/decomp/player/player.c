@@ -43,7 +43,7 @@
 static void Player_Update(Regs *r)
 {
     Decomp_Enter(DT_CODE_PLAYER_UPDATE, r->a, r->x, r->y);
-    gGravity = PLAYER_GRAVITY;
+    gGravity = (uint8_t)Tune_Value(TUNE_GRAVITY, PLAYER_GRAVITY);
     if (gPlayerInvulnerable != 0 && !(gPlayerInvulnerable & 0x80)) {
         gPlayerInvulnerable--;
     }
