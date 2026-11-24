@@ -610,18 +610,18 @@ indirect jump or another routine's entry, and counts as C the routines only C re
 script's docstring gives every rule. `--rev` reads the C of another branch against the same
 coverage.
 
-On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **63.9%, 16,049 of 25,120 executed
-bytes**, in 248 routines (decomp/level after the row scroll batch, 12 routes and 33 poke cases).
+On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **65.9%, 16,559 of 25,120 executed
+bytes**, in 252 routines (decomp/level after the block draw and tile edits, 12 routes and 33 poke cases).
 
 | Group | Files | Routines | Executed bytes | Share |
 |---|---|---|---|---|
 | player | `player.c`, `motion.c`, `sound.c` | 53 | 3,569 | 14.2% |
 | objects | `objects.c`, `objcommon.c` | 62 | 4,172 | 16.6% |
 | flow | `flow.c` | 85 | 2,406 | 9.6% |
-| level | `level.c`, `collision.c` | 31 | 2,686 | 10.7% |
+| level | `level.c`, `collision.c` | 35 | 3,196 | 12.7% |
 | system | `system.c`, `sprites.c`, `audio.c` | 17 | 3,216 | 12.8% |
 
-317 of those bytes are also run by original routines (shared tails). `Input_ReadControllers` is
+263 of those bytes are also run by original routines (shared tails). `Input_ReadControllers` is
 not counted: replace mode gives every call to the original. The largest routines still original
 are the object kinds of bank 6 that `Obj_UpdateAll` hands to the original (`$A6D3` 469 bytes,
 `$A8D6` 466, `$A065` 367, `$AAE1` 342) and the NMI `$C000` (308).

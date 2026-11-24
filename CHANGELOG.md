@@ -7,6 +7,10 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- The block draw `$D068` with the debris it throws (bank 4 `$BD80`) and the object tile edits
+  `$F4D8`/`$F506` are decompiled (`src/decomp/level.c`); `$D068`'s site replaces the flow's stop
+  there. The probe's special-tile switch no longer has an original fallback (every entry of
+  `$D1E2` is handled).
 - The row scroll `$C976`, the 60-frame vertical transition between map rows, is decompiled as task
   code with resume points `$C99D`, `$C9FB`, `$CA09` and `$CA22`, and its eight step routines
   `$CA4A-$CC84` (block row draw, queue headers, the kept half, the half rows of the screens beside
