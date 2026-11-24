@@ -18,6 +18,8 @@
  */
 #include "decomp/decomp.h"
 #include "decomp/level.h"
+#include "decomp/objcommon.h"
+#include "decomp/sound.h"
 
 #include "ducktales/game.h"
 #include "ducktales/level.h"
@@ -1008,6 +1010,102 @@ static void Row_ScrollEnd(Regs *r)
     RAM_U8(DT_ADDR_PALETTE_REQUEST) = r->y;
 }
 
+/* ---- block draw ----
+ *
+ * $D068 queues a block record (the table at $D110, from offset Y) over the
+ * screen: a tile pair record of its metatiles' top and bottom tiles, copied
+ * down two tile rows at a time; then it throws the four debris pieces of a
+ * broken block from bank 4. The message box ($ED05, message $06) and the
+ * breaking object at $FD88 use it. */
+
+#define gBlockRecord RAM_U8(DT_ADDR_SCRATCH0) /* offset of the next metatile in the record */
+#define gBlockOut    RAM_U8(DT_ADDR_SCRATCH1) /* offset of its tiles in the first record */
+#define gBlockFirst  RAM_U8(DT_ADDR_SCRATCH3) /* the record's offset */
+#define gBlockCopies RAM_U8(DT_ADDR_TARGET_X)
+#define gDebrisY     RAM_U8(DT_ADDR_TARGET_X)
+#define gDebrisX     RAM_U8(DT_ADDR_TARGET_X + 1)
+#define PAIR_RECORD  7 /* address high, low, count - 1, 4 tiles */
+#define DEBRIS       4
+#define DEBRIS_BANK  4 /* bank of $BD80 */
+#define DEBRIS_STATE (OBJ_STATUS_LIVE | 0x20)
+#define SFX_BREAK    0x16
+
+/* bank 4 $BD80: four debris pieces around ($11, $10) in free slots, then the
+ * break sound. */
+static void Block_Debris(void)
+{
+    Decomp_Enter(DT_B4_BLOCK_DEBRIS, 0, 0, 0);
+    uint8_t slot = 0;
+    for (int i = DEBRIS - 1; i >= 0 && Obj_FindFreeSlot(&slot); i--) {
+        gObjects->state[slot] = DEBRIS_STATE;
+        gObjects->flags[slot] = DEBRIS_STATE | OBJ_FLAG_DELETE_AT_END;
+        gObjects->action[slot] = OBJ_ACTION_BREAK;
+        gObjects->animFrame[slot] = 0;
+        gObjects->hitbox[slot] = 0;
+        gObjects->kind[slot] = 0;
+        unsigned y = gDebrisY + rom((uint16_t)(DT_B4_DEBRIS_DY + i));
+        gObjects->y[slot] = (uint8_t)y;
+        gObjects->worldX[slot] = (uint8_t)(gDebrisX + rom((uint16_t)(DT_B4_DEBRIS_DX + i)) + (y >> 8));
+        gObjects->worldPage[slot] = gObjects->worldPage[P_];
+        gObjects->animTimer[slot] = rom((uint16_t)(DT_B4_DEBRIS_TIMER + i));
+    }
+    Sound_Request(SFX_BREAK, slot);
+}
+
+static void Block_Draw(uint8_t record)
+{
+    Decomp_Enter(DT_CODE_BLOCK_DRAW, 0, 0, record);
+    gBlockRecord = record;
+    gBlockFirst = record;
+    Bank_Select(gTilesetBank);
+    gBlockCopies = rom((uint16_t)(DT_CODE_BLOCK_RECORDS + record));
+    uint8_t hi = rom((uint16_t)(DT_CODE_BLOCK_RECORDS + 1 + record));
+    uint8_t lo = rom((uint16_t)(DT_CODE_BLOCK_RECORDS + 2 + record));
+    gVramQueue[0] = hi;
+    gVramQueue[PAIR_RECORD] = hi;
+    gVramQueue[1] = lo;
+    gVramQueue[PAIR_RECORD + 1] = lo | 0x20;
+    gVramQueue[2] = 3;
+    gVramQueue[PAIR_RECORD + 2] = 3;
+    gBlockOut = 0;
+    for (;;) {
+        uint8_t metatile = rom((uint16_t)(DT_CODE_BLOCK_RECORDS + 3 + gBlockRecord));
+        if (!metatile) {
+            break;
+        }
+        uint8_t i = gBlockOut;
+        gVramQueue[3 + i] = rom((uint16_t)(DT_METATILE_TILES + metatile));
+        gVramQueue[4 + i] = rom((uint16_t)(DT_METATILE_TILES + 0x100 + metatile));
+        gVramQueue[PAIR_RECORD + 3 + i] = rom((uint16_t)(DT_METATILE_TILES + 0x200 + metatile));
+        gVramQueue[PAIR_RECORD + 4 + i] = rom((uint16_t)(DT_METATILE_TILES + 0x300 + metatile));
+        gBlockOut = (uint8_t)(i + 2);
+        if (!++gBlockRecord) {
+            break;
+        }
+    }
+    uint8_t y = 0;
+    do {
+        unsigned low = gVramQueue[1 + y] + 0x40u;
+        gVramQueue[2 * PAIR_RECORD + 1 + y] = (uint8_t)low;
+        gVramQueue[3 * PAIR_RECORD + 1 + y] = (uint8_t)low | 0x20;
+        uint8_t high = (uint8_t)(gVramQueue[y] + (low >> 8));
+        gVramQueue[2 * PAIR_RECORD + y] = high;
+        gVramQueue[3 * PAIR_RECORD + y] = high;
+        for (int k = 0; k < 5; k++, y++) {
+            gVramQueue[2 * PAIR_RECORD + 2 + y] = gVramQueue[2 + y];
+            gVramQueue[3 * PAIR_RECORD + 2 + y] = gVramQueue[2 + y];
+        }
+        y = (uint8_t)(y + 9);
+    } while (--gBlockCopies);
+    gVramQueue[2 * PAIR_RECORD + y] = 0xFF;
+    gVramQueueReady = 0xFF;
+    uint8_t side = gBlockFirst & 0x02;
+    gDebrisY = rom((uint16_t)(DT_CODE_BLOCK_DEBRIS_POS + side));
+    gDebrisX = rom((uint16_t)(DT_CODE_BLOCK_DEBRIS_POS + 1 + side));
+    Bank_Select(DEBRIS_BANK);
+    Block_Debris();
+}
+
 /* ---- site adapters ---- */
 
 static void Run_MapLoadHeader(Regs *r)
@@ -1071,6 +1169,17 @@ static void Run_TileEdit(Regs *r)
 static void Run_ChrStreamRow(Regs *r)
 {
     r->x = Chr_StreamRow(r->x);
+}
+
+static void Run_BlockDraw(Regs *r)
+{
+    Block_Draw(r->y);
+}
+
+static void Run_BlockDebris(Regs *r)
+{
+    (void)r;
+    Block_Debris();
 }
 
 static void Run_RowHeaders(Regs *r)
@@ -1141,6 +1250,8 @@ const DecompRoutine gLevelRoutines[] = {
     { DT_CODE_ROW_LAST_STEP, "ducktales.decomp.CA8B", "Row_LastStep", Run_RowLastStep, OUT_HW },
     { DT_CODE_ROW_RIGHT_STEP, "ducktales.decomp.CB5A", "Row_RightStep", Run_RowRightStep, OUT_HW },
     { DT_CODE_ROW_LEFT_STEP, "ducktales.decomp.CB6E", "Row_LeftStep", Run_RowLeftStep, OUT_HW },
+    { DT_CODE_BLOCK_DRAW, "ducktales.decomp.D068", "Block_Draw", Run_BlockDraw, OUT_HW },
+    { DT_B4_BLOCK_DEBRIS, NULL, "Block_Debris", Run_BlockDebris, 0, .bank = DEBRIS_BANK },
     { DT_CODE_ROW_SCROLL, "ducktales.decomp.C976", "Row_Scroll", Row_Scroll, 0, true, 0, false },
     { DT_CODE_ROW_SCROLL_FRAME, NULL, "Row_ScrollFrame", Row_ScrollFrame, 0, true, ROW_LOCALS, true },
     { DT_CODE_ROW_SCROLL_STEPPED, NULL, "Row_ScrollStepped", Row_ScrollStepped, 0, true, ROW_LOCALS, true },

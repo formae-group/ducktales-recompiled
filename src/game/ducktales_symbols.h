@@ -263,7 +263,7 @@
 #define DT_CODE_MESSAGE_LINE_END 0xEF5C /* queue offset where each line's entry ends (code) */
 #define DT_CODE_MESSAGE_LINE_AT  0xEF5F /* queue offset of each line's entry (code) */
 #define DT_CODE_MESSAGE_SCENE    0xDFED /* the scene draw before message $0B; waits for frames (code; not studied) */
-#define DT_CODE_BLOCK_DRAW       0xD068 /* queue the draw of block Y of the tileset (code; not studied) */
+#define DT_CODE_BLOCK_DRAW       0xD068 /* queue block record Y of $D110 and throw its debris (code) */
 #define DT_B1_MESSAGE_TILE_OFF  0x82D0 /* bank 1: CHR tile $12D restored when the box closes (verified, rendering.md) */
 #define DT_B2_MESSAGE_TILE      0xA8F0 /* bank 2: CHR tile $12D while a message shows (verified, rendering.md) */
 #define DT_B4_MESSAGE_LO        0xB888 /* bank 4: text of each message id, low bytes (code) */
@@ -835,6 +835,12 @@
 #define DT_CODE_ROW_Y_EXTRA        0xCCA5 /* Scrooge's Y step on even frames */
 #define DT_CODE_ROW_Y_STEP         0xCCA6 /* Scrooge's Y step every frame */
 #define DT_CODE_ROW_CHR_STREAM     0xC42C
+#define DT_CODE_BLOCK_RECORDS      0xD110 /* block records: copies, PPU address high, low, metatiles, 0 */
+#define DT_CODE_BLOCK_DEBRIS_POS   0xD11C /* debris Y, world X by record bit 1 */
+#define DT_B4_BLOCK_DEBRIS         0xBD80 /* four debris pieces at ($11, $10) and the break sound */
+#define DT_B4_DEBRIS_DY            0xBDC7
+#define DT_B4_DEBRIS_DX            0xBDCB
+#define DT_B4_DEBRIS_TIMER         0xBDCF
 #define DT_CODE_ROW_CHR_BASE       0xC508 /* first entry of each land in the row tables */
 #define DT_CODE_ROW_CHR_LIST       0xC511 /* CHR list per row; bit 7: two lists chosen by camera page */
 #define DT_CODE_ROW_PALETTE        0xC53A /* sprite palette 3 per row */

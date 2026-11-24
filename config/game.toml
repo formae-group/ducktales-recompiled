@@ -266,6 +266,14 @@ addr = 0xC42C
 length = 8
 crc32 = 0xC14ABEE7
 
+# Block_Draw (the message box $ED05 in player.c hands off to it, and its site also
+# stops the isolated runs of that task code)
+[[mod_function_hook]]
+id = "ducktales.decomp.D068"
+addr = 0xD068
+length = 8
+crc32 = 0x4E032F44
+
 # Row_Scroll (task code; the row change $E8C0 in player.c hands off to it, and its
 # site also stops the isolated runs of that task code)
 [[mod_function_hook]]
@@ -513,12 +521,6 @@ id = "ducktales.decomp.stop.DFED"
 addr = 0xDFED
 length = 8
 crc32 = 0x0971742F
-
-[[mod_function_hook]]
-id = "ducktales.decomp.stop.D068"
-addr = 0xD068
-length = 8
-crc32 = 0x4E032F44
 
 [[mod_function_hook]]
 id = "ducktales.decomp.stop.B580.5"

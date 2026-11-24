@@ -1978,12 +1978,12 @@ const int gFlowRoutineCount = sizeof gFlowRoutines / sizeof gFlowRoutines[0];
 #define STOP(addr, id) { addr, "ducktales.decomp.stop." id }
 
 /* The routines the flow hands off to that have a decompiled C of their own
- * ($C42C, $C71D, $C78F, $C830, $C976, $EFE2 in level.c, $E354 in player.c, $8000 bank
+ * ($C42C, $C71D, $C78F, $C830, $C976, $D068, $EFE2 in level.c, $E354 in player.c, $8000 bank
  * 6 in objects.c, the fades, the PPU and CHR loaders and bank 5 $BAB0 in
  * system.c) stop the isolated runs at their own sites. */
 const DecompStop gFlowStops[] = {
     STOP(DT_CODE_TASK_YIELD, "FFAC"),    STOP(DT_CODE_RESET, "FEE0"),      STOP(DT_B6_SPAWN, "AEA0.6"),
     STOP(DT_CODE_ENDING, "E1AF"),        STOP(DT_CODE_TASK_WAIT, "FFA5"),  STOP(DT_B4_FINAL_TRIP, "BE00.4"),
-    STOP(DT_CODE_MESSAGE_SCENE, "DFED"), STOP(DT_CODE_BLOCK_DRAW, "D068"), STOP(DT_B5_PAUSE_TEXT, "B580.5"),
+    STOP(DT_CODE_MESSAGE_SCENE, "DFED"), STOP(DT_B5_PAUSE_TEXT, "B580.5"),
 };
 const int gFlowStopCount = sizeof gFlowStops / sizeof gFlowStops[0];
