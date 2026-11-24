@@ -12,7 +12,8 @@
  *                               frame (the host resets it on a resize or F11)
  *   volume                      CycHostExtras.audio_mix scales the samples by
  *                               the new / starting volume (the host scales by
- *                               the starting one after it)
+ *                               the starting one after it); the native player
+ *                               reads app_ui_volume and ramps to it
  *   bindings                    CycHostExtras.input replaces the controller
  *                               bytes with cyc_input_eval() of the new bindings
  *   frame pacing                [Game] FramePacing; resolved into the host's
@@ -368,7 +369,11 @@ bool app_vsync_pending(void)
 
 bool app_volume_pending(void)
 {
+#if DUCKTALES_NATIVE_PLAYER
+    return false;
+#else
     return s_cfg.volume != s_launch.volume && s_launch.volume == 0;
+#endif
 }
 
 const uint32_t *app_ui_picture(int out_w, int out_h, int *w, int *h, bool *exact)
@@ -415,6 +420,11 @@ void app_ui_frame_begin(void)
     if (s_changed && s_cfg.integer_scale != s_launch.integer_scale) {
         apply_integer(win);
     }
+}
+
+int app_ui_volume(void)
+{
+    return s_loaded ? s_cfg.volume : -1;
 }
 
 void app_ui_audio(int16_t *samples, size_t count)

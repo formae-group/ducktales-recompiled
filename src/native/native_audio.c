@@ -33,7 +33,9 @@
  * in the same mixer. With both voices off apu[0] is all there is.
  *
  * native_audio_set_mute drops channels from the mix only (mods that play a
- * file in place of the driver's channels): every channel keeps running.
+ * file in place of the driver's channels): every channel keeps running, and
+ * a channel's level in the mix ramps out and back in over 5 ms instead of
+ * stepping.
  */
 #include "native/native_audio.h"
 
@@ -77,7 +79,7 @@ typedef struct {
 } NaApu;
 
 static struct {
-    double cps, fill;
+    double cps, fill, mute_step, mute_gain[4];
     double hp90_a, hp440_a, lp_a, hp90_in, hp90_out, hp440_in, hp440_out, lp_out;
     NaApu apu[3];
     int apus;        /* 1, or 3 while an extra voice is on */
@@ -110,6 +112,10 @@ void native_audio_reset(int sample_rate)
     s.hp90_a = rc90 / (rc90 + dt);
     s.hp440_a = rc440 / (rc440 + dt);
     s.lp_a = dt / (rc14k + dt);
+    s.mute_step = 1.0 / (0.005 * sample_rate);
+    for (int ch = 0; ch < 4; ch++) {
+        s.mute_gain[ch] = 1.0;
+    }
     apu_power_on(&s.apu[0]);
     s.apus = 1;
     s.live[0] = 0x0F;
@@ -307,16 +313,18 @@ void native_audio_set_mute(uint8_t mask)
     s_mute = mask & 0x0F;
 }
 
-static int16_t emit(void)
+static double emit(void)
 {
     double sum[4];
     for (int ch = 0; ch < 4; ch++) {
-        sum[ch] = (s_channels & ~s_mute) >> ch & 1 ? s.apu[0].sum[ch] : 0;
+        double target = s_mute >> ch & 1 ? 0.0 : 1.0, d = target - s.mute_gain[ch];
+        s.mute_gain[ch] += d > s.mute_step ? s.mute_step : d < -s.mute_step ? -s.mute_step : d;
+        sum[ch] = s_channels >> ch & 1 ? s.apu[0].sum[ch] * s.mute_gain[ch] : 0;
     }
     double p = (sum[0] + sum[1]) / s.fill, t = (3 * sum[2] + 2 * sum[3]) / s.fill + s.apu[0].dmc_level;
     for (int i = 1; i < s.apus; i++) {
         for (int ch = 0; ch < 4; ch++) {
-            sum[ch] = (s_channels & ~s_mute) >> ch & 1 ? s.apu[i].sum[ch] : 0;
+            sum[ch] = s_channels >> ch & 1 ? s.apu[i].sum[ch] * s.mute_gain[ch] : 0;
         }
         p += (sum[0] + sum[1]) / s.fill;
         t += (3 * sum[2] + 2 * sum[3]) / s.fill;
@@ -329,21 +337,14 @@ static int16_t emit(void)
     s.hp440_in = hp;
     s.hp440_out = hp2;
     s.lp_out += s.lp_a * (hp2 - s.lp_out);
-    double v = s.lp_out * 30000.0;
-    if (v > 32767) {
-        v = 32767;
-    }
-    if (v < -32768) {
-        v = -32768;
-    }
     s.fill = 0;
     for (int i = 0; i < s.apus; i++) {
         memset(s.apu[i].sum, 0, sizeof s.apu[i].sum);
     }
-    return (int16_t)v;
+    return s.lp_out * 30000.0;
 }
 
-static void render(double span, int16_t *out, size_t max, size_t *n)
+static void render(double span, double *out, size_t max, size_t *n)
 {
     while (span > 0) {
         double take = s.cps - s.fill;
@@ -354,7 +355,7 @@ static void render(double span, int16_t *out, size_t max, size_t *n)
         s.fill += take;
         span -= take;
         if (s.fill >= s.cps - 1e-9) {
-            int16_t v = emit();
+            double v = emit();
             if (*n < max) {
                 out[*n] = v;
             }
@@ -363,7 +364,7 @@ static void render(double span, int16_t *out, size_t max, size_t *n)
     }
 }
 
-static void advance(double span, int16_t *out, size_t max, size_t *n)
+static void advance(double span, double *out, size_t max, size_t *n)
 {
     while (span > 0) {
         double to_clock = seq_points[s.five_step][s.seq_next] - s.seq_pos;
@@ -467,7 +468,7 @@ static void play_voices(const NativeVoiceFrame *v)
     }
 }
 
-size_t native_audio_frame(const NativeFrame *frame, int16_t *out, size_t max)
+size_t native_audio_mix(const NativeFrame *frame, double *out, size_t max)
 {
     double length = frame->cycles, now = 0;
     if (frame->held_cycles && frame->held_cycles < frame->cycles) {
@@ -526,6 +527,18 @@ size_t native_audio_frame(const NativeFrame *frame, int16_t *out, size_t max)
         advance(length - now, out, max, &n);
     }
     return n < max ? n : max;
+}
+
+size_t native_audio_frame(const NativeFrame *frame, int16_t *out, size_t max)
+{
+    static double mix[NATIVE_AUDIO_MAX_FRAME_SAMPLES];
+    size_t n = native_audio_mix(frame, mix,
+                                max < NATIVE_AUDIO_MAX_FRAME_SAMPLES ? max : NATIVE_AUDIO_MAX_FRAME_SAMPLES);
+    for (size_t i = 0; i < n; i++) {
+        double v = mix[i] > 32767 ? 32767 : mix[i] < -32768 ? -32768 : mix[i];
+        out[i] = (int16_t)v;
+    }
+    return n;
 }
 
 void native_audio_wav_header(FILE *f, int sample_rate, uint32_t samples)

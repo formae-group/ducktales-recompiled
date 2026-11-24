@@ -187,6 +187,36 @@ POKES = [
         {0x709: 0xA2, 0x719: 0x13, 0x629: 0x2B, 0x649: 0xA6, 0x729: 0x62, 0x739: 0x00, 0x7D9: 0x01, 0x609: 0x80},
         ['Pickup_Take', 'Pickup_ExtraDot', 'Hud_RefillHp'],
     ),
+    # the same pickup holding the extra life ($8BB0, a timed item, so its timer is set), and item $74, a treasure past the five lands that
+    # shows message $0D instead of the treasure pose ($8C37)
+    (
+        'extra-life',
+        {
+            0x709: 0xA2,
+            0x719: 0x13,
+            0x629: 0x27,
+            0x6B9: 0xFF,
+            0x649: 0xA6,
+            0x729: 0x62,
+            0x739: 0x00,
+            0x7D9: 0x01,
+            0x609: 0x80,
+        },
+        ['Pickup_Take'],
+    ),
+    (
+        'secret-treasure',
+        {0x709: 0xA2, 0x719: 0x13, 0x629: 0x74, 0x649: 0xA6, 0x729: 0x62, 0x739: 0x00, 0x7D9: 0x01, 0x609: 0x80},
+        ['Pickup_Take', 'Pickup_Treasure'],
+    ),
+    # the camera at the right end of Amazon row 5 ($2D = $2F) with Scrooge walking right past X $F0:
+    # the camera stays and his X is clamped to $F0 ($F08B)
+    (
+        'row-end-right',
+        {0xF2: 0x00, 0xF3: 0x07, 0x2D: 0x2F, 0x720: 0xF8, 0x730: 0x07, 0x650: 0xF8},
+        ['Camera_Update'],
+        {POKE_FRAME + 1: 'RIGHT'},
+    ),
     (
         'money-max',
         {

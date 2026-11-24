@@ -7,6 +7,9 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- `tests/decomp_test.py` poke cases `extra-life` (the extra life `$8BB0`), `secret-treasure` (item `$74`,
+  message `$0D` instead of the treasure pose, `$8C37`) and `row-end-right` (Scrooge's X clamped to `$F0` at a
+  row's right end, `$F08B`): code no route or poke case ran before.
 - Route `difficult_himalayas` (6,200 frames): `full_himalayas` on Difficult to the LAND CLEAR tally,
   the first route on Difficult; it passes `verify_routes` at the four alignments with 100% native cycles.
 - The native player writes a session summary when its Decompiled code ran: `decomp-session-<time>.txt`
@@ -16,6 +19,11 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - The object spawner of bank 6 is decompiled (`src/decomp/level.c`): the table set-up `$AE20`/`$AE22`,
   the reset `$AE60`, the per-frame window update `$AEA0` and the timed spawns at the camera's edge
   `$B0AB`. `$AEA0`'s site replaces the flow's stop there.
+- `tests/audio_output_test.py` and `ducktales.exe --audio-out FILE --audio-sim SPEC`: the native
+  player's presented sound rendered off screen through its output stage, with the frame loop and the
+  audio device on simulated clocks; the test fails on any sample at full scale, any click and any
+  underrun over the 12 routes, the worst case (extra voices, full-scale mod, VSync 60 Hz) and the
+  window events (docs/validation.md "Presented sound").
 - The native player can run the decompiled C: Settings → Gameplay → Decompiled code (`[Game] DecompiledCode`,
   off by default) runs the routines decompiled to C alone in place of the recompiled ones, with No
   slowdown on only; with No slowdown off the toggle is disabled and its (?) says why. `decomp.c` is now
@@ -120,6 +128,14 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Fixed
 
+- The native player's sound no longer clips, clicks or drops out (docs/audio.md "Output stage"): a
+  look-ahead limiter at -1 dBFS replaces the 16-bit clamp (a full-scale mod over the game's effects
+  reached +6 dBFS), the volume ramps instead of stepping and follows the menu live, the queue is
+  paced by resampling frames by at most 0.5% instead of stretching one up to 2x or dropping one at
+  100 ms, the sound fades in at the start and out when the menu pauses the game, for fast-forward,
+  sound off, a window move or resize, F9 and closing, and an underrun decays instead of stepping.
+  Mod replacements and the channels they mute fade over 5 ms. The machine and the synth's own
+  samples are unchanged.
 - `tools/decomp_progress.py` took bank 5 `$8003`, one instruction into `Oam_Build`, for a target
   of the NMI's `JSR $8003` (bank 3's `Sound_Play`), so 187 bytes of the sprite builder counted as
   original. A fixed-bank JSR into the window now skips a bank where an executed instruction falls

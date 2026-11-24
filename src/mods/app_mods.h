@@ -137,6 +137,9 @@ void app_mods_audio_frame_end(const uint8_t *ram);
 uint8_t app_mods_audio_mute(void);
 /* Adds the replacements' sound to the frame's mono samples at rate Hz. */
 void app_mods_audio_mix(int16_t *samples, size_t count, int rate);
+/* The same, to samples in 16-bit units that are not clamped (the native
+ * player's output stage keeps the sum under full scale, native_output.h). */
+void app_mods_audio_add(double *samples, size_t count, int rate);
 
 #ifdef __cplusplus
 }

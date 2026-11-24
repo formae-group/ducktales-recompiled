@@ -68,7 +68,7 @@ namespace ui = formae::ui;
 
 namespace {
 
-int (*s_menu_tick)(void) = nullptr;
+int (*s_menu_tick)(bool run) = nullptr;
 
 float ui_base(SDL_Window *win, int out_h)
 {
@@ -534,7 +534,7 @@ bool confirmation_open()
 
 } // namespace
 
-extern "C" void app_ui_set_menu_tick(int (*tick)(void))
+extern "C" void app_ui_set_menu_tick(int (*tick)(bool run))
 {
     s_menu_tick = tick;
 }
@@ -690,8 +690,8 @@ extern "C" bool app_menu_run(SDL_Window *win)
         AppMenuPrefs prefs;
         app_menu_prefs_get(&prefs);
         imgui.ctx->set_gamepad_navigation(prefs.pad_nav != 0);
-        if (s_menu_tick && !prefs.pause && !confirming) {
-            game_frames += s_menu_tick();
+        if (s_menu_tick) {
+            game_frames += s_menu_tick(!prefs.pause && !confirming);
         }
         ImGuiIO &io = ImGui::GetIO();
         SDL_RenderSetLogicalSize(ren, 0, 0);
