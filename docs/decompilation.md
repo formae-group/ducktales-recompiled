@@ -798,20 +798,20 @@ indirect jump or another routine's entry, and counts as C the routines only C re
 script's docstring gives every rule. `--rev` reads the C of another branch against the same
 coverage.
 
-On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **99.3%, 26,789 of 26,968 executed
-bytes**, in 375 routines (13 routes and 64 poke cases).
+On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **99.6%, 27,681 of 27,788 executed
+bytes**, in 386 routines (main 6209080 merged, 13 routes and 70 poke cases).
 
 | Group | Files | Routines | Executed bytes | Share |
 |---|---|---|---|---|
-| player | `player.c`, `motion.c`, `sound.c` | 54 | 3,624 | 13.4% |
-| objects | `objects.c`, `objcommon.c` | 112 | 12,073 | 44.8% |
-| flow | `flow.c` | 142 | 3,794 | 14.1% |
-| level | `level.c`, `collision.c` | 40 | 3,602 | 13.4% |
-| system | `system.c`, `sprites.c`, `audio.c` | 25 | 3,385 | 12.6% |
+| player | `player.c`, `motion.c`, `sound.c` | 54 | 3,624 | 13.0% |
+| objects | `objects.c`, `objcommon.c` | 118 | 12,893 | 46.4% |
+| flow | `flow.c` | 147 | 3,866 | 13.9% |
+| level | `level.c`, `collision.c` | 40 | 3,602 | 13.0% |
+| system | `system.c`, `sprites.c`, `audio.c` | 25 | 3,385 | 12.2% |
 
-No executed byte is shared with an original routine. The original code still reached is the reset
-`$FEE0` (85 bytes), scheduler `$FF35` (72), credits' raster split `$E229` (19) and the frame loop's
-return jump `$DC29` (3).
+No executed byte is shared with an original routine. The original code still reached is the scheduler
+`$FF35` (72 bytes), the credits' raster split `$E229` (19), the reset's four-vblank wait `$FEEE` (13)
+and the frame loop's return jump `$DC29` (3).
 
 ### Adding a routine
 

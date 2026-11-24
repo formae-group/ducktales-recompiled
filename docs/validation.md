@@ -427,6 +427,13 @@ all 2,718. The pokes also compared all 12 calls to the CHR loader, whose return 
 kept across the yield after unblanking. Cycle quick verification passed 13/13 affected routes
 (7,800 frames from golden states, alignment 0).
 
+The reset `$FEE0-$FF34` is compared from power-on on all 13 routes: `decomp_test.py --changed
+FEE0-FF34 --from-state --span 600` passed check and replace (13/13 each, every reset routine 13/13
+compared). A warm reset (`--dt-reset-at 1200` on `amazon_intro` from its frame-1000 state) passed
+check with all five reset routines compared, and its replace run equals the check run on all 301
+frames (296 NMIs in both); there `Reset` is given to the original because the NMI edge is about
+to latch.
+
 ## Decompiled level, player, flow and objects (2026-11-23)
 
 Each branch passed its own gate before the merge: format, `quick_verify.py` native and cycle
