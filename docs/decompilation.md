@@ -798,8 +798,8 @@ indirect jump or another routine's entry, and counts as C the routines only C re
 script's docstring gives every rule. `--rev` reads the C of another branch against the same
 coverage.
 
-On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **99.6%, 27,681 of 27,788 executed
-bytes**, in 386 routines (main 6209080 merged, 13 routes and 70 poke cases).
+On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **99.6%, 28,264 of 28,371 executed
+bytes**, in 386 routines (main ea58c83, 13 routes and 92 poke cases).
 
 | Group | Files | Routines | Executed bytes | Share |
 |---|---|---|---|---|
