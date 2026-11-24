@@ -4,7 +4,7 @@
  * Scrooge is object slot PLAYER_SLOT; his per-object values are that column
  * of gObjects (objects.h). The values the game keeps for him outside the
  * object tables are zero-page variables, named here. The ROM has one player,
- * so these are one set; the decompiled routines (src/decomp/player.c) reach
+ * so these are one set; the decompiled routines (src/decomp/player/) reach
  * them only through these names, which is the one place a second player
  * would give its own set.
  */

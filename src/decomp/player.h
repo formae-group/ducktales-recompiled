@@ -1,5 +1,5 @@
 /*
- * player.h - routines of src/decomp/player.c that other decompiled code calls.
+ * player.h - routines of src/decomp/player/ that other decompiled code calls.
  */
 #pragma once
 #include "decomp/decomp.h"
