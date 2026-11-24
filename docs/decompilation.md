@@ -823,8 +823,8 @@ bytes**, in 389 routines (main 6933fda, 13 routes and 92 poke cases).
 | level | `level.c`, `collision.c` | 40 | 3,602 | 13.0% |
 | system | `system.c`, `sprites.c`, `audio.c` | 25 | 3,385 | 12.2% |
 
-No executed byte is shared with an original routine. The original code still reached is the scheduler
-`$FF35` (72 bytes), the credits' raster split `$E229` (19), the reset's four-vblank wait `$FEEE` (13)
+No executed byte is shared with an original routine. The original code still reached is the credits'
+raster split `$E229` (19 bytes), the reset's four-vblank wait `$FEEE` (13)
 and the frame loop's return jump `$DC29` (3).
 
 ### Gap
