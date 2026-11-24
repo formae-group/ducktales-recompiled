@@ -209,8 +209,8 @@ call can do. `flow.c` decompiles that code as **task code** (`DecompRoutine.task
   enters through an RTS (`$FFAB`) whose return the observer moves to the start, at the routine's
   true S, with the isolated call's return address in place of the routine's own (at S + locals
   + 1). When the C hands off, the original stops where it reaches the same routine at the same
-  depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`, 2 of
-  them: the scheduler `$FF35`, which `task_yield`'s C hands off to, and the reset's PPU wait `$FEEE`). Check compares RAM, the stack down to that depth, the registers the hand-off uses and the
+  depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`: the
+  scheduler `$FF35`, which `task_yield`'s C hands off to). Check compares RAM, the stack down to that depth, the registers the hand-off uses and the
   number of device writes.
 - Replace mode stores the C's results, makes its device writes, spends the original's cycles up to
   the stop (without the entry RTS) and jumps there. A call that would run into VBlank or past the
@@ -218,6 +218,21 @@ call can do. `flow.c` decompiles that code as **task code** (`DecompRoutine.task
   uses (the random generator, the scratch bytes).
 - A task routine called from another's C is not checked on its own: the caller's comparison covers
   it up to the hand-off. Its calls are counted.
+- **Timed** task code (`DecompRoutine.timed`, `TASK_TIMED`/`RESUME_TIMED`) polls a device with
+  `Decomp_BusWait`: the reset's VBlank waits and the credits' raster split. An isolated call has no
+  clock, so on the cycle host both modes measure the original as the NMI's replace does: from a
+  clocked snapshot of the running machine to where the C ends. Check compares RAM, the registers and
+  the device writes there, and the C's bus operations against the original's, a wait taking as many
+  reads as the original made; then the original runs for real (its poll looping back to the site in
+  that time is not a new call). Replace stores the C's RAM and replays the schedule with the C's
+  device operations at the original's cycles. A timed call may pass one frame end (a wait for
+  VBlank sees the flag in the next frame): the host ends the frame when the call returns, a few
+  cycles after the PPU entered VBlank. At power-on the first read of the reset's wait races the
+  flag's rise and finds it clear, so that wait takes two frames: the call is paused where the
+  original was last back at its start before the second frame end (it wrote nothing), and the next
+  frame calls it there again. An interrupt or an observation point inside goes to the original.
+  The native runtime makes the C's operations in order when the call ends; its PPU advances with
+  every read.
 
 ### Interrupt routines
 
@@ -505,7 +520,7 @@ RAM-identical in replace mode.
 | `BankTransfer` (1 resume point) | `$D8D9-$D9BD` | checked | 5 | all-treasures (no money), total-max (TOTAL at 99999) | not measured |
 | `Scene` (6 resume points) | `$DF27-$DFEC` | checked | 0 | scene-1, scene-2 | not measured |
 | `Mode15_Redraw` (5 resume points) | `$DFED-$E053` | checked | 0 | mode15-redraw, message-scene | not measured |
-| `Ending`, `Ending_Split`, `Ending_BankTransfer` (`$FFC7`) and their resume points | `$E1AF-$E28B` | checked; the raster wait and write at `$E229-$E23B` run in the original | 0 | ending, ending-0, ending-2 | not measured |
+| `Ending`, `Ending_Split`, `Ending_BankTransfer` (`$FFC7`) and their resume points | `$E1AF-$E28B` | checked; `Ending_Split` (`$E229`) is timed | 0 | ending, ending-0, ending-2 | not measured |
 | `EndingScreen` (11 resume points) | `$E054-$E11A` | checked | 0 | ending, ending-0, ending-2 | not measured |
 | `EndingObjects`, `EndingObjects_Update` and the five scene handlers | bank 5 `$B380-$B3CB`, `$B400-$B50C` | checked with the ending | 0 | ending-0 (hop), ending (walk), ending-2 (wait); all three exit and reach the credits | not measured |
 | `WaitA` (1 resume point) | `$D9BE` | checked | 5 | final-trip | not measured |
@@ -527,16 +542,18 @@ frames with their tables (`$E054-$E126`, `$E133-$E142`, `$E1AF-$E28B`), the HUD 
 take-off scene (bank 4 `$BE00-$BEAA`) with the sprites frame it waits with (`$F855-$F868`), and
 in bank 5 the pause and message box text (`$B580-$B61B`), the Land Select messages
 (`$B800-$B86B`), the clearing of the consumed-record bits (`$B760`) and the ending's scene
-objects (`$B380-$B50C`, with tables). The credits yield to the original raster split at
-`$E229-$E23B`: it watches the sprite-0 flag on `$2002`, writes `$2000` at the split and
-resumes the C via the internal hook at `$E23C`. The Select refill `$E2FE` is in `player.c`;
+objects (`$B380-$B50C`, with tables). The credits' raster split `$E229-$E23B` is the timed resume
+point `Ending_Split`: it waits for the sprite-0 flag on `$2002` to clear and to rise, writes `$2000`
+there and goes on to the scroll. The frame loop's `$DC29` (after `task_yield`) is the resume point
+`FrameLoop_Next`. The Select refill `$E2FE` is in `player.c`;
 the scene palette tables `$E127-$E132` and `$E143-$E1AE` are read by `Palette_LoadScene` (system.c).
-The flow has 16 sites: 14 entries that original code reaches and 2 stop sites (the scheduler
-`$FF35` and the reset's PPU wait `$FEEE`). The reset `$FEE0-$FF34` is task code: `Reset` turns
-rendering off and hands the four-vblank wait `$FEEE-$FEFA` to the original, whose fall-through reaches
-the internal site `$FEFB` (`Reset_Ready`: RAM, sprites, nametables, the main task, the scheduler). A
-warm reset at the frame boundary takes an NMI before the first store to `$2000`, so replace gives
-that call to the original (the NMI line has risen but the CPU has not latched it yet).
+The flow has 15 sites: 14 entries that original code reaches (2 of them internal: `$FEEE` and
+`$FEF3`) and 1 stop site (the scheduler `$FF35`). The reset `$FEE0-$FF34` is task code: `Reset`
+turns rendering off and hands off to the timed wait, `Reset_WaitVblank` (`$FEEE`, until VBlank) and
+`Reset_WaitVblankEnd` (`$FEF3`, until it ends), four times; after the fourth it clears RAM, parks
+the sprites, fills the nametables, creates the main task and enters the scheduler. A warm reset at
+the frame boundary takes an NMI before the first store to `$2000`, so replace gives that call to
+the original (the NMI line has risen but the CPU has not latched it yet).
 
 Not decompiled yet, and still run as the original from the C:
 
@@ -798,20 +815,19 @@ indirect jump or another routine's entry, and counts as C the routines only C re
 script's docstring gives every rule. `--rev` reads the C of another branch against the same
 coverage.
 
-On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **99.6%, 28,264 of 28,371 executed
-bytes**, in 386 routines (main ea58c83, 13 routes and 92 poke cases).
+On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **99.7%, 28,299 of 28,371 executed
+bytes**, in 388 routines (decomp/flow on main e13ede4, 13 routes and 92 poke cases).
 
 | Group | Files | Routines | Executed bytes | Share |
 |---|---|---|---|---|
-| player | `player.c`, `motion.c`, `sound.c` | 54 | 3,624 | 13.0% |
-| objects | `objects.c`, `objcommon.c` | 118 | 12,893 | 46.4% |
-| flow | `flow.c` | 147 | 3,866 | 13.9% |
-| level | `level.c`, `collision.c` | 40 | 3,602 | 13.0% |
-| system | `system.c`, `sprites.c`, `audio.c` | 25 | 3,385 | 12.2% |
+| player | `player.c`, `motion.c`, `sound.c` | 54 | 3,626 | 12.8% |
+| objects | `objects.c`, `objcommon.c` | 118 | 13,465 | 47.5% |
+| flow | `flow.c` | 149 | 3,901 | 13.7% |
+| level | `level.c`, `collision.c` | 40 | 3,643 | 12.8% |
+| system | `system.c`, `sprites.c`, `audio.c` | 25 | 3,391 | 12.0% |
 
-No executed byte is shared with an original routine. The original code still reached is the scheduler
-`$FF35` (72 bytes), the credits' raster split `$E229` (19), the reset's four-vblank wait `$FEEE` (13)
-and the frame loop's return jump `$DC29` (3).
+No executed byte is shared with an original routine. The only original code still reached is the
+scheduler `$FF35` (72 bytes).
 
 ### Gap
 

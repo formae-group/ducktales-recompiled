@@ -22,12 +22,11 @@ ROM = Path(default_rom())
 TOML = ROOT / "config" / "game.toml"
 HEAD = "# Game flow (src/decomp/flow.c"
 TAIL = "# END game flow"
-INTERNAL = {"E23C", "FEEE", "FEFB"}  # these sites also fire inside a routine
+INTERNAL = {"FEEE", "FEF3"}  # these sites also fire inside a routine
 NOTES = {
     "C976": "The row scroll the row change ($E8C0, src/decomp/player.c) hands off to.",
     "DFED": "What the message box ($ED05, src/decomp/player.c) hands off to besides task_wait:\n"
     "the scene set-up of message $0B, the block draw of message $06 and the pause text.",
-    "FEEE": "The reset waits for the live PPU before Reset_Ready resumes the C.",
 }
 
 
@@ -53,7 +52,7 @@ def main():
         "",
     ]
     count = 0
-    for m in re.finditer(r'(?:ROUTINE|TASK)(?:_AT\(\w+, |\()(\w+), SITE\("([\w.]+)"\), "(\w+)"', src):
+    for m in re.finditer(r'(?:ROUTINE|TASK)(?:_AT\(\w+, |_TIMED\(|\()(\w+), SITE\("([\w.]+)"\), "(\w+)"', src):
         sym, site, name = m.groups()
         addr = syms[sym]
         bank = int(site.split(".")[0]) if "." in site else 7

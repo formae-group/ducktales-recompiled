@@ -66,6 +66,7 @@ typedef struct DecompRoutine {
     bool resume;    /* task code: started where an RTS returns to its address, with no site */
     uint8_t bank;   /* entries below $C000: the bank mapped at $8000 */
     bool interrupt; /* task code of the NMI handler: its C ends in RTI, not RTS */
+    bool timed;     /* task code that polls a device (Decomp_BusWait): measured and replayed with the clock */
 } DecompRoutine;
 
 typedef enum DecompMode {
@@ -106,7 +107,13 @@ void Decomp_BusWrite(uint16_t addr, uint8_t value);
 void Decomp_BusRead(uint16_t addr);
 /* A device poll (the NMI's sprite-0 wait): addr is read until its bits in
  * mask equal want. Made for real in replace mode; on an isolated copy of the
- * machine, where no clock runs, it is one read. */
+ * machine, where no clock runs, it is one read. Task code that polls is timed
+ * (DecompRoutine.timed): on the cycle host check mode runs its original on a
+ * snapshot with the clock to where the C ends and compares there, and replace
+ * mode makes the C's operations at the original's cycles, as for the NMI;
+ * the native runtime makes them in order at the C's end. A timed call may
+ * see one frame end (a wait for VBlank); before a second it pauses where its
+ * original was last back at its start, and the next frame calls it again. */
 void Decomp_BusWait(uint16_t addr, uint8_t mask, uint8_t want);
 /* A device read whose value the C needs (the controllers): made at once with
  * the recorded operations before it, in the C's isolated copy in check mode

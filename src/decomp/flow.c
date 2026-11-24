@@ -5,8 +5,9 @@
  * The main task runs the title, Land Select, the land load, the frame loop
  * and the ending. Its task code returns or hands off to another routine
  * (task_yield, the fades, the PPU loaders); the RTS observer resumes the C
- * at the address after the original JSR. The credits' raster split waits
- * on the PPU in the original, then resumes the C at an internal site.
+ * at the address after the original JSR. The reset's VBlank waits and the
+ * credits' raster split poll the PPU: those routines are timed (their bus
+ * operations at the original's cycles).
  * Values the original keeps across a frame go on the 6502 stack.
  * "r" holds the registers of the original at that point.
  *
@@ -58,6 +59,9 @@
 #define RESPAWN_ENTRY_LEN     9
 #define NT_FILL_ADDR          0x20 /* $C203: nametables from $2000 */
 #define NT_FILL_TILE          0x24
+#define STATUS_VBLANK         0x80
+#define STATUS_SPRITE0        0x40
+#define CTRL_NAMETABLE_1      0x01
 #define PPU_STRINGS_LAND      0 /* $BAB0 set drawn at every land load */
 #define ROW_SCROLL_HI         0x24
 #define SCROOGE_START_Y       0x40
@@ -1053,13 +1057,21 @@ static void FrameLoop_Yield(Regs *r)
     Yield(DT_FLOW_NEXT_FRAME);
 }
 
+/* $DC29 */
+static void FrameLoop_Next(Regs *r)
+{
+    Decomp_Enter(DT_FLOW_NEXT_FRAME, r->a, r->x, r->y);
+    FrameLoop(r);
+}
+
 /* ---- title and difficulty ---- */
 
 static void Title_Loop(Regs *r);
 static void LandSelect(Regs *r);
+static void Reset_Ready(Regs *r);
 
-/* $FEE0: the reset vector turns rendering off and resets S. The live PPU
- * wait at $FEEE-$FEFA lets four vblanks pass before RAM is initialized. */
+/* $FEE0: the reset vector turns rendering off and resets S. Four VBlanks
+ * pass before RAM is initialized. */
 static void Reset(Regs *r)
 {
     Decomp_Enter(DT_CODE_RESET, r->a, r->x, r->y);
@@ -1073,11 +1085,30 @@ static void Reset(Regs *r)
     Jump(DT_RESET_POLL, OUT_X | OUT_Y | OUT_P);
 }
 
+/* $FEEE: Y times, VBlank (the frame ends in the poll)... */
+static void Reset_WaitVblank(Regs *r)
+{
+    Decomp_Enter(DT_RESET_POLL, r->a, r->x, r->y);
+    Decomp_BusWait(PPU_STATUS, STATUS_VBLANK, STATUS_VBLANK);
+    Jump(DT_RESET_VBLANK_END, OUT_Y);
+}
+
+/* $FEF3: ...and its end (the pre-render line); then the rest of the reset. */
+static void Reset_WaitVblankEnd(Regs *r)
+{
+    Decomp_Enter(DT_RESET_VBLANK_END, r->a, r->x, r->y);
+    Decomp_BusWait(PPU_STATUS, STATUS_VBLANK, 0);
+    if (--r->y) {
+        Jump(DT_RESET_POLL, OUT_Y);
+        return;
+    }
+    Reset_Ready(r);
+}
+
 /* $FEFB: clear all eight pages (the original's pointer $00/$01 ends at
  * $0700), park the sprites and fill the first nametable with blank tiles. */
 static void Reset_Ready(Regs *r)
 {
-    Decomp_Enter(DT_RESET_READY, r->a, r->x, r->y);
     Decomp_KeepStackRam();
     memset(gRam, 0, GAME_RAM_SIZE);
     gScratch(1) = GAME_RAM_SIZE / 0x100 - 1;
@@ -2716,8 +2747,7 @@ static void Ending_Frame(Regs *r)
 }
 
 /* $E212: the split (sprite 0's Y) a line down, the credits with it, until
- * line $E8 or on screen 5 $B0; then a frame, where the original waits for
- * the sprite-0 hit and shows the credits' nametable below it ($E229-$E23B). */
+ * line $E8 or on screen 5 $B0; then a frame. */
 static void Ending_Scroll(Regs *r)
 {
     r->a = ++gOamSprite0Y;
@@ -2731,11 +2761,16 @@ static void Ending_Scroll(Regs *r)
     Yield(DT_FLOW_END_SPLIT_WAIT);
 }
 
-/* $E23C, after the split: every eighth line the scroll stops for 64 frames,
- * but on screen 0 from line $B7 on, where the credits music starts. */
+/* $E229, in that frame: the sprite-0 hit of the last frame cleared (the
+ * pre-render line), then this frame's, below which the credits' nametable
+ * shows. Then ($E23C) every eighth line the scroll stops for 64 frames, but
+ * on screen 0 from line $B7 on, where the credits music starts. */
 static void Ending_Split(Regs *r)
 {
-    Decomp_Enter(DT_FLOW_END_SPLIT, r->a, r->x, r->y);
+    Decomp_Enter(DT_FLOW_END_SPLIT_WAIT, r->a, r->x, r->y);
+    Decomp_BusWait(PPU_STATUS, STATUS_SPRITE0, 0);
+    Decomp_BusWait(PPU_STATUS, STATUS_SPRITE0, STATUS_SPRITE0);
+    Ppu_SetCtrl((uint8_t)(RAM_U8(DT_ADDR_PPU_CTRL) | CTRL_NAMETABLE_1));
     r->a = gOamSprite0Y & 7;
     if (r->a != 7) {
         Ending_Scroll(r);
@@ -3004,6 +3039,8 @@ static void Run_RespawnEntry(Regs *r)
 #define ROUTINE(addr, site, name, fn, out)      { addr, site, name, fn, out, false, 0, false }
 #define TASK(addr, site, name, fn, locals)      { addr, site, name, fn, 0, true, locals, false }
 #define RESUME(addr, name, fn, locals)          { addr, NULL, name, fn, 0, true, locals, true }
+#define TASK_TIMED(addr, site, name, fn)        { addr, site, name, fn, 0, true, 0, false, 0, false, true }
+#define RESUME_TIMED(addr, name, fn, locals)    { addr, NULL, name, fn, 0, true, locals, true, 0, false, true }
 #define ROUTINE_IN(bank, addr, name, fn, out)   { addr, NULL, name, fn, out, false, 0, false, bank }
 #define TASK_AT(bank, addr, site, name, fn)     { addr, site, name, fn, 0, true, 0, false, bank }
 #define TASK_IN(bank, addr, name, fn)           { addr, NULL, name, fn, 0, true, 0, false, bank }
@@ -3030,6 +3067,7 @@ const DecompRoutine gFlowRoutines[] = {
     ROUTINE(DT_CODE_LAND_TABLES, SITE("D9CA"), "Land_ApplyTables", Land_ApplyTables, OUT_X | OUT_Y),
     ROUTINE(DT_CODE_LAND_PALETTE, SITE("D9F5"), "Land_LoadPalette", Run_LandPalette, OUT_X | OUT_Y),
     TASK(DT_CODE_FRAME_LOOP, SITE("DB36"), "FrameLoop", FrameLoop, 0),
+    RESUME(DT_FLOW_NEXT_FRAME, "FrameLoop_Next", FrameLoop_Next, 0),
     RESUME(DT_FLOW_PAUSED, "FrameLoop_Paused", FrameLoop_Paused, 0),
     RESUME(DT_FLOW_AFTER_PLAYER, "FrameLoop_AfterPlayer", FrameLoop_AfterPlayer, 0),
     TASK_AT(DT_BANK_SPRITES, DT_B5_PAUSE_TEXT, SITE("5.B580"), "PauseText", PauseText),
@@ -3130,7 +3168,8 @@ const DecompRoutine gFlowRoutines[] = {
     RESUME(DT_FLOW_M15_ARENA_CHR, "Mode15_ArenaChr", Mode15_ArenaChr, 0),
     RESUME(DT_FLOW_M15_SPAWNED, "Mode15_Spawned", Mode15_Spawned, 0),
     TASK(DT_CODE_RESET, SITE("FEE0"), "Reset", Reset, 0),
-    TASK(DT_RESET_READY, SITE("FEFB"), "Reset_Ready", Reset_Ready, 0),
+    TASK_TIMED(DT_RESET_POLL, SITE("FEEE"), "Reset_WaitVblank", Reset_WaitVblank),
+    TASK_TIMED(DT_RESET_VBLANK_END, SITE("FEF3"), "Reset_WaitVblankEnd", Reset_WaitVblankEnd),
     RESUME(DT_RESET_NT0_READY, "Reset_SecondNametable", Reset_SecondNametable, 0),
     RESUME(DT_RESET_NT1_READY, "Reset_CreateMainTask", Reset_CreateMainTask, 0),
     RESUME(DT_RESET_CREATED, "Reset_StartScheduler", Reset_StartScheduler, 0),
@@ -3138,7 +3177,7 @@ const DecompRoutine gFlowRoutines[] = {
     TASK(DT_CODE_ENDING_BANK, NULL, "Ending_BankTransfer", Ending_BankTransfer, 0),
     RESUME(DT_FLOW_ENDING_BANKED, "Ending_Banked", Ending_Banked, 0),
     RESUME(DT_FLOW_ENDING_WAITED, "Ending_Waited", Ending_Waited, 0),
-    TASK(DT_FLOW_END_SPLIT, SITE("E23C"), "Ending_Split", Ending_Split, 0),
+    RESUME_TIMED(DT_FLOW_END_SPLIT_WAIT, "Ending_Split", Ending_Split, 0),
     RESUME(DT_FLOW_END_SECOND, "Ending_Second", Ending_Second, 1),
     RESUME(DT_FLOW_END_OVER, "Ending_OverNext", Ending_OverNext, 0),
     RESUME(DT_FLOW_ENDING_SHOWN, "Ending_Shown", Ending_Shown, 0),
@@ -3170,6 +3209,5 @@ const int gFlowRoutineCount = sizeof gFlowRoutines / sizeof gFlowRoutines[0];
  * own sites; task_yield's C hands off to the scheduler. */
 const DecompStop gFlowStops[] = {
     STOP(DT_CODE_SCHEDULER, "FF35"),
-    STOP(DT_RESET_POLL, "FEEE"),
 };
 const int gFlowStopCount = sizeof gFlowStops / sizeof gFlowStops[0];

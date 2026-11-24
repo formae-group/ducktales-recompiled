@@ -27,8 +27,8 @@
            case runs in check mode, where the routines it targets must be
            compared at least once, and stock against replace as above.
   events   (needs --dev-build) enhancements whose event a decompiled routine
-           raises itself (EVENTS below): check mode, and the same options
-           with --decomp off against --decomp replace as above.
+           raises itself, and a warm reset (EVENTS below): check mode, and the
+           same options with --decomp off against --decomp replace as above.
 
     py -3 -I tests/decomp_test.py --build build/headless [--dev-build build/headless-dev]
            [--routes tests/routes/X.txt ...] [--modes check replace pokes events] [--jobs 2]
@@ -862,10 +862,18 @@ POKES = [
     ),
 ]
 
-# name, route, options, routines that must be compared
+# name, route, options, routines that must be compared, optionally the frames to run
 EVENTS = [
     ('no-damage', 'moon_intro', ['--no-damage', 'on'], ['Player_Knockback']),
     ('jump-scale-125', 're_amazon_moves', ['--jump-scale', '125'], ['Player_StartJump']),
+    # the reset at frame 1200 comes with an NMI pending, which the original takes before its first store to $2000
+    (
+        'warm-reset',
+        'amazon_intro',
+        ['--dt-reset-at', '1200'],
+        ['Reset_WaitVblank', 'Reset_WaitVblankEnd', 'Reset_SecondNametable', 'Reset_StartScheduler'],
+        1301,
+    ),
 ]
 
 
@@ -947,9 +955,9 @@ def pressed_route(case, tmp):
     return path
 
 
-def event_case(name, route, options, want):
+def event_case(name, route, options, want, frames=None):
     path = ROOT / 'tests' / 'routes' / f'{route}.txt'
-    return {'name': name, 'route': path, 'frames': route_frames(path), 'extra': options, 'want': want}
+    return {'name': name, 'route': path, 'frames': frames or route_frames(path), 'extra': options, 'want': want}
 
 
 def run(exe, rom, case, extra):
