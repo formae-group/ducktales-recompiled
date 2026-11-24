@@ -632,3 +632,11 @@ id = "ducktales.decomp.nmi-exit"
 addr = 0xC138
 length = 8
 crc32 = 0x45D72BBE
+
+# Obj_SpawnRecord (bank 6)
+[[mod_function_hook]]
+id = "ducktales.decomp.6.AF2B"
+bank = 6
+addr = 0xAF2B
+length = 8
+crc32 = 0x60B1217E

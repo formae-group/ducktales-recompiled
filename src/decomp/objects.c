@@ -56,6 +56,10 @@
 #define SFX_SPLASH       0x21
 #define SFX_ROLL         0x27
 #define SFX_SPOUT        0x25
+#define SFX_BOSS_HOP     0x22
+#define SFX_BOSS_LAND    0x1E
+#define SFX_BOSS_TURN    0x23
+#define SFX_LAUNCH       0x28
 
 #define gObjCursor        RAM_U8(DT_ADDR_OBJ_CURSOR)
 #define gScratch0         RAM_U8(DT_ADDR_SCRATCH0)
@@ -76,8 +80,11 @@
 #define gRandom(i)        RAM_U8(DT_ADDR_RANDOM + (i))
 #define gPaletteUpload    RAM_U8(DT_ADDR_PALETTE_REQUEST)
 #define gHeldSlot         RAM_U8(DT_ADDR_HELD_SLOT)
-#define gProbeCount       RAM_U8(DT_ADDR_PROBE_COUNT)
-#define gPaletteShown(i)  RAM_U8(DT_ADDR_PALETTE_SHOWN + (i))
+#define gRowScroll        RAM_U8(DT_ADDR_ROW_SCROLL)
+#define SpawnTable(i) \
+    ((uint16_t)(RAM_U8(DT_ADDR_SPAWN_TABLES + 2 * (i)) | RAM_U8(DT_ADDR_SPAWN_TABLES + 2 * (i) + 1) << 8))
+#define gProbeCount      RAM_U8(DT_ADDR_PROBE_COUNT)
+#define gPaletteShown(i) RAM_U8(DT_ADDR_PALETTE_SHOWN + (i))
 
 /* ---- shared pieces of the handlers ---- */
 
@@ -2754,6 +2761,516 @@ static void Obj_Thief(uint8_t x)
     gObjects->timer[x] = (uint8_t)(gObjects->unk_06D0[x] << 1);
 }
 
+/* $F6D7, not decompiled yet: a counted hit on a boss (the boss-hit event's
+ * site is in it). Carry set when the hit beat it. */
+static bool Boss_Hit(uint8_t *x)
+{
+    Regs r = Decomp_Call(DT_CODE_BOSS_HIT, 0, *x, 0);
+    *x = r.x;
+    return r.p & P_C;
+}
+
+/* Kind $28 ($A6D3): the African Mines boss. It lands in the middle of the
+ * arena (world X $80, Y $B0) and hops three times (vertical velocity $02D4,
+ * sound $22), then, facing a random way (pose $2A, harmless pose $62 to
+ * $63), runs a 20-step pattern of climbs up and down and walks at $0398
+ * ($A8AC: direction and vertical way), stepping 4 px on the probes the step
+ * expects ($A8C0). Off the expected probes after a full pattern, within 3 px
+ * of the middle, it starts over. A counted hit goes to the boss hit $F6D7;
+ * the last one beats it. */
+static void Obj_MinesBoss(uint8_t x)
+{
+    static const uint8_t pattern[20] = { 0x05, 0x09, 0x05, 0x09, 0x05, 0x09, 0x0A, 0x09, 0x0A, 0x09,
+                                         0x0A, 0x06, 0x0A, 0x06, 0x0A, 0x06, 0x05, 0x06, 0x05, 0x06 };
+    static const uint8_t expected[20] = { 0x01, 0x00, 0x01, 0x00, 0x01, 0x02, 0x00, 0x02, 0x00, 0x02,
+                                          0x01, 0x00, 0x01, 0x00, 0x01, 0x02, 0x00, 0x02, 0x00, 0x02 };
+
+    Decomp_Enter(DT_CODE_KIND_MINES_BOSS, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0 && Boss_Hit(&x)) {
+        Obj_Defeat(x);
+        return;
+    }
+    uint8_t step;
+    if (Step(x) == 0) {
+        if (gObjects->action[x] == 0x2A) {
+            if (gObjects->animFrame[x] != 0 && gObjects->animTimer[x] == 5) {
+                gObjects->action[x] = 0x62;
+                ResetAnim(x);
+                gObjects->hitbox[x] |= 0x80;
+            }
+            return;
+        }
+        Obj_SetVelocityY(x, 0);
+        gObjects->timer[x] = 0;
+        gObjects->vdir[x] = 0;
+        gObjects->y[x] = 0xB0;
+        gObjects->worldX[x] = 0x80;
+        RAM_U8(DT_ADDR_MINES_BOSS_05E7) = 0x55;
+        gObjects->state[x]++;
+    }
+    if (!(gObjects->state[x] & 2)) {
+        if (gObjects->vdir[x] != 0) {
+            x = Obj_Rise(x, 0x52, 2);
+            if (gObjects->vy[x] & 0x80) {
+                Obj_SetVelocityY(x, 0);
+                gObjects->vdir[x]--;
+            }
+            return;
+        }
+        x = Obj_Fall(x, 0x31, 2);
+        if (!(gProbeHits & 1)) {
+            return;
+        }
+        Sound_Request(SFX_BOSS_HOP, x);
+        Obj_SetVelocityY(x, 0x02D4);
+        gObjects->vdir[x]++;
+        if (++gObjects->timer[x] != 3) {
+            return;
+        }
+        gObjects->state[x]++;
+        gRandom(1) = (uint8_t)(gRandom(0) + gRandom(1) + 1);
+        gObjects->dir[x] = (uint8_t)((gRandom(1) & 1) + 1);
+        gObjects->timer[x] = gObjects->dir[x];
+        gObjects->action[x] = 0x2A;
+        ResetAnim(x);
+        gObjects->unk_06C0[x] = 0;
+        gObjects->unk_06D0[x] = 0;
+        Obj_SetSpeed(x, 0x0398);
+        Obj_SetVelocityY(x, 0x0398);
+        step = 0;
+    } else {
+        if (gObjects->action[x] == 0x2A) {
+            if (gObjects->animFrame[x] == 0 || gObjects->animTimer[x] != 5) {
+                return;
+            }
+            gObjects->action[x] = 0x63;
+            ResetAnim(x);
+            gObjects->hitbox[x] &= 0x7F;
+        }
+        (void)Obj_TouchScrooge(x);
+        if (gObjects->vdir[x] & 4) {
+            x = Obj_ClimbDown(x, 0x31, 2);
+        } else {
+            x = Obj_ClimbUp(x, 0x52, 2);
+        }
+        uint8_t vertical = (uint8_t)((gProbeHits & 1) << 1);
+        if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+            x = Obj_WalkRight(x, 0x34, 2);
+        } else {
+            x = Obj_WalkLeft(x, 0x37, 2);
+        }
+        gProbeHits = (uint8_t)(vertical + (gProbeHits & 1));
+        uint8_t want = expected[gObjects->unk_06C0[x]];
+        if (want != 0) {
+            gProbeHits &= want;
+        }
+        if (gProbeHits != want) {
+            if (gObjects->unk_06D0[x] == 0) {
+                return;
+            }
+            uint8_t off = (uint8_t)(gObjects->worldX[x] - 0x80);
+            if (gObjects->worldX[x] < 0x80) {
+                off = (uint8_t)-off;
+            }
+            if (off >= 3) {
+                return;
+            }
+            gObjects->action[x] = 0x2A;
+            ResetAnim(x);
+            gObjects->state[x] &= 0xF0;
+            return;
+        }
+        if (gProbeHits == 0) {
+            gObjects->y[x] = (uint8_t)(gObjects->y[x] + ((gObjects->vdir[x] & 8) ? 0xFC : 0x04));
+        }
+        step = (uint8_t)(gObjects->unk_06C0[x] + 1);
+        if (step == 0x14) {
+            gObjects->unk_06D0[x]++;
+            step = 0;
+        }
+        gObjects->unk_06C0[x] = step;
+    }
+    uint8_t p = pattern[step];
+    gObjects->dir[x] = (uint8_t)(p & 3);
+    if (gObjects->timer[x] != 1) {
+        gObjects->dir[x] ^= 3;
+    }
+    gObjects->vdir[x] = (uint8_t)(p & 0x0C);
+}
+
+/* Kind $2A ($A8D6): the Himalayas boss. It jumps (vertical velocity $06EE,
+ * frame 2 of its pose), lands (sound $1E) and, at animation frame 7, rests
+ * 30 frames before the next jump, walking at $01CC while airborne. A wall
+ * hit while resting turns it (pose $65, sound $23) and starts a stomp: at
+ * frame 7 of the pose (pose $64) the camera shakes 4 px every 4 frames and
+ * one of two patterns ($AAA8, random) drops a row of falling objects (kind
+ * $2B, pose $47) into slots 8 on, each at its frame count ($AAB6). When the
+ * last one is gone it jumps again. A counted hit goes to the boss hit $F6D7;
+ * the last one beats it. The spawning slot is left in $00. */
+static void Obj_HimalayasBoss(uint8_t x)
+{
+    static const uint8_t dropX[14] = { 0x70, 0xD8, 0x48, 0xA8, 0x18, 0x88, 0x00,
+                                       0x68, 0x98, 0x28, 0xD8, 0x48, 0x88, 0x00 };
+    static const uint8_t dropAt[14] = { 0x00, 0x08, 0x18, 0x18, 0x20, 0x30, 0x00,
+                                        0x00, 0x08, 0x18, 0x18, 0x28, 0x28, 0x00 };
+    static const uint8_t patterns[2] = { 0x00, 0x07 };
+    static const uint8_t shakes[2] = { 0x00, 0x04 };
+
+    Decomp_Enter(DT_CODE_KIND_HIMALAYAS_BOSS, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0 && Boss_Hit(&x)) {
+        Obj_Defeat(x);
+        return;
+    }
+    if (Step(x) == 0) {
+        gObjects->timer[x] = 0;
+        gObjects->unk_06C0[x] = 0;
+        ResetAnim(x);
+        Obj_SetSpeed(x, 0x01CC);
+        gObjects->state[x]++;
+        gObjects->dir[x] = OBJ_DIR_LEFT;
+        RAM_U8(DT_ADDR_HIMALAYAS_BOSS_05A0) = 0x11;
+        Obj_SetVelocityY(x, 0x06EE);
+    }
+    if (gObjects->state[x] & 2) {
+        if (gObjects->action[x] != 0x64) {
+            if (gObjects->animFrame[x] == 0 || gObjects->animTimer[x] != 7) {
+                return;
+            }
+            gObjects->action[x] = 0x64;
+            gObjects->animFrame[x] = 0;
+            gObjects->timer[x] = 0;
+            gRandom(1) = (uint8_t)(gRandom(0) + gRandom(1) + 1);
+            gObjects->unk_06C0[x] = patterns[gRandom(1) & 1];
+            gObjects->unk_06D0[x] = 8;
+        }
+        for (;;) {
+            gObjects->animTimer[x] = 0;
+            gCameraX = shakes[(RAM_U8(DT_ADDR_SPR_PHASE) >> 2) & 1];
+            uint8_t i = gObjects->unk_06C0[x];
+            if (dropX[i] == 0) {
+                break;
+            }
+            if (gObjects->timer[x] != dropAt[i]) {
+                gObjects->timer[x]++;
+                return;
+            }
+            gScratch0 = x;
+            uint8_t s = gObjects->unk_06D0[x];
+            gObjects->worldX[s] = dropX[i];
+            gObjects->worldPage[s] = 4;
+            gObjects->y[s] = 0x38;
+            gObjects->state[s] = 0xA0;
+            gObjects->flags[s] = 0xA0;
+            gObjects->action[s] = 0x47;
+            ResetAnim(s);
+            gObjects->hitbox[s] = 0x10;
+            gObjects->kind[s] = OBJ_KIND_DROPPING;
+            Obj_SetVelocityY(s, 0x0180);
+            gObjects->unk_06C0[x]++;
+            gObjects->unk_06D0[x]++;
+        }
+        if (gObjects->state[gObjects->unk_06D0[x] - 1] != 0) {
+            return;
+        }
+        gObjects->state[x]--;
+        gObjects->timer[x] = 0;
+        gObjects->unk_06C0[x] = 0;
+        gObjects->unk_06D0[x] = 0;
+        gCameraX = 0;
+        Obj_SetVelocityY(x, 0x06EE);
+    }
+    if (gObjects->unk_06C0[x] != 0) {
+        gObjects->animTimer[x] = 0;
+        if (--gObjects->unk_06C0[x] == 0) {
+            gObjects->animFrame[x]++;
+        }
+        return;
+    }
+    if (gObjects->timer[x] == 0) {
+        if (gObjects->animFrame[x] != 2) {
+            return;
+        }
+        gObjects->animTimer[x] = 0;
+        x = Obj_Rise(x, 0x52, 2);
+        if (gObjects->vy[x] & 0x80) {
+            Obj_SetVelocityY(x, 0);
+            gObjects->timer[x]++;
+            return;
+        }
+    } else {
+        if (gObjects->animFrame[x] == 2) {
+            gObjects->animTimer[x] = 0;
+        }
+        x = Obj_Fall(x, 0x31, 2);
+        if (gProbeHits & 1) {
+            if (gObjects->animFrame[x] != 1) {
+                gObjects->animFrame[x] = 1;
+            }
+            if (gObjects->animTimer[x] == 0) {
+                Sound_Request(SFX_BOSS_LAND, x);
+            }
+            if (gObjects->animTimer[x] != 7) {
+                return;
+            }
+            gObjects->unk_06C0[x] = 0x1E;
+            Obj_SetVelocityY(x, 0x06EE);
+            gObjects->timer[x] = 0;
+            gObjects->animFrame[x] = 0;
+        }
+    }
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        x = Obj_WalkRight(x, 0x34, 2);
+    } else {
+        x = Obj_WalkLeft(x, 0x37, 2);
+    }
+    if (!(gProbeHits & 1) || gObjects->unk_06C0[x] == 0) {
+        return;
+    }
+    gObjects->dir[x] ^= 3;
+    gObjects->state[x]++;
+    gObjects->action[x] = 0x65;
+    ResetAnim(x);
+    Sound_Request(SFX_BOSS_TURN, x);
+}
+
+/* The Moon boss back in the middle: pose $67, 30 frames facing Scrooge. */
+static void Obj_MoonBossRestart(uint8_t x)
+{
+    gObjects->worldX[x] = 0x80;
+    gObjects->unk_06C0[x]--;
+    gObjects->state[x]--;
+    gObjects->action[x] = 0x67;
+    ResetAnim(x);
+    gObjects->unk_06D0[x] = 0x1E;
+}
+
+/* Kind $29 ($AAE1): the Moon boss. It enters at world X $80 (pose $67) and
+ * for 15 frames faces Scrooge, then (pose $66) walks a random way at a
+ * random speed, $03C0 or $01CC, the slow one jumping first (pose $68,
+ * vertical velocity $06EE). Landing from a jump it jumps again ($0548),
+ * turned round; walls turn it too. After a turn, back within 4 px of the
+ * middle on the floor, or landing after its second jump, it starts over
+ * from the middle with 30 frames facing Scrooge. Its random steps add the
+ * carry the dispatch left. A counted hit goes to the boss hit $F6D7; the
+ * last one beats it. */
+static void Obj_MoonBoss(uint8_t x, bool carry)
+{
+    static const uint16_t speeds[2] = { 0x03C0, 0x01CC };
+
+    Decomp_Enter(DT_CODE_KIND_MOON_BOSS, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0) {
+        if (Boss_Hit(&x)) {
+            Obj_Defeat(x);
+            return;
+        }
+        carry = false;
+    }
+    if (Step(x) == 0) {
+        Obj_SetVelocityY(x, 0);
+        gObjects->worldX[x] = 0x80;
+        RAM_U8(DT_ADDR_BOSS_05AF) = 0x44;
+        gObjects->state[x]++;
+        gObjects->unk_06D0[x] = 0x0F;
+        gObjects->action[x] = 0x67;
+    }
+    if (gObjects->unk_06D0[x] != 0) {
+        gObjects->unk_06D0[x]--;
+        uint8_t facing = gObjects->worldX[x] >= gObjects->worldX[P_] ? 0 : OBJ_FLAG_FACING_RIGHT;
+        gObjects->flags[x] = (uint8_t)((gObjects->flags[x] & (uint8_t)~OBJ_FLAG_FACING_RIGHT) | facing);
+        return;
+    }
+    if (!(gObjects->state[x] & 2)) {
+        gObjects->state[x]++;
+        gObjects->timer[x] = 0;
+        gObjects->unk_06C0[x] = 0;
+        ResetAnim(x);
+        gObjects->action[x] = 0x66;
+        unsigned sum = gRandom(0) + gRandom(1) + carry;
+        gRandom(3) = (uint8_t)sum;
+        gObjects->dir[x] = (uint8_t)((sum & 1) + 1);
+        sum = gRandom(2) + gRandom(3) + (sum >> 8);
+        gRandom(1) = (uint8_t)sum;
+        uint8_t slow = sum & 1;
+        gObjects->timer[x] = slow;
+        Obj_SetSpeed(x, speeds[slow]);
+        if (slow) {
+            gObjects->timer[x]++;
+            Obj_SetVelocityY(x, 0x06EE);
+            gObjects->action[x] = 0x68;
+        }
+    }
+    if (gObjects->timer[x] != 0) {
+        if (!(gObjects->timer[x] & 1)) {
+            x = Obj_Rise(x, 0x5E, 2);
+            if (gObjects->vy[x] & 0x80) {
+                gObjects->timer[x]--;
+                Obj_SetVelocityY(x, 0);
+            }
+        } else {
+            x = Obj_Fall(x, 0x5B, 2);
+            if (gProbeHits & 1) {
+                if (gObjects->unk_06C0[x] != 0) {
+                    Obj_MoonBossRestart(x);
+                    return;
+                }
+                Obj_SetVelocityY(x, 0x0548);
+                gObjects->timer[x]++;
+                gObjects->unk_06C0[x]++;
+                gObjects->dir[x] ^= 3;
+                return;
+            }
+        }
+    }
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        x = Obj_WalkRight(x, 0x55, 2);
+    } else {
+        x = Obj_WalkLeft(x, 0x58, 2);
+    }
+    if (gProbeHits & 1) {
+        gObjects->dir[x] ^= 3;
+        gObjects->unk_06C0[x]++;
+        return;
+    }
+    if (gObjects->timer[x] != 0 || gObjects->unk_06C0[x] == 0) {
+        return;
+    }
+    uint8_t off = (uint8_t)(gObjects->worldX[x] - 0x80);
+    if (gObjects->worldX[x] < 0x80) {
+        off = (uint8_t)-off;
+    }
+    if (off < 4) {
+        Obj_MoonBossRestart(x);
+    }
+}
+
+/* Kind $33 ($ADB9): an object that does nothing until a hit beats it. */
+static void Obj_Target(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_TARGET, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0) {
+        Obj_Defeat(x);
+    }
+}
+
+/* Kind $34 ($ADC1): a launcher. Touched (not while Scrooge is knocked back
+ * or dying), it throws him into mode 12 with speed $0400 and vertical
+ * velocity $0728 (sound $28) and plays its animation (frame timer 7, then
+ * held at its end with $80). */
+static void Obj_Launcher(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_LAUNCHER, 0x22, x, gObjects->kind[x]);
+    if (gPlayerMode == PLAYER_MODE_KNOCKBACK || gPlayerMode == PLAYER_MODE_DEATH) {
+        return;
+    }
+    if (Step(x) == 0) {
+        gObjects->animTimer[x] = 0;
+        if (!Obj_TouchScrooge(x)) {
+            return;
+        }
+        gPlayerMode = PLAYER_MODE_12;
+        gObjects->state[x]++;
+        gObjects->animTimer[x] = 7;
+        Obj_SetSpeed(P_, 0x0400);
+        Obj_SetVelocityY(P_, 0x0728);
+        gObjects->vdir[P_] = 0;
+        Sound_Request(SFX_LAUNCH, x);
+    }
+    if ((gObjects->animTimer[x] | gObjects->animFrame[x]) == 0) {
+        gObjects->animTimer[x] = 0x80;
+    }
+}
+
+/* $F4D8, not decompiled yet: draws a spawned block's tiles into the
+ * background (through the tile queue). It keeps X and Y, leaving them in
+ * $12/$13. */
+static void Obj_DrawBlock(uint8_t x, uint8_t a, uint8_t y)
+{
+    (void)Decomp_Call(DT_CODE_OBJ_DRAW_BLOCK, a, x, y);
+}
+
+/* $AF2B: spawn land record y (the spawner $AEA0 calls it for the records
+ * entering the window $00-$03) unless its consumed bit is set, it lies left
+ * of $01:$00, or a live slot already holds it. The object goes to the
+ * highest free slot with the record's world X and Y and the 4-byte template
+ * of its type ($BE16: timer and status, pose, kind, hitbox). A hidden object
+ * (status bit 4) shown outside a row scroll gets pose bit 7 moved to
+ * $06C0 = $FF, and a hidden block or dropper draws its tiles ($F4D8). In a
+ * boss fight the boss hits are reset to 5, and in the final arena, or with
+ * every treasure, the object becomes the final boss's stand-in (kind $3A,
+ * pose $84, hidden). With the Amazon's treasure, the land's hidden items,
+ * chests and pose-$1B blocks are not spawned again. $10 holds the record's
+ * bit and $04/$05 the template's address. */
+static void Obj_SpawnRecord(uint8_t y)
+{
+    Decomp_Enter(DT_CODE_SPAWN_RECORD, 0, 0, y);
+    gProbeHits = (uint8_t)(1 << (y & 7));
+    if (RAM_U8(DT_ADDR_CONSUMED + (y >> 3)) & gProbeHits) {
+        return;
+    }
+    uint8_t page = Rom((uint16_t)(SpawnTable(0) + y));
+    uint8_t wx = Rom((uint16_t)(SpawnTable(1) + y));
+    if ((uint16_t)(page << 8 | wx) < (uint16_t)(gScratch(1) << 8 | gScratch(0))) {
+        return;
+    }
+    uint8_t x = 0x0F;
+    while (x != 0 && gObjects->record[x] != y) {
+        x--;
+    }
+    if (x != 0 && (gObjects->state[x] & OBJ_STATUS_LIVE)) {
+        return;
+    }
+    if (!Obj_FindFreeSlot(&x)) {
+        return;
+    }
+    gObjects->record[x] = y;
+    gObjects->worldPage[x] = page;
+    gObjects->worldX[x] = wx;
+    gObjects->unk_0740[x] = gObjects->y[x] = Rom((uint16_t)(SpawnTable(3) + y));
+    uint8_t type = Rom((uint16_t)(SpawnTable(4) + y));
+    uint8_t t = (uint8_t)(type << 2);
+    gScratch(4) = (uint8_t)DT_CODE_SPAWN_TEMPLATES;
+    gScratch(5) = (uint8_t)((DT_CODE_SPAWN_TEMPLATES >> 8) + ((type >> 6) & 1));
+    uint16_t at = (uint16_t)((gScratch(5) << 8 | gScratch(4)) + t);
+    gObjects->unk_0690[x] = 0;
+    gObjects->unk_06C0[x] = 0;
+    gObjects->bossCooldown[x] = 0;
+    uint8_t b = Rom(at);
+    gObjects->timer[x] = b & 0x0F;
+    gObjects->state[x] = gObjects->flags[x] = b & 0xF0;
+    gObjects->action[x] = Rom((uint16_t)(at + 1));
+    gObjects->kind[x] = Rom((uint16_t)(at + 2));
+    gObjects->hitbox[x] = Rom((uint16_t)(at + 3));
+    ResetAnim(x);
+    if (gRowScroll == 0 && (gObjects->state[x] & OBJ_STATUS_HIDDEN)) {
+        if (gObjects->action[x] & 0x80) {
+            gObjects->action[x] &= 0x7F;
+            gObjects->unk_06C0[x] = 0xFF;
+        }
+        uint8_t kind = gObjects->kind[x];
+        if (kind == OBJ_KIND_BLOCK || kind == OBJ_KIND_DROPPER) {
+            Obj_DrawBlock(x, kind, (uint8_t)(t + 3));
+            return;
+        }
+    }
+    if (gBossFight & 0x80) {
+        gBossHits = 5;
+        if (gFinalArena != 0 || (gTreasures & 0x1F) == 0x1F) {
+            gObjects->kind[x] = OBJ_KIND_FINAL_STAND_IN;
+            gObjects->hitbox[x] = 0;
+            gObjects->state[x] |= OBJ_STATUS_HIDDEN;
+            gObjects->action[x] = 0x84;
+        }
+    }
+    if (gLand != 1 || !(gTreasures & 2)) {
+        return;
+    }
+    uint8_t kind = gObjects->kind[x];
+    if (kind == OBJ_KIND_HIDDEN_ITEM || kind == OBJ_KIND_CHEST ||
+        (kind == OBJ_KIND_BLOCK && gObjects->action[x] == 0x1B)) {
+        gObjects->state[x] = 0;
+    }
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -2871,6 +3388,15 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
         case OBJ_KIND_RISING_SHOT:
             Obj_RisingShot(slot);
             break;
+        case OBJ_KIND_MINES_BOSS:
+            Obj_MinesBoss(slot);
+            break;
+        case OBJ_KIND_MOON_BOSS:
+            Obj_MoonBoss(slot, r->p & P_C);
+            break;
+        case OBJ_KIND_HIMALAYAS_BOSS:
+            Obj_HimalayasBoss(slot);
+            break;
         case OBJ_KIND_DROPPING:
             Obj_Dropping(slot);
             break;
@@ -2889,6 +3415,12 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_PICKPOCKET:
             Obj_Pickpocket(slot);
+            break;
+        case OBJ_KIND_TARGET:
+            Obj_Target(slot);
+            break;
+        case OBJ_KIND_LAUNCHER:
+            Obj_Launcher(slot);
             break;
         case OBJ_KIND_TALKER:
             Obj_Talker(slot);
@@ -3149,6 +3681,36 @@ static void Run_Thief(Regs *r)
     Obj_Thief(r->x);
 }
 
+static void Run_MinesBoss(Regs *r)
+{
+    Obj_MinesBoss(r->x);
+}
+
+static void Run_HimalayasBoss(Regs *r)
+{
+    Obj_HimalayasBoss(r->x);
+}
+
+static void Run_MoonBoss(Regs *r)
+{
+    Obj_MoonBoss(r->x, r->p & P_C);
+}
+
+static void Run_Target(Regs *r)
+{
+    Obj_Target(r->x);
+}
+
+static void Run_Launcher(Regs *r)
+{
+    Obj_Launcher(r->x);
+}
+
+static void Run_SpawnRecord(Regs *r)
+{
+    Obj_SpawnRecord(r->y);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -3318,6 +3880,12 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_SPAWN_RECORD, "ducktales.decomp.6.AF2B", "Obj_SpawnRecord", Run_SpawnRecord, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_LAUNCHER, NULL, "Obj_Launcher", Run_Launcher, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_TARGET, NULL, "Obj_Target", Run_Target, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_MOON_BOSS, NULL, "Obj_MoonBoss", Run_MoonBoss, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_HIMALAYAS_BOSS, NULL, "Obj_HimalayasBoss", Run_HimalayasBoss, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_MINES_BOSS, NULL, "Obj_MinesBoss", Run_MinesBoss, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_THIEF, NULL, "Obj_Thief", Run_Thief, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_TREAT, NULL, "Obj_Treat", Run_Treat, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_TREAT_SPOUT, NULL, "Obj_TreatSpout", Run_TreatSpout, 0, .bank = DT_BANK_OBJECTS },
