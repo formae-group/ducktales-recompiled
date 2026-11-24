@@ -16,6 +16,8 @@
  *   mods              the [Mods] section, written last (mods/app_mods.h)
  *   extra voices      [Audio] MusicUnderEffects and OverlapEffects (off by
  *                     default), played by the native player only
+ *   decompiled code   [Game] DecompiledCode (off by default), run by the
+ *                     native player only and only with No slowdown on
  *
  * A command-line value applies to that run only; config.ini keeps what the
  * player saved (ducktales_host_saved_value).
@@ -42,11 +44,22 @@ static bool s_no_slowdown = true;
 static bool s_no_slowdown = false;
 #endif
 
-static bool s_music_under_effects, s_overlap_effects;
+static bool s_music_under_effects, s_overlap_effects, s_decompiled;
 
 bool ducktales_host_no_slowdown(void)
 {
     return s_no_slowdown;
+}
+
+bool ducktales_host_decompiled(void)
+{
+    return s_decompiled;
+}
+
+void ducktales_host_set_decompiled(bool on)
+{
+    s_decompiled = on;
+    ducktales_host_apply_no_slowdown(s_no_slowdown);
 }
 
 bool ducktales_host_music_under_effects(void)
@@ -191,6 +204,10 @@ void ducktales_host_load_game_setting(const char *key, const char *value)
         parse_on_off(value, &s_no_slowdown);
         return;
     }
+    if (!strcmp(key, "DecompiledCode")) {
+        parse_on_off(value, &s_decompiled);
+        return;
+    }
     for (int e = 0; e < DT_ENH_COUNT; e++) {
         const DtEnhInfo *in = dt_enh_info((DtEnh)e);
         if (strcmp(key, in->key)) {
@@ -223,6 +240,7 @@ void ducktales_host_write_game_settings(FILE *f)
     }
     fprintf(f, "%s = %s\n", DT_SPRITES_KEY, s_saved_sprites ? "on" : "off");
     fprintf(f, "NoSlowdown = %s\n", s_no_slowdown ? "on" : "off");
+    fprintf(f, "DecompiledCode = %s\n", s_decompiled ? "on" : "off");
 #if DUCKTALES_WINDOW
     app_present_write(f);
     app_ui_write_game_settings(f);

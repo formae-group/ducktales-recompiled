@@ -290,6 +290,19 @@ void page_gameplay()
         ducktales_host_set_no_slowdown(on);
         app_settings_changed();
     }
+#if DUCKTALES_NATIVE_PLAYER
+    ui::section("Code");
+    bool decompiled = on && ducktales_host_decompiled();
+    ImGui::BeginDisabled(!on);
+    if (ui::toggle("Decompiled code", &decompiled,
+                   "Run the game's routines decompiled to C in place of the recompiled ones. The game logic is "
+                   "unchanged. Needs No slowdown: the C does not take the console's time, so with the console's "
+                   "slowdown the game would lag where the console does not.")) {
+        ducktales_host_set_decompiled(decompiled);
+        app_settings_changed();
+    }
+    ImGui::EndDisabled();
+#endif
 }
 
 std::string mod_detail(const AppMod *m)
