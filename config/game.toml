@@ -424,6 +424,13 @@ addr = 0xF812
 length = 8
 crc32 = 0x1394DA66
 
+# Boss_Hit
+[[mod_function_hook]]
+id = "ducktales.decomp.F6D7"
+addr = 0xF6D7
+length = 8
+crc32 = 0x093C0A7B
+
 # Money_Max
 [[mod_function_hook]]
 id = "ducktales.decomp.F83F"
