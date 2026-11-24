@@ -22,12 +22,16 @@
  * climbing steps $F192/$F1A8 the C of objcommon.c and the HP refill $F812
  * the C of objects.c. Called through Decomp_Call: the walls move $F0F8,
  * which every object kind shares (decompiled with the object code).
- * Given to the original routine (Decomp_RunOriginal): Player_Update in modes
- * 15 and 16 (message box and treasure) and every call that reaches the row
- * change at $E8C0. The original then reaches their C at its own sites: it is
- * task code (decomp.h), since all three wait for frames. The row change drops
+ * Player_Update is task code (decomp.h): modes 15 and 16 (message box and
+ * treasure) wait for frames, and the row change at $E8C0 drops
  * Player_Update's return address and hands off to the row scroll, which goes
- * back into the frame loop.
+ * back into the frame loop. The handlers on the way to the row change
+ * (Player_Ground, Player_StartJump, Player_Air, Player_Pogo, Player_Climb,
+ * Player_Stuck, Player_Carried) are task code too, since their original does
+ * not return there: Player_Update's check covers them. The original jumps to
+ * all of them (JMP), so no return address of theirs is on the stack. The
+ * sites of $ED05, $EF62 and $E8C0 stay for the original Player_Update, which
+ * replace mode runs when the call would cross VBlank.
  */
 #include "decomp/decomp.h"
 #include "decomp/collision.h"
@@ -99,6 +103,9 @@ static uint8_t Player_Fall(void);
 static void Player_StartJump(void);
 static void Player_Knockback(uint8_t x);
 static void Player_PitDeath(void);
+static void Player_RowChange(Regs *r);
+static void Player_Message(Regs *r);
+static void Player_Treasure(Regs *r);
 static void Player_Death(void);
 
 static void Player_SetAction(uint8_t action)
@@ -638,9 +645,9 @@ static void Player_StartJump(void)
 
 /* $E878: Scrooge left the screen row: in the final arena that ends the
  * fight's drop; otherwise move to the row above or below if the map has one
- * there. The move (Player_RowChange) leaves Player_Update without returning,
- * so a call that gets there runs as the original, which reaches the row
- * change's own site. */
+ * there. The move (Player_RowChange, A = row, X = 2 with Up held, Y = the
+ * camera screen, $00 the stream screen) leaves Player_Update without
+ * returning. */
 static void Player_LeaveRow(void)
 {
     if (gFinalArena && gObjects->y[P_] >= FINAL_ARENA_DROP_Y) {
@@ -667,7 +674,8 @@ static void Player_LeaveRow(void)
     if (row >= gMapRows) {
         return;
     }
-    Decomp_RunOriginal();
+    Regs r = { row, up ? 2 : 0, screen, 0 };
+    Player_RowChange(&r);
 }
 
 /* $E8C0: the row change, reached from $E878 with A = the new row, X = 0 (or 2
@@ -1140,28 +1148,30 @@ static void Player_Mode14(void)
 }
 
 /* $E354: once per frame from the frame loop. */
-static void Player_Update(const Regs *in)
+static void Player_Update(Regs *r)
 {
-    Decomp_Enter(DT_CODE_PLAYER_UPDATE, in->a, in->x, in->y);
+    Decomp_Enter(DT_CODE_PLAYER_UPDATE, r->a, r->x, r->y);
     gGravity = PLAYER_GRAVITY;
     if (gPlayerInvulnerable != 0 && !(gPlayerInvulnerable & 0x80)) {
         gPlayerInvulnerable--;
     }
     if (gPlayerPower != 0 && !(gPlayerPower & 0x80)) {
         if (gMusic != MUSIC_POWER) {
-            Music_Request(MUSIC_POWER, in->x);
+            Music_Request(MUSIC_POWER, r->x);
         }
         uint8_t p = P_C;
         RAM_U8(DT_ADDR_POWER_FRAMES) = Alu_Sbc(RAM_U8(DT_ADDR_POWER_FRAMES), 1, &p);
         RAM_U8(DT_ADDR_POWER_FRAMES + 1) = Alu_Sbc(RAM_U8(DT_ADDR_POWER_FRAMES + 1), 0, &p);
         if (Player_GetPowerFrames() == 0) {
             gPlayerPower = 0;
-            Music_Request(gLand, in->x);
+            Music_Request(gLand, r->x);
         }
     }
     uint8_t mode = gPlayerMode;
     gScratch(0) = Game_ReadRom((uint16_t)(DT_CODE_MODE_LO + mode));
     gScratch(1) = Game_ReadRom((uint16_t)(DT_CODE_MODE_HI + mode));
+    r->a = gScratch(1);
+    r->x = mode;
     switch (mode) {
         case PLAYER_MODE_GROUND:
             Player_Ground();
@@ -1206,8 +1216,11 @@ static void Player_Update(const Regs *in)
         case PLAYER_MODE_14:
             Player_Mode14();
             break;
-        default:
-            Decomp_RunOriginal();
+        case PLAYER_MODE_MESSAGE:
+            Player_Message(r);
+            break;
+        case PLAYER_MODE_TREASURE:
+            Player_Treasure(r);
             break;
     }
 }
@@ -1906,16 +1919,16 @@ static void Run_SelectRefill(Regs *r)
  * the damage event runs at its own [[mod_function_hook]] there (declared
  * first, so it fires first), and the adapter is the routine without it. */
 const DecompRoutine gPlayerRoutines[] = {
-    { DT_CODE_PLAYER_UPDATE, "ducktales.decomp.E354", "Player_Update", Run_Update, 0 },
-    { DT_CODE_PLAYER_GROUND, NULL, "Player_Ground", Run_Ground, 0 },
-    { DT_CODE_JUMP_START, NULL, "Player_StartJump", Run_StartJump, 0 },
+    { DT_CODE_PLAYER_UPDATE, "ducktales.decomp.E354", "Player_Update", Run_Update, 0, true, 0, false },
+    { DT_CODE_PLAYER_GROUND, NULL, "Player_Ground", Run_Ground, 0, true, 0, false },
+    { DT_CODE_JUMP_START, NULL, "Player_StartJump", Run_StartJump, 0, true, 0, false },
     { DT_CODE_PLAYER_WALK, NULL, "Player_Walk", Run_Walk, 0 },
     { DT_CODE_MOVE_RIGHT, NULL, "Player_MoveRight", Run_MoveRight, OUT_X },
     { DT_CODE_MOVE_LEFT, NULL, "Player_MoveLeft", Run_MoveLeft, OUT_X },
-    { DT_CODE_PLAYER_AIR, NULL, "Player_Air", Run_Air, 0 },
+    { DT_CODE_PLAYER_AIR, NULL, "Player_Air", Run_Air, 0, true, 0, false },
     { DT_CODE_GRAB_CLIMB, NULL, "Player_GrabClimb", Run_GrabClimb, 0 },
-    { DT_CODE_PLAYER_POGO, NULL, "Player_Pogo", Run_Pogo, 0 },
-    { DT_CODE_PLAYER_CLIMB, NULL, "Player_Climb", Run_Climb, 0 },
+    { DT_CODE_PLAYER_POGO, NULL, "Player_Pogo", Run_Pogo, 0, true, 0, false },
+    { DT_CODE_PLAYER_CLIMB, NULL, "Player_Climb", Run_Climb, 0, true, 0, false },
     { DT_CODE_PLAYER_CANE, NULL, "Player_Cane", Run_Cane, 0 },
     { DT_CODE_PLAYER_FALL, NULL, "Player_Fall", Run_Fall, OUT_X },
     { DT_CODE_PLAYER_RISE, NULL, "Player_Rise", Run_Rise, OUT_X },
@@ -1923,11 +1936,11 @@ const DecompRoutine gPlayerRoutines[] = {
     { DT_CODE_PLAYER_HURT, NULL, "Player_Hurt", Run_Hurt, 0 },
     { DT_CODE_PLAYER_KNOCKBACK, NULL, "Player_Knockback", Run_Knockback, 0 },
     { DT_CODE_TAKE_DAMAGE, "ducktales.decomp.EB5E", "Player_TakeDamage", Run_TakeDamage, 0 },
-    { DT_CODE_PLAYER_STUCK, NULL, "Player_Stuck", Run_Stuck, 0 },
+    { DT_CODE_PLAYER_STUCK, NULL, "Player_Stuck", Run_Stuck, 0, true, 0, false },
     { DT_CODE_PLAYER_PIT, NULL, "Player_Pit", Run_Pit, 0 },
     { DT_CODE_PIT_DEATH, "ducktales.decomp.EBB4", "Player_PitDeath", Run_PitDeath, 0 },
     { DT_CODE_PLAYER_MODE9, NULL, "Player_Mode9", Run_Mode9, 0 },
-    { DT_CODE_PLAYER_CARRIED, NULL, "Player_Carried", Run_Carried, 0 },
+    { DT_CODE_PLAYER_CARRIED, NULL, "Player_Carried", Run_Carried, 0, true, 0, false },
     { DT_CODE_PLAYER_MODE12, NULL, "Player_Mode12", Run_Mode12, 0 },
     { DT_CODE_PLAYER_DEATH, NULL, "Player_Death", Run_Death, 0 },
     { DT_CODE_PLAYER_MODE14, NULL, "Player_Mode14", Run_Mode14, 0 },
