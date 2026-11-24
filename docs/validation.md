@@ -406,6 +406,12 @@ a full table stops the run. main a856a27 registered 243, under the old cap. Gate
   - pokes: 45/45 in check and 45/45 in replace
   - events: 2/2 in check and 2/2 in replace
 
+The two-run `decomp_test.py` (check as the baseline of replace, pokes from a save state) on the same
+builds and tree: all passed in 1,904 s, against 5,145 s above (both with other agents' tests on the
+PC). Its check, replace and events lines and the routine table of the 12 routes are identical line
+for line to the run above; the 45 poke cases pass in check and in replace from frame 1,500.
+Beforehand, `re_amazon_moves` in check mode and stock gave byte-identical RAM logs (2,128 frames).
+
 ## Release 1.0.0
 
 On main `8569c86` (the release tree before its changelog and documentation commit), 2026-11-23:
