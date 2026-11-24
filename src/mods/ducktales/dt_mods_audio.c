@@ -283,11 +283,8 @@ static float voice_sample(Voice *v, double step)
     return out;
 }
 
-void app_mods_audio_mix(int16_t *samples, size_t count, int rate)
+static void add_voices(double *samples, size_t count, int rate)
 {
-    if (!s_count || rate <= 0) {
-        return;
-    }
     for (int k = 0; k < 2; k++) {
         Voice *v = &s_voice[k];
         if (!v->on || v->held || !v->sound) {
@@ -295,8 +292,35 @@ void app_mods_audio_mix(int16_t *samples, size_t count, int rate)
         }
         double step = (double)fm_sound_rate(v->sound) / rate;
         for (size_t i = 0; i < count && v->on; i++) {
-            long mixed = samples[i] + lrintf(voice_sample(v, step) * 32767.0f);
-            samples[i] = (int16_t)(mixed > 32767 ? 32767 : mixed < -32768 ? -32768 : mixed);
+            samples[i] += voice_sample(v, step) * 32767.0;
+        }
+    }
+}
+
+void app_mods_audio_add(double *samples, size_t count, int rate)
+{
+    if (!s_count || rate <= 0) {
+        return;
+    }
+    add_voices(samples, count, rate);
+    apply_next();
+}
+
+void app_mods_audio_mix(int16_t *samples, size_t count, int rate)
+{
+    if (!s_count || rate <= 0) {
+        return;
+    }
+    double mix[1024];
+    for (size_t at = 0; at < count; at += 1024) {
+        size_t n = count - at < 1024 ? count - at : 1024;
+        for (size_t i = 0; i < n; i++) {
+            mix[i] = samples[at + i];
+        }
+        add_voices(mix, n, rate);
+        for (size_t i = 0; i < n; i++) {
+            long v = lrint(mix[i]);
+            samples[at + i] = (int16_t)(v > 32767 ? 32767 : v < -32768 ? -32768 : v);
         }
     }
     apply_next();

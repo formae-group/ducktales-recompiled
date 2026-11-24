@@ -299,6 +299,7 @@ endif()
 if(NOT DUCKTALES_HEADLESS)
     add_executable(ducktales_player
         "${CMAKE_SOURCE_DIR}/src/native/native_window.c"
+        "${CMAKE_SOURCE_DIR}/src/native/native_output.c"
         "${CMAKE_SOURCE_DIR}/src/native/native_present.c"
         "${CMAKE_SOURCE_DIR}/src/native/native_render.c"
         "${CMAKE_SOURCE_DIR}/src/native/native_cycle.c"

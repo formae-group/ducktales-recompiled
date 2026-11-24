@@ -52,7 +52,11 @@
  * presentation settings at their defaults) after every Nth frame, named as
  * the cycle host's --present-out names them, for tests/native_player_test.py;
  * --wav-out FILE writes the synth's sound as 48 kHz mono 16-bit PCM, before
- * the window's volume and queue stretching.
+ * the window's volume and queue stretching. --audio-out FILE writes what the
+ * audio device would play instead, through the window's output stage
+ * (native_output.h) on simulated clocks (--audio-sim SPEC, below), as a
+ * stereo WAV for tests/audio_output_test.py, and prints the output stage's
+ * statistics.
  * --state-check F saves the machine after frame F, runs 300 frames, loads the
  * state and runs them again, and reports whether CPU RAM, the cycle count and
  * the video memories matched on every one. The summary line lists how often
@@ -68,6 +72,7 @@
 #include "native/native_runtime.h"
 #include "native/native_state.h"
 #include "native/native_audio.h"
+#include "native/native_output.h"
 
 #include "decomp/decomp.h"
 #include "game/enhancements.h"
@@ -84,6 +89,7 @@
 #include "cyc_render.h"
 #include "cyc_settings.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -204,6 +210,191 @@ static size_t frame_sound(int16_t *pcm, size_t cap, int rate)
     return n;
 }
 
+/* The same before the 16-bit clamp, for the output stage (native_output.h). */
+static size_t frame_mix(double *mix, size_t cap, int rate)
+{
+    apply_voices();
+    native_audio_set_mute(s_frame_mute);
+    size_t n = native_audio_mix(native_last_frame(), mix, cap);
+    app_mods_audio_add(mix, n, rate);
+    return n;
+}
+
+/* --audio-sim: the window's frame loop and the audio device on simulated
+ * clocks, for --audio-out. Each frame's sound is pushed when the loop
+ * starts the frame; the frame then waits for its deadline (1 / 60.0988 s)
+ * and, with refresh set, for the next VSync after it, as run_window does.
+ * The device pulls period samples every period / 48000 s, its clock off
+ * by drift parts per million. The events stand for what the window sees:
+ * menu=F:N the menu opens before frame F with MenuPausesGame on for N
+ * frames; fast=F:N fast-forward for N frames; drag=F:MS the window is moved
+ * for MS ms (the loop blocked in the move); hitch=F:MS the loop blocked for
+ * MS ms with no warning; load=F a state loaded (the queue flushed); off=F:N
+ * sound off for N frames; sweep=F the volume stepped by 5 every frame from
+ * F, from 100 to 0 and back. */
+typedef struct {
+    int refresh, period, volume;
+    double drift;
+    long menu[2], fast[2], drag[2], hitch[2], off[2], load, sweep;
+} AudioSim;
+
+static bool parse_audio_sim(const char *spec, AudioSim *sim)
+{
+    memset(sim, 0, sizeof *sim);
+    sim->period = 1024;
+    sim->volume = 100;
+    sim->load = sim->sweep = -1;
+    sim->menu[0] = sim->fast[0] = sim->drag[0] = sim->hitch[0] = sim->off[0] = -1;
+    char buf[512];
+    snprintf(buf, sizeof buf, "%s", spec);
+    for (char *tok = strtok(buf, ","); tok; tok = strtok(NULL, ",")) {
+        char *eq = strchr(tok, '=');
+        if (!eq) {
+            return false;
+        }
+        *eq++ = 0;
+        long a = 0, b = 0;
+        int got = sscanf(eq, "%ld:%ld", &a, &b);
+        long *pair = !strcmp(tok, "menu")    ? sim->menu
+                     : !strcmp(tok, "fast")  ? sim->fast
+                     : !strcmp(tok, "drag")  ? sim->drag
+                     : !strcmp(tok, "hitch") ? sim->hitch
+                     : !strcmp(tok, "off")   ? sim->off
+                                             : NULL;
+        if (pair && got == 2) {
+            pair[0] = a, pair[1] = b;
+        } else if (!strcmp(tok, "refresh") && got == 1) {
+            sim->refresh = (int)a;
+        } else if (!strcmp(tok, "period") && got == 1 && a > 0 && a <= 8192) {
+            sim->period = (int)a;
+        } else if (!strcmp(tok, "volume") && got == 1) {
+            sim->volume = (int)a;
+        } else if (!strcmp(tok, "drift")) {
+            sim->drift = atof(eq);
+        } else if (!strcmp(tok, "load") && got == 1) {
+            sim->load = a;
+        } else if (!strcmp(tok, "sweep") && got == 1) {
+            sim->sweep = a;
+        } else {
+            return false;
+        }
+    }
+    return true;
+}
+
+static struct {
+    FILE *f;
+    uint32_t samples;
+    double t, device_t, next;
+    const AudioSim *sim;
+} s_sim;
+
+static void sim_wav_header(void)
+{
+    uint32_t rate = AUDIO_RATE, bytes = s_sim.samples * 4, riff = 36 + bytes, fmt = 16, byte_rate = rate * 4;
+    uint16_t pcm = 1, channels = 2, align = 4, bits = 16;
+    long at = ftell(s_sim.f);
+    fseek(s_sim.f, 0, SEEK_SET);
+    fwrite("RIFF", 1, 4, s_sim.f), fwrite(&riff, 4, 1, s_sim.f), fwrite("WAVEfmt ", 1, 8, s_sim.f);
+    fwrite(&fmt, 4, 1, s_sim.f), fwrite(&pcm, 2, 1, s_sim.f), fwrite(&channels, 2, 1, s_sim.f);
+    fwrite(&rate, 4, 1, s_sim.f), fwrite(&byte_rate, 4, 1, s_sim.f), fwrite(&align, 2, 1, s_sim.f);
+    fwrite(&bits, 2, 1, s_sim.f), fwrite("data", 1, 4, s_sim.f), fwrite(&bytes, 4, 1, s_sim.f);
+    if (at > 44) {
+        fseek(s_sim.f, at, SEEK_SET);
+    }
+}
+
+/* The device's pulls up to time t: the output and the mix it came from, as
+ * a stereo WAV (left the output, right the mix or -32768). */
+static void sim_device_until(double t)
+{
+    static int16_t out[8192], game[8192], pair[16384];
+    const int period = s_sim.sim->period;
+    const double step = period / (AUDIO_RATE * (1.0 + s_sim.sim->drift * 1e-6));
+    while (s_sim.device_t <= t) {
+        native_output_pull(out, game, (size_t)period);
+        for (int i = 0; i < period; i++) {
+            pair[2 * i] = out[i];
+            pair[2 * i + 1] = game[i];
+        }
+        fwrite(pair, sizeof pair[0], 2 * (size_t)period, s_sim.f);
+        s_sim.samples += (uint32_t)period;
+        s_sim.device_t += step;
+    }
+}
+
+static bool sim_in(const long ev[2], long frame)
+{
+    return ev[0] >= 0 && frame >= ev[0] && frame < ev[0] + ev[1];
+}
+
+/* Before frame: the events, then the device up to the loop's start. */
+static void sim_frame_begin(long frame, bool *push)
+{
+    const AudioSim *sim = s_sim.sim;
+    const double T = 1.0 / FRAME_HZ;
+    if (frame == sim->menu[0]) {
+        native_output_hold(NATIVE_OUTPUT_HOLD_MENU, true);
+        sim_device_until(s_sim.t += sim->menu[1] * T);
+        native_output_hold(NATIVE_OUTPUT_HOLD_MENU, false);
+    }
+    if (frame == sim->drag[0]) {
+        native_output_hold(NATIVE_OUTPUT_HOLD_WINDOW, true);
+        sim_device_until(s_sim.t += sim->drag[1] / 1000.0);
+        native_output_hold(NATIVE_OUTPUT_HOLD_WINDOW, false);
+    }
+    if (frame == sim->hitch[0]) {
+        s_sim.t += sim->hitch[1] / 1000.0;
+    }
+    if (frame == sim->load) {
+        native_output_flush();
+    }
+    if (sim->sweep >= 0 && frame >= sim->sweep && frame < sim->sweep + 40) {
+        long k = frame - sim->sweep;
+        native_output_volume(k < 20 ? 95 - 5 * (int)k : 5 * (int)(k - 19));
+    }
+    bool fast = sim_in(sim->fast, frame), off = sim_in(sim->off, frame);
+    native_output_hold(NATIVE_OUTPUT_HOLD_FAST, fast);
+    native_output_hold(NATIVE_OUTPUT_HOLD_OFF, off);
+    *push = !fast && !off;
+    sim_device_until(s_sim.t);
+}
+
+/* After the frame's push: its wait for the deadline and VSync. */
+static void sim_frame_end(long frame)
+{
+    const AudioSim *sim = s_sim.sim;
+    const double T = 1.0 / FRAME_HZ;
+    bool unpaced = sim_in(sim->fast, frame);
+    if (unpaced) {
+        s_sim.t += 0.0005;
+    } else {
+        if (s_sim.t < s_sim.next) {
+            s_sim.t = s_sim.next;
+        }
+        if (sim->refresh > 0) {
+            s_sim.t = ceil(s_sim.t * sim->refresh - 1e-9) / sim->refresh;
+        }
+    }
+    s_sim.next += T;
+    if (unpaced || s_sim.t > s_sim.next + 4 * T) {
+        s_sim.next = s_sim.t;
+    }
+}
+
+static void sim_report(void)
+{
+    const NativeOutputStats *st = native_output_stats();
+    printf("native player: audio: device_samples=%u played=%llu underruns=%llu starved=%llu dropped=%llu "
+           "stretched=%llu shrunk=%llu flushes=%llu over=%llu limited=%llu peak_in=%.2f peak_out=%.2f "
+           "max_queue_ms=%.1f\n",
+           s_sim.samples, (unsigned long long)st->played, (unsigned long long)st->underruns,
+           (unsigned long long)st->starved, (unsigned long long)st->dropped, (unsigned long long)st->stretched,
+           (unsigned long long)st->shrunk, (unsigned long long)st->flushes, (unsigned long long)st->over,
+           (unsigned long long)st->limited, st->peak_in > 0 ? 20 * log10(st->peak_in / 32768.0) : -999.0,
+           st->peak_out > 0 ? 20 * log10(st->peak_out / 32768.0) : -999.0, st->max_queued * 1000.0 / AUDIO_RATE);
+}
+
 static uint64_t machine_hash(void)
 {
     uint64_t h = 1469598103934665603ull;
@@ -219,7 +410,7 @@ static uint64_t machine_hash(void)
 }
 
 static int run_off_screen(long frames, const char *input, int lag, const char *present_out, long present_every,
-                          long state_check, const char *wav_out)
+                          long state_check, const char *wav_out, const char *audio_out, const AudioSim *sim)
 {
     enum {
         CHECK_FRAMES = 300
@@ -246,6 +437,18 @@ static int run_off_screen(long frames, const char *input, int lag, const char *p
         native_audio_reset(AUDIO_RATE);
         native_audio_wav_header(wav, AUDIO_RATE, 0);
     }
+    if (audio_out) {
+        s_sim.f = fopen(audio_out, "wb");
+        if (!s_sim.f) {
+            fprintf(stderr, "cannot write %s\n", audio_out);
+            return 2;
+        }
+        s_sim.sim = sim;
+        native_audio_reset(AUDIO_RATE);
+        native_output_reset(AUDIO_RATE, sim->period);
+        native_output_volume(sim->volume);
+        sim_wav_header();
+    }
     power_on();
     if (lag >= 0) {
         native_set_lag_mode((NativeLagMode)lag);
@@ -253,12 +456,24 @@ static int run_off_screen(long frames, const char *input, int lag, const char *p
     for (long frame = 0; frame < frames; frame++) {
         uint8_t held[2];
         native_route_frame(&route, frame, held);
+        bool push = true;
+        if (s_sim.f) {
+            sim_frame_begin(frame, &push);
+        }
         run_frame(held[0], held[1]);
         if (wav) {
             static int16_t pcm[NATIVE_AUDIO_MAX_FRAME_SAMPLES];
             size_t n = frame_sound(pcm, NATIVE_AUDIO_MAX_FRAME_SAMPLES, AUDIO_RATE);
             fwrite(pcm, sizeof pcm[0], n, wav);
             wav_samples += (uint32_t)n;
+        }
+        if (s_sim.f) {
+            static double mix[NATIVE_AUDIO_MAX_FRAME_SAMPLES];
+            size_t n = frame_mix(mix, NATIVE_AUDIO_MAX_FRAME_SAMPLES, AUDIO_RATE);
+            if (push) {
+                native_output_push(mix, n);
+            }
+            sim_frame_end(frame);
         }
         if (state_check >= 0 && frame == state_check) {
             state_size = native_state_save(NULL, 0);
@@ -309,6 +524,14 @@ static int run_off_screen(long frames, const char *input, int lag, const char *p
     if (wav) {
         native_audio_wav_header(wav, AUDIO_RATE, wav_samples);
         fclose(wav);
+    }
+    if (s_sim.f) {
+        native_output_hold(NATIVE_OUTPUT_HOLD_QUIT, true);
+        sim_device_until(s_sim.t + 0.05);
+        sim_wav_header();
+        fclose(s_sim.f);
+        s_sim.f = NULL;
+        sim_report();
     }
     printf("native player: frames=%ld cycles=%llu fallback_instructions=%llu unmodeled_reads=%llu\n", frames,
            (unsigned long long)native_cycle_count(), (unsigned long long)native_fallback_instructions(),
@@ -877,7 +1100,8 @@ static int usage(const char *self)
     fprintf(stderr,
             "usage: %s ROM [--hidden] [--exit-after N] [--config FILE] [--uncapped]\n"
             "       [--present-out FILE [--present-every N]]\n"
-            "       [--frames N [--input ROUTE] [--lag none|faithful] [--state-check FRAME] [--wav-out FILE]]\n"
+            "       [--frames N [--input ROUTE] [--lag none|faithful] [--state-check FRAME] [--wav-out FILE]\n"
+            "        [--audio-out FILE [--audio-sim SPEC]]]\n"
             "       [--jump-scale N] [--no-damage on|off] [--infinite-time on|off] [--infinite-lives on|off]\n"
             "       [--start-lives 0-9|off] [--no-sprite-flicker on|off]\n"
             "       [--music-under-effects on|off] [--overlap-effects on|off]\n"
@@ -888,7 +1112,9 @@ static int usage(const char *self)
 
 int ducktales_host_main(int argc, char **argv)
 {
-    const char *rom = NULL, *present_out = NULL, *input = NULL, *config = NULL, *wav_out = NULL;
+    const char *rom = NULL, *present_out = NULL, *input = NULL, *config = NULL, *wav_out = NULL, *audio_out = NULL;
+    AudioSim sim;
+    parse_audio_sim("refresh=0", &sim);
     long exit_after = -1, present_every = 1, frames = -1, state_check = -1;
     int lag = -1;
     bool hidden = false, uncapped = false, mod_ok = false;
@@ -922,6 +1148,13 @@ int ducktales_host_main(int argc, char **argv)
             state_check = atol(argv[++i]);
         } else if (!strcmp(a, "--wav-out") && v) {
             wav_out = argv[++i];
+        } else if (!strcmp(a, "--audio-out") && v) {
+            audio_out = argv[++i];
+        } else if (!strcmp(a, "--audio-sim") && v) {
+            if (!parse_audio_sim(argv[++i], &sim)) {
+                fprintf(stderr, "--audio-sim %s: invalid\n", v);
+                return 2;
+            }
         } else if (!strncmp(a, "--mods", 6) && v && app_mods_option(a, v, &mod_ok)) {
             i++;
             if (!mod_ok) {
@@ -986,7 +1219,11 @@ int ducktales_host_main(int argc, char **argv)
     }
     dt_sprites_mods_changed();
     if (off_screen) {
-        return run_off_screen(frames, input, lag, present_out, present_every, state_check, wav_out);
+        if (wav_out && audio_out) {
+            fprintf(stderr, "--wav-out and --audio-out cannot be used together\n");
+            return 2;
+        }
+        return run_off_screen(frames, input, lag, present_out, present_every, state_check, wav_out, audio_out, &sim);
     }
     power_on();
     return run_window(hidden, uncapped, exit_after, present_out, present_every);

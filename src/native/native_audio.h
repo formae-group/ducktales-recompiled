@@ -9,7 +9,9 @@
  * closed form between register writes and sequencer clocks. Nothing is
  * stepped per CPU cycle. The console's nonlinear mixer and the NES output
  * stage (90 Hz and 440 Hz high-pass, 14 kHz low-pass) follow, as in the
- * cycle host's APU. Nothing here is read back by the game.
+ * cycle host's APU. Nothing here is read back by the game. The samples leave
+ * unclamped (native_audio_mix): the player's output stage (native_output.h)
+ * keeps them under full scale; native_audio_frame clamps them to 16 bits.
  *
  * Owns no setting; the sample rate and the extra voices are the caller's.
  */
@@ -50,6 +52,10 @@ void native_audio_channels(unsigned mask);
  * signed 16-bit mono samples to out (at most max) and returns how many:
  * sample_rate / 60.0988 per frame on average. */
 size_t native_audio_frame(const NativeFrame *frame, int16_t *out, size_t max);
+
+/* native_audio_frame's samples before the 16-bit clamp, in 16-bit units:
+ * with the extra voices and every channel loud they can pass full scale. */
+size_t native_audio_mix(const NativeFrame *frame, double *out, size_t max);
 
 /* A 44-byte mono 16-bit PCM WAV header at the start of f, for --wav-out:
  * written first with 0 samples, again with the count when done. */
