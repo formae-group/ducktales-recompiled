@@ -29,6 +29,7 @@
 #pragma once
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 
 #include "ducktales/ram.h"
 
@@ -78,6 +79,11 @@ DecompMode Decomp_Mode(void);
  * which spends each replaced call's original cycle count; false on the native
  * runtime, where the C runs alone (decomp_native.c). */
 bool Decomp_ConsoleTiming(void);
+/* Each routine's call counts as the "decomp: mode=..." lines the host prints
+ * at exit, labelled with mode; and the error that stopped the program ("" when
+ * none). The native player writes both to its session summary. */
+void Decomp_WriteStats(FILE *f, DecompMode mode);
+const char *Decomp_Error(void);
 bool Decomp_ParseMode(const char *text, DecompMode *out);
 
 /* The first statement of every routine's C, with the registers the original
