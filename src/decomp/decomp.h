@@ -136,6 +136,10 @@ void Decomp_FrameEnd(void);
 int Decomp_RaiseEvent(int event);
 /* The same for an event about the object in slot (Events_RaiseSlot). */
 void Decomp_RaiseSlotEvent(int event, uint8_t slot);
+/* Run fn(ctx) for code outside the game's own calls (a mod) that uses a
+ * decompiled routine's C on the open RAM transaction: Decomp_Enter does
+ * nothing meanwhile, so the routine is neither checked, timed nor counted. */
+void Decomp_Outside(void (*fn)(void *ctx), void *ctx);
 
 /* Task code (docs/DECOMPILATION.md "Task code"): the game's tasks wait for
  * frames (task_yield), switch banks and drive the PPU, which no isolated call

@@ -72,7 +72,7 @@ handler reads the values its event carries with `Events_Args`.
 | `EVENT_ITEM_COLLECTED` | bank 6 `$8B21`, entry of `Pickup_Take` | Scrooge takes a pickup; carries `slot`, `item` (`$0620,X`), `x` and `y` | not cancelable | mods |
 | `EVENT_UPDATE` | `$DB6F`, in the frame loop | `Player_Update` returned (the `JSR` at `$DB6C`) and the objects are about to move: once per unpaused step of play | not cancelable | mods |
 
-Four more events have no site. `Events_FrameEnd`, which the hosts call after every machine frame,
+Eight more events have no site. `Events_FrameEnd`, which the hosts call after every machine frame,
 compares RAM with the previous frame's while one of them has a handler (the first such frame only
 records it), so they cost no hook site and take the same values with the decompiled routines on:
 
@@ -82,6 +82,12 @@ records it), so they cost no hook site and take the same values with the decompi
 | `EVENT_LAND_CLEAR` | `$5D` becomes non-zero while the scene request `$78` is 0: the land is left with its "clear" result (GAME-STATE.md, "Land completion"); the Launchpad ride home sets `$78` first | `land` |
 | `EVENT_CHECKPOINT` | `$7C` becomes 5: `$DC04` found Scrooge in his land's boss-checkpoint screen | `land` |
 | `EVENT_MONEY_CHANGED` | the HUD money differs from the last frame that showed it (several adds in one frame make one event) | `money`, `delta` |
+| `EVENT_OBJECT_DESPAWNED` | a slot 1-15 that was live is no longer live, or holds another `kind` (`$0710`) or land record (`$07F0`); raised for every slot before any spawn | `slot`, `kind`, `action`, `x` (world), `y`, `record`, as last seen |
+| `EVENT_OBJECT_SPAWNED` | a slot 1-15 is live with a `kind` or record it did not have | the same, now |
+| `EVENT_SCREEN_CHANGED` | the camera's screen index `$2D` changed | `screen`, `row` (`$F1`) |
+| `EVENT_PLAYER_MODE_CHANGED` | Scrooge's mode `$39` changed | `player` (1), `mode`, `previous` |
+
+A change that comes and goes within one machine frame is not seen by these.
 
 Evidence for each site:
 
@@ -257,6 +263,13 @@ too and are not counted.
   and the original runs from its entry. It is used for paths into code that waits for the hardware
   (a row scroll, a message box), which an isolated call cannot run. Those calls are counted as
   "original" and are not compared.
+
+**C used from outside the game's calls.** A mod's handler runs the decompiled C of a routine on the
+open RAM transaction, as `o:despawn()` runs `Obj_Despawn` (docs/MODS.md), through
+`Decomp_Outside(fn, ctx)`: meanwhile `Decomp_Enter` does nothing, so the routine is neither checked
+nor timed nor counted, and it needs no call of the game's to be running (outside one `dc_top` names
+none). Its RAM changes are the handler's: on the machine at an event site, in the C's image when
+the C raises the event (replace mode).
 
 ### Task code
 

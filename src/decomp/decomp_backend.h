@@ -62,6 +62,7 @@ extern bool dc_keep_stack_ram;
 extern bool dc_run_original;
 extern const DecompRoutine *dc_top;
 extern bool dc_top_entered;
+extern bool dc_outside; /* inside Decomp_Outside */
 extern bool dc_damage_cancel[8];
 extern int dc_damage_raised;
 extern BusOp dc_ops[MAX_BUS_OPS];

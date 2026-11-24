@@ -74,7 +74,7 @@ extern bool fm_script_in_event; /* a game event's handlers are running */
 Script *fm_script_of(lua_State *L);
 void fm_script_log_line(const Script *s, const char *what, const char *text);
 
-/* fm_script_state.c: dt.state, dt.set, dt.tune and dt.<query>() */
+/* fm_script_state.c: dt.state, dt.set, dt.tune and dt.<query>() with its handles */
 int fm_script_sb_query(lua_State *L);
 int fm_script_state_index(lua_State *L);
 int fm_script_read_only(lua_State *L);
@@ -83,6 +83,8 @@ void fm_script_apply(Script *s, const FmField *f, long long value);
 /* label names the write in its repeat line ("dt.set.lives(7)"). */
 void fm_script_log_write(Script *s, const char *key, long long value, const char *label, const char *text);
 void fm_script_flush_writes(Script *s);
+int fm_script_handle_set(lua_State *L);
+int fm_script_handle_remove(lua_State *L);
 int fm_script_tune_index(lua_State *L);
 int fm_script_tune_newindex(lua_State *L);
 /* Gives the game the tunes' values in force where they changed. */

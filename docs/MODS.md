@@ -173,7 +173,7 @@ end)
 | `dt.state` | The game's state, read only, inside handlers (fields below) |
 | `dt.set.<field>(value)` | Sets a writable field, inside handlers: at once in a game event's handler, at the frame's end in a `frame` handler (see [Writing the game](#writing-the-game)) |
 | `dt.tune.<name>` | Scrooge's physics: assign a number to use in place of the game's, `nil` for the game's again; reads give the value in force or `nil` (see [Tunables](#tunables)) |
-| `dt.objects()`, `dt.camera()` | The live object slots and the camera, read only, inside handlers (see [Objects and the camera](#objects-and-the-camera)) |
+| `dt.objects()`, `dt.camera()` | The live object slots, as handles that can move or remove an object in a game event's handler, and the camera, inside handlers (see [Objects and the camera](#objects-and-the-camera)) |
 | `dt.toast(text)` | Shows a short notice over the picture; returns `false` when it was refused (see [Toasts](#toasts)) |
 | `dt.draw.text(x, y, text[, color])`, `dt.draw.rect(x, y, w, h, color)` | Draws over the presented picture for one frame (see [Drawing](#drawing)) |
 | `dt.store.get(key)`, `dt.store.set(key, value)` | The mod's own saved values (see [Store](#store)) |
@@ -201,6 +201,10 @@ handler gets a table with the event's `name` and the values below (`function(e) 
 | `new-game` | The title's set-up reset the HUD | | Not cancelable |
 | `jump-start` | A jump copied the take-off velocity into Scrooge's | | Not cancelable |
 | `update` | A step of play: Scrooge has moved and the objects are about to (once per step, not on paused frames, also while a message is up) | | Not cancelable |
+| `object-spawned` | A slot 1-15 holds an object it did not hold at the last frame's end: it became live, or its `kind` or `record` changed (a hidden item that shows becomes a pickup, for example) | `slot`, `kind`, `action`, `x`, `y`, `record` | Not cancelable |
+| `object-despawned` | The object a slot 1-15 held at the last frame's end is gone (raised before the `object-spawned` of what replaced it) | the same, as last seen | Not cancelable |
+| `screen-changed` | The camera's screen index changed | `screen`, `row` | Not cancelable |
+| `player-mode-changed` | Scrooge's `mode` changed | `player` (1), `mode`, `previous` | Not cancelable |
 
 `slot` is the object's slot (1-15), `kind` its type (`$0710`), `item` the pickup's item
 (`$0620`; the land treasures are `$6F` and up, see [GAME-STATE.md](GAME-STATE.md)), `x` its world X
@@ -208,8 +212,10 @@ and `y` its Y on the screen, as `dt.state.x` and `y` are Scrooge's. `land` is 0 
 (The Moon). `money-changed` gives the new `money` and the `delta`; several additions in one frame,
 and the time bonus counted at the end of a land, come as one event per frame that changed it.
 
-`land-start`, `land-clear`, `checkpoint` and `money-changed` are seen at the end of the frame,
-before the `frame` handlers; the others run at the moment the game does it, inside the frame. Every
+`land-start`, `land-clear`, `checkpoint`, `money-changed`, `object-spawned`, `object-despawned`,
+`screen-changed` and `player-mode-changed` are seen at the end of the frame, by comparing the
+game's state with the last frame's, before the `frame` handlers: a change that comes and goes
+within one frame is not seen. The others run at the moment the game does it, inside the frame. Every
 event fires once per occurrence with the decompiled code on or off. `update` is the place for a
 script that changes gameplay: it runs once per step of the game's logic, at the same point of
 the step, so a frame the console lags (where the game's step takes two frames) has none, where
@@ -230,10 +236,11 @@ game, as the matching enhancement does.
 ### Objects and the camera
 
 `dt.objects()` returns an array with a table for every live object slot (Scrooge is slot 0):
-`slot`, `kind`, `action` (for a pickup, its item), `state`, `x` (world X), `y` (Y on the screen)
-and `screen_x` (X on the screen). `dt.camera()` returns `x` (the world X of the camera's left
-edge), `row` (the map row) and `screen` (the screen index, row * 8 + page). Both read the game
-when they are called, only inside handlers, and change nothing. The object tables are in
+`slot`, `kind`, `action` (for a pickup, its item), `state`, `x` (world X), `y` (Y on the screen),
+`screen_x` (X on the screen), `record` (the land record it was spawned from, 255 for none) and
+`player` (1 for Scrooge's slot, 0 for an object). `dt.camera()` returns `x` (the world X of the
+camera's left edge), `row` (the map row) and `screen` (the screen index, row * 8 + page). Both
+read the game when they are called, only inside handlers. The object tables are in
 [docs/MEMORY-MAP.md](MEMORY-MAP.md).
 
 ```lua
@@ -241,6 +248,36 @@ dt.on("frame", function()
     for _, o in ipairs(dt.objects()) do
         if o.slot ~= 0 then
             dt.draw.rect(o.screen_x, o.y - 2, 8, 1, 0xFFFF00) -- a mark over every object
+        end
+    end
+end)
+```
+
+Each object table is also a handle on its object, with two methods that work only in a game
+event's handler (`update` is the one meant for them) and change the game at once:
+
+- `o:set{x = ..., y = ..., action = ...}` writes any of the three. `x` is a world X on the
+  screen now (from the camera's `x` to 255 more) and needs an object with a world position, `y` is
+  0 to 239, and `action` must be one a record of this land spawns that kind with; a new action
+  starts its animation from the first frame. A pickup's, hidden item's or chest's action is its
+  item and cannot be set, and no action that holds an item can be given. The table's fields follow
+  the values written. `kind`, `state` and the rest cannot be set: `state` is the step of the
+  object's own code, and another value sends the game into code that does not belong to it.
+- `o:despawn()` frees the slot at once, through the game's own despawn routine. The land record is
+  not used up, so the object comes back when the spawner reaches its record again. The bosses and
+  the objects that drive a scene or the final climb cannot be despawned.
+
+Both return `true`. Every field is checked first, and a value that cannot be written is an error
+(catchable with `pcall`), as is a call on the player's slot or outside a game event's handler. A
+handle kept from an earlier call names a slot, a kind and a record: when the slot holds something
+else now, the call changes nothing, returns `false, "gone"` and the log says so. Every write is
+logged as for `dt.set`: `object 9 (kind 1):set{y = 120}, was 144`, `object 9 (kind 1):despawn()`.
+
+```lua
+dt.on("update", function()
+    for _, o in ipairs(dt.objects()) do
+        if o.player == 0 and o.kind == 1 and o.y > 140 then
+            o:despawn() -- no hoppers on the floor
         end
     end
 end)
@@ -268,6 +305,7 @@ or any hash (`tests/mods_test.py` compares the per-frame hashes with a drawing s
 | `hp` | 0 to `hp_max` | The HUD's HP dots: the first `hp` full, the rest lost |
 | `money` | 0 to 9,999,990, a multiple of 10, while the HUD shows money | The money digits, leading zeros blank as the game draws them |
 | `time` | 0 to 999 | The HUD time digits |
+| `boss_hits` | 1 to 5, only during a boss fight | The hits the boss still takes (`$B1`); the fight's spawn sets 5 |
 | `invulnerable` | 0 to 255; during the knock-back (`mode` 6) 61 to 127, while hurt (`mode` 5) below 128 | Scrooge's invulnerability frames (`$7D`): while not 0 hits do not hurt him and his sprite flickers. It counts down once a step; 128 and up do not count down. The knock-back ends when it reaches 60, and a hit at 0 starts another, so values that would never end it are refused |
 
 The value is checked when `dt.set` is called, and a value out of range is an error (catchable
@@ -389,9 +427,9 @@ save a fix. Only the scripts of mods loaded at start reload: a mod that had no
 
 | Folder | What it holds |
 |---|---|
-| `core/` | Knows no game. `fm_mods.h` is its interface: the package format and catalogue (`fm_catalog.c`: folders, `mod.toml`, order, switches, restart check), the archive and folder reader (`fm_archive.c`), PNG, OGG, WAV and deflate on stb (`fm_codec.c`) and the Lua sandbox with the generic script API (`fm_script.c`: `dt.on`, cancel, log, limits, hot reload; `fm_script_state.c`: `dt.state`, `dt.set`, `dt.tune` and the queries over the fields, tunables and records the game describes; `fm_script_show.c`: toast and `dt.draw`; `fm_script_store.c`: store; `fm_script_internal.h`: what they share) |
+| `core/` | Knows no game. `fm_mods.h` is its interface: the package format and catalogue (`fm_catalog.c`: folders, `mod.toml`, order, switches, restart check), the archive and folder reader (`fm_archive.c`), PNG, OGG, WAV and deflate on stb (`fm_codec.c`) and the Lua sandbox with the generic script API (`fm_script.c`: `dt.on`, cancel, log, limits, hot reload; `fm_script_state.c`: `dt.state`, `dt.set`, `dt.tune` and the queries over the fields, tunables and records the game describes, with the records' handle methods; `fm_script_show.c`: toast and `dt.draw`; `fm_script_store.c`: store; `fm_script_internal.h`: what they share) |
 | `nes/` | NES games: tile keys, the replacement tile table, `.pal` palettes and tile templates (`fm_nes.c`) |
-| `ducktales/` | This game: what the assets mean and how they are loaded (`dt_mods.c`), painted (`dt_mods_picture.c`, with the toast and `dt.draw` overlay) and mixed (`dt_mods_audio.c`); the event list, the `dt.state` and writable fields, the tunables, the queries and the store folder (`dt_mods_script.c`) |
+| `ducktales/` | This game: what the assets mean and how they are loaded (`dt_mods.c`), painted (`dt_mods_picture.c`, with the toast and `dt.draw` overlay) and mixed (`dt_mods_audio.c`); the event list, the `dt.state` and writable fields, the tunables, the queries and their handles (`o:despawn()` runs the decompiled `Obj_Despawn` through `Decomp_Outside`) and the store folder (`dt_mods_script.c`) |
 | `app_mods.h` | The interface the hosts and the menu call |
 
 Both hosts and the native player call the same entry points:

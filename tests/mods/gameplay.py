@@ -7,7 +7,10 @@ gives the game's value back, the highest mod in the order wins, and the native p
 same. On the headless build, scripts that write and tune with --decomp off, check and replace: the
 same lines, no mismatch, and with the developer build (--dev-build) the same RAM outside the stack
 on every frame with the decompiled code in place of the original (decomp_test.py's comparison).
-dt.set.invulnerable is refused where it would hold the knock-back forever.
+dt.set.invulnerable is refused where it would hold the knock-back forever. Object handles on
+amazon_intro: a timed enemy moved and despawned, a stale handle, the player's slot, actions and
+positions out of bounds, calls outside a game event's handler, and the four events seen at the
+frame's end; dt.set.boss_hits on full_amazon's fight and outside it.
 """
 
 import os
@@ -149,6 +152,104 @@ dt.on("update", function()
     dt.log("range", ok, err)
     ok, err = pcall(function() dt.tune.speed = 1 end)
     dt.log("name", ok, err)
+end)
+'''
+
+# Handles of dt.objects() on amazon_intro: the refusals at step 2, the first timed hopper moved up
+# and despawned at step 30, its stale handle; the four frame-end events summed up at frame 1400.
+OBJECTS_LUA = r'''
+local step, moved, gone, held = 0, false, false, nil
+local function find(kind)
+    for _, o in ipairs(dt.objects()) do
+        if o.kind == kind then
+            return o
+        end
+    end
+end
+dt.on("update", function()
+    step = step + 1
+    local objects = dt.objects()
+    if step == 2 then
+        local ok, err = pcall(objects[1].set, objects[1], { y = 100 })
+        dt.log("player", objects[1].slot, objects[1].player, ok, err)
+        local block = find(8)
+        ok, err = pcall(block.set, block, { action = 99 })
+        dt.log("bad action", ok, err)
+        dt.log("block action", block:set({ action = 26 }), block.action)
+        local chest = find(21)
+        ok, err = pcall(chest.set, chest, { action = 28 })
+        dt.log("chest", ok, err)
+        ok, err = pcall(chest.set, chest, { x = 0 })
+        dt.log("off screen", ok, err)
+    end
+    local hopper = find(1)
+    if hopper and not moved then
+        moved = true
+        local y = hopper.y
+        hopper:set({ y = y - 24 })
+        dt.log("moved", step, y, hopper.y, find(1).y)
+        held = hopper
+    elseif held and not gone and step == 30 then
+        gone = true
+        dt.log("despawn", step, held:despawn(), find(1) == nil)
+        dt.log("stale", held:set({ y = 50 }))
+    end
+end)
+dt.on("object-despawned", function(e)
+    if e.kind == 1 and gone and step == 30 then
+        dt.log("despawned event", e.slot, e.record)
+    end
+end)
+local seen = { spawned = 0, despawned = 0, screens = {}, modes = {} }
+dt.on("object-spawned", function(e)
+    seen.spawned = seen.spawned + 1
+    if e.kind == 1 and not seen.hopper then
+        seen.hopper = e.slot .. "/" .. e.record
+    end
+end)
+dt.on("object-despawned", function()
+    seen.despawned = seen.despawned + 1
+end)
+dt.on("screen-changed", function(e)
+    seen.screens[#seen.screens + 1] = e.row .. ":" .. e.screen
+end)
+dt.on("player-mode-changed", function(e)
+    seen.modes[#seen.modes + 1] = e.previous .. ">" .. e.mode
+end)
+dt.on("frame", function(frame)
+    if frame == 1400 then
+        dt.log("events", seen.spawned, seen.despawned, seen.hopper, table.concat(seen.screens, ","),
+            table.concat(seen.modes, ",", 1, math.min(#seen.modes, 6)))
+    end
+    if frame == 1000 then
+        local o = dt.objects()[1]
+        local ok, err = pcall(o.set, o, { y = 1 })
+        dt.log("outside", ok, err)
+    end
+end)
+'''
+
+# dt.set.boss_hits outside the fight, out of range, and 5 at the second hit (the game's leaves 3).
+BOSS_LUA = r'''
+local hits = 0
+dt.on("update", function()
+    if dt.frame() == 1000 then
+        local ok, err = pcall(dt.set.boss_hits, 3)
+        dt.log("outside fight", ok, err)
+    end
+end)
+dt.on("boss-hit", function()
+    hits = hits + 1
+    if hits == 2 then
+        local ok, err = pcall(dt.set.boss_hits, 6)
+        dt.log("range", ok, err)
+        dt.set.boss_hits(5)
+    end
+end)
+dt.on("frame", function(frame)
+    if frame == 7300 then
+        dt.log("hits left", hits, dt.state.boss_hits)
+    end
 end)
 '''
 
@@ -316,9 +417,96 @@ def gameplay_checks(exe, native, dev):
                 f'the native player measures the same with the tunables ({measured["native player"]})',
             )
 
+        object_mods = mods('objects', {'objects': OBJECTS_LUA})
+        object_lines = {}
+        for host, host_exe, is_native in hosts:
+            log = run(host_exe, f'objects_{host.replace(" ", "_")}', is_native, object_mods)
+            object_lines[host] = [line for line in log.splitlines() if 'Mod objects:' in line]
+            got = {
+                what: (lines(log, 'objects', what) or [[]])[0]
+                for what in (
+                    'player',
+                    'bad action',
+                    'block action',
+                    'chest',
+                    'off screen',
+                    'moved',
+                    'despawn',
+                    'stale',
+                    'despawned event',
+                    'outside',
+                    'events',
+                )
+            }
+            refused = {what: got[what][-1:] for what in ('player', 'bad action', 'chest', 'off screen', 'outside')}
+            check(
+                got['player'][:3] == ['0', '1', 'false']
+                and refused['player'][0].endswith("slot 0 is player 1's: read only")
+                and got['bad action'][:1] == ['false']
+                and refused['bad action'][0].endswith('no record of this land spawns kind 8 with that action')
+                and got['chest'][:1] == ['false']
+                and refused['chest'][0].endswith('the action of kind 21 is the item it gives')
+                and got['off screen'][:1] == ['false']
+                and refused['off screen'][0].endswith('(the screen)')
+                and got['outside'][:1] == ['false']
+                and refused['outside'][0].endswith("is called in a game event's handler"),
+                f'{host}: a handle refuses the player\'s slot, an action no record of the land spawns, a '
+                f'chest\'s item, a position off the screen and a call outside a game event\'s handler',
+                f'{got}',
+            )
+            moved = got['moved']
+            check(
+                got['block action'] == ['true', '26']
+                and any(line.endswith(':set{action = 26}, was 28') for line in object_lines[host])
+                and len(moved) == 4
+                and int(moved[2]) == int(moved[1]) - 24 == int(moved[3]),
+                f'{host}: o:set writes at once and logs the value it replaced (a block\'s action, a '
+                f'hopper moved up 24 lines: {moved[1:]})',
+                f'{got}',
+            )
+            check(
+                got['despawn'] == ['30', 'true', 'true']
+                and got['stale'] == ['false', 'gone']
+                and any(line.endswith(':set() dropped: it is gone') for line in object_lines[host])
+                and got['despawned event'][1:] == ['255'],
+                f'{host}: o:despawn() frees the slot at once, object-despawned reports it, and the stale '
+                f'handle changes nothing',
+                f'{got}',
+            )
+            seen = got['events']
+            check(
+                len(seen) == 5
+                and int(seen[0]) > 10
+                and int(seen[1]) > 10
+                and seen[2].endswith('/255')
+                and '5:40' in seen[3].split(',')
+                and seen[4].startswith('15>0,0>1'),
+                f'{host}: object-spawned, object-despawned, screen-changed and player-mode-changed at the '
+                f'frame\'s end ({seen})',
+            )
+        if len(object_lines) == 2:
+            check(
+                object_lines['headless'] == object_lines['native player'],
+                f'the native player logs the same {len(object_lines["headless"])} lines with the handles',
+            )
+
         if not exe:
             return
-        trio_mods = mods('trio', {'gameplay': UPDATE_LUA, 'knock': KNOCK_LUA})
+        log = run(
+            exe, 'boss', False, mods('boss', {'boss': BOSS_LUA}), ROOT / 'tests' / 'routes' / 'full_amazon.txt', 7310
+        )
+        boss = {what: (lines(log, 'boss', what) or [[]])[0] for what in ('outside fight', 'range', 'hits left')}
+        check(
+            boss['outside fight'] == ['false', 'dt.set.boss_hits(3): only during a boss fight']
+            and boss['range'] == ['false', 'dt.set.boss_hits(6): out of range 1 to 5']
+            and 'Mod boss: dt.set.boss_hits(5), was 4' in log
+            and boss['hits left'] == ['2', '4'],
+            f'headless: dt.set.boss_hits works only during the fight, 1 to 5; written at the second hit, '
+            f'the boss has {boss["hits left"][1:]} hits left where the game leaves 3',
+            f'{boss}',
+        )
+
+        trio_mods = mods('trio', {'gameplay': UPDATE_LUA, 'knock': KNOCK_LUA, 'objects': OBJECTS_LUA})
         logs, ram = {}, []
         for mode in ('off', 'check', 'replace'):
             host_exe, extra = exe, ['--decomp', mode]
@@ -326,15 +514,16 @@ def gameplay_checks(exe, native, dev):
                 ram.append(tmp / f'{mode}.ram')
                 host_exe, extra = dev, [*extra, '--dt-ram-log', ram[-1]]
             logs[mode] = run(host_exe, f'decomp_{mode}', False, trio_mods, extra=extra)
-        knock = (lines(logs['off'], 'knock', 'knock-back write') or [[]])[0]
+        knock_log = run(exe, 'knock', False, mods('knock', {'knock': KNOCK_LUA}))
+        knock = (lines(knock_log, 'knock', 'knock-back write') or [[]])[0]
         check(
             knock[:1] == ['false']
             and knock[1:2] == ['dt.set.invulnerable(32): during the knock-back it is 61 to 127 (it ends at 60)']
-            and 'Mod knock: dt.set.invulnerable(96), was ' in logs['off'],
+            and 'Mod knock: dt.set.invulnerable(96), was ' in knock_log,
             'headless: dt.set.invulnerable is refused at or below the knock-back\'s end and written above it',
             f'{knock}',
         )
-        held = (lines(logs['off'], 'knock', 'knock-back steps') or [[]])[0]
+        held = (lines(knock_log, 'knock', 'knock-back steps') or [[]])[0]
         check(
             held[:1] and int(held[0]) >= 30,
             f'headless: the knock-back lasts until the written invulnerability counts down to its end '
@@ -342,11 +531,12 @@ def gameplay_checks(exe, native, dev):
         )
         check(
             all('MISMATCH' not in log and 'TIMING' not in log for log in logs.values()),
-            'headless: with the writing and tuning scripts, --decomp check finds no mismatch and no timing difference',
+            'headless: with the writing, tuning and object scripts, --decomp check finds no mismatch and no timing '
+            'difference',
             logs['check'][-3000:],
         )
         written = {
-            m: [line for line in log.splitlines() if 'Mod gameplay:' in line or 'Mod knock:' in line]
+            m: [line for line in log.splitlines() if any(f'Mod {i}:' in line for i in ('gameplay', 'knock', 'objects'))]
             for m, log in logs.items()
         }
         check(
@@ -359,7 +549,7 @@ def gameplay_checks(exe, native, dev):
         diff, info = ram_diff(ram)
         check(
             diff is None,
-            f'headless: with the writing and tuning scripts, --decomp replace keeps the RAM of --decomp off '
+            f'headless: with the writing, tuning and object scripts, --decomp replace keeps the RAM of --decomp off '
             f'outside the stack ({info})',
             diff or '',
         )

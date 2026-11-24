@@ -9,7 +9,8 @@
  *   state      dt.state and dt.set = FIELDS below, dt.objects() and
  *              dt.camera() = QUERIES, read and written through the game API
  *              (ducktales/hud.h, game.h, player.h, objects.h) inside a RAM
- *              transaction
+ *              transaction; dt.objects() gives handles: o:set{x, y, action}
+ *              and o:despawn() (the decompiled Obj_Despawn)
  *   tunes      dt.tune = TUNES below, Scrooge's tunables (ducktales/tune.h)
  *   store      dt.store in the data folder's mods-data
  */
@@ -22,6 +23,8 @@
 #include "ducktales/objects.h"
 #include "ducktales/player.h"
 #include "ducktales/tune.h"
+#include "decomp/decomp.h"
+#include "decomp/objcommon.h"
 #include "game/ducktales_symbols.h"
 #include "ui/app_rom.h"
 
@@ -258,6 +261,22 @@ static void set_invulnerable(long long v)
     gPlayerInvulnerable = (uint8_t)v;
 }
 
+#define BOSS_HITS_START 5 /* what the spawner sets when a fight starts ($AF2B) */
+
+static bool check_boss_hits(long long v, char *err, size_t cap)
+{
+    if (!(gBossFight & 0x80)) {
+        snprintf(err, cap, "only during a boss fight");
+        return false;
+    }
+    return in_range(v, 1, BOSS_HITS_START, err, cap);
+}
+
+static void set_boss_hits(long long v)
+{
+    gBossHits = (uint8_t)v;
+}
+
 static const FmField FIELDS[] = {
     { "land", false, get_land, NULL, NULL },
     { "lives", false, get_lives, check_lives, set_lives },
@@ -267,7 +286,7 @@ static const FmField FIELDS[] = {
     { "time", false, get_time, check_time, set_time },
     { "difficulty", false, get_difficulty, NULL, NULL },
     { "paused", true, get_paused, NULL, NULL },
-    { "boss_hits", false, get_boss_hits, NULL, NULL },
+    { "boss_hits", false, get_boss_hits, check_boss_hits, set_boss_hits },
     { "treasures", false, get_treasures, NULL, NULL },
     { "key_items", false, get_key_items, NULL, NULL },
     { "pad", false, get_pad, NULL, NULL },
@@ -279,11 +298,34 @@ static const FmField FIELDS[] = {
     { "y", false, get_y, NULL, NULL },
 };
 
-static const char *const OBJECT_FIELDS[] = { "slot", "kind", "action", "state", "x", "y", "screen_x" };
-#define OBJECT_FIELD_COUNT ((int)(sizeof OBJECT_FIELDS / sizeof OBJECT_FIELDS[0]))
+static const char *const OBJECT_FIELDS[] = {
+    "slot", "kind", "action", "state", "x", "y", "screen_x", "record", "player"
+};
+
+enum {
+    O_SLOT,
+    O_KIND,
+    O_ACTION,
+    O_STATE,
+    O_X,
+    O_Y,
+    O_SCREEN_X,
+    O_RECORD,
+    O_PLAYER,
+    OBJECT_FIELD_COUNT
+};
+
+#define OBJ_Y_MAX 0xEF /* the last line of the picture */
+
+/* The player of a slot, 0 for none: one player, in slot 0. */
+static int player_of(int slot)
+{
+    return slot == PLAYER_SLOT ? 1 : 0;
+}
 
 /* The live object slots (Scrooge is slot 0): x is the world X, y and
- * screen_x where the slot is on the screen. */
+ * screen_x where the slot is on the screen, record the land record it was
+ * spawned from ($FF none), player the player it is (0 for an object). */
 static int read_objects(long long *v)
 {
     int n = 0;
@@ -292,15 +334,163 @@ static int read_objects(long long *v)
             continue;
         }
         long long *r = &v[n++ * OBJECT_FIELD_COUNT];
-        r[0] = slot;
-        r[1] = gObjects->kind[slot];
-        r[2] = gObjects->action[slot];
-        r[3] = gObjects->state[slot];
-        r[4] = Obj_GetWorldX(slot);
-        r[5] = gObjects->y[slot];
-        r[6] = gObjects->x[slot];
+        r[O_SLOT] = slot;
+        r[O_KIND] = gObjects->kind[slot];
+        r[O_ACTION] = gObjects->action[slot];
+        r[O_STATE] = gObjects->state[slot];
+        r[O_X] = Obj_GetWorldX(slot);
+        r[O_Y] = gObjects->y[slot];
+        r[O_SCREEN_X] = gObjects->x[slot];
+        r[O_RECORD] = gObjects->record[slot];
+        r[O_PLAYER] = player_of(slot);
     }
     return n;
+}
+
+/* The handle's slot still holds the live object of that kind and record. */
+static bool same_object(const long long *v)
+{
+    if (v[O_SLOT] < 0 || v[O_SLOT] >= OBJ_SLOTS) {
+        return false;
+    }
+    int slot = (int)v[O_SLOT];
+    return (gObjects->state[slot] & OBJ_STATUS_LIVE) && gObjects->kind[slot] == v[O_KIND] &&
+           gObjects->record[slot] == v[O_RECORD];
+}
+
+/* A byte of the land's record table i (the pointers at $60-$69): bank 6, or RAM. */
+static uint8_t record_byte(int table, int y)
+{
+    uint16_t addr = (uint16_t)(RAM_U8(DT_ADDR_SPAWN_TABLES + 2 * table) | RAM_U8(DT_ADDR_SPAWN_TABLES + 2 * table + 1)
+                                                                              << 8) +
+                    (uint16_t)y;
+    return addr < GAME_RAM_SIZE ? gRam[addr] : Game_ReadPrg(DT_BANK_OBJECTS, addr);
+}
+
+/* Whether a record of this land spawns kind with action: the template of the
+ * record's type, as $AF2B reads it (records end at a page with bit 7). */
+static bool land_spawns(uint8_t kind, uint8_t action)
+{
+    for (int y = 0; y < 256 && !(record_byte(0, y) & 0x80); y++) {
+        uint8_t type = record_byte(4, y);
+        uint16_t at = (uint16_t)(DT_CODE_SPAWN_TEMPLATES + ((type >> 6 & 1) << 8)) + (uint8_t)(type << 2);
+        if (Game_ReadPrg(DT_BANK_OBJECTS, (uint16_t)(at + 2)) == kind &&
+            Game_ReadPrg(DT_BANK_OBJECTS, (uint16_t)(at + 1)) == action) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Kinds the game's progress waits for (a boss fight, a scene, the final
+ * climb): despawned, they would stall it. */
+static bool keeps_progress(uint8_t kind)
+{
+    switch (kind) {
+        case OBJ_KIND_TRANSYLVANIA_BOSS:
+        case OBJ_KIND_MINES_BOSS:
+        case OBJ_KIND_MOON_BOSS:
+        case OBJ_KIND_HIMALAYAS_BOSS:
+        case OBJ_KIND_AMAZON_BOSS:
+        case OBJ_KIND_LAUNCHPAD_RIDE:
+        case OBJ_KIND_SKY_FLYER:
+        case OBJ_KIND_SKY_ROPE:
+            return true;
+        default:
+            return kind >= OBJ_KIND_FINAL_STAND_IN && kind <= OBJ_KIND_FINAL_TREASURE;
+    }
+}
+
+/* The action of a pickup, a hidden item or a chest is the item it gives,
+ * and a block with one of these actions holds an item. */
+static bool action_is_item(uint8_t kind)
+{
+    return kind == OBJ_KIND_PICKUP || kind == OBJ_KIND_HIDDEN_ITEM || kind == OBJ_KIND_CHEST;
+}
+
+static bool action_holds_item(uint8_t action)
+{
+    return action == OBJ_ACTION_CHEST || action == OBJ_ACTION_LAND_CHEST;
+}
+
+static bool check_object(const long long *v, const char *field, long long value, char *err, size_t cap)
+{
+    int slot = (int)v[O_SLOT];
+    uint8_t kind = gObjects->kind[slot];
+    if (player_of(slot)) {
+        snprintf(err, cap, "slot %d is player %d's: read only", slot, player_of(slot));
+        return false;
+    }
+    if (!field) {
+        if (keeps_progress(kind)) {
+            snprintf(err, cap, "kind %d is one the game's progress waits for", kind);
+            return false;
+        }
+        return true;
+    }
+    if (!strcmp(field, "x")) {
+        if (!(gObjects->state[slot] & OBJ_STATUS_WORLD)) {
+            snprintf(err, cap, "this object has no world position");
+            return false;
+        }
+        long long left = gCameraPage << 8 | gCameraX;
+        if (!in_range(value, left, left + 0xFF, err, cap)) {
+            strncat(err, " (the screen)", cap - strlen(err) - 1);
+            return false;
+        }
+        return true;
+    }
+    if (!strcmp(field, "y")) {
+        return in_range(value, 0, OBJ_Y_MAX, err, cap);
+    }
+    if (!strcmp(field, "action")) {
+        if (action_is_item(kind)) {
+            snprintf(err, cap, "the action of kind %d is the item it gives", kind);
+            return false;
+        }
+        if (action_holds_item((uint8_t)value)) {
+            snprintf(err, cap, "an object with that action holds an item");
+            return false;
+        }
+        if (value < 0 || value > 0xFF || !land_spawns(kind, (uint8_t)value)) {
+            snprintf(err, cap, "no record of this land spawns kind %d with that action", kind);
+            return false;
+        }
+        return true;
+    }
+    snprintf(err, cap, "%s cannot be set (x, y, action)", field);
+    return false;
+}
+
+/* A new action starts its animation from the first frame, as a spawn does. */
+static void write_object(const long long *v, const char *field, long long value)
+{
+    int slot = (int)v[O_SLOT];
+    if (!strcmp(field, "x")) {
+        Obj_SetWorldX(slot, (uint16_t)value);
+    } else if (!strcmp(field, "y")) {
+        gObjects->y[slot] = (uint8_t)value;
+    } else {
+        gObjects->action[slot] = (uint8_t)value;
+        gObjects->animFrame[slot] = 0;
+        gObjects->animTimer[slot] = 0;
+    }
+}
+
+static void despawn(void *slot)
+{
+    Obj_Despawn(*(uint8_t *)slot);
+}
+
+static void despawn_object(const long long *v)
+{
+    uint8_t slot = (uint8_t)v[O_SLOT];
+    Decomp_Outside(despawn, &slot);
+}
+
+static void describe_object(const long long *v, char *out, size_t cap)
+{
+    snprintf(out, cap, "object %lld (kind %lld)", v[O_SLOT], v[O_KIND]);
 }
 
 static const char *const CAMERA_FIELDS[] = { "x", "row", "screen" };
@@ -315,7 +505,8 @@ static int read_camera(long long *v)
 }
 
 static const FmQuery QUERIES[] = {
-    { "objects", true, OBJECT_FIELD_COUNT, OBJECT_FIELDS, read_objects },
+    { "objects", true, OBJECT_FIELD_COUNT, OBJECT_FIELDS, read_objects, same_object, check_object, write_object,
+      "despawn", despawn_object, describe_object },
     { "camera", false, (int)(sizeof CAMERA_FIELDS / sizeof CAMERA_FIELDS[0]), CAMERA_FIELDS, read_camera },
 };
 

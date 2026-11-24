@@ -18,6 +18,12 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   end. The decompiled player code reads them in replace mode (`Tune_Value`), so `--decomp` check
   and replace stay equal (docs/DECOMPILATION.md "Tunables"). `dt.set.invulnerable` is writable,
   refused where the knock-back would never end.
+- Script mods can move and remove objects (docs/MODS.md "Objects and the camera"): the tables of
+  `dt.objects()` are handles with `o:set{x, y, action}` and `o:despawn()` (the decompiled
+  `Obj_Despawn`, through the new `Decomp_Outside`) in a game event's handler, checked against the
+  slot's kind and land record; actions only those the land's records spawn, no items, no player
+  slot. `dt.set.boss_hits` during a fight. Four events seen at the frame's end, with no hook site:
+  `object-spawned`, `object-despawned`, `screen-changed` and `player-mode-changed`.
 - Decompiled the scheduler `$FF35-$FF7C` as timed task code (`Task_Schedule`, `Task_Pass`,
   `Task_Resume`), whose time the native runtime spends, giving the call to the original when an NMI
   is pending or VBlank would come during it. The native step dumps and lag logs are unchanged on all

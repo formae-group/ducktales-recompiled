@@ -241,6 +241,16 @@ void Decomp_RaiseSlotEvent(int event, uint8_t slot)
     }
 }
 
+bool dc_outside;
+
+void Decomp_Outside(void (*fn)(void *ctx), void *ctx)
+{
+    bool was = dc_outside;
+    dc_outside = true;
+    fn(ctx);
+    dc_outside = was;
+}
+
 /* The C of a routine on an image of RAM at its entry; dc_image holds the RAM
  * it leaves, *out its registers. */
 void dc_run_c(const DecompRoutine *rt, const CycModRegs *in, Regs *out)

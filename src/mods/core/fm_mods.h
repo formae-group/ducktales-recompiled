@@ -215,6 +215,19 @@ typedef struct {
     /* Fills values with field_count values per record; returns the records
      * (at most FM_QUERY_VALUES / field_count). */
     int (*read)(long long *values);
+    /* Records that are handles (NULL: plain tables), used in a game event's
+     * handler only. values is a record as its table holds it now. same: it
+     * still names the thing it was read from (else a call changes nothing
+     * and returns false). check: field may be set to value now (field NULL:
+     * remove), false with the reason (an error). rec:set{field = value, ...}
+     * checks every field, then writes them; rec:<remove>() removes the thing.
+     * describe names the record in the log. */
+    bool (*same)(const long long *values);
+    bool (*check)(const long long *values, const char *field, long long value, char *err, size_t cap);
+    void (*write)(const long long *values, const char *field, long long value);
+    const char *remove;
+    void (*do_remove)(const long long *values);
+    void (*describe)(const long long *values, char *out, size_t cap);
 } FmQuery;
 
 typedef struct {

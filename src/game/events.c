@@ -22,7 +22,8 @@
  * The events without a site are seen at the end of each machine frame
  * (Events_FrameEnd), from what RAM holds then against the previous frame,
  * and only while one of them has a handler; the first frame after that
- * only records RAM.
+ * only records RAM. An object slot is the same object while it stays live
+ * with the same kind and land record.
  *
  * Inside an isolated call (cyc_mod.h) a site raises nothing: the original
  * routine runs there only to be measured (src/decomp/decomp.c).
@@ -31,6 +32,7 @@
 #include "ducktales/game.h"
 #include "ducktales/hud.h"
 #include "ducktales/objects.h"
+#include "ducktales/player.h"
 
 #include "cyc_mod.h"
 #include "mod_function_hooks.h"
@@ -61,6 +63,10 @@ static const EventInfo INFO[EVENT_COUNT] = {
     [EVENT_CHECKPOINT] = { "checkpoint", NULL, false },
     [EVENT_MONEY_CHANGED] = { "money-changed", NULL, false },
     [EVENT_UPDATE] = { "update", DT_SITE_UPDATE_ID, false },
+    [EVENT_OBJECT_SPAWNED] = { "object-spawned", NULL, false },
+    [EVENT_OBJECT_DESPAWNED] = { "object-despawned", NULL, false },
+    [EVENT_SCREEN_CHANGED] = { "screen-changed", NULL, false },
+    [EVENT_PLAYER_MODE_CHANGED] = { "player-mode-changed", NULL, false },
 };
 
 static struct {
@@ -73,11 +79,19 @@ static uint64_t s_raised[EVENT_COUNT];
 static EventArg s_args[EVENT_MAX_ARGS];
 static int s_nargs;
 
+/* An object slot as a frame's end saw it. */
+typedef struct {
+    bool live;
+    uint8_t kind, action, y, record;
+    uint16_t x;
+} SlotSeen;
+
 /* What the previous frame's end saw (Events_FrameEnd). */
 static struct {
     bool primed, has_money;
-    uint8_t music, land_left, checkpoint;
+    uint8_t music, land_left, checkpoint, screen, mode;
     uint32_t money;
+    SlotSeen slot[OBJ_SLOTS];
 } s_last;
 
 const char *Events_Name(EventId id)
@@ -225,10 +239,60 @@ EventResult Events_RaiseSlot(EventId id, uint8_t slot)
     return EVENT_CONTINUE;
 }
 
+static SlotSeen slot_now(uint8_t slot)
+{
+    SlotSeen s = { 0 };
+    s.live = (gObjects->state[slot] & OBJ_STATUS_LIVE) != 0;
+    if (s.live) {
+        s.kind = gObjects->kind[slot];
+        s.action = gObjects->action[slot];
+        s.y = gObjects->y[slot];
+        s.record = gObjects->record[slot];
+        s.x = Obj_GetWorldX(slot);
+    }
+    return s;
+}
+
+static void raise_slot(EventId id, uint8_t slot, const SlotSeen *s)
+{
+    s_nargs = 0;
+    arg("slot", slot);
+    arg("kind", s->kind);
+    arg("action", s->action);
+    arg("x", s->x);
+    arg("y", s->y);
+    arg("record", s->record);
+    run_handlers(id);
+}
+
+/* Objects that left their slot, then those that came, slot by slot. */
+static void raise_objects(void)
+{
+    SlotSeen now[OBJ_SLOTS];
+    for (uint8_t slot = 1; slot < OBJ_SLOTS; slot++) {
+        now[slot] = slot_now(slot);
+    }
+    for (int pass = 0; pass < 2; pass++) {
+        for (uint8_t slot = 1; slot < OBJ_SLOTS; slot++) {
+            const SlotSeen *was = &s_last.slot[slot], *is = &now[slot];
+            bool same = was->live == is->live && was->kind == is->kind && was->record == is->record;
+            if (same) {
+                continue;
+            }
+            if (pass == 0 && was->live) {
+                raise_slot(EVENT_OBJECT_DESPAWNED, slot, was);
+            } else if (pass == 1 && is->live) {
+                raise_slot(EVENT_OBJECT_SPAWNED, slot, is);
+            }
+        }
+    }
+}
+
 void Events_FrameEnd(void)
 {
     if (!s_count[EVENT_LAND_START] && !s_count[EVENT_LAND_CLEAR] && !s_count[EVENT_CHECKPOINT] &&
-        !s_count[EVENT_MONEY_CHANGED]) {
+        !s_count[EVENT_MONEY_CHANGED] && !s_count[EVENT_OBJECT_SPAWNED] && !s_count[EVENT_OBJECT_DESPAWNED] &&
+        !s_count[EVENT_SCREEN_CHANGED] && !s_count[EVENT_PLAYER_MODE_CHANGED]) {
         return;
     }
     GameRam_Begin();
@@ -253,8 +317,29 @@ void Events_FrameEnd(void)
             arg("delta", (int32_t)money - (int32_t)s_last.money);
             run_handlers(EVENT_MONEY_CHANGED);
         }
+        if (s_count[EVENT_OBJECT_SPAWNED] || s_count[EVENT_OBJECT_DESPAWNED]) {
+            raise_objects();
+        }
+        if (gCameraScreen != s_last.screen) {
+            s_nargs = 0;
+            arg("screen", gCameraScreen);
+            arg("row", gMapRow);
+            run_handlers(EVENT_SCREEN_CHANGED);
+        }
+        if (gPlayerMode != s_last.mode) {
+            s_nargs = 0;
+            arg("player", 1);
+            arg("mode", gPlayerMode);
+            arg("previous", s_last.mode);
+            run_handlers(EVENT_PLAYER_MODE_CHANGED);
+        }
     }
     s_last.primed = true;
+    s_last.screen = gCameraScreen;
+    s_last.mode = gPlayerMode;
+    for (uint8_t slot = 1; slot < OBJ_SLOTS; slot++) {
+        s_last.slot[slot] = slot_now(slot);
+    }
     s_last.music = music;
     s_last.land_left = left;
     s_last.checkpoint = checkpoint;

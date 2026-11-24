@@ -112,6 +112,9 @@ void Decomp_Enter(uint16_t routine, uint8_t a, uint8_t x, uint8_t y)
     (void)a;
     (void)x;
     (void)y;
+    if (dc_outside) {
+        return;
+    }
     if (!dc_top_entered && routine == dc_top->addr) {
         dc_top_entered = true;
         return;

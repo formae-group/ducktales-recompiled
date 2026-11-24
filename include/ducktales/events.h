@@ -18,9 +18,9 @@
  *   EVENT_JUMP_START      a jump copied the take-off velocity into Scrooge's; not cancelable
  *
  * The others cannot be cancelled. Two have sites of their own in bank 6, one
- * in the frame loop, one shares the boss hit's site, and four are seen at the end of a machine
+ * in the frame loop, one shares the boss hit's site, and eight are seen at the end of a machine
  * frame (Events_FrameEnd) by comparing RAM with the previous frame's, so
- * they cost no site:
+ * they cost no site (a change that starts and ends within one frame is not seen):
  *
  *   EVENT_BOSS_DEFEATED   the hit that counts is a boss's last (after the boss-hit handlers; not when one cancelled)
  *   EVENT_ENEMY_DEFEATED  an enemy is beaten ($8932)            slot, kind, x (world), y
@@ -29,6 +29,12 @@
  *   EVENT_LAND_CLEAR      the land is left with its "clear" result ($5D set with no scene in $78)
  *   EVENT_CHECKPOINT      Scrooge reached his land's boss checkpoint ($7C becomes 5)
  *   EVENT_MONEY_CHANGED   the HUD money differs from the last frame that showed it   money, delta
+ *   EVENT_OBJECT_SPAWNED  a slot 1-15 holds an object it did not hold: it became live, or its
+ *                         kind or land record changed   slot, kind, action, x (world), y, record
+ *   EVENT_OBJECT_DESPAWNED  the object a slot 1-15 held is gone (before the spawn of what
+ *                         replaced it)                  the same values as last seen
+ *   EVENT_SCREEN_CHANGED  the camera's screen index $2D changed   screen, row
+ *   EVENT_PLAYER_MODE_CHANGED  Scrooge's mode $39 changed       player (1), mode, previous
  *
  *   EVENT_UPDATE          a step of play: Player_Update returned and the objects are about to move ($DB6F)
  *
@@ -61,6 +67,10 @@ typedef enum EventId {
     EVENT_CHECKPOINT,
     EVENT_MONEY_CHANGED,
     EVENT_UPDATE,
+    EVENT_OBJECT_SPAWNED,
+    EVENT_OBJECT_DESPAWNED,
+    EVENT_SCREEN_CHANGED,
+    EVENT_PLAYER_MODE_CHANGED,
     EVENT_COUNT
 } EventId;
 
@@ -77,7 +87,7 @@ typedef struct EventArg {
     int32_t value;
 } EventArg;
 
-#define EVENT_MAX_ARGS 4
+#define EVENT_MAX_ARGS 6
 
 /* False when the table is full or the same handler/user is registered. */
 bool Events_On(EventId id, EventHandler fn, void *user);
@@ -98,7 +108,8 @@ EventResult Events_Raise(EventId id);
 EventResult Events_RaiseSlot(EventId id, uint8_t slot);
 
 /* After each machine frame: raises the events seen in RAM (land-start,
- * land-clear, checkpoint, money-changed) while one has a handler. */
+ * land-clear, checkpoint, money-changed, object-spawned, object-despawned,
+ * screen-changed, player-mode-changed) while one has a handler. */
 void Events_FrameEnd(void);
 
 #ifdef __cplusplus

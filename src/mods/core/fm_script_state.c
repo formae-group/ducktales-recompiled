@@ -30,24 +30,148 @@ static void push_record(lua_State *L, const FmQuery *q, const long long *values)
     }
 }
 
+/* Pushes the metatable of q's handles: their methods, with q's index as upvalue 1. */
+static void push_handle_meta(lua_State *L, lua_Integer query)
+{
+    const FmQuery *q = &fm_script_game.queries[query];
+    lua_createtable(L, 0, 2);
+    lua_createtable(L, 0, 2);
+    lua_pushinteger(L, query);
+    lua_pushcclosure(L, fm_script_handle_set, 1);
+    lua_setfield(L, -2, "set");
+    lua_pushinteger(L, query);
+    lua_pushcclosure(L, fm_script_handle_remove, 1);
+    lua_setfield(L, -2, q->remove);
+    lua_setfield(L, -2, "__index");
+}
+
 /* dt.<query>(): upvalue 1 is the query's index. */
 int fm_script_sb_query(lua_State *L)
 {
-    const FmQuery *q = &fm_script_game.queries[lua_tointeger(L, lua_upvalueindex(1))];
+    lua_Integer query = lua_tointeger(L, lua_upvalueindex(1));
+    const FmQuery *q = &fm_script_game.queries[query];
     if (!fm_script_game.state_open || !fm_script_game.state_open()) {
         return luaL_error(L, "dt.%s: the game's state is read in dt.on callbacks", q->name);
     }
     long long values[FM_QUERY_VALUES];
     int n = q->read(values);
+    if (q->check) {
+        push_handle_meta(L, query);
+    }
     if (!q->list) {
         push_record(L, q, values);
+        if (q->check) {
+            lua_pushvalue(L, -2);
+            lua_setmetatable(L, -2);
+        }
         return 1;
     }
     lua_createtable(L, n, 0);
     for (int i = 0; i < n; i++) {
         push_record(L, q, &values[i * q->field_count]);
+        if (q->check) {
+            lua_pushvalue(L, -3);
+            lua_setmetatable(L, -2);
+        }
         lua_rawseti(L, -2, i + 1);
     }
+    return 1;
+}
+
+/* The values of the handle at index 1 as its table holds them. */
+static void handle_values(lua_State *L, const FmQuery *q, long long *values)
+{
+    luaL_checktype(L, 1, LUA_TTABLE);
+    for (int f = 0; f < q->field_count; f++) {
+        lua_getfield(L, 1, q->fields[f]);
+        values[f] = (long long)lua_tointeger(L, -1);
+        lua_pop(L, 1);
+    }
+}
+
+/* Common to a handle's methods: the state is open in a game event's handler
+ * and the handle still names its thing; false (with the result pushed) when
+ * it does not. */
+static bool handle_ready(lua_State *L, const FmQuery *q, const long long *values, const char *method, char *name,
+                         size_t cap)
+{
+    q->describe(values, name, cap);
+    if (!fm_script_in_event || !fm_script_game.state_open || !fm_script_game.state_open()) {
+        luaL_error(L, "%s:%s() is called in a game event's handler", name, method);
+    }
+    if (q->same(values)) {
+        return true;
+    }
+    char text[200];
+    snprintf(text, sizeof text, "%s:%s() dropped: it is gone", name, method);
+    fm_script_log_line(fm_script_of(L), "", text);
+    lua_pushboolean(L, 0);
+    lua_pushliteral(L, "gone");
+    return false;
+}
+
+/* rec:set{field = value, ...}: upvalue 1 is the query's index. */
+int fm_script_handle_set(lua_State *L)
+{
+    const FmQuery *q = &fm_script_game.queries[lua_tointeger(L, lua_upvalueindex(1))];
+    long long values[FM_QUERY_VALUES];
+    handle_values(L, q, values);
+    luaL_checktype(L, 2, LUA_TTABLE);
+    char name[64], err[160];
+    if (!handle_ready(L, q, values, "set", name, sizeof name)) {
+        return 2;
+    }
+    lua_pushnil(L);
+    while (lua_next(L, 2)) {
+        const char *field = lua_type(L, -2) == LUA_TSTRING ? lua_tostring(L, -2) : "?";
+        if (!lua_isinteger(L, -1)) {
+            return luaL_error(L, "%s:set{%s = ...}: an integer is needed", name, field);
+        }
+        if (!q->check(values, field, (long long)lua_tointeger(L, -1), err, sizeof err)) {
+            return luaL_error(L, "%s:set{%s = %I}: %s", name, field, lua_tointeger(L, -1), err);
+        }
+        lua_pop(L, 1);
+    }
+    Script *s = fm_script_of(L);
+    lua_pushnil(L);
+    while (lua_next(L, 2)) {
+        const char *field = lua_tostring(L, -2);
+        long long value = (long long)lua_tointeger(L, -1);
+        q->write(values, field, value);
+        char key[128], label[128], text[200];
+        snprintf(key, sizeof key, "%s.%s", name, field);
+        snprintf(label, sizeof label, "%s:set{%s = %lld}", name, field, value);
+        lua_getfield(L, 1, field);
+        snprintf(text, sizeof text, "%s, was %lld", label, (long long)lua_tointeger(L, -1));
+        lua_pop(L, 1);
+        fm_script_log_write(s, key, value, label, text);
+        lua_pushvalue(L, -2);
+        lua_pushvalue(L, -2);
+        lua_settable(L, 1);
+        lua_pop(L, 1);
+    }
+    lua_pushboolean(L, 1);
+    return 1;
+}
+
+/* rec:<remove>(): upvalue 1 is the query's index. */
+int fm_script_handle_remove(lua_State *L)
+{
+    const FmQuery *q = &fm_script_game.queries[lua_tointeger(L, lua_upvalueindex(1))];
+    long long values[FM_QUERY_VALUES];
+    handle_values(L, q, values);
+    char name[64], err[160];
+    if (!handle_ready(L, q, values, q->remove, name, sizeof name)) {
+        return 2;
+    }
+    if (!q->check(values, NULL, 0, err, sizeof err)) {
+        return luaL_error(L, "%s:%s(): %s", name, q->remove, err);
+    }
+    q->do_remove(values);
+    char text[160];
+    snprintf(text, sizeof text, "%s:%s()", name, q->remove);
+    fm_script_log_line(fm_script_of(L), "", text);
+    lua_pushboolean(L, 1);
     return 1;
 }
 
