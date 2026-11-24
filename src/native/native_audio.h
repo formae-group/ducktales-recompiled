@@ -63,7 +63,8 @@ void native_audio_wav_header(FILE *f, int sample_rate, uint32_t samples);
 
 /* Channels left out of the mix from now on (bit 0 pulse 1, 1 pulse 2, 2
  * triangle, 3 noise), the extra voices' copies included; they keep running,
- * only their sound is dropped (mods that play a file in place of them). */
+ * only their sound is dropped (mods that play a file in place of them). A
+ * channel fades out and back in over 5 ms. */
 void native_audio_set_mute(uint8_t mask);
 
 #ifdef __cplusplus
