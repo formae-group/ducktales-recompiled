@@ -6,19 +6,12 @@
  * mapped): it loads the objects' gravity and runs the handler of every live
  * slot 1-15 (status bit 7), chosen by its kind through the handler table at
  * $802C/$806F. The slot cursor lives in RAM ($4A) because the original keeps
- * it there across the handler call. Kinds whose handler is decompiled run as
- * C; the others call their original handler at its own address through
- * Decomp_CallP. Kinds $43 and up have no handler entry and do nothing.
+ * it there across the handler call. Every kind in the table has a C case;
+ * kind 0 has no action, matching its RTS. Kinds $43 and up have no entry.
  *
- * Decompiled kinds: the Amazon's enemies (1-5, 7, $0A, $0C, $0D) and its
- * swinging hold ($0E), the Himalayas' dangler (6), Transylvania's swooper
- * ($11), blocks (8) and launched blocks (9), beaten enemies ($0B), the lift
- * ($0F), pickups ($13) with what taking each item does, hidden items
- * ($14), chests ($15), doors ($2F) and talking characters ($35). Every
- * routine starts with Decomp_Enter and the C calls it as plain C; only
- * those original code also calls have a hook site (the dispatch, the
- * movers and the helpers original handlers call). Not decompiled yet and
- * run through Decomp_Call: the tile edit $F506.
+ * Registered routines start with Decomp_Enter. Routines also called by
+ * original code may have a hook site, including the dispatch and the
+ * fixed-bank movement helpers.
  */
 #include "decomp/decomp.h"
 #include "decomp/level.h"
@@ -630,6 +623,20 @@ static void Pickup_Take(uint8_t x)
     }
 }
 
+static void Pickup_TryTake(uint8_t x)
+{
+    if (gPlayerMode == PLAYER_MODE_KNOCKBACK) {
+        return;
+    }
+    if (gPlayerMode == PLAYER_MODE_DEATH) {
+        gObjects->state[x] = 0;
+        return;
+    }
+    if (Obj_TouchScrooge(x)) {
+        Pickup_Take(x);
+    }
+}
+
 /* Kind $13 ($8A59): a pickup. While in the jump-out pose ($2A) it shows
  * its item when the animation reaches frame 1, timer 5. Step 0 rises, step
  * 1 falls to the floor, step 2 waits; the timed items blink at $78 and
@@ -683,16 +690,7 @@ static void Obj_Pickup(uint8_t x)
             gObjects->timer[x]--;
         }
     }
-    if (gPlayerMode == PLAYER_MODE_KNOCKBACK) {
-        return;
-    }
-    if (gPlayerMode == PLAYER_MODE_DEATH) {
-        gObjects->state[x] = 0;
-        return;
-    }
-    if (Obj_TouchScrooge(x)) {
-        Pickup_Take(x);
-    }
+    Pickup_TryTake(x);
 }
 
 /* $8CE1: the slot becomes a block (kind 8). In a boss fight it gets
@@ -781,7 +779,7 @@ static void Obj_HiddenItem(uint8_t x)
 /* Kind $15 ($8D19): a chest (hitbox $81). Scrooge's cane opens it: its
  * record is consumed, it moves up by the land's offset, and it shows the
  * land's item, or becomes a pickup at once when the table has none. In the
- * Himalayas ($F6 = 1) a chest with $06B0 >= 2 is a solid block (pose $5B)
+ * Transylvania ($F6 = 1) a chest with $06B0 >= 2 is a solid block (pose $5B)
  * while Scrooge does not swing at it. */
 static void Obj_Chest(uint8_t x)
 {
@@ -806,13 +804,13 @@ static void Obj_Chest(uint8_t x)
         gObjects->unk_0690[x] = 0;
         gObjects->state[x] &= 0xE0;
         if (y == 6) {
-            gObjects->kind[x] = 0x17;
+            gObjects->kind[x] = OBJ_KIND_CHEST_SLIDER;
             gObjects->hitbox[x] = 0x10;
             gObjects->action[x] = 0x21;
             return;
         }
         gObjects->action[x] = OBJ_ACTION_BREAK;
-        gObjects->kind[x]++;
+        gObjects->kind[x] = OBJ_KIND_CHEST_OPENING;
         return;
     }
     if (gLand != 1 || gObjects->timer[x] < 2) {
@@ -826,6 +824,138 @@ static void Obj_Chest(uint8_t x)
     gObjects->hitbox[x] = 0x82;
     if (AbsDiff(gObjects->y[x], gObjects->y[P_]) >= 0x18) {
         gObjects->hitbox[x]++;
+    }
+}
+
+/* Kind $16 ($8DD1): at frame 1 or later, timer 5 of the opening pose,
+ * show the chest's contents. Transylvania's fourth variant moves down
+ * $18 px; its first plays sound $30. */
+static void Obj_ChestOpening(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_CHEST_OPENING, 0x22, x, gObjects->kind[x]);
+    if (!OnScreen(x)) {
+        gObjects->state[x] = 0;
+        return;
+    }
+    if (gObjects->animFrame[x] == 0 || gObjects->animTimer[x] != 5) {
+        return;
+    }
+    uint8_t i = (uint8_t)((gLand << 2) + gObjects->timer[x]);
+    if (i == 7) {
+        gObjects->y[x] += 0x18;
+    }
+    gObjects->action[x] = Rom((uint16_t)(DT_CODE_CHEST_CONTENT_ACTION + i));
+    gObjects->kind[x] = Rom((uint16_t)(DT_CODE_CHEST_ITEM + i));
+    gObjects->hitbox[x] = Rom((uint16_t)(DT_CODE_CHEST_CONTENT_HITBOX + i));
+    ResetAnim(x);
+    gObjects->unk_0690[x] = 0;
+    if (i == 4) {
+        Sound_Request(SFX_SWOOP, x);
+    }
+}
+
+/* Kind $17 ($8E23): a block that shakes in place for eight sprite phases,
+ * slides toward Scrooge, then turns into a regular block on the floor
+ * when it stops or hits something. */
+static void Obj_ChestSlider(uint8_t x)
+{
+    static const int8_t shake[4] = { 1, -1, -1, 1 };
+    Decomp_Enter(DT_CODE_KIND_CHEST_SLIDER, 0x22, x, gObjects->kind[x]);
+    if (!OnScreen(x)) {
+        gObjects->state[x] = 0;
+        return;
+    }
+    if (Step(x) == 0) {
+        Obj_SetVelocityY(x, 0);
+        Obj_SetSpeed(x, 0x0200);
+        gObjects->timer[x] = 0;
+        Obj_FaceScrooge(x);
+        gObjects->state[x]++;
+    }
+    if (gObjects->timer[x] != 8) {
+        if (!(gSprPhase & 3)) {
+            Obj_SetWorldX(x, (uint16_t)(Obj_GetWorldX(x) + shake[gObjects->timer[x] & 3]));
+            gObjects->timer[x]++;
+        }
+        return;
+    }
+    x = Obj_Fall(x, 0x2D, 1);
+    gObjects->unk_06C0[x] = gProbeHits;
+    uint16_t speed = Obj_GetSpeed(x);
+    if ((gProbeHits & 1) && speed != 0) {
+        Obj_SetSpeed(x, (uint16_t)(speed - 0x10));
+    }
+    if (!(gObjects->state[x] & 2)) {
+        if (gObjects->dir[x] & OBJ_DIR_LEFT) {
+            x = Obj_WalkLeft(x, 0x2B, 1);
+        } else {
+            x = Obj_WalkRight(x, 0x29, 1);
+        }
+        (void)Obj_TouchScrooge(x);
+        if (Obj_GetSpeed(x) != 0 && !(gProbeHits & 1)) {
+            return;
+        }
+    }
+    if (gObjects->unk_06C0[x] & 1) {
+        gObjects->kind[x] = OBJ_KIND_BLOCK;
+        gObjects->hitbox[x] = 0x80;
+    }
+}
+
+/* Kind $42 ($8EE6): a solid block the cane opens a second time. It releases
+ * a sliding health pickup that moves until it has fallen and landed. */
+static void Obj_ChestHealth(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_CHEST_HEALTH, 0x22, x, gObjects->kind[x]);
+    if (Step(x) == 0) {
+        bool swinging = gObjects->action[P_] == PLAYER_ACTION_CANE;
+        if (swinging && gObjects->animFrame[P_] == 3) {
+            gObjects->hitbox[x] = 0x81;
+            if (Obj_TouchScrooge(x)) {
+                gObjects->state[x]++;
+                gObjects->action[x] = OBJ_ACTION_BREAK;
+                ResetAnim(x);
+                gObjects->hitbox[x] = 0;
+                gObjects->y[x] -= 0x18;
+                return;
+            }
+        }
+        gObjects->hitbox[x] = 0x83;
+        if (swinging && (uint8_t)(gObjects->y[x] - gObjects->y[P_]) >= 0x18) {
+            gObjects->hitbox[x]++;
+        }
+        return;
+    }
+    if (gObjects->action[x] != 0x25 && gObjects->action[x] != 0x28) {
+        if (gObjects->animFrame[x] == 0 || gObjects->animTimer[x] != 5) {
+            return;
+        }
+        gObjects->action[x] = 0x25;
+        Obj_DifficultAction(x);
+        ResetAnim(x);
+        gObjects->timer[x] = 0;
+        Obj_SetVelocityY(x, 0);
+        Obj_SetSpeed(x, 0x0120);
+        Obj_FaceScrooge(x);
+        return;
+    }
+    x = Obj_Fall(x, 0x2D, 1);
+    if (Obj_TouchScrooge(x)) {
+        Pickup_Take(x);
+        return;
+    }
+    if (!(gProbeHits & 1)) {
+        gObjects->timer[x]++;
+    } else if (gObjects->timer[x] != 0) {
+        gObjects->state[x] = OBJ_STATUS_LIVE | OBJ_STATUS_WORLD | 2;
+        gObjects->timer[x] = 0xFF;
+        Pickup_TryTake(x);
+        return;
+    }
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        (void)Obj_WalkRight(x, 0x29, 0);
+    } else {
+        (void)Obj_WalkLeft(x, 0x2B, 0);
     }
 }
 
@@ -4317,7 +4447,7 @@ static void Obj_FinalTreasure(uint8_t x)
  * JMP ($0000) vector), A = $22 (the low byte of the return it pushed),
  * X = slot and Y = kind. The flags are those of the loop: the caller's carry
  * for slot 1, the CPX of the loop for the others, and the V the previous
- * handler left. *r gets the registers an original handler returns with.
+ * handler left.
  * Kinds $43 and up read past the table in the original; here they do nothing. */
 static void Obj_RunHandler(uint8_t slot, Regs *r)
 {
@@ -4392,6 +4522,12 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_CHEST:
             Obj_Chest(slot);
+            break;
+        case OBJ_KIND_CHEST_OPENING:
+            Obj_ChestOpening(slot);
+            break;
+        case OBJ_KIND_CHEST_SLIDER:
+            Obj_ChestSlider(slot);
             break;
         case OBJ_KIND_PATROLLER:
             Obj_Patroller(slot);
@@ -4511,20 +4647,14 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
         case OBJ_KIND_KEY_SPOT:
             Obj_KeySpot(slot);
             break;
-        case OBJ_KIND_16:
-            *r = Decomp_CallP(DT_CODE_KIND_16, r->a, slot, r->y, r->p);
-            break;
-        case OBJ_KIND_17:
-            *r = Decomp_CallP(DT_CODE_KIND_17, r->a, slot, r->y, r->p);
-            break;
         case OBJ_KIND_CART:
             Obj_Cart(slot);
             break;
         case OBJ_KIND_HOP_WALKER:
             Obj_HopWalker(slot);
             break;
-        case OBJ_KIND_42:
-            *r = Decomp_CallP(DT_CODE_KIND_42, r->a, slot, r->y, r->p);
+        case OBJ_KIND_CHEST_HEALTH:
+            Obj_ChestHealth(slot);
             break;
     }
 }
@@ -4908,6 +5038,21 @@ static void Run_Chest(Regs *r)
     Obj_Chest(r->x);
 }
 
+static void Run_ChestOpening(Regs *r)
+{
+    Obj_ChestOpening(r->x);
+}
+
+static void Run_ChestSlider(Regs *r)
+{
+    Obj_ChestSlider(r->x);
+}
+
+static void Run_ChestHealth(Regs *r)
+{
+    Obj_ChestHealth(r->x);
+}
+
 static void Run_Door(Regs *r)
 {
     Obj_Door(r->x);
@@ -5116,6 +5261,9 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_PICKUP, NULL, "Obj_Pickup", Run_Pickup, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_HIDDEN_ITEM, NULL, "Obj_HiddenItem", Run_HiddenItem, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_CHEST, NULL, "Obj_Chest", Run_Chest, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_CHEST_OPENING, NULL, "Obj_ChestOpening", Run_ChestOpening, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_CHEST_SLIDER, NULL, "Obj_ChestSlider", Run_ChestSlider, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_CHEST_HEALTH, NULL, "Obj_ChestHealth", Run_ChestHealth, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_DOOR, NULL, "Obj_Door", Run_Door, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_TALKER, NULL, "Obj_Talker", Run_Talker, 0 },
     { DT_CODE_OBJ_FIND_FREE_Y, NULL, "Obj_FindFreeSlotY", Run_FindFreeSlotY, OUT_Y | OUT_C, .bank = DT_BANK_OBJECTS },

@@ -7,6 +7,8 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- The chest's opening, sliding block and health block handlers (kinds `$16`, `$17` and `$42`)
+  are decompiled, with poke cases based on three Transylvania chest records.
 - `tests/decomp_test.py` poke cases `extra-life` (the extra life `$8BB0`), `secret-treasure` (item `$74`,
   message `$0D` instead of the treasure pose, `$8C37`) and `row-end-right` (Scrooge's X clamped to `$F0` at a
   row's right end, `$F08B`): code no route or poke case ran before.

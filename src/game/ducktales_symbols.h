@@ -702,6 +702,8 @@
 #define DT_CODE_ITEM_BY_INDEX             0x8FB8 /* item by $06B0 */
 #define DT_CODE_CHEST_ITEM                0x8FDA /* chest: 0 = no item shown, by land * 4 + $06B0 */
 #define DT_CODE_CHEST_RISE                0x9002 /* chest: Y offset when opened */
+#define DT_CODE_CHEST_CONTENT_ACTION      0x8FC6 /* action of the chest contents, same index */
+#define DT_CODE_CHEST_CONTENT_HITBOX      0x8FEE /* hitbox of the chest contents, same index */
 #define DT_CODE_ITEM_BY_LAND              0x9016 /* item of a pose-$3F block by land * 3 + $06B0 */
 #define DT_CODE_DROP_BY_KIND              0x9025 /* item a beaten enemy may drop, by kind */
 #define DT_CODE_KIND_DOOR                 0x9065 /* kind $2F */
@@ -714,8 +716,8 @@
 #define DT_CODE_KIND_LAUNCHPAD_RIDE       0xF869 /* kind $36 (fixed bank) */
 #define DT_CODE_KIND_SKY_FLYER            0xF8F2 /* kind $37 (fixed bank) */
 #define DT_CODE_KIND_SKY_ROPE             0xF9F8 /* kind $38 (fixed bank) */
-#define DT_CODE_KIND_16                   0x8DD1 /* kind $16 */
-#define DT_CODE_KIND_17                   0x8E23 /* kind $17 */
+#define DT_CODE_KIND_CHEST_OPENING        0x8DD1 /* kind $16 */
+#define DT_CODE_KIND_CHEST_SLIDER         0x8E23 /* kind $17 */
 #define DT_CODE_KIND_CART                 0x9EB3 /* kind $21 */
 #define DT_CODE_KIND_HOP_WALKER           0x9F3D /* kind $22 */
 #define DT_CODE_HOP_WALKER_WALK           0x9FC5 /* kind $22: walk, turning at walls */
@@ -724,7 +726,7 @@
 #define DT_CODE_KIND_CLIMBER              0xFB68 /* kind $3C (fixed bank) */
 #define DT_CODE_KIND_HIT_TALKER           0xFBFF /* kind $3D (fixed bank) */
 #define DT_CODE_KIND_FINAL_TREASURE       0xFD9E /* kind $40 (fixed bank) */
-#define DT_CODE_KIND_42                   0x8EE6 /* kind $42 */
+#define DT_CODE_KIND_CHEST_HEALTH         0x8EE6 /* kind $42 */
 #define DT_CODE_KIND_HOPPER               0x8225 /* kind 1 */
 #define DT_CODE_KIND_WALKER               0x82AF /* kind 2 */
 #define DT_CODE_KIND_THROWER              0x830E /* kind 3 */

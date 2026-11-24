@@ -49,8 +49,8 @@ extern "C" {
 #define OBJ_KIND_PICKUP            0x13 /* an item Scrooge takes by touching it (code) */
 #define OBJ_KIND_HIDDEN_ITEM       0x14 /* an item that appears when touched (code) */
 #define OBJ_KIND_CHEST             0x15 /* a chest the cane opens (code) */
-#define OBJ_KIND_16                0x16 /* (not studied; the original handler runs) */
-#define OBJ_KIND_17                0x17 /* (not studied; the original handler runs) */
+#define OBJ_KIND_CHEST_OPENING     0x16 /* the chest's opening pose before its contents appear */
+#define OBJ_KIND_CHEST_SLIDER      0x17 /* a block that slides out of an opened chest */
 #define OBJ_KIND_PATROLLER         0x18 /* enemy: walks a ledge, turns at its edges and at walls (code) */
 #define OBJ_KIND_POUNCER           0x19 /* enemy: flies in arcs, pounces on Scrooge (code) */
 #define OBJ_KIND_PIT_JUMPER        0x1A /* enemy: jumps out of a pit with a splash (code) */
@@ -93,7 +93,7 @@ extern "C" {
 #define OBJ_KIND_PATH_OPENER 0x3F /* runs right to page 7, then lets Scrooge go and draws block record 6 (code) */
 #define OBJ_KIND_FINAL_TREASURE 0x40 /* the prize atop the final climb: starts the ending (code; name hypothesis) */
 #define OBJ_KIND_KEY_SPOT       0x41 /* a spot that needs the land's key item (code) */
-#define OBJ_KIND_42             0x42 /* (not studied; the original handler runs) */
+#define OBJ_KIND_CHEST_HEALTH   0x42 /* a chest's solid block that releases a health pickup */
 
 /* $0700 bits 0-3: the handler's step (code). */
 #define OBJ_STATE_STEP 0x0F
