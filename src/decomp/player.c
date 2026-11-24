@@ -73,7 +73,6 @@
 #define OBJ_FLAG_NO_LANDING 0x02 /* skipped by the vertical contact test (code) */
 #define OBJ_KIND_BLOCK      0x08
 #define OBJ_KIND_15         0x15
-#define OBJ_KIND_42         0x42
 #define HITBOX_SOLID        0x80
 #define HITBOX_INDEX        0x7F
 #define HITBOX_HARMFUL      0x70
@@ -894,7 +893,7 @@ static void Player_Cane(void)
     uint8_t slot = Player_ContactH();
     if (slot) {
         uint8_t kind = gObjects->kind[slot];
-        if (kind == OBJ_KIND_BLOCK || kind == OBJ_KIND_15 || kind == OBJ_KIND_42) {
+        if (kind == OBJ_KIND_BLOCK || kind == OBJ_KIND_15 || kind == OBJ_KIND_CHEST_HEALTH) {
             return;
         }
     }

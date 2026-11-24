@@ -13,6 +13,8 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - `tools/decomp_gap.py`: the PRG code a static walk from the executed code reaches (branches, calls and
   dispatch tables) but no route or poke case executes, by block and routine, and the unreached runs that
   decode as code (docs/decompilation.md "Gap").
+- The chest's opening, sliding block and health block handlers (kinds `$16`, `$17` and `$42`)
+  are decompiled, with poke cases based on three Transylvania chest records.
 - `tests/decomp_test.py` poke cases `extra-life` (the extra life `$8BB0`), `secret-treasure` (item `$74`,
   message `$0D` instead of the treasure pose, `$8C37`) and `row-end-right` (Scrooge's X clamped to `$F0` at a
   row's right end, `$F08B`): code no route or poke case ran before.
@@ -112,7 +114,8 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   wait as a new bus operation, `Decomp_BusWait`. Check mode makes the C's bus operations on a clocked
   copy of the machine and compares at the original's RTI: RAM, registers, the PPU's memories and OAM,
   the PRG bank, the PPU and APU settings the NMI writes, and the writes to `$2006`/`$2007` and the APU
-  in order. The native runtime runs it; replace mode on the cycle host still gives it to the original.
+  in order. Both runtimes run the C in replace mode. The cycle host measures the original on a
+  clocked snapshot, then runs the C's device operations at the original's cycles.
 - Decompiled: the task primitives (`src/decomp/system.c`): `task_create` `$FF7D` with the slot offsets
   `$FF9F`/`$FFA1`, and `task_yield` `$FFAC` and `task_wait` `$FFA5` (resume point `$FFA8`) as task code. Their
   sites replace the flow's stops there; `task_yield`'s C hands off to the scheduler `$FF35`, which has a
