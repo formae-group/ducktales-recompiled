@@ -49,6 +49,8 @@ bool fm_valid_id(const char *id);
 bool fm_ends_with(const char *s, const char *tail);
 bool fm_parse_hex(const char *s, int digits, uint64_t *out);
 void fm_base_name(const char *path, char *out, size_t cap);
+/* text past a UTF-8 byte order mark (Notepad's), or text itself. */
+const char *fm_skip_bom(const char *text);
 
 #define FM_NAME_MAX 256
 

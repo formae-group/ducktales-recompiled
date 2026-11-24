@@ -124,6 +124,11 @@ bool fm_parse_hex(const char *s, int digits, uint64_t *out)
     return true;
 }
 
+const char *fm_skip_bom(const char *text)
+{
+    return strncmp(text, "\xEF\xBB\xBF", 3) ? text : text + 3;
+}
+
 static void lower(char *s)
 {
     for (; *s; s++) {
@@ -336,8 +341,9 @@ static bool toml_string(char **cursor, char *out, size_t cap, char *err, size_t 
 static bool parse_toml(char *text, FmMod *m, char *game, size_t game_cap, char *target, size_t target_cap, char *err,
                        size_t cap)
 {
-    char *p = text;
-    bool top = true;
+    const char *const KEYS[7] = { "id", "name", "version", "author", "description", "game", s_game.target_key };
+    char *p = (char *)fm_skip_bom(text);
+    bool top = true, seen[7] = { false };
     int line = 1;
     while (*p) {
         while (*p == ' ' || *p == '\t' || *p == '\r') {
@@ -378,7 +384,8 @@ static bool parse_toml(char *text, FmMod *m, char *game, size_t game_cap, char *
             p++;
         }
         char value[1024], why[64];
-        if (*p == '"' || *p == '\'') {
+        bool quoted = *p == '"' || *p == '\'';
+        if (quoted) {
             char *start = p;
             if (!toml_string(&p, value, sizeof value, why, sizeof why)) {
                 snprintf(err, cap, "mod.toml line %d: %s", line, why);
@@ -411,23 +418,29 @@ static bool parse_toml(char *text, FmMod *m, char *game, size_t game_cap, char *
         if (!top) {
             continue;
         }
-#define KEY(name) (klen == sizeof name - 1 && !strncmp(key, name, klen))
-        if (KEY("id")) {
-            snprintf(m->id, sizeof m->id, "%s", value);
-        } else if (KEY("name")) {
-            snprintf(m->name, sizeof m->name, "%s", value);
-        } else if (KEY("version")) {
-            snprintf(m->version, sizeof m->version, "%s", value);
-        } else if (KEY("author")) {
-            snprintf(m->author, sizeof m->author, "%s", value);
-        } else if (KEY("description")) {
-            snprintf(m->description, sizeof m->description, "%s", value);
-        } else if (KEY("game")) {
-            snprintf(game, game_cap, "%s", value);
-        } else if ((klen == strlen(s_game.target_key) && !strncmp(key, s_game.target_key, klen))) {
-            snprintf(target, target_cap, "%s", value);
+        int known = -1;
+        for (int k = 0; k < 7; k++) {
+            if (klen == strlen(KEYS[k]) && !strncmp(key, KEYS[k], klen)) {
+                known = k;
+            }
         }
-#undef KEY
+        if (known >= 0 && seen[known]) {
+            snprintf(err, cap, "mod.toml line %d: %s is set twice", line, KEYS[known]);
+            return false;
+        }
+        if (known >= 0 && !quoted) {
+            snprintf(err, cap, "mod.toml line %d: %s must be a quoted string (%s = \"...\")", line, KEYS[known],
+                     KEYS[known]);
+            return false;
+        }
+        if (known < 0) {
+            continue;
+        }
+        seen[known] = true;
+        char *const FIELD[7] = { m->id, m->name, m->version, m->author, m->description, game, target };
+        const size_t FIELD_CAP[7] = { sizeof m->id,          sizeof m->name, sizeof m->version, sizeof m->author,
+                                      sizeof m->description, game_cap,       target_cap };
+        snprintf(FIELD[known], FIELD_CAP[known], "%s", value);
     }
     return true;
 }
@@ -468,14 +481,31 @@ static void read_mod(FmMod *m)
         char name_from_file[128];
         snprintf(name_from_file, sizeof name_from_file, "%s", m->name);
         m->id[0] = m->name[0] = 0;
-        if (!parse_toml(text, m, game, sizeof game, target, sizeof target, err, sizeof err)) {
+        const char *const REQUIRED[5] = { "id", "name", "version", "game", s_game.target_key };
+        const char *const VALUE[5] = { m->id, m->name, m->version, game, target };
+        char missing[128] = "";
+        bool parsed = parse_toml(text, m, game, sizeof game, target, sizeof target, err, sizeof err);
+        for (int k = 0; k < 5; k++) {
+            if (!VALUE[k][0]) {
+                size_t used = strlen(missing);
+                snprintf(missing + used, sizeof missing - used, "%s%s", used ? ", " : "", REQUIRED[k]);
+            }
+        }
+        uint64_t digits;
+        if (!parsed) {
             snprintf(m->error, sizeof m->error, "Cannot be read: %s", err);
+        } else if (missing[0]) {
+            snprintf(m->error, sizeof m->error, "mod.toml is missing %s.", missing);
         } else if (!fm_valid_id(m->id)) {
             snprintf(m->error, sizeof m->error,
-                     "mod.toml: id \"%s\" must be 1-63 characters of a-z, 0-9, '-', '_' or '.'.", m->id);
-        } else if (!m->name[0] || !m->version[0] || !game[0] || !target[0]) {
-            snprintf(m->error, sizeof m->error, "mod.toml: name, version, game and %s are required.",
-                     s_game.target_key);
+                     "mod.toml: id \"%s\" must be 1-63 characters of a-z, 0-9, '-', '_' or '.', starting with a "
+                     "letter or digit.",
+                     m->id);
+        } else if (strlen(target) != 64 || !fm_parse_hex(target, 16, &digits) ||
+                   !fm_parse_hex(target + 16, 16, &digits) || !fm_parse_hex(target + 32, 16, &digits) ||
+                   !fm_parse_hex(target + 48, 16, &digits)) {
+            snprintf(m->error, sizeof m->error, "mod.toml: %s must be the 64 hex digits of the %s's SHA-256.",
+                     s_game.target_key, s_game.target_label);
         } else if (strcmp(game, s_game.name)) {
             snprintf(m->error, sizeof m->error, "Made for \"%s\", not %s.", game, s_game.name);
         } else {

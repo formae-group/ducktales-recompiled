@@ -127,6 +127,11 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - `tests/decomp_test.py --from-state` starts only from a golden state where the game's scheduler is
   idle. `full_moon` saved at frame 500 inside a task, and replace mode failed on its first frame
   from there, because the run resumed the original's task while replace ran the C.
+- Mods: a mod.toml saved by Notepad (with a UTF-8 byte order mark) failed on line 1, and so did a
+  `scripts/main.lua`; both load now. Names inside a mod match whatever their case, so
+  `Scripts/Main.lua` no longer showed as a script that then could not be found. mod.toml errors name
+  the missing keys, a key set twice and a key that is not a quoted string, and a `prg_sha256` that is
+  not 64 hex digits is reported as such instead of as a mod for another version of the game.
 
 ## [1.0.0] - 2026-11-23
 

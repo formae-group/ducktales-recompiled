@@ -889,7 +889,8 @@ static bool start_script(Script *s, char *err, size_t cap)
     lua_pushcfunction(L, setup);
     int status = lua_pcall(L, 0, 0, 0);
     if (status == LUA_OK) {
-        status = luaL_loadbufferx(L, (const char *)text, size, "=scripts/main.lua", "t");
+        const char *chunk = fm_skip_bom((const char *)text);
+        status = luaL_loadbufferx(L, chunk, size - (size_t)(chunk - (const char *)text), "=scripts/main.lua", "t");
     }
     if (status == LUA_OK) {
         status = lua_pcall(L, 0, 0, 0);

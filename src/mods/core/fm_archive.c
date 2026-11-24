@@ -5,8 +5,9 @@
  * directory, every entry's local header and its CRC-32. Encrypted entries,
  * ZIP64 and other compression methods are refused with a reason. When
  * mod.toml is not at the archive's root but in exactly one folder (a zipped
- * mod folder), that folder is the mod's root. Paths are UTF-8; Windows
- * gets them through the wide calls.
+ * mod folder), that folder is the mod's root. Names are found whatever their
+ * case, as Windows finds files. Paths are UTF-8; Windows gets them through
+ * the wide calls.
  */
 #include "mods/core/fm_mods.h"
 
@@ -296,10 +297,10 @@ static void find_prefix(FmArchive *a)
     const char *found = NULL;
     for (int i = 0; i < a->count; i++) {
         const char *n = a->entries[i].name, *slash = strchr(n, '/');
-        if (!strcmp(n, "mod.toml")) {
+        if (!_stricmp(n, "mod.toml")) {
             return;
         }
-        if (slash && !strchr(slash + 1, '/') && !strcmp(slash + 1, "mod.toml")) {
+        if (slash && !strchr(slash + 1, '/') && !_stricmp(slash + 1, "mod.toml")) {
             if (found) {
                 return;
             }
@@ -343,14 +344,14 @@ const char *fm_archive_name(const FmArchive *a, int index)
 {
     const char *n = a->entries[index].name;
     size_t k = strlen(a->prefix);
-    return strncmp(n, a->prefix, k) ? NULL : n + k;
+    return _strnicmp(n, a->prefix, k) ? NULL : n + k;
 }
 
 int fm_archive_find(const FmArchive *a, const char *name)
 {
     for (int i = 0; i < a->count; i++) {
         const char *n = fm_archive_name(a, i);
-        if (n && !strcmp(n, name)) {
+        if (n && !_stricmp(n, name)) {
             return i;
         }
     }

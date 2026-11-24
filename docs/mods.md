@@ -76,10 +76,18 @@ game = "DuckTales (USA)"
 prg_sha256 = "8ba8baed01a9fbaf1e9ff29e0c9825db1963ac2aff211d6f1f3bcfd3839e2013"
 ```
 
-`id` is 1 to 63 characters of `a-z`, `0-9`, `-`, `_` and `.`, and it is what `[Mods] Order`
-saves. `name`, `version`, `game` and `prg_sha256` are required. `prg_sha256` is the SHA-256 of the
-PRG ROM the mod was made for: tile keys and sound ids belong to that program, so a mod for another
+`id` is 1 to 63 characters of `a-z`, `0-9`, `-`, `_` and `.`, starting with a letter or a digit,
+and it is what `[Mods] Order` saves. `id`, `name`, `version`, `game` and `prg_sha256` are required;
+`author` and `description` are optional. These seven keys are quoted strings and each may be set
+once; other keys and tables are ignored. `prg_sha256` is the SHA-256 of the PRG ROM the mod was
+made for, in 64 hex digits: tile keys and sound ids belong to that program, so a mod for another
 PRG is refused.
+
+A mod.toml that breaks these rules is listed with the reason and the line: *mod.toml is missing
+version, prg_sha256*, *mod.toml line 3: version must be a quoted string (version = "...")*,
+*mod.toml line 5: name is set twice*. The file may start with a UTF-8 byte order mark (Notepad
+writes one), and so may `scripts/main.lua`. File and folder names inside a mod are matched
+whatever their case (`Scripts/Main.lua`, `MOD.TOML`), as Windows matches them.
 
 ### Tiles
 
