@@ -37,7 +37,7 @@ bool ducktales_host_no_slowdown(void);
 /* Applied between frames and saved with the other [Game] keys. */
 void ducktales_host_set_no_slowdown(bool on);
 /* Each runtime's own No slowdown: the cycle host's extra scanlines
- * (ducktales_host.c) or the native runtime's lag mode (native_window.c). */
+ * (ducktales_host.c) or the native runtime's lag mode (native_player.c). */
 void ducktales_host_apply_no_slowdown(bool on);
 
 /* Decompiled code (config.ini [Game] DecompiledCode, the Settings menu), on

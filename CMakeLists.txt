@@ -304,14 +304,17 @@ if(DUCKTALES_NATIVE)
     ducktales_native_target(ducktales_native)
 endif()
 
-# The player build on the native runtime (src/native/native_window.c): the
+# The player build on the native runtime (src/native/native_player.c, its window
+# native_window.c and the runs with no window native_offscreen.c): the
 # window, menu, settings, presentation, enhancements and sprite compositor of
 # the cycle build over native_run_frame(), the native renderer and the native
 # synth (native_audio.c). NESRecomp contributes its settings file, input bindings, PNG writer
 # and toast font, no part of its cycle host.
 if(NOT DUCKTALES_HEADLESS)
     add_executable(ducktales_player
+        "${CMAKE_SOURCE_DIR}/src/native/native_player.c"
         "${CMAKE_SOURCE_DIR}/src/native/native_window.c"
+        "${CMAKE_SOURCE_DIR}/src/native/native_offscreen.c"
         "${CMAKE_SOURCE_DIR}/src/native/native_output.c"
         "${CMAKE_SOURCE_DIR}/src/native/native_present.c"
         "${CMAKE_SOURCE_DIR}/src/native/native_render.c"
