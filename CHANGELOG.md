@@ -96,8 +96,11 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   stop. A site or stop that cannot be registered (NESRecomp's 128-hook cap) now fails at start-up.
   `tests/native_decomp_test.py` excepts and counts the NMI-counted yield (docs/decompilation.md "On the
   native runtime").
-- Decompiled: object kinds `$36` (`$F869`) and `$37` (`$F8F2`, with its drop `$F99C`) of the fixed bank,
-  reached in the Launchpad scenes. `tests/decomp_test.py` has a `clear-keep` poke case for the object
+- Decompiled: object kinds `$36` (`$F869`, `Obj_LaunchpadRide`) and `$37` (`$F8F2`, `Obj_SkyFlyer`, with
+  its drop `$F99C`) of the fixed bank, reached in the Launchpad scenes, and kind `$38` (`$F9F8`,
+  `Obj_SkyRope`, which lifts Scrooge out of the land), reached by the `sky-rope` and `sky-rope-dying`
+  poke cases, and the final arena's stand-in, kinds `$3A` (`$FA3F`, `Obj_FinalStandIn`) and `$3B`
+  (`$FBC9`, `Obj_StandInBeaten`), reached by the `stand-in` and `stand-in-beaten` poke cases. `tests/decomp_test.py` has a `clear-keep` poke case for the object
   clear's Transylvania branch (slots 14 and 15 kept).
 - Decompiled: the boss hit `$F6D7` (`Boss_Hit`, objects.c; it raises the boss-hit event from C), the
   object clear `$F2C7` (`Obj_ClearSlots`, objcommon.c, called as C by flow.c and level.c) and the TOTAL
