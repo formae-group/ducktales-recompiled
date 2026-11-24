@@ -1,6 +1,6 @@
 """Print Scrooge's movement variables per frame from a NESRecomp --frame-log file.
 
-Columns (see docs/player.md): held buttons $16, player mode $39, action $0620, Y $0640 with its
+Columns (see docs/PLAYER.md): held buttons $16, player mode $39, action $0620, Y $0640 with its
 fraction $0660, vertical velocity $07C0:$07B0 (signed 8.8, positive = up), screen X $0650, and any
 extra addresses given with --extra. --summary reports the highest point (smallest Y) and the
 frames spent in the air for each airborne stretch.

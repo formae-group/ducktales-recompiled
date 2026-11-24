@@ -2,7 +2,7 @@
 
 The sound driver lives in bank 3 and drives the four tone channels of the 2A03 APU (two pulses,
 triangle, noise). It never uses the DMC. Addresses below are bank 3 unless another bank is
-named; RAM is CPU RAM. Status words follow [memory-map.md](memory-map.md): **verified** = seen
+named; RAM is CPU RAM. Status words follow [MEMORY-MAP.md](MEMORY-MAP.md): **verified** = seen
 in a controlled run or read from unambiguous code, **hypothesis** = needs another experiment.
 
 Tools (they read your ROM locally; their output is never committed):
@@ -228,7 +228,7 @@ writes `$4010-$4013` (`audio_driver.py apu`; the one other hit, a `$4003` store 
 
 ## Native synth
 
-`src/native/native_audio.c` is the sound of the native runtime ([native-runtime.md](native-runtime.md)),
+`src/native/native_audio.c` is the sound of the native runtime ([NATIVE-RUNTIME.md](NATIVE-RUNTIME.md)),
 which has no APU. The recompiled driver keeps running as game logic and writes the APU registers
 as it always did; the native bus records those writes per frame with their CPU cycle
 (`NativeFrame.apu_writes`), and the synth turns one frame's writes into that frame's samples:
@@ -268,7 +268,7 @@ What cannot match sample for sample, and why the comparison uses phase-free meas
 steps once per CPU cycle during a rest (period 0), so where it stops when the next quarter-frame
 clock clears its linear counter depends on single cycles of write timing, and the noise LFSR's
 phase likewise. Two recordings of the APU itself at different CPU/PPU alignments differ the same
-way. Results: [validation.md](validation.md#native-synth).
+way. Results: [VALIDATION.md](VALIDATION.md#native-synth).
 
 `ducktales_native --wav-out FILE` writes the synth's output (48 kHz mono) for a route.
 
@@ -289,7 +289,7 @@ back. The synth plays those writes on two more sets of channels, at the point of
 driver's update starts (its `$4015` write), and only the channels a voice holds are heard. Their
 output joins the console's in the same nonlinear mixer and output filters. With both options off the
 extra channels do not exist and the samples are the same as before, bit for bit
-([validation.md](validation.md#extra-voices)).
+([VALIDATION.md](VALIDATION.md#extra-voices)).
 
 - **Music under effects.** For each channel in `$DF` (the effect's mask) the voice plays the music
   part the driver keeps sequencing there without writing the APU. The record's music bytes
@@ -344,7 +344,7 @@ own samples, byte for byte as before.
 F9 fades out before the queue is dropped, since the queued sound is the old state's, and closing the
 game fades out before the device closes. In the synth, a channel a mod mutes ramps out and back in
 over 5 ms, and in the mods layer a replacement fades in when it starts and out when it is stopped
-or held by the pause ([mods.md](mods.md#music-and-effects)).
+or held by the pause ([MODS.md](MODS.md#music-and-effects)).
 
 The synth renders straight at the device's rate (48 kHz, each sample the integral of the channels
 over its span of CPU time), so there is no rate conversion between them; mods' files at another
@@ -355,7 +355,7 @@ this stage with the frame loop and the device on simulated clocks and writes wha
 play. SPEC is a comma-separated list: `refresh=HZ` (VSync; 0 for none, a minimised window),
 `period=N` (device buffer, default 1024), `drift=PPM` (device clock), `volume=N`, and the events
 `menu=F:N`, `fast=F:N`, `drag=F:MS`, `hitch=F:MS`, `off=F:N`, `load=F` and `sweep=F` (volume
-100-0-100 in steps of 5 per frame). Results: [validation.md](validation.md#presented-sound).
+100-0-100 in steps of 5 per frame). Results: [VALIDATION.md](VALIDATION.md#presented-sound).
 
 ## Catalogue
 
@@ -375,7 +375,7 @@ identical at the loop start and one period later. "Seen in" is the route and fir
 | `$03` | The Himalayas | 144 intro, loops 2048 | same | `himalayas_intro` 917 |
 | `$04` | The Moon | 910 intro, loops 2080 (the noise part repeats every 160) | same | `moon_intro` 937 |
 | `$05` | Land Select; also the ending | loops 96 (triangle 192), noise unused | `$D9CA` with `$F6` = 5; ending `$E1C1` | every route, frame 220; ending poke run |
-| `$06` | Boss fight | 224 intro, loops 896 (pulse 2: 895) | boss trigger `$D043`; respawn during a boss fight | poke runs ([game-state.md](game-state.md#boss)) |
+| `$06` | Boss fight | 224 intro, loops 896 (pulse 2: 895) | boss trigger `$D043`; respawn during a boss fight | poke runs ([GAME-STATE.md](GAME-STATE.md#boss)) |
 | `$07` | Title | loops every 3168 | `$D4FA`; ending `$E256` (static reading: when sprite 0's Y is `$B7` or more and `$C5` is not 7) | every route, frame 7 |
 | `$08` | Invincibility | loops 96, noise unused | `$E36C` while `$75` is positive | `african_mines_intro` 1821 |
 | `$09` | Game over | ends after 160, noise unused | `$DEB9` | `amazon_intro` 4020 |
@@ -400,7 +400,7 @@ behind bank 6 call sites are not known.
 
 | Id | Prio | Channels | Frames | Where it plays | Status |
 |---|---|---|---|---|---|
-| `$10` | 8 | P2+N | 7 | Scrooge lands (`$E6C9`) | verified (routes, [player.md](player.md)) |
+| `$10` | 8 | P2+N | 7 | Scrooge lands (`$E6C9`) | verified (routes, [PLAYER.md](PLAYER.md)) |
 | `$11` | 5 | P2 | 40 | Pogo bounce (`$E6A0`) | verified (routes) |
 | `$12` | 10 | P2 | 9 | Climbing while Up or Down is held (`$E82C`) | static |
 | `$13` | 12 | P2+N | 16 | Cane swing (`$E928`) | verified (routes) |
@@ -431,7 +431,7 @@ behind bank 6 call sites are not known.
 | `$33` | 5 | P2+N | 11 | Bank 6 `$9F39` | static |
 | `$34` | 15 | P2 | 28 | Bank 6 `$9BBF` (type `$56`) | verified (route, The Himalayas) |
 | `$35` | 15 | P2 | 56 | Bank 6 `$8942` (types `$4E`, `$38`) | verified (routes) |
-| `$36` | 15 | P2 | 25 | Time below 30, every 16 frames (`$E2FA`) | static ([game-state.md](game-state.md#timer)) |
+| `$36` | 15 | P2 | 25 | Time below 30, every 16 frames (`$E2FA`) | static ([GAME-STATE.md](GAME-STATE.md#timer)) |
 | `$37` | 15 | all four | 255 | Fanfare: key item (type `$29`, table `$8C0C`), treasure (bank 6 `$8C15`), and after `$FF` at `$FDDD` before the ending | static |
 
 Every id `$10-$37` was recorded from the Land Select state with the music stopped first

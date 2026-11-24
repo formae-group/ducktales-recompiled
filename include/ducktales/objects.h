@@ -6,7 +6,7 @@
  * overlay below names the rows in that layout, so gObjects->y[slot] is the
  * byte the game reads as LDA $0640,X. A row whose meaning is not known keeps
  * its address as its name (unk_XXXX). Field status follows
- * docs/memory-map.md: "verified" rows are named in ducktales_symbols.h with
+ * docs/MEMORY-MAP.md: "verified" rows are named in ducktales_symbols.h with
  * that status; the rest are hypotheses.
  */
 #pragma once
@@ -21,7 +21,7 @@ extern "C" {
 
 #define OBJ_SLOTS DT_OBJ_SLOTS
 
-/* $0700 status bits (docs/rendering.md, docs/decompilation.md "Objects"). */
+/* $0700 status bits (docs/RENDERING.md, docs/DECOMPILATION.md "Objects"). */
 #define OBJ_STATUS_LIVE   0x80 /* the slot is updated and drawn (verified) */
 #define OBJ_STATUS_WORLD  0x20 /* X is a world position (verified) */
 #define OBJ_STATUS_HIDDEN 0x10 /* not drawn (verified) */
@@ -114,8 +114,8 @@ extern "C" {
 /* $0600 flags. */
 #define OBJ_FLAG_ON_SCREEN     0x80 /* set by the sprite builder; contact tests skip slots without it (code) */
 #define OBJ_FLAG_FACING_RIGHT  0x40 /* (verified) */
-#define OBJ_FLAG_DELETE_AT_END 0x08 /* freed when its animation ends (verified, rendering.md) */
-#define OBJ_FLAG_BLINK         0x02 /* drawn every other frame (verified, rendering.md) */
+#define OBJ_FLAG_DELETE_AT_END 0x08 /* freed when its animation ends (verified, RENDERING.md) */
+#define OBJ_FLAG_BLINK         0x02 /* drawn every other frame (verified, RENDERING.md) */
 
 /* $07E0 direction of the walking kinds: bit 0 right (code). */
 #define OBJ_DIR_RIGHT 1
@@ -153,7 +153,7 @@ typedef struct ObjectTable {
     uint8_t vy[OBJ_SLOTS];        /* $07C0 vertical velocity, signed, up positive (verified) */
     uint8_t hitbox[OBJ_SLOTS];    /* $07D0 hitbox entry (verified) */
     uint8_t dir[OBJ_SLOTS];       /* $07E0 direction (code) */
-    uint8_t record[OBJ_SLOTS];    /* $07F0 land record the slot was spawned from, $FF none (verified, levels.md) */
+    uint8_t record[OBJ_SLOTS];    /* $07F0 land record the slot was spawned from, $FF none (verified, LEVELS.md) */
 } ObjectTable;
 
 #define OBJ_ROW_CHECK(field, addr) \

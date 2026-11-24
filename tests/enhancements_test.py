@@ -1,4 +1,4 @@
-"""Enhancement checks (src/game/enhancements.c, docs/architecture.md "Enhancements").
+"""Enhancement checks (src/game/enhancements.c, docs/ARCHITECTURE.md "Enhancements").
 
 For every enhancement, on the headless build:
   1. with the option at its stock value the run is identical to no option

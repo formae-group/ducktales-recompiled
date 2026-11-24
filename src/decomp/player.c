@@ -1,6 +1,6 @@
 /*
- * player.c - Scrooge, decompiled from the fixed bank (docs/player.md,
- * docs/decompilation.md).
+ * player.c - Scrooge, decompiled from the fixed bank (docs/PLAYER.md,
+ * docs/DECOMPILATION.md).
  *
  * Player_Update runs once per frame from the frame loop: it loads gravity,
  * counts the invulnerability and power-up timers down and runs the handler of

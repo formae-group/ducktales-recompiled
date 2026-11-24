@@ -1,6 +1,6 @@
 /*
  * native_audio.c - the native runtime's synth (native_audio.h,
- * docs/audio.md "Native synth"). A frame is played as a run of spans between
+ * docs/AUDIO.md "Native synth"). A frame is played as a run of spans between
  * events (a register write at its cycle offset, a frame-sequencer clock);
  * within a span every channel's parameters are fixed, so its contribution to
  * a sample is the integral of a periodic step sequence, taken in closed form:
@@ -17,7 +17,7 @@
  *   noise      15-bit LFSR, one shift per table period (the only loop: at
  *              most one iteration per LFSR shift, never per cycle)
  *   DMC        the $4011 level only; the ROM never starts a sample
- *              (docs/audio.md, "DMC")
+ *              (docs/AUDIO.md, "DMC")
  *
  * Envelopes, the linear counter, length counters and sweeps are clocked by
  * the 4- or 5-step frame sequencer at its NTSC cycle positions, carried

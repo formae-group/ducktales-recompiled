@@ -3,7 +3,7 @@
  * the native renderer that draws it (native/native_render.c). Nothing here
  * depends on a runtime: the cycle host fills NvVideo from its PPU
  * (native/native_check.c), a native runtime fills it from what the game
- * wrote. docs/native-render.md describes the model and its verification.
+ * wrote. docs/NATIVE-RENDER.md describes the model and its verification.
  *
  *   memories    CHR RAM (8 KiB), CIRAM (two 1 KiB nametables) with the
  *               cartridge's mirroring, palette RAM (32 bytes, 6 bits) and

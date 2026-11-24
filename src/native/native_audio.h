@@ -1,7 +1,7 @@
 /*
  * native_audio.h - the native runtime's synth: the frame's APU register
  * writes (NativeFrame.apu_writes, native_state.h) in, the frame's samples
- * out (docs/audio.md, "Native synth").
+ * out (docs/AUDIO.md, "Native synth").
  *
  * It keeps the four tone channels, the DMC's output level and the frame
  * sequencer as the program set them and renders each sample as the average
@@ -33,7 +33,7 @@ extern "C" {
 /* Power-on: every register 0, silence, samples at sample_rate Hz. */
 void native_audio_reset(int sample_rate);
 
-/* The native player's extra voices (native_voices.h, docs/audio.md "Extra
+/* The native player's extra voices (native_voices.h, docs/AUDIO.md "Extra
  * voices"), both off until set; they read the driver's RAM and the ROM after
  * each frame and are mixed beside the console's channels. With both off the
  * output is the console's channels alone, sample for sample as before.

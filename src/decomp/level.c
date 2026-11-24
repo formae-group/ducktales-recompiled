@@ -1,7 +1,7 @@
 /*
  * level.c - the level's map and screen decoding, the column streaming, the
  * VRAM queue uploads and the camera, decompiled from the fixed bank
- * (docs/levels.md, docs/rendering.md, docs/decompilation.md).
+ * (docs/LEVELS.md, docs/RENDERING.md, docs/DECOMPILATION.md).
  *
  * The camera follows Scrooge inside a map row and stops at its ends; every 4
  * pixels it moves stream one 32x32 block of the screen at its edge into the

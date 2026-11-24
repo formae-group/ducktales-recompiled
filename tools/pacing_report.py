@@ -1,4 +1,4 @@
-"""Summarise a window run's frame pacing (docs/presentation.md).
+"""Summarise a window run's frame pacing (docs/PRESENTATION.md).
 
     NESRECOMP_PACING_LOG=captures/p.csv CYC_PACING_LOG=captures/p.txt build/windows/Release/ducktales.exe ROM ...
     py -3 -I tools/pacing_report.py captures/p [--skip 120]

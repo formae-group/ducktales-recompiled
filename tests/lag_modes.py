@@ -1,4 +1,4 @@
-"""The native runtime's two lag modes on the full_* routes (docs/native-runtime.md).
+"""The native runtime's two lag modes on the full_* routes (docs/NATIVE-RUNTIME.md).
 
 For each route this runs ducktales_native twice:
 

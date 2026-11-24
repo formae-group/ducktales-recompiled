@@ -1,4 +1,4 @@
-"""Sprite presentation checks (src/host/ducktales_sprites.c, docs/rendering.md "Sprites without limits").
+"""Sprite presentation checks (src/host/ducktales_sprites.c, docs/RENDERING.md "Sprites without limits").
 
 The window shows every sprite the game wants, in a fixed order, with no per-line or OAM limit,
 while the machine keeps drawing the console's picture. On the headless build:
@@ -44,7 +44,7 @@ from render_oam import hud_allowed, hud_in_oam, hud_records, log_records, slot_o
 
 ROUTES = ROOT / 'tests' / 'routes'
 # route, first frame, frames: the Amazon vine shaft (HUD left out for Scrooge's Y) and the quieter screen after it, then the busiest
-# windows of four lands measured with render_oam.py limits (docs/rendering.md)
+# windows of four lands measured with render_oam.py limits (docs/RENDERING.md)
 WINDOWS = [
     ('full_amazon', 1215, 90),
     ('full_amazon', 3200, 30),

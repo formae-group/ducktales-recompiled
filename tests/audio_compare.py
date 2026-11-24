@@ -1,4 +1,4 @@
-"""Native synth vs the cycle host's APU on the input routes (docs/audio.md, "Native synth").
+"""Native synth vs the cycle host's APU on the input routes (docs/AUDIO.md, "Native synth").
 
 For every selected route this records the cycle host (ducktales.exe --wav-out, the
 cycle-level APU) and the native runtime with its synth (ducktales_native.exe --lag
@@ -32,7 +32,7 @@ floor counts only if the two APU recordings stayed in step (its own level and sp
 medians within the limits); on some full_* routes the timing change sends the game down
 another path and the floor is not used. The pitch
 p95 is reported but not judged: peaks in a mix of four channels make it as large in the
-noise floor (docs/validation.md gives the numbers).
+noise floor (docs/VALIDATION.md gives the numbers).
 
     py -3 -I tests/audio_compare.py --build build/headless [--routes R ...] [--jobs 2] [--keep]
 

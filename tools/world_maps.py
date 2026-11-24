@@ -4,7 +4,7 @@ The fixed bank holds, per map index (0-4 = the five lands in Land Select order,
 5-9 = boss arenas and scenes), the row count, the row stride and a pointer to a
 byte grid of rows x stride screen ids, $FF meaning no screen there. The loader
 is the routine at $C7B0, which copies them to $2A, $2B and $20/$21 (see
-docs/levels.md). Screen index = row * stride + column, the value kept in $2D.
+docs/LEVELS.md). Screen index = row * stride + column, the value kept in $2D.
 
     py -3 -I tools/world_maps.py ROM [--ids]
 

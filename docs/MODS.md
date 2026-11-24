@@ -131,14 +131,14 @@ that land only and win over `global.pal` there. On the title and Land Select scr
 `music/<id>.ogg` or `.wav` replaces music request `<id>` (00-0F), `sfx/<id>.ogg` or `.wav`
 replaces effect request `<id>` (10-37). `<id>` is two hex digits and may be followed by a dash
 and any name: `music/07-title.ogg`, `sfx/13-swing.wav`. The ids are listed in
-[docs/audio.md](audio.md). WAV files are PCM, 8 or 16 bits, mono or stereo. Music loops from the
+[docs/AUDIO.md](AUDIO.md). WAV files are PCM, 8 or 16 bits, mono or stereo. Music loops from the
 file's own loop start (the OGG `LOOPSTART` comment, a WAV `smpl` loop), or from the beginning.
 
 While a replacement plays, the sound driver's channels for that request are muted in the mix. The
 APU still runs them, so the machine is unchanged. A replacement fades in over 5 ms when it starts
 and out over 5 ms when it is stopped or the game pauses, and the muted channels fade the same way,
 so no file has to start or end at silence to avoid a click. The native player keeps the sum under
-full scale with its limiter ([audio.md](audio.md#output-stage)); a file at full scale over the
+full scale with its limiter ([AUDIO.md](AUDIO.md#output-stage)); a file at full scale over the
 game's effects is turned down there instead of clipping.
 
 ## Scripts
@@ -201,7 +201,7 @@ handler gets a table with the event's `name` and the values below (`function(e) 
 | `jump-start` | A jump copied the take-off velocity into Scrooge's | | Not cancelable |
 
 `slot` is the object's slot (1-15), `kind` its type (`$0710`), `item` the pickup's item
-(`$0620`; the land treasures are `$6F` and up, see [game-state.md](game-state.md)), `x` its world X
+(`$0620`; the land treasures are `$6F` and up, see [GAME-STATE.md](GAME-STATE.md)), `x` its world X
 and `y` its Y on the screen, as `dt.state.x` and `y` are Scrooge's. `land` is 0 (The Amazon) to 4
 (The Moon). `money-changed` gives the new `money` and the `delta`; several additions in one frame,
 and the time bonus counted at the end of a land, come as one event per frame that changed it.
@@ -215,7 +215,7 @@ not drawn), `time` (the HUD's 0-999), `difficulty`, `paused` (boolean), `boss_hi
 `treasures` and `key_items` (bit masks), `pad` and `pad_new` (controller 1, held and newly
 pressed), `music`, `mode` (Scrooge's mode), `invulnerable` (frames left), `x` (Scrooge's world
 X) and `y` (his Y on screen). Their addresses and meaning are in
-[docs/memory-map.md](memory-map.md) and [docs/game-state.md](game-state.md). Reading an unknown
+[docs/MEMORY-MAP.md](MEMORY-MAP.md) and [docs/GAME-STATE.md](GAME-STATE.md). Reading an unknown
 field is an error.
 
 A handler that only reads, logs, toasts or uses the store leaves the machine exactly as it was
@@ -229,7 +229,7 @@ game, as the matching enhancement does.
 and `screen_x` (X on the screen). `dt.camera()` returns `x` (the world X of the camera's left
 edge), `row` (the map row) and `screen` (the screen index, row * 8 + page). Both read the game
 when they are called, only inside handlers, and change nothing. The object tables are in
-[docs/memory-map.md](memory-map.md).
+[docs/MEMORY-MAP.md](MEMORY-MAP.md).
 
 ```lua
 dt.on("frame", function()

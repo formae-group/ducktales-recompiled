@@ -1,6 +1,6 @@
 /*
  * decomp_cycle.c - the cycle host's backend of the decompilation layer
- * (decomp_backend.h, docs/decompilation.md): runs the decompiled routines in
+ * (decomp_backend.h, docs/DECOMPILATION.md): runs the decompiled routines in
  * place of the recompiled ones, or beside them.
  *
  * Every routine owns one [[mod_function_hook]] site at its entry
@@ -48,7 +48,7 @@
  * both from the caller's C state, with the registers the C passes. (A routine
  * with a site is checked there, when the caller's original runs for real.)
  *
- * Task code (decomp.h, docs/decompilation.md "Task code") runs the same way,
+ * Task code (decomp.h, docs/DECOMPILATION.md "Task code") runs the same way,
  * with four differences. Its C starts at a site or at a resume point: an
  * address the game's RTS returns to (after a JSR to code that is not
  * decompiled, or a task_yield), seen by the RTS observer with no site. Its

@@ -2,7 +2,7 @@
  * events.c - the event system (ducktales/events.h).
  *
  * An event with a site owns one [[mod_function_hook]] (config/game.toml,
- * address and evidence in ducktales_symbols.h, docs/decompilation.md
+ * address and evidence in ducktales_symbols.h, docs/DECOMPILATION.md
  * "Events"); EVENT_BOSS_DEFEATED shares the boss hit's. A site's hook is
  * enabled exactly while one of its events has a handler, so with no handler
  * the generated code runs the original instruction and nothing changes. At

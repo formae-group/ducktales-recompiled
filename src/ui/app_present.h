@@ -1,6 +1,6 @@
 /*
  * app_present.h - how the window shows the machine's picture (window builds
- * only, DUCKTALES_WINDOW). docs/presentation.md has the measurements behind
+ * only, DUCKTALES_WINDOW). docs/PRESENTATION.md has the measurements behind
  * each choice.
  *
  *   frame pacing   Auto, VSync or Steady: resolved at launch into the host's

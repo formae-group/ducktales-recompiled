@@ -1,4 +1,4 @@
-"""Mods (src/mods, docs/mods.md) on the headless build, with mods made on the fly.
+"""Mods (src/mods, docs/MODS.md) on the headless build, with mods made on the fly.
 
 Nothing derived from the game is kept: every mod is generated in a temporary folder, the tile
 templates come from the player's own ROM through --mods-dump and are deleted with it.

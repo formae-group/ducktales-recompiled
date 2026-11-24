@@ -1,6 +1,6 @@
 /*
  * native_voices.c - the synth's extra voices (native_voices.h). Each function
- * names the driver code it follows (bank 3, docs/audio.md); the channel record
+ * names the driver code it follows (bank 3, docs/AUDIO.md); the channel record
  * offsets are the driver's.
  */
 #include "native/native_voices.h"

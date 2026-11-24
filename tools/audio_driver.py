@@ -1,4 +1,4 @@
-"""Inspect DuckTales' sound driver (bank 3) from the user's ROM; see docs/audio.md.
+"""Inspect DuckTales' sound driver (bank 3) from the user's ROM; see docs/AUDIO.md.
 
 Output is for local investigation and is not committed (it is derived from the ROM).
 

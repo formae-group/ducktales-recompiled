@@ -29,7 +29,7 @@ void ducktales_host_write_game_settings(FILE *f);
  * after the picture and before each NMI, with the APU paused across them. The
  * game gets that much more CPU time per frame and the window still shows 60
  * frames a second, so frames that lag on the console finish in time
- * (docs/native-runtime.md has the measurements). On by default in the window
+ * (docs/NATIVE-RUNTIME.md has the measurements). On by default in the window
  * build; off in the headless build, which verification runs. The host's own
  * --extra-scanlines N overrides it for one run. */
 #define DT_NO_SLOWDOWN_LINES 128u

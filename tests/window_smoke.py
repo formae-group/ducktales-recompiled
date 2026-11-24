@@ -1,4 +1,4 @@
-"""Smoke test of the window build (application, docs/architecture.md).
+"""Smoke test of the window build (application, docs/ARCHITECTURE.md).
 
 Runs build/windows/Release/ducktales.exe hidden (--hidden --exit-after N), so
 nothing appears on screen, with a scratch config.ini (--config) and data
@@ -16,7 +16,7 @@ folder (DUCKTALES_DATA_DIR):
   6. presentation: the [Game] keys survive a run, FramePacing sets the host's
      [Display] VSync before it starts, and --present-out shows the picture
      at the size the overscan crop, the pixel aspect and the window scale
-     give (docs/presentation.md);
+     give (docs/PRESENTATION.md);
   7. DUCKTALES_UI_SELFTEST: the in-game menu opens by itself at frame 120, walks
      every tab and category (Settings: General, Graphics, Audio, Controls with
      a capture, Gameplay, Mods; Enhancements: Gameplay, Restore defaults; About),

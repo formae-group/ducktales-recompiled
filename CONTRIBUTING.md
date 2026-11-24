@@ -54,10 +54,10 @@ enhancement and sprite tests use.
 
 ## Changing the game
 
-Game behaviour changes go through [docs/architecture.md](docs/architecture.md#adding-a-behaviour-change):
+Game behaviour changes go through [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#adding-a-behaviour-change):
 
-1. Identify the routine and document it in [docs/functions.md](docs/functions.md) and the RAM it uses
-   in [docs/memory-map.md](docs/memory-map.md).
+1. Identify the routine and document it in [docs/FUNCTIONS.md](docs/FUNCTIONS.md) and the RAM it uses
+   in [docs/MEMORY-MAP.md](docs/MEMORY-MAP.md).
 2. Name the address in `src/game/enhancements_sites.h` and declare a `[[mod_function_hook]]` for it
    in `config/game.toml` with a content key (length and CRC-32 of the original bytes), so the hook
    refuses to run on unexpected code. Compute the CRC from your own ROM and never commit the bytes.
@@ -82,7 +82,7 @@ Run the checks that cover what you touched before submitting:
 | ROM identity and import | `build\headless\Release\app_rom_test.exe` |
 | Native player sound output | `py -3 -I tests/audio_output_test.py --build build/windows` |
 
-Checks come in two tiers ([docs/validation.md](docs/validation.md#fast-verification)):
+Checks come in two tiers ([docs/VALIDATION.md](docs/VALIDATION.md#fast-verification)):
 
 - **Every commit**, `tests/quick_verify.py` runs the routes at alignment 0 and compares every
   frame with golden hashes recorded from a verified build, stopping at the first difference and
@@ -112,7 +112,7 @@ CI ([GitHub Actions](.github/workflows/ci.yml)) runs on every push to `main` and
 without the ROM: `tools/format.py --check` with the pinned clang-format and Black, and a byte-compile
 of `tests/` and `tools/`. Everything that needs the game (the table above) runs on your machine.
 
-Record new verified results in [docs/validation.md](docs/validation.md), and list anything you did
+Record new verified results in [docs/VALIDATION.md](docs/VALIDATION.md), and list anything you did
 not verify in its *Not verified* section.
 
 ## Style
@@ -167,10 +167,10 @@ shows), so a package built from an untagged or modified tree says so in its name
 The package holds `ducktales.exe` (static MSVC runtime, so players need no Visual C++
 redistributable), `SDL2.dll`, the player `README.txt` (from `packaging/README.txt.in`),
 `LICENSE.txt` and the third-party licences under `licenses/`; the install rules at the end of
-`CMakeLists.txt` list them and [docs/licensing.md](docs/licensing.md) says why each is there. It
+`CMakeLists.txt` list them and [docs/LICENSING.md](docs/LICENSING.md) says why each is there. It
 never contains the ROM, generated sources or test tools; `tests/package_test.py` checks the file list.
 
 ## Licensing
 
 Contributions are accepted under the MIT license in [LICENSE](LICENSE). Builds link NESRecomp, which
-is licensed for noncommercial use only; see [docs/licensing.md](docs/licensing.md).
+is licensed for noncommercial use only; see [docs/LICENSING.md](docs/LICENSING.md).

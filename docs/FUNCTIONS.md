@@ -16,11 +16,11 @@ Addresses are CPU addresses; `bank N` is the 16 KiB PRG bank at `$8000` (bank 7 
 | `$FFA5` | `task_wait` | Calls `task_yield` X times. | Static reading. |
 | `$FFDE` | `bank_select` | A = bank. Stores it in `$E7` and writes it through the bus-conflict table at `$FFE5`. | Static reading; 45 call sites in bank 7. |
 | `$FFE0` | `bank_select_temp` | Same write without updating `$E7`; used by the NMI, which restores `$E7` afterwards. | Static reading of the NMI. |
-| `$C000` | `nmi` | See [rendering.md](rendering.md) and [audio.md](audio.md). | Static reading. |
-| `$C1AB` | `read_controllers` | Strobes `$4016` and shifts 8 bits from each port. | Static reading; RAM correlation in [memory-map.md](memory-map.md). |
+| `$C000` | `nmi` | See [RENDERING.md](RENDERING.md) and [AUDIO.md](AUDIO.md). | Static reading. |
+| `$C1AB` | `read_controllers` | Strobes `$4016` and shifts 8 bits from each port. | Static reading; RAM correlation in [MEMORY-MAP.md](MEMORY-MAP.md). |
 | `$D4E6` | `main_task` | Entry point of the first task. Static discovery cannot reach it (it is only reached through `JMP ($0093)`), so it is listed in `config/game.toml`. | Static reading of `reset`; first interpreter miss in the unseeded build. |
 
-### Rendering (details in [rendering.md](rendering.md))
+### Rendering (details in [RENDERING.md](RENDERING.md))
 
 | Address | Name | Behaviour |
 |---|---|---|
@@ -43,7 +43,7 @@ Addresses are CPU addresses; `bank N` is the 16 KiB PRG bank at `$8000` (bank 7 
 | bank 5 `$8000` | `build_oam` | Sprite builder (HUD groups, then slots, order flipped every frame). |
 | bank 5 `$BAB0` | `draw_strings` | Direct text and HUD-frame drawing. |
 
-### Game flow (details in [game-state.md](game-state.md), [levels.md](levels.md))
+### Game flow (details in [GAME-STATE.md](GAME-STATE.md), [LEVELS.md](LEVELS.md))
 
 | Address | Name | Behaviour |
 |---|---|---|
@@ -71,7 +71,7 @@ Addresses are CPU addresses; `bank N` is the 16 KiB PRG bank at `$8000` (bank 7 
 
 Evidence for each row is in the linked documents (traces, poke runs, static reading).
 
-### Scrooge (details in [player.md](player.md))
+### Scrooge (details in [PLAYER.md](PLAYER.md))
 
 | Address | Name | Behaviour | Evidence |
 |---|---|---|---|
@@ -99,7 +99,7 @@ Evidence for each row is in the linked documents (traces, poke runs, static read
 | `$8228` | `channel_mute` | Silences one APU channel. | Static. |
 | `$88D9` | `load_instrument` | Copies instrument bytes into the channel record. | Static. |
 
-Fixed bank: `$F754` `sound_request` queues A in the ring when the slot is free (dropped otherwise); `$F752` also records the music id in `$C5`. See [audio.md](audio.md) for the full catalogue of 56 ids.
+Fixed bank: `$F754` `sound_request` queues A in the ring when the slot is free (dropped otherwise); `$F752` also records the music id in `$C5`. See [AUDIO.md](AUDIO.md) for the full catalogue of 56 ids.
 
 ## Why static discovery needs help
 
@@ -111,5 +111,5 @@ Two patterns hide code from NESRecomp's static discovery:
 
 Both are handled by seeds: `config/game.toml` names `main_task`, and `config/ducktales.seeds`
 lists the bank-qualified instruction addresses that the route runs executed (see
-[validation.md](validation.md)). Code no route has reached still runs correctly on the
+[VALIDATION.md](VALIDATION.md)). Code no route has reached still runs correctly on the
 interpreter.

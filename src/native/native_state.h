@@ -1,7 +1,7 @@
 /*
  * native_state.h - what the native runtime hands to a renderer and a synth.
  *
- * The native runtime (docs/native-runtime.md) runs the recompiled program
+ * The native runtime (docs/NATIVE-RUNTIME.md) runs the recompiled program
  * against a plain bus: no PPU dots, no APU ticks. The game's register writes
  * still land somewhere, and this header is that place:
  *

@@ -1,6 +1,6 @@
 /*
  * native_output.c - the native player's sound output (native_output.h,
- * docs/audio.md "Output stage").
+ * docs/AUDIO.md "Output stage").
  *
  * Producer (one push per frame):
  *   volume    the master volume, ramped to a new value over 10 ms

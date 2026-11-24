@@ -1,6 +1,6 @@
 /*
  * ducktales_symbols.h - every revision-specific address the port's own code
- * uses, for DuckTales (USA), PRG SHA-256 8ba8baed...e2013 (docs/rom.md).
+ * uses, for DuckTales (USA), PRG SHA-256 8ba8baed...e2013 (docs/ROM.md).
  *
  * This is the only file that names addresses. Each entry points at the
  * document that holds its evidence; "hypothesis" marks the ones that still
@@ -10,17 +10,17 @@
  */
 #pragma once
 
-/* ---- zero page (docs/memory-map.md, docs/game-state.md) ---- */
+/* ---- zero page (docs/MEMORY-MAP.md, docs/GAME-STATE.md) ---- */
 #define DT_ADDR_SCRATCH0        0x0000 /* scratch: jump vector low, sound request's saved X (verified, code) */
 #define DT_ADDR_SCRATCH1        0x0001 /* scratch: jump vector high, sound request's id (verified, code) */
 #define DT_ADDR_TEMP08          0x0008 /* scratch: Y before a vertical move, X before a horizontal one (code) */
 #define DT_ADDR_TEMP09          0x0009 /* scratch: world X page before a horizontal move (code) */
-#define DT_ADDR_PROBE_HITS      0x0010 /* background probe result, bit 0 = solid (verified, player.md) */
+#define DT_ADDR_PROBE_HITS      0x0010 /* background probe result, bit 0 = solid (verified, PLAYER.md) */
 #define DT_ADDR_CONTACT_DEPTH   0x0011 /* overlap left by the object contact tests $D202/$D291 (code) */
 #define DT_ADDR_PAD_NEW         0x0014 /* controller 1, newly pressed this frame (verified) */
 #define DT_ADDR_PAD_HELD        0x0016 /* controller 1, held (verified) */
 #define DT_ADDR_PAD2_HELD       0x0017 /* controller 2, held (hypothesis: read by the row drop at $E70B) */
-#define DT_ADDR_MAP_GRID        0x0020 /* pointer to the current map's screen grid (verified, levels.md) */
+#define DT_ADDR_MAP_GRID        0x0020 /* pointer to the current map's screen grid (verified, LEVELS.md) */
 #define DT_ADDR_STREAM_SCREEN   0x0024 /* screen index being streamed (verified) */
 #define DT_ADDR_STREAM_POS      0x0026 /* stream position (verified) */
 #define DT_ADDR_STREAM_DIR      0x0029 /* stream direction last used (hypothesis) */
@@ -105,11 +105,11 @@
 /* Page 1 below this is data, not stack: the master palette $0100-$011F, the
  * consumed-record bits $0120-$013F and the HUD time group $0140-$015F, which
  * the game-over box ($DEB9, 33 bytes) replaces up to its end mark at $0160
- * (verified, memory-map.md, game-state.md). */
+ * (verified, MEMORY-MAP.md, GAME-STATE.md). */
 #define DT_ADDR_STACK_FLOOR 0x0161
 
 /* ---- object tables: one 16-byte row per attribute, column = slot ----
- * Slot 0 is Scrooge (docs/memory-map.md "Object tables", docs/player.md). */
+ * Slot 0 is Scrooge (docs/MEMORY-MAP.md "Object tables", docs/PLAYER.md). */
 #define DT_OBJ_SLOTS         16
 #define DT_SLOT_SCROOGE      0
 #define DT_OBJ_BASE          0x0600
@@ -123,7 +123,7 @@
 #define DT_ROW_POSE          0x0680 /* pose variant set with crouch and landing (code) */
 #define DT_ROW_TIMER         0x06B0 /* per-object countdown; Scrooge's cane recoil (code) */
 #define DT_ROW_BOSS_COOLDOWN 0x06F0 /* frames before a boss can be hit again (code) */
-#define DT_ROW_KIND          0x0710 /* object type the cane test reads (code, player.md) */
+#define DT_ROW_KIND          0x0710 /* object type the cane test reads (code, PLAYER.md) */
 #define DT_ROW_SPEED_FRAC    0x0760 /* horizontal speed fraction (verified) */
 #define DT_ROW_SPEED         0x0770 /* horizontal speed, whole pixels (verified) */
 #define DT_ROW_VDIR          0x0780 /* Scrooge: 8 rising, 4 falling or standing (verified) */
@@ -131,15 +131,15 @@
 #define DT_ROW_VY            0x07C0 /* vertical velocity, whole pixels, signed, up positive (verified) */
 #define DT_ROW_HITBOX        0x07D0 /* hitbox entry: bit 7 solid, bits 4-6 harmful (verified) */
 #define DT_ROW_DIR           0x07E0 /* per-object direction (code) */
-#define DT_ROW_RECORD        0x07F0 /* land record of the slot, $FF none (verified, levels.md) */
+#define DT_ROW_RECORD        0x07F0 /* land record of the slot, $FF none (verified, LEVELS.md) */
 
 /* Scrooge's jump take-off velocity (8.8, up positive). Stored by the land
  * set-up code in the fixed bank and copied into slot 0's velocity when a
- * jump starts (verified, docs/architecture.md "Jump experiment"). */
+ * jump starts (verified, docs/ARCHITECTURE.md "Jump experiment"). */
 #define DT_ADDR_JUMP_VY_FRAC 0x0790
 #define DT_ADDR_JUMP_VY      0x07A0
 
-/* ---- HUD (docs/memory-map.md "Other RAM") ---- */
+/* ---- HUD (docs/MEMORY-MAP.md "Other RAM") ---- */
 #define DT_ADDR_TIME_DIGITS   0x0151 /* HUD time hundreds; tens at +4, ones at +8 (verified) */
 #define DT_ADDR_MONEY_DIGITS  0x0324 /* 6 digit tiles, most significant first (verified) */
 #define DT_MONEY_DIGIT_COUNT  6
@@ -152,7 +152,7 @@
 #define DT_HP_DOT_LOST        0x01   /* attribute of a lost HP dot; 0 = full (verified) */
 #define DT_ADDR_LIVES         0x0361 /* extra lives, also the HUD digit tile (verified) */
 
-/* ---- sprite builder (bank 5 $8000, docs/rendering.md "Sprites") ----
+/* ---- sprite builder (bank 5 $8000, docs/RENDERING.md "Sprites") ----
  * Read by the presentation compositor (host/ducktales_sprites.c) to rebuild
  * the sprite list without the console's limits; all verified by
  * tools/render_oam.py check. */
@@ -174,7 +174,7 @@
 #define DT_ADDR_CAMERA_X        0x00F2 /* camera X low, page in DT_ADDR_CAMERA_PAGE */
 #define DT_ADDR_CAMERA_PAGE     0x00F3
 #define DT_ADDR_LAND            0x00F6 /* 0-4 lands, 5 Land Select, 6+ other screens */
-#define DT_LANDS                5      /* lands 0-4; music 0-4 is each land's own (game-state.md) */
+#define DT_LANDS                5      /* lands 0-4; music 0-4 is each land's own (GAME-STATE.md) */
 #define DT_LAND_HUD_TABLE_OFF   9      /* $F6 value whose top of frame keeps sprites at $0000 */
 #define DT_HUD_MIN_SCROOGE_Y    0x44   /* the builder adds the HUD only with Scrooge's Y >= this */
 #define DT_HUD_BAND_Y           0x30   /* objects but slot 0 lose sprites above this unless $0600 bit 4 */
@@ -198,7 +198,7 @@
 #define DT_ADDR_SPR_Y           0x0012 /* scratch: the slot's screen Y */
 #define DT_ADDR_SPR_X           0x0013 /* scratch: the slot's screen X */
 
-/* ---- sound driver (bank 3, docs/audio.md) ----
+/* ---- sound driver (bank 3, docs/AUDIO.md) ----
  * Read by the mods' music and effect replacements (src/mods/ducktales/dt_mods_audio.c). */
 #define DT_SOUND_BANK           3      /* PRG bank of the driver and its sound table */
 #define DT_SOUND_TABLE          0x8A40 /* 2-byte header pointers by request id $00-$37 (verified) */
@@ -219,8 +219,8 @@
 
 /* ---- code sites (fixed bank 7 at $C000-$FFFF) ---- */
 /* ---- code (fixed bank 7 at $C000-$FFFF) ----
- * Routines the decompilation names or calls (docs/functions.md,
- * docs/player.md, docs/decompilation.md). config/game.toml declares a
+ * Routines the decompilation names or calls (docs/FUNCTIONS.md,
+ * docs/PLAYER.md, docs/DECOMPILATION.md). config/game.toml declares a
  * [[mod_function_hook]] with a content key at every one the port hooks. */
 #define DT_CODE_BG_PROBE         0xD120 /* background probes $40.. against the collision map */
 #define DT_CODE_CONTACT_H        0xD202 /* Scrooge-object contact while moving horizontally */
@@ -276,8 +276,8 @@
 #define DT_CODE_MESSAGE_LINE_AT  0xEF5F /* queue offset of each line's entry (code) */
 #define DT_CODE_MESSAGE_SCENE    0xDFED /* mode 15, message $0B: map row 6 streamed, then row 2 (code) */
 #define DT_CODE_BLOCK_DRAW       0xD068 /* queue block record Y of $D110 and throw its debris (code) */
-#define DT_B1_MESSAGE_TILE_OFF  0x82D0 /* bank 1: CHR tile $12D restored when the box closes (verified, rendering.md) */
-#define DT_B2_MESSAGE_TILE      0xA8F0 /* bank 2: CHR tile $12D while a message shows (verified, rendering.md) */
+#define DT_B1_MESSAGE_TILE_OFF  0x82D0 /* bank 1: CHR tile $12D restored when the box closes (verified, RENDERING.md) */
+#define DT_B2_MESSAGE_TILE      0xA8F0 /* bank 2: CHR tile $12D while a message shows (verified, RENDERING.md) */
 #define DT_B4_MESSAGE_LO        0xB888 /* bank 4: text of each message id, low bytes (code) */
 #define DT_B4_MESSAGE_HI        0xB89A /* their high bytes (code) */
 #define DT_B5_PROGRESS_BITS     0xB76A /* bank 5: consumed-record bits from the progress flags (code) */
@@ -329,7 +329,7 @@
 #define DT_TABLE_SCENE_PALETTES    0xE143 /* the scene palette bytes */
 #define DT_TABLE_SCENE_SPRITE_PAL3 0xE1A3 /* sprite palette 3 by $F9, 4 bytes each */
 
-/* ---- sound driver of bank 3 (docs/audio.md "Driver RAM") ---- */
+/* ---- sound driver of bank 3 (docs/AUDIO.md "Driver RAM") ---- */
 #define DT_SND_BANK               3      /* PRG bank of the driver and its data */
 #define DT_ADDR_SND_PRIORITY      0x00D0 /* high nibble playing effect, low nibble playing music (verified) */
 #define DT_ADDR_SND_OLD_MASK      0x00D1 /* previous effect channel mask while an effect starts */
@@ -361,9 +361,9 @@
 #define DT_TABLE_MUSIC_COMMANDS   0x87BB /* bank 3: music command handlers */
 #define DT_TABLE_EFFECT_COMMANDS  0x85C3 /* bank 3: effect command handlers */
 
-/* ---- game flow (docs/game-state.md, docs/levels.md, docs/rendering.md;
+/* ---- game flow (docs/GAME-STATE.md, docs/LEVELS.md, docs/RENDERING.md;
  * decompiled in src/decomp/flow.c) ---- */
-#define DT_ADDR_SCRATCH4          0x0004 /* scratch: block steps for $C830 (verified, rendering.md) */
+#define DT_ADDR_SCRATCH4          0x0004 /* scratch: block steps for $C830 (verified, RENDERING.md) */
 #define DT_ADDR_SCRATCH5          0x0005 /* scratch: VRAM queue offset for $C830 (code) */
 #define DT_ADDR_SCRATCH10         0x0010 /* scratch: counters and pointers of the flow code (code) */
 #define DT_ADDR_SCRATCH11         0x0011 /* scratch: screens left to draw at a respawn (code) */
@@ -398,9 +398,9 @@
 #define DT_ADDR_HUD_SPLIT          0x00EA /* sprite-0 HUD split, $40 in play (verified) */
 #define DT_ADDR_ROW_SCROLL_ADDR    0x00ED /* mid-frame $2006 low byte of the row scroll (hypothesis) */
 #define DT_ADDR_ROW_SCROLL_ADDR_HI 0x00EE /* its high byte (hypothesis) */
-#define DT_ADDR_SPRITE0_Y          0x00FA /* sprite-0 Y of the HUD split (verified, memory-map.md) */
+#define DT_ADDR_SPRITE0_Y          0x00FA /* sprite-0 Y of the HUD split (verified, MEMORY-MAP.md) */
 #define DT_ADDR_RANDOM             0x00C0 /* random generator, 4 bytes, stepped by $C2E6 (code) */
-#define DT_ADDR_SCROLL_Y           0x00FC /* top-of-frame scroll Y (verified, memory-map.md) */
+#define DT_ADDR_SCROLL_Y           0x00FC /* top-of-frame scroll Y (verified, MEMORY-MAP.md) */
 #define DT_ADDR_SCROLL_X           0x00FD /* top-of-frame scroll X (verified) */
 #define DT_ADDR_PPU_CTRL           0x00FF /* PPUCTRL shadow (verified) */
 #define DT_PPU_CTRL                0x2000
@@ -658,7 +658,7 @@
 #define DT_DATA_SELECT_MARK_X     0xD8D4
 #define DT_DATA_HUD_LIVES         0xDB02 /* the HUD lives group as the title starts it */
 #define DT_HUD_LIVES_LEN          13
-#define DT_DATA_BOSS_ROW          0xD04D /* per land: map row of the boss trigger (levels.md) */
+#define DT_DATA_BOSS_ROW          0xD04D /* per land: map row of the boss trigger (LEVELS.md) */
 #define DT_DATA_BOSS_PAGE         0xD052 /* per land: Scrooge's X page that fires it */
 #define DT_DATA_BOSS_DIR          0xD057 /* per land: scroll direction into the arena, pad bits */
 #define DT_DATA_BOSS_CAMERA_STEP  0xD05C /* 16-bit camera step per frame: right, left */
@@ -669,7 +669,7 @@
 #define DT_DATA_LAND_TIME         0xDB2C /* per land: start time hundreds and tens */
 #define DT_DATA_CHECKPOINT_ROW    0xDC2C /* per land: boss-checkpoint row and page */
 #define DT_DATA_CHECKPOINT_PAGE   0xDC35
-#define DT_DATA_RESPAWN           0xDDC1 /* 9-byte respawn and warp entries (levels.md) */
+#define DT_DATA_RESPAWN           0xDDC1 /* 9-byte respawn and warp entries (LEVELS.md) */
 #define DT_DATA_ENDING_TILESET    0xE11B /* per ending screen: tileset bank */
 #define DT_DATA_ENDING_CHR        0xE121 /* per ending screen: CHR list */
 #define DT_DATA_ENDING_TEXT_AT    0xE133 /* per ending screen: its string sets' offset from DT_DATA_ENDING_TEXT */
@@ -680,14 +680,14 @@
 #define DT_DATA_SCENE_MODE        0xDFEA /* per scene: Scrooge's mode ($39) */
 #define DT_DATA_GAME_OVER_SPRITES 0xDEE7
 #define DT_GAME_OVER_SPRITES_LEN  33
-/* ---- object system (bank 6, docs/decompilation.md "Objects") ----
+/* ---- object system (bank 6, docs/DECOMPILATION.md "Objects") ----
  * The frame loop maps bank 6 and calls DT_B6_OBJECTS at $DB78, its only
  * caller (code). */
 #define DT_ADDR_OBJ_CURSOR        0x004A /* slot whose handler runs (code) */
 #define DT_CODE_OBJ_HANDLER_LO    0x802C /* handler address by kind ($0710), low bytes, 67 entries (code) */
 #define DT_CODE_OBJ_HANDLER_HI    0x806F /* high bytes */
 #define DT_ADDR_CONTACT_SLOT      0x0012 /* block slot a horizontal block test found, 0 none (code) */
-#define DT_ADDR_CONSUMED          0x0120 /* consumed-record bits of the land (verified, game-state.md) */
+#define DT_ADDR_CONSUMED          0x0120 /* consumed-record bits of the land (verified, GAME-STATE.md) */
 #define DT_CODE_OBJ_WALK_LEFT     0xF13B /* move left with wall probes and blocks (code) */
 #define DT_CODE_OBJ_FALL          0xF1BE /* gravity, move down, land on tiles or blocks (code) */
 #define DT_CODE_OBJ_RISE          0xF1F9 /* move up, gravity, bump on tiles or blocks (code) */
@@ -698,13 +698,13 @@
 #define DT_CODE_OBJ_FACE_SCROOGE  0xF6BD /* $07E0 = direction towards Scrooge (code) */
 #define DT_CODE_OBJ_FIND_FREE     0xF7BE /* highest free slot 15..1 (code) */
 #define DT_CODE_OBJ_DISTANCE_X    0xF7DA /* |Scrooge's world X - the slot's|, low byte (code) */
-#define DT_CODE_OBJ_MARK_CONSUMED 0xF7F0 /* set the slot's record bit in $0120 (verified, game-state.md) */
-#define DT_CODE_OBJ_EDIT_TILE     0xF506 /* edit the metatile at the slot (rendering.md) */
+#define DT_CODE_OBJ_MARK_CONSUMED 0xF7F0 /* set the slot's record bit in $0120 (verified, GAME-STATE.md) */
+#define DT_CODE_OBJ_EDIT_TILE     0xF506 /* edit the metatile at the slot (RENDERING.md) */
 #define DT_CODE_BIT_TABLE         0xF80A /* 1 << n, n = 0-7 (code) */
 #define DT_CODE_LAND_BIT          0xD8C7 /* bit by land or message id (code) */
 #define DT_ADDR_MESSAGE_SLOT      0x007A /* slot of the character whose message shows (code) */
-#define DT_ADDR_LAUNCHPAD_RIDES   0x00A6 /* lands where the Launchpad ride was taken (hypothesis, game-state.md) */
-#define DT_ADDR_MESSAGES_SHOWN    0x00A8 /* bit per message id already shown (hypothesis, game-state.md) */
+#define DT_ADDR_LAUNCHPAD_RIDES   0x00A6 /* lands where the Launchpad ride was taken (hypothesis, GAME-STATE.md) */
+#define DT_ADDR_MESSAGES_SHOWN    0x00A8 /* bit per message id already shown (hypothesis, GAME-STATE.md) */
 #define DT_ADDR_EXTRA_DOT_TAKEN   0x00AE /* the extra HP dot was taken in the Himalayas (code) */
 #define DT_ADDR_RANDOM            0x00C0 /* four random bytes, stepped by $C2E6 (code) */
 /* Handlers by kind (bank 6 unless noted) and their tables. */
@@ -844,7 +844,7 @@
  * config/game.toml declares each with a length/crc32 content key, so another
  * revision fails code generation instead of firing at the wrong code. */
 
-/* Entry of the damage routine (functions.md `damage`): marks the last full
+/* Entry of the damage routine (FUNCTIONS.md `damage`): marks the last full
  * HP dot lost (every other hit on Easy). Reached only by JSR, from $EAD0 and
  * $EB22; the instruction before it is a JMP, so nothing falls into it. */
 #define DT_SITE_DAMAGE    0xEB5E
@@ -876,7 +876,7 @@
 /* In the boss hit routine ($F6D7, called by the boss objects of bank 6 and
  * by $FA44): the decrement of the boss hits left $B1, reached only when the
  * boss's cooldown $06F0,X is 0, i.e. for a hit that counts
- * (docs/decompilation.md "Events"). */
+ * (docs/DECOMPILATION.md "Events"). */
 #define DT_SITE_BOSS_HIT    0xF6DD
 #define DT_SITE_BOSS_HIT_ID "ducktales.event.boss-hit"
 
@@ -896,13 +896,13 @@
 
 /* The RTI of the NMI handler ($C000), its only exit: replace mode spends
  * there the cycles a replaced routine still owed when the NMI came
- * (docs/decompilation.md "Timing in replace mode"). */
+ * (docs/DECOMPILATION.md "Timing in replace mode"). */
 #define DT_SITE_NMI_EXIT    0xC138
 #define DT_NMI_RETURN       0xC132 /* the handler's exit: PLA TAY PLA TAX PLA PLP RTI */
 #define DT_CODE_NMI         0xC000 /* the NMI handler (the vector at $FFFA) */
 #define DT_SITE_NMI_EXIT_ID "ducktales.decomp.nmi-exit"
 /* Levels: map and screen decoding, column streaming, the VRAM queues, the
- * camera and the background probe (docs/levels.md, docs/rendering.md,
+ * camera and the background probe (docs/LEVELS.md, docs/RENDERING.md,
  * src/decomp/level.c and collision.c). */
 #define DT_ADDR_SCRATCH2         0x0002
 #define DT_ADDR_SCRATCH3         0x0003 /* also the buffer offset of the block quadrant being decoded (code) */

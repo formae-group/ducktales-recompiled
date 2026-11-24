@@ -34,7 +34,7 @@ ROM-derived code locally.
 - **Native runtime.** The game runs on a native bus and renderer instead of an emulated PPU, and its
   presented picture is checked pixel for pixel against the cycle-exact build. Its sound comes from a
   native synth of the APU, compared with the cycle build's APU on every route
-  ([docs/validation.md](docs/validation.md#native-synth)).
+  ([docs/VALIDATION.md](docs/VALIDATION.md#native-synth)).
 - **No slowdown.** VBlank waits until the frame's logic is done, removing the console's lag frames
   without changing game logic.
 - **Decompiled code.** The player runs the game's routines decompiled to C, with No slowdown, by
@@ -47,13 +47,13 @@ ROM-derived code locally.
 - **Mods.** `.dtmod` archives and loose folders replace tiles, palettes, music and sound effects,
   and Lua 5.4 scripts react to the game's events in a sandbox. Off by default and ordered in the
   Mod Menu; asset mods never touch the machine. The Mods page opens the log for load and script
-  errors. See [docs/mods.md](docs/mods.md).
+  errors. See [docs/MODS.md](docs/MODS.md).
 - **A start on decompilation.** A typed C API over the game's RAM, game events for mods, and
   C versions of Scrooge's per-frame routines and parts of the game loop and HUD. The cycle host can
   compare them with the original (`--decomp check`) or run them in its place
   (`--decomp replace`). Off by default. Progress: 100% of the PRG bytes the routes and the poke
   cases execute (28,371 of 28,371) are in routines with C (`tools/decomp_progress.py`,
-  [docs/decompilation.md](docs/decompilation.md#progress)).
+  [docs/DECOMPILATION.md](docs/DECOMPILATION.md#progress)).
 
 ## Supported ROM
 
@@ -70,7 +70,7 @@ modified image is refused.
 | CRC32 | `06B994B2` |
 | CRC32 (without header) | `EFB09075` |
 
-Further detail on the header and board behaviour is in [docs/rom.md](docs/rom.md).
+Further detail on the header and board behaviour is in [docs/ROM.md](docs/ROM.md).
 
 ## Building
 
@@ -161,10 +161,10 @@ The two sound options bring back what the console's four channels drop: the musi
 effect takes over (39 of the 40 effects take pulse 2 and/or noise), and an effect the sound driver
 ignores or cuts off for a newer one. They play on extra channels of the native player's synth and
 change nothing in the game; `ducktales_cycle.exe` keeps them in `config.ini` but plays the console's
-sound only ([docs/audio.md](docs/audio.md#extra-voices)).
+sound only ([docs/AUDIO.md](docs/AUDIO.md#extra-voices)).
 
 Frame pacing applies at the next launch: *Auto* uses VSync on displays up to 70 Hz and a steady
-present hold above that. Measurements are in [docs/presentation.md](docs/presentation.md). The About
+present hold above that. Measurements are in [docs/PRESENTATION.md](docs/PRESENTATION.md). The About
 tab shows the version, the build date and the credits.
 
 ### Enhancements
@@ -192,7 +192,7 @@ Each enhancement hooks a single, documented site in the original code, guarded b
    draws each frame from what the game wrote. The verification builds and `ducktales_cycle.exe` link
    the same code against NESRecomp's cycle host (PPU, APU, mapper). Code that no seed covers runs on
    the interpreter and is reported, so it can be added to the seeds. See
-   [native-runtime.md](docs/native-runtime.md).
+   [NATIVE-RUNTIME.md](docs/NATIVE-RUNTIME.md).
 3. **Port layer.** `src/game` (typed game state, revision-specific symbols, enhancement hooks),
    `src/host` (settings, options, the sprite compositor, diagnostics) and `src/ui` (the menu, built with
    [formae-ui](https://github.com/formae-group/formae-ui) on Dear ImGui,
@@ -247,15 +247,15 @@ build\headless\Release\ducktales.exe roms\baserom.nes --input tests\routes\NEW.t
 
 | Document | Contents |
 |---|---|
-| [architecture.md](docs/architecture.md) | Port layer, hooks, enhancements, application |
-| [validation.md](docs/validation.md) | Routes, coverage and verification results |
-| [rendering.md](docs/rendering.md) | Screen data, sprite builder, flicker analysis |
-| [presentation.md](docs/presentation.md) | Pacing, DPI, scaling and picture measurements |
-| [native-runtime.md](docs/native-runtime.md) | Native runtime, the player build and lag analysis |
-| [decompilation.md](docs/decompilation.md) | Game API, events and the decompiled routines |
-| [mods.md](docs/mods.md) | Using and making mods: tiles, palettes, sounds and Lua scripts |
-| [memory-map.md](docs/memory-map.md), [functions.md](docs/functions.md) | RAM and routine reference |
-| [player.md](docs/player.md), [game-state.md](docs/game-state.md), [levels.md](docs/levels.md), [audio.md](docs/audio.md) | Reverse-engineering notes |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Port layer, hooks, enhancements, application |
+| [VALIDATION.md](docs/VALIDATION.md) | Routes, coverage and verification results |
+| [RENDERING.md](docs/RENDERING.md) | Screen data, sprite builder, flicker analysis |
+| [PRESENTATION.md](docs/PRESENTATION.md) | Pacing, DPI, scaling and picture measurements |
+| [NATIVE-RUNTIME.md](docs/NATIVE-RUNTIME.md) | Native runtime, the player build and lag analysis |
+| [DECOMPILATION.md](docs/DECOMPILATION.md) | Game API, events and the decompiled routines |
+| [MODS.md](docs/MODS.md) | Using and making mods: tiles, palettes, sounds and Lua scripts |
+| [MEMORY-MAP.md](docs/MEMORY-MAP.md), [FUNCTIONS.md](docs/FUNCTIONS.md) | RAM and routine reference |
+| [PLAYER.md](docs/PLAYER.md), [GAME-STATE.md](docs/GAME-STATE.md), [LEVELS.md](docs/LEVELS.md), [AUDIO.md](docs/AUDIO.md) | Reverse-engineering notes |
 
 ## License
 
@@ -263,7 +263,7 @@ The code in this repository is MIT licensed ([LICENSE](LICENSE)). NESRecomp is l
 PolyForm Noncommercial 1.0.0 with additional permissions, so builds of this port must be distributed
 free of charge. [formae-ui](https://github.com/formae-group/formae-ui) (MIT, Formae's menu library),
 Dear ImGui, SDL2, stb and Lua are used under their own licenses. See
-[docs/licensing.md](docs/licensing.md).
+[docs/LICENSING.md](docs/LICENSING.md).
 
 *DuckTales* is a trademark of Disney. This project is not affiliated with Disney or Capcom and
 distributes no part of the game.

@@ -1,6 +1,6 @@
 /*
  * system.c - the system layer of the fixed bank, decompiled
- * (docs/functions.md, docs/rendering.md, docs/decompilation.md): bank
+ * (docs/FUNCTIONS.md, docs/RENDERING.md, docs/DECOMPILATION.md): bank
  * switching, the controllers, the PPU blanking helpers, the nametable fill,
  * the OAM park, the random generator, the CHR list upload, the scene
  * palettes and the direct string drawing of bank 5. The per-row sprite CHR
@@ -178,7 +178,7 @@ void Oam_Clear(void)
     } while (DC_BR(0xC276, entry));
 }
 
-/* ---- the fades: task code (docs/decompilation.md "Task code") ---- */
+/* ---- the fades: task code (docs/DECOMPILATION.md "Task code") ---- */
 
 /* $C28D: the shown palette is the loaded one darkened by the fade level
  * (colours that would go below 0 are black); then the step's frames, the
@@ -257,7 +257,7 @@ static void Palette_FadeWait(Regs *r)
     r->p = p;
 }
 
-/* ---- the task primitives (docs/functions.md); task_yield and task_wait are
+/* ---- the task primitives (docs/FUNCTIONS.md); task_yield and task_wait are
  * task code ---- */
 
 /* $FFA1: X = A * 4, the offset of task slot A in $80-$8F; A keeps it. */
@@ -329,7 +329,7 @@ static void Task_WaitNext(Regs *r)
     }
 }
 
-/* ---- the scheduler (docs/functions.md), task code that states the
+/* ---- the scheduler (docs/FUNCTIONS.md), task code that states the
  * original's cycles ---- */
 
 /* $FF35 (task_yield's and a finished task's way out): S back at the top of

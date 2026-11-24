@@ -1,5 +1,5 @@
 /*
- * ducktales/player.h - Scrooge (docs/player.md).
+ * ducktales/player.h - Scrooge (docs/PLAYER.md).
  *
  * Scrooge is object slot PLAYER_SLOT; his per-object values are that column
  * of gObjects (objects.h). The values the game keeps for him outside the

@@ -1,4 +1,4 @@
-"""List every sound request a route makes (docs/audio.md).
+"""List every sound request a route makes (docs/AUDIO.md).
 
 Runs the headless build on an input route with --frame-log in chunks (deleted after
 reading, so disk use stays near 130 KB x CHUNK) and prints each new entry of the

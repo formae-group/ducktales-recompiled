@@ -11,7 +11,7 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   `Task_Resume`), whose time the native runtime spends, giving the call to the original when an NMI
   is pending or VBlank would come during it. The native step dumps and lag logs are unchanged on all
   13 routes.
-- Timing for decompiled code (docs/decompilation.md "Timing"): the C of a timed routine marks the
+- Timing for decompiled code (docs/DECOMPILATION.md "Timing"): the C of a timed routine marks the
   original's branches, indirect jumps and page-crossing reads (`DC_BR`, `DC_JUMP`, `DC_EA`), and
   `src/decomp/decomp_timing.c` walks the ROM between the marks for the original's path, cycles and
   bus-operation cycles. Check mode compares them with the original run on the machine, instruction by
@@ -22,7 +22,7 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   existing route or poke case reached.
 - `tools/decomp_gap.py`: the PRG code a static walk from the executed code reaches (branches, calls and
   dispatch tables) but no route or poke case executes, by block and routine, and the unreached runs that
-  decode as code (docs/decompilation.md "Gap").
+  decode as code (docs/DECOMPILATION.md "Gap").
 - Decompiled the ending's scene objects (bank 5 `$B380-$B50C`) and later frames
   (`$E1F9-$E28B`). Only the sprite-0 raster wait and timed PPU write stay in the original.
   The three long ending pokes exercise each variant through the end of the credits.
@@ -73,14 +73,14 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   player's presented sound rendered off screen through its output stage, with the frame loop and the
   audio device on simulated clocks; the test fails on any sample at full scale, any click and any
   underrun over the 12 routes, the worst case (extra voices, full-scale mod, VSync 60 Hz) and the
-  window events (docs/validation.md "Presented sound").
+  window events (docs/VALIDATION.md "Presented sound").
 - The native player can run the decompiled C: Settings → Gameplay → Decompiled code (`[Game] DecompiledCode`,
   off by default) runs the routines decompiled to C alone in place of the recompiled ones, with No
   slowdown on only; with No slowdown off the toggle is disabled and its (?) says why. `decomp.c` is now
   the core of two backends, `decomp_cycle.c` (the cycle host's check and replace, unchanged) and
   `decomp_native.c`; `ducktales_native --decomp replace` runs it headless with `--lag none`.
   `tests/native_decomp_test.py` compares RAM after every logic step with the recompiled program on the
-  12 routes: equal except the stack and NMI-run state (docs/decompilation.md "On the native runtime").
+  12 routes: equal except the stack and NMI-run state (docs/DECOMPILATION.md "On the native runtime").
 - The block draw `$D068` with the debris it throws (bank 4 `$BD80`) and the object tile edits
   `$F4D8`/`$F506` are decompiled (`src/decomp/level.c`); `$D068`'s site replaces the flow's stop
   there. The probe's special-tile switch no longer has an original fallback (every entry of
@@ -90,7 +90,7 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   `$CA4A-$CC84` (block row draw, queue headers, the kept half, the half rows of the screens beside
   the camera's) as routines with sites (`src/decomp/level.c`). Its site replaces the flow's stop
   at `$C976`. The sprite builder's slot routine (bank 5 `$80BE`) is checked on its own.
-- The game flow is decompiled as task code (`src/decomp/flow.c`, docs/decompilation.md "Task
+- The game flow is decompiled as task code (`src/decomp/flow.c`, docs/DECOMPILATION.md "Task
   code"): the title and difficulty select, Land Select with the bank transfer of money, the land load, the frame loop with pause, death, warps,
   respawn, game over and land exit, the special scenes, the scene set-up of message $0B, the final trip's take-off, the ending's screens, the HUD timer and refreshes, and the boss trigger with the
   arena scroll. Its resume points start from the RTS observer, with no hook site.
@@ -149,7 +149,7 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   code the `Decomp_BusWrite` writes of the routines it calls are its device stores (up to 64), and a
   task routine reached from another one's C counts as compared with it.
 - The NMI handler gets its own kind of decompiled routine, **interrupt routines**: task code whose C
-  ends in RTI (`src/decomp/nmi.c`, docs/decompilation.md "Interrupt routines"). Its RTI pays the cycles
+  ends in RTI (`src/decomp/nmi.c`, docs/DECOMPILATION.md "Interrupt routines"). Its RTI pays the cycles
   a replaced routine owed when the NMI came, and tells the native runtime the handler ended. The
   handler's exit `$C132` (`Nmi_Return`) is the first.
 - The whole NMI handler `$C000` is decompiled (`Nmi_Handler`, `src/decomp/nmi.c`), with the sprite-0
@@ -162,7 +162,7 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   `$FF9F`/`$FFA1`, and `task_yield` `$FFAC` and `task_wait` `$FFA5` (resume point `$FFA8`) as task code. Their
   sites replace the flow's stops there; `task_yield`'s C hands off to the scheduler `$FF35`, which has a
   stop. A site or stop that cannot be registered (NESRecomp's 128-hook cap) now fails at start-up.
-  `tests/native_decomp_test.py` excepts and counts the NMI-counted yield (docs/decompilation.md "On the
+  `tests/native_decomp_test.py` excepts and counts the NMI-counted yield (docs/DECOMPILATION.md "On the
   native runtime").
 - Decompiled: object kinds `$36` (`$F869`, `Obj_LaunchpadRide`) and `$37` (`$F8F2`, `Obj_SkyFlyer`, with
   its drop `$F99C`) of the fixed bank, reached in the Launchpad scenes, and kind `$38` (`$F9F8`,
@@ -195,7 +195,7 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - Extra lives at start had no effect with the decompiled code on: the decompiled title set-up
   (`Title_Lit`) did not raise the new-game event the option uses.
 
-- The native player's sound no longer clips, clicks or drops out (docs/audio.md "Output stage"): a
+- The native player's sound no longer clips, clicks or drops out (docs/AUDIO.md "Output stage"): a
   look-ahead limiter at -1 dBFS replaces the 16-bit clamp (a full-scale mod over the game's effects
   reached +6 dBFS), the volume ramps instead of stepping and follows the menu live, the queue is
   paced by resampling frames by at most 0.5% instead of stretching one up to 2x or dropping one at
@@ -281,7 +281,7 @@ The first release.
   SDL2, a player README (ROM import, SHA-256, controls) and every third-party licence, checked by
   `tests/package_test.py`; releasing steps in CONTRIBUTING.md.
 - Native runtime prototype without the cycle-level host (`DUCKTALES_NATIVE`).
-- Mods, off by default (docs/mods.md): `.dtmod` archives and loose folders from the data folder's
+- Mods, off by default (docs/MODS.md): `.dtmod` archives and loose folders from the data folder's
   `mods` folder replace tiles (by CHR content hash and palette), palettes (global or per land),
   music and sound effects (OGG Vorbis or WAV, by request id); earlier mods win per asset, and none of
   it changes the machine. `--mods`, `--mods-dir`, `--mods-order` and `--mods-dump` on both hosts.

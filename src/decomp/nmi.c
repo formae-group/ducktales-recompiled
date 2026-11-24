@@ -1,6 +1,6 @@
 /*
  * nmi.c - the NMI handler of the fixed bank ($C000-$C138), decompiled as
- * interrupt routines (docs/decompilation.md "Interrupt routines"): C that
+ * interrupt routines (docs/DECOMPILATION.md "Interrupt routines"): C that
  * ends in RTI.
  *
  * Every NMI puts the HUD split's sprite 0 into the OAM shadow; unless

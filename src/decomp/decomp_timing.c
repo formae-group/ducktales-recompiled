@@ -1,6 +1,6 @@
 /*
  * decomp_timing.c - the original's time for the C of timed routines
- * (docs/decompilation.md "Timing"). The C marks each decision of the original
+ * (docs/DECOMPILATION.md "Timing"). The C marks each decision of the original
  * that the ROM alone does not tell (DC_BR, DC_JUMP and DC_EA in decomp.h);
  * between the marks the walker follows the ROM instruction by instruction:
  * fall-through, JMP, JSR into the routine called and RTS back. Its path (each

@@ -1,6 +1,6 @@
 /*
  * decomp.h - how a decompiled routine replaces the recompiled one
- * (docs/decompilation.md).
+ * (docs/DECOMPILATION.md).
  *
  * A decompiled routine is C over the typed game API (include/ducktales/). It
  * runs in a RAM transaction on a private image of CPU RAM, from a
@@ -137,7 +137,7 @@ int Decomp_RaiseEvent(int event);
 /* The same for an event about the object in slot (Events_RaiseSlot). */
 void Decomp_RaiseSlotEvent(int event, uint8_t slot);
 
-/* Task code (docs/decompilation.md "Task code"): the game's tasks wait for
+/* Task code (docs/DECOMPILATION.md "Task code"): the game's tasks wait for
  * frames (task_yield), switch banks and drive the PPU, which no isolated call
  * can do. A task routine's C therefore ends in one of two ways: it returns
  * (RTS), or it hands off to the original code, which runs for real. Its C
@@ -194,7 +194,7 @@ void Decomp_KeepStackRam(void);
 void Decomp_SelectBank(uint8_t bank);
 void Decomp_Store(uint16_t addr, uint8_t value);
 
-/* Timing (docs/decompilation.md "Timing"): the C of a timed routine
+/* Timing (docs/DECOMPILATION.md "Timing"): the C of a timed routine
  * (DecompRoutine.timed) marks each decision of the original that the ROM
  * alone does not tell, and the layer walks the original's instructions between
  * the marks (decomp_timing.c), so it knows the original's path, its cycles and

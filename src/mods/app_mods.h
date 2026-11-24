@@ -1,7 +1,7 @@
 /*
  * app_mods.h - mods: replacement tiles, palettes, music and sound effects
  * loaded from .dtmod archives and loose folders, and Lua scripts
- * (docs/mods.md). Assets change only what the window shows and what the
+ * (docs/MODS.md). Assets change only what the window shows and what the
  * speakers play: nothing here writes to the machine, so its state, its own
  * picture and every verified hash stay the console's. Scripts read the game's
  * state, may cancel the cancelable game events and may write the fields the

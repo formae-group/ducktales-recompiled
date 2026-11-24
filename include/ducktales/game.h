@@ -1,5 +1,5 @@
 /*
- * ducktales/game.h - game-wide state (docs/game-state.md, docs/levels.md).
+ * ducktales/game.h - game-wide state (docs/GAME-STATE.md, docs/LEVELS.md).
  */
 #pragma once
 #include <stdint.h>

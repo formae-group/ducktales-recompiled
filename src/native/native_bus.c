@@ -1,7 +1,7 @@
 /*
  * native_bus.c - the machine the recompiled code runs on in the native
  * runtime: NESRecomp's hw.h bus interface implemented as plain memory and
- * register capture, with no PPU or APU underneath (docs/native-runtime.md).
+ * register capture, with no PPU or APU underneath (docs/NATIVE-RUNTIME.md).
  *
  *   memory map    $0000-$1FFF CPU RAM (2 KiB mirrored), $2000-$3FFF PPU
  *                 registers (native_video.c), $4014 sprite DMA, $4016/$4017

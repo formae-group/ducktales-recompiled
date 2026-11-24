@@ -1,5 +1,5 @@
 /*
- * native_output.h - the native player's sound output (docs/audio.md,
+ * native_output.h - the native player's sound output (docs/AUDIO.md,
  * "Output stage"): each frame's mix (the synth and the mods' files, in
  * 16-bit units, unclamped) in, the audio device's 16-bit samples out.
  *

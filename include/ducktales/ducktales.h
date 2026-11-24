@@ -8,7 +8,7 @@
  *   game.h     difficulty, land, map, timer, bosses, progress flags
  *   events.h   events for mods: Events_On(EVENT_..., handler, user)
  *
- * docs/decompilation.md describes the API, the events and the decompiled
+ * docs/DECOMPILATION.md describes the API, the events and the decompiled
  * routines built on it.
  */
 #pragma once

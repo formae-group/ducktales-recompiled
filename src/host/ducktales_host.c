@@ -24,7 +24,7 @@
  *                     ui/app_present.h) and its [Game] keys; present_rate with
  *                     present_from_snapshot and no present_phase turns on the
  *                     window's steady hold while VSync is off, with no
- *                     in-between pictures (docs/presentation.md)
+ *                     in-between pictures (docs/PRESENTATION.md)
  *   mods              mods/app_mods.h: the folders (--mods-dir; the window
  *                     adds the data folder's), loaded before the first frame;
  *                     their sounds follow the driver at each frame's end (the

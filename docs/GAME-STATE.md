@@ -1,10 +1,10 @@
 # Game state
 
 How the game moves between title, Land Select, a land, its exits, game over and the ending,
-and which RAM holds that state. Status per entry follows [memory-map.md](memory-map.md):
+and which RAM holds that state. Status per entry follows [MEMORY-MAP.md](MEMORY-MAP.md):
 **verified** = seen in a controlled run or read from unambiguous code; **hypothesis** = a
 reading that still needs an experiment. Code addresses are bank 7 (fixed) unless a bank is
-named. Map and room structure is in [levels.md](levels.md).
+named. Map and room structure is in [LEVELS.md](LEVELS.md).
 
 "Poke run" below means a controlled run: a save state taken from a route, patched with
 `tools/world_poke.py`, then continued with `--load-state` (commands under
@@ -12,7 +12,7 @@ named. Map and room structure is in [levels.md](levels.md).
 
 ## Control flow
 
-The game runs as cooperative tasks (see [functions.md](functions.md)). Reset creates one task,
+The game runs as cooperative tasks (see [FUNCTIONS.md](FUNCTIONS.md)). Reset creates one task,
 `$D4E6`; the scheduler resumes tasks whose wait expired, and the NMI drives the wait counters, so
 game logic advances once per frame per task.
 
@@ -31,7 +31,7 @@ game logic advances once per frame per task.
      to `$F6` with wrap-around (4 to 0 and 0 to 4) and repeat the step while the target land's
      bit is set, so completed lands cannot be selected. A loads the land (`$D79B`).
 3. **Land load** (`$D79B`): blanks the screen, applies the per-land tables (`$D9CA`, see
-   [levels.md](levels.md#land-load)), loads graphics, draws the starting screens, sets up the
+   [LEVELS.md](LEVELS.md#land-load)), loads graphics, draws the starting screens, sets up the
    object spawner (bank 6 `$AE20`/`$AE60`), puts Scrooge at his start, resets the HUD, clears
    `$70-$7F`, `$FB`, `$5D`, sets the HUD time from the land's start time and clears the
    "already collected" object bits for the land (bank 5 `$B760`), then enters the frame loop.
@@ -56,14 +56,14 @@ game logic advances once per frame per task.
 | `$F6` | Current land: 0 Amazon, 1 Transylvania, 2 African Mines, 3 Himalayas, 4 Moon (Land Select order). 5 while the Land Select screen loads and during the boss-arena scroll, 9 during the ending | verified | Values 0-4 at frame 1450 of the five intro routes and stable through play; Land Select code at `$D6EF-$D746` writes it; the African Mines redirect changes it 2 to 1 (frame 1365 of `african_mines_intro`, writer `$DB9D`); 5 seen in poke runs while Land Select loads; ending writes 9 at `$E1C6`. |
 | `$C6/$C7` | **Not** the land: sound request ring indices | verified (refutes the candidate) | `$C7` is the NMI's read index (memory-map); both count requests, e.g. 02-06 at frame 500 in the five routes before any land loads, and African Mines read 07 at frame 1450 after its extra redirect. |
 | `$C5` | Last music id requested through `$F752` (the land's music is its land number; 5 Land Select, 6 boss, 7 title, 9 game over, `$0A` death) | verified | `$F752` stores A in `$C5` before queueing it; `$C5` equals `$F6` in each land, 5 on Land Select, 6 after the boss trigger, `$0A` after a death in poke runs. |
-| `$F1` | Map row of the current screen (0 = top row) | verified | Per-land start rows 5/6/0/0/4 from the land table; changes to the destination row on warps and respawns (poke runs `7E=$80-$86`); row arithmetic at `$E8B6`. See [levels.md](levels.md). |
+| `$F1` | Map row of the current screen (0 = top row) | verified | Per-land start rows 5/6/0/0/4 from the land table; changes to the destination row on warps and respawns (poke runs `7E=$80-$86`); row arithmetic at `$E8B6`. See [LEVELS.md](LEVELS.md). |
 | `$A0` | Treasures held: bit n (n = 0-4) = treasure of land n, bits 5 and 6 = two further treasures | verified (bits 0-4), hypothesis (meaning of bits 5-6) | Bank 6 `$8C22-$8C2E` ORs bit (object type - `$6F`) for object types `$6F` and above; Land Select skips lands whose bit is set (poke runs `A0=$01`, `$02`, `$10`, `$1D`); `$1F` triggers the final trip; ending variant 2 needs `$7F`. |
 | `$A3` | Key items: bit 1 = the item African Mines asks for, bit 2 = item picked up in the Moon | verified (bit 1), hypothesis (bit 2) | Bank 6 `$8BE7` ORs 4 when picked up in land 4, else 2; with bit 1 set African Mines is not redirected (poke run `mines_key`), with it clear it is (`$EE19`, route `african_mines_intro`). |
 | `$A4` | Land redirect request: positive = load Transylvania, negative = back to Land Select | verified | `$DB8F-$DBA6`; poke runs `A4=$01` (Transylvania loads, time reset to 500) and `A4=$80` (Land Select). Set by `$EE1F` (African Mines without the item), `$CFC9` and bank 6 `$9090`. |
 | `$5D` | Land left: once set, the frame loop returns to Land Select, which banks the money | verified (effect), hypothesis (which events set it besides the Launchpad scene) | Poke run `5D=$01`: Land Select with the land's result and the money moved into TOTAL; set at frame 1367 of poke run `78=$81` at the end of the helicopter scene. Writers `$EFDF` (after a 60-frame wait), `$F8EF`, `$FA3C` (when an object carrying Scrooge has lifted him above Y `$10`); cleared at land load `$D84D`. |
 | `$78` | Special scene request: bit 7 = start, low bits = scene (1 = Launchpad ride home, 2 = scene that returns to Land Select without banking) | verified (behaviour), hypothesis (scene names) | `$DF27` loads the scene from respawn-table entry `$10 + n`; poke run `78=$81`: helicopter scene, then Land Select showing the land's money without "clear"; `78=$82`: sky scene, then Land Select directly. `$EE16` sets `$81` unless B is newly pressed (hypothesis: the answer to Launchpad's offer). |
 | `$A6` | Lands where the Launchpad ride was taken (bit = land) | hypothesis | `$EE0B-$EE14` sets the land's bit together with `$78=$81`; `$FE12-$FE19` skips the conversation object type `$33` when the bit is set. |
-| `$7E` | Respawn/warp request: bit 7 = pending, low 5 bits = entry in the respawn table (`$DDC1`, see [levels.md](levels.md#respawn-and-warp-table)). `$87+` costs a life | verified | Poke runs `7E=$80-$86` move Scrooge to seven different rows/screens without losing a life; `$87` costs a life; pit death writes `$87 + land + $7C` at `$EBB4` (seen as `$87` in Amazon and `$8B` in the Moon routes). |
+| `$7E` | Respawn/warp request: bit 7 = pending, low 5 bits = entry in the respawn table (`$DDC1`, see [LEVELS.md](LEVELS.md#respawn-and-warp-table)). `$87+` costs a life | verified | Poke runs `7E=$80-$86` move Scrooge to seven different rows/screens without losing a life; `$87` costs a life; pit death writes `$87 + land + $7C` at `$EBB4` (seen as `$87` in Amazon and `$8B` in the Moon routes). |
 | `$7C` | Boss checkpoint: 5 while Scrooge is in his land's boss-checkpoint screen, else 0 | verified | `$DC04` sets it when (`$F1`, `$0730`) equals the land's checkpoint; poke run `F1=2 0730=1` in the Amazon sets it on the next frame. |
 | `$FB` | Bit 7 set = boss fight (after the boss trigger); suppresses the trigger and makes a respawn replay music 6 | verified | Poke runs at each trigger position set it to `$FF` together with music 6; `$DB85`, `$DCE4`. |
 | `$AC` | Ending: non-zero starts it, bit 7 = ending running | verified | Poke run `AC=$01`: the ending sequence plays. `$FDF2` increments it when an object's countdown (`$06B0`) reaches 0. |
@@ -147,7 +147,7 @@ by poke runs on `$A0`.
 ## Boss
 
 Each land has a boss trigger at a fixed row and screen (`$CF93`, table in
-[levels.md](levels.md#boss-trigger-and-checkpoint)). When Scrooge reaches it:
+[LEVELS.md](LEVELS.md#boss-trigger-and-checkpoint)). When Scrooge reaches it:
 
 - in Transylvania with its own treasure already taken and not all five held, `$A4 = $80` sends
   him back to Land Select;

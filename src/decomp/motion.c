@@ -1,6 +1,6 @@
 /*
  * motion.c - object motion primitives of the fixed bank, decompiled
- * (docs/decompilation.md). Every object uses them with X = its slot, Scrooge
+ * (docs/DECOMPILATION.md). Every object uses them with X = its slot, Scrooge
  * included: velocity and gravity on Y, horizontal speed on world X. Values
  * are 8.8 fixed point split over two object rows.
  *

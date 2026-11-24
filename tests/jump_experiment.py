@@ -1,4 +1,4 @@
-"""Jump experiment check (src/game/ducktales_jump.c, docs/architecture.md).
+"""Jump experiment check (src/game/ducktales_jump.c, docs/ARCHITECTURE.md).
 
 Runs tests/routes/re_amazon_moves.txt on the headless build and measures the
 first jump (A pressed at frame 1780) from Scrooge's Y ($0640) in a frame log:

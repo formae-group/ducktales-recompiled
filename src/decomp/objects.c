@@ -1,5 +1,5 @@
 /*
- * objects.c - the object system of bank 6, decompiled (docs/decompilation.md
+ * objects.c - the object system of bank 6, decompiled (docs/DECOMPILATION.md
  * "Objects").
  *
  * Obj_UpdateAll runs once per frame from the frame loop ($DB78, bank 6

@@ -1,4 +1,4 @@
-"""How much of the code the game runs is decompiled C (docs/decompilation.md).
+"""How much of the code the game runs is decompiled C (docs/DECOMPILATION.md).
 
     py -3 -I tools/decomp_progress.py [--golden DIR] [--rev REV] [--top N]
     py -3 -I tools/decomp_progress.py --record-pokes [--dev-build build/headless-dev] [--golden DIR]

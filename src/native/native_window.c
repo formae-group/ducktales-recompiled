@@ -1,6 +1,6 @@
 /*
  * native_window.c - the player build's window on the native runtime
- * (docs/native-runtime.md "The player build"): the recompiled program runs on
+ * (docs/NATIVE-RUNTIME.md "The player build"): the recompiled program runs on
  * the native bus one 60 Hz frame at a time (native_run_frame), the native
  * renderer draws the picture (native_present.c) and the native synth
  * (native_audio.h) the sound. No part of NESRecomp's cycle host is linked.

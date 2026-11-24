@@ -191,7 +191,7 @@ Full CPU RAM, stack page included, differs on most frames at every alignment (fo
   at boot but not in items 2 and 4. Whether both models describe the same race and differ by
   part of a cycle in phase, or model the race window itself differently, has not been
   determined. The TriCNES oracle agrees with `ducktales.exe` on every frame
-  (`docs/validation.md`), so this is a difference between two reference machines, not a
+  (`docs/VALIDATION.md`), so this is a difference between two reference machines, not a
   recompilation error.
 - The `moon_intro` divergence after frame 2148, and whether it really ends in a state that
   inputs cannot change (item 5).

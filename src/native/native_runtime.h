@@ -1,5 +1,5 @@
 /*
- * native_runtime.h - the native runtime's machine side (docs/native-runtime.md).
+ * native_runtime.h - the native runtime's machine side (docs/NATIVE-RUNTIME.md).
  *
  *   native_bus.c    what the recompiled code calls (NESRecomp's hw.h): CPU
  *                   RAM, the UNROM banks, the controller, APU register

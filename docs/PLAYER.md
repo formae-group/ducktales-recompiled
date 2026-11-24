@@ -33,8 +33,8 @@ run passes through `$E387`).
 | 6 | `$EB00` | Knockback after contact with a harmful object | verified |
 | 13 (`$0D`) | `$EC9B` | Death jump | verified |
 | 7-12, 14 | `$EB82`...`$ECFF` | Other scripted states | not studied |
-| 15 (`$0F`) | `$ED05` | Message box: the text of message `$6E`, page by page, then what the message does as it closes | code (docs/decompilation.md) |
-| 16 (`$10`) | `$EF62` | Treasure held up: 256 frames of music, then the time turns into money and the land is left | code (docs/decompilation.md) |
+| 15 (`$0F`) | `$ED05` | Message box: the text of message `$6E`, page by page, then what the message does as it closes | code (docs/DECOMPILATION.md) |
+| 16 (`$10`) | `$EF62` | Treasure held up: 256 frames of music, then the time turns into money and the land is left | code (docs/DECOMPILATION.md) |
 
 ## Vertical motion
 
@@ -221,7 +221,7 @@ clearance. **code**, plus the knockback trace.
 
 ## Proposed memory-map rows
 
-See the final report of this task; rows are not added to `docs/memory-map.md` here.
+See the final report of this task; rows are not added to `docs/MEMORY-MAP.md` here.
 
 ## Still unknown
 

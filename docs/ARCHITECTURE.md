@@ -12,7 +12,7 @@ src/game/game_ram.c                  RAM transactions (ducktales/ram.h)
 src/game/events.c                    game events: one hook site each, enabled only while handled
 src/game/ducktales_jump.[ch]         jump-height experiment: a handler of EVENT_JUMP_START, off by default
 src/game/enhancements.[ch]           the optional enhancements: one table, one event handler each
-src/decomp/                          decompiled routines (docs/decompilation.md), --decomp off by default
+src/decomp/                          decompiled routines (docs/DECOMPILATION.md), --decomp off by default
 src/host/ducktales_host.c            cyc_host_extras(): settings, options, per-frame callbacks
 src/host/ducktales_sprites.[ch]      presentation: every sprite, fixed order, HUD kept (on by default)
 src/host/ducktales_main.c            main() of the window build: ROM choice, then the host
@@ -98,7 +98,7 @@ addresses.
   not touch it.
 
 The site is `$E3FE`, the site of `EVENT_JUMP_START` (`config/game.toml`, id
-`ducktales.event.jump-start`; [decompilation.md](decompilation.md) "Events"). The handler reads slot 0's
+`ducktales.event.jump-start`; [DECOMPILATION.md](DECOMPILATION.md) "Events"). The handler reads slot 0's
 velocity, multiplies it by `JumpScale`/100 (clamped to `$7FFF`; a negative value is left alone) and
 writes it back. After that the game's own physics runs the jump unchanged.
 
@@ -134,7 +134,7 @@ match on every frame, with 100.0% native cycles (2026-11-21).
 Five optional changes, all off by default. `enhancements.c` holds one table that gives each its
 `config.ini` `[Game]` key, its command-line option, its menu label, its range and its stock value.
 The host (load, save, usage), the menu and the tests iterate that table. Each enhancement is a
-handler of one game event (`include/ducktales/events.h`, [decompilation.md](decompilation.md)
+handler of one game event (`include/ducktales/events.h`, [DECOMPILATION.md](DECOMPILATION.md)
 "Events"), registered only while its value differs from stock, and an event without handlers keeps
 its `[[mod_function_hook]]` site disabled. So with an enhancement off, the generated code runs the
 original instruction, as described under Mechanism. All sites are in the fixed bank 7, so the bank
@@ -191,7 +191,7 @@ It is a `cyc_render.h` stock-width compositor that paints the picture the window
 headless `--present-out`), from the exact background capture and a sprite list rebuilt from the RAM the
 frame's OAM was built from, without the per-line or OAM limits and in a fixed order; the HUD stays up
 while Scrooge is in the top band. The design and its evidence are in
-[rendering.md](rendering.md#sprites-without-limits-presentation). The host saves it as `[Game]
+[RENDERING.md](RENDERING.md#sprites-without-limits-presentation). The host saves it as `[Game]
 NoSpriteFlicker` (`ducktales_host_saved_sprites`), `--no-sprite-flicker on|off` overrides it for one run,
 and the menu's Settings page switches it live; on by default. `frame_end` saves the RAM of the last two
 frames, `power_on` and `state_loaded` forget them. Off turns the background capture and stock
@@ -266,10 +266,10 @@ src/ui/app_rom.[ch]      ROM check, import and the data folder (UTF-8 paths, _w*
 src/ui/app_settings.[ch] config.ini copy, live settings, bindings, menu shortcut, menu settings
 src/ui/app_present.[ch]  the picture the window shows: HUD split, overscan, scaling, aspect, pacing
 src/ui/app_ui.cpp        the first-run screen and the menu on formae-ui and Dear ImGui
-src/mods/core/           mods, game-agnostic: catalogue, archives, codecs, Lua sandbox (docs/mods.md)
+src/mods/core/           mods, game-agnostic: catalogue, archives, codecs, Lua sandbox (docs/MODS.md)
 src/mods/nes/            mods for NES games: tile keys, .pal palettes
 src/mods/ducktales/      mods for DuckTales: assets, events, fields, audio
-external/formae-ui       the menu library (submodule, docs/architecture.md "formae-ui")
+external/formae-ui       the menu library (submodule, docs/ARCHITECTURE.md "formae-ui")
 assets/brand/formae.png  the About page's logo, embedded by formae_ui_embed_file
 ```
 
@@ -331,12 +331,12 @@ assets/brand/formae.png  the About page's logo, embedded by formae_ui_embed_file
     `app_ui_configure` writes the `[Display] VSync` it asks for, because the host reads VSync only
     at start.
   - Pixels, pixel aspect, overscan crop and the HUD split line act on the picture the window
-    shows (`CycHostExtras.present`), never on the machine: [presentation.md](presentation.md).
+    shows (`CycHostExtras.present`), never on the machine: [PRESENTATION.md](PRESENTATION.md).
   - `[Game] MenuOpacity`, `MenuControllerNav` and `MenuPausesGame` are the menu's own; `ducktales_host.c` hands
     them to `app_ui_load_game_setting`/`app_ui_write_game_settings` with the other `[Game]` keys.
   - `[Game] NoSlowdown` (the No slowdown row, on by default) sets the cycle host's extra
     scanlines between frames (`ducktales_host_set_no_slowdown`); see
-    [native-runtime.md](native-runtime.md#the-same-thing-on-the-cycle-host-without-changing-nesrecomp).
+    [NATIVE-RUNTIME.md](NATIVE-RUNTIME.md#the-same-thing-on-the-cycle-host-without-changing-nesrecomp).
 - The host also writes `config.ini`, on F11 and at exit, from its own stale copy. Its save calls
   the `[Game]` writer (`app_ui_host_saved`). On the next frame, or after the host exits, the
   file is written again from the menu's copy, keeping only the host's fullscreen value. This runs
@@ -381,7 +381,7 @@ first-run screen, in the menu's colours and fonts, writes its two screens, and `
 
 ## Mods (`src/mods/`)
 
-Mods are described in [docs/mods.md](mods.md). Every host links the same files, and the native
+Mods are described in [docs/MODS.md](MODS.md). Every host links the same files, and the native
 player calls the same entry points as the cycle host:
 
 | Where | What it calls |
@@ -416,7 +416,7 @@ it the host links empty inline stubs and lists none of these options.
   line per raised event (`frame=1004 event=player-damaged`).
 - `--dt-ram-log FILE` writes CPU RAM (2 KiB) and the CPU's S after every frame, raw, and
   `--dt-poke-at FRAME:ADDR=VALUE` (hex, repeatable) stores a byte of CPU RAM before that frame.
-  `tests/decomp_test.py` uses both ([decompilation.md](decompilation.md)).
+  `tests/decomp_test.py` uses both ([DECOMPILATION.md](DECOMPILATION.md)).
 - `--dt-sprite-log FILE|-` composes the presented picture every frame and writes one line per frame from
   the sprite compositor; at exit the log reports its totals.
 - In the window, with `--tcp PORT`: `dt_state` returns the typed state as JSON, and `dt_jump_scale`

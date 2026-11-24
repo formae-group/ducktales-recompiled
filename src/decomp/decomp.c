@@ -1,6 +1,6 @@
 /*
  * decomp.c - the core of the decompilation layer (decomp.h,
- * docs/decompilation.md): the routine tables and their sites, the C of one
+ * docs/DECOMPILATION.md): the routine tables and their sites, the C of one
  * routine on an image of RAM (dc_run_c) and the calls the C makes the same
  * way on every host. What runs at a site is the backend's (decomp_backend.h):
  * decomp_cycle.c in the cycle host, decomp_native.c on the native runtime.

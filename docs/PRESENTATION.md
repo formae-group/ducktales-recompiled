@@ -116,7 +116,7 @@ frame and also guards against it:
 - The audio queue is kept near two device buffers and a frame by resampling frames by at most 0.5%
   (2% when under half a buffer is left), and the sound fades out instead of running dry when the
   frame loop stops on purpose (the menu pausing the game, fast-forward, a window move or resize); see
-  [audio.md](audio.md#output-stage).
+  [AUDIO.md](AUDIO.md#output-stage).
 
 `ducktales_cycle.exe` has neither. Not verified by ear or with an unfocused window on that machine.
 
@@ -150,7 +150,7 @@ So the overscan crop is off by default. `top-bottom` gives the 256x224 a televis
 
 ## HUD split line
 
-The one edge defect is at the HUD split (docs/rendering.md, "Sprite-0 split"). Below the HUD
+The one edge defect is at the HUD split (docs/RENDERING.md, "Sprite-0 split"). Below the HUD
 the playfield's first line is line 47, and the PPU starts it with the playfield's scroll but in
 tile row 5 of the nametables, which in nametable 0 is the HUD's bottom row. So wherever the camera
 covers nametable 0 that line is black, and where it covers nametable 1 it shows sky or terrain:

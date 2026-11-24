@@ -1,4 +1,4 @@
-"""Timing marks for a decompiled routine (docs/decompilation.md "Timing").
+"""Timing marks for a decompiled routine (docs/DECOMPILATION.md "Timing").
 
 For a routine of the tables in src/decomp/*.c, walks its original code in the ROM from its entry
 (fall-through, both ways of each branch, JMP; not into the routines it calls) and lists every

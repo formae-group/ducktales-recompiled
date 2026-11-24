@@ -1,4 +1,4 @@
-"""Decompilation checks (src/decomp/, docs/decompilation.md).
+"""Decompilation checks (src/decomp/, docs/DECOMPILATION.md).
 
   check    every route runs with --decomp check: at every call of every
            decompiled routine (from a site or from another routine's C,

@@ -1,6 +1,6 @@
 /*
  * collision.c - the background probe and its snaps, decompiled from the
- * fixed bank (docs/player.md, docs/levels.md, docs/decompilation.md).
+ * fixed bank (docs/PLAYER.md, docs/LEVELS.md, docs/DECOMPILATION.md).
  *
  * Every object tests the background through probe points: offsets from its
  * world X and screen Y (tables at $D433 and $D3CE, read from the ROM) that

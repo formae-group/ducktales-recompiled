@@ -1,4 +1,4 @@
-"""Estimate the PRG code that neither the routes nor the poke cases execute (docs/decompilation.md).
+"""Estimate the PRG code that neither the routes nor the poke cases execute (docs/DECOMPILATION.md).
 
     py -3 -I tools/decomp_gap.py [--golden DIR] [--top N]
 

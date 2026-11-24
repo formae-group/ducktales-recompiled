@@ -148,7 +148,7 @@ no route runs (bank 6 `$BABC`, for one), selects nothing and says so.
 `tests/native_routes.py` holds the native-runtime prototype (`ducktales_native`, faithful lag mode)
 to the recompiled build: CPU RAM, cycles and registers equal on every frame of every route above
 (82,621 frames). `tests/lag_modes.py` measures lag on the full_* routes and compares the
-no-slowdown mode per logic step. Details: [native-runtime.md](native-runtime.md).
+no-slowdown mode per logic step. Details: [NATIVE-RUNTIME.md](NATIVE-RUNTIME.md).
 
 ## Native renderer (automated)
 
@@ -156,11 +156,11 @@ no-slowdown mode per logic step. Details: [native-runtime.md](native-runtime.md)
 (no PPU) from the frame's video state and compares it with the PPU's picture: 47,440 frames, every
 pixel equal except on the HUD split line, where the console's mid-line write lands at a column that
 depends on the CPU's polling phase. With that column placed, 115 frames (all vertical row
-transitions) still differ on that one line. Details in [native-render.md](native-render.md).
+transitions) still differ on that one line. Details in [NATIVE-RENDER.md](NATIVE-RENDER.md).
 
 ## Native player (automated)
 
-The player build (`ducktales.exe` on the native runtime, docs/native-runtime.md "The player build"),
+The player build (`ducktales.exe` on the native runtime, docs/NATIVE-RUNTIME.md "The player build"),
 2026-11-22:
 
 - `py -3 -I tests/native_player_test.py --build build/windows --routes full_amazon full_moon
@@ -206,7 +206,7 @@ plays cleanly, with no stutter or glitch, while the window is not focused.
 
 `tests/audio_compare.py` records each route twice from power-on at 48 kHz: the cycle host's APU
 (`ducktales.exe --wav-out`) and the native runtime's synth (`ducktales_native --lag faithful
---wav-out`, [audio.md](audio.md#native-synth)). Both runs also write `--ram-hash-out`; RAM and cycle
+--wav-out`, [AUDIO.md](AUDIO.md#native-synth)). Both runs also write `--ram-hash-out`; RAM and cycle
 count were equal on every frame of all ten routes below, so the synth was fed exactly the register
 writes the APU received, at the same cycles. The two WAVs had the same number of samples on every
 route.
@@ -217,7 +217,7 @@ Each frame (800 samples) is compared three ways, none of which depends on wavefo
 - **spectral**: log-spectral distance over 1/3-octave bands from 50 Hz to 12.5 kHz (2048-sample
   Hann window per frame, bands 60 dB under the loudest one floored);
 - **pitch per channel**: for pulse 1, pulse 2 and the triangle, wherever the driver's channel record
-  ([audio.md](audio.md#channel-records)) holds one period for five frames, the spectral peak
+  ([AUDIO.md](AUDIO.md#channel-records)) holds one period for five frames, the spectral peak
   within half a semitone of that note in each WAV (4096-sample window, 8x zero padding, parabolic
   interpolation), kept when the APU's peak stands 10 dB over the frame's median and no harmonic
   1-8 of another tone channel lies within a semitone; the difference in cents.
@@ -300,7 +300,7 @@ costs about 0.2 ms a frame: `ducktales_native` ran `full_moon` at 1,336 frames a
 
 ## Extra voices
 
-The two native-player sound options ([audio.md](audio.md#extra-voices)), on branch `audio/native`.
+The two native-player sound options ([AUDIO.md](AUDIO.md#extra-voices)), on branch `audio/native`.
 
 **Off is unchanged.** WAVs recorded before any code change were compared with the same runs on
 the finished code, with both options off. They were byte-identical: `ducktales.exe --lag faithful
@@ -360,7 +360,7 @@ the channel is the music's again.
 ## Presented sound
 
 What the native player's audio device plays, after the output stage
-([audio.md](audio.md#output-stage)), on branch `audio/robustness` (2026-11-24).
+([AUDIO.md](AUDIO.md#output-stage)), on branch `audio/robustness` (2026-11-24).
 `tests/audio_output_test.py` runs `ducktales.exe --audio-out` (`build/windows`, off screen, no window)
 with the frame loop and the device on simulated clocks: the 12 routes at the defaults (No slowdown
 off, VSync 144 Hz, volume 100) and in the worst case (No slowdown on, both extra voices on, a mod
@@ -633,4 +633,4 @@ Not run on this tree: the full `tests/verify_routes.py` (last run on 21a7ffb wit
   "no music" row and the effects inside the music rows).
 - Window presentation as a person sees it on the 144 Hz monitor, gamepads, audio quality by ear,
   fullscreen, and the sprite presentation by eye in play: needs a person at the machine. The
-  application-side pacing, DPI and picture measurements are in [presentation.md](presentation.md).
+  application-side pacing, DPI and picture measurements are in [PRESENTATION.md](PRESENTATION.md).

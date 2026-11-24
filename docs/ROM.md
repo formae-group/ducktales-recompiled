@@ -35,7 +35,7 @@ picks. The commands in these docs call it `roms/baserom.nes`.
   route run).
 - The last 16 KiB bank (bank 7) is fixed at `$C000-$FFFF`; banks 0-7 can be selected at `$8000`.
 - The bank-select routine writes through a table in the fixed bank whose byte equals the value
-  written (`$FFE5+n = n`), which avoids UxROM bus conflicts. See [functions.md](functions.md).
+  written (`$FFE5+n = n`), which avoids UxROM bus conflicts. See [FUNCTIONS.md](FUNCTIONS.md).
 
 ## Compatibility
 

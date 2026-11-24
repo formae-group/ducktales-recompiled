@@ -20,7 +20,7 @@ src/native/native_bus.c       NESRecomp's hw.h for the generated code: RAM, UNRO
                               sprite DMA, APU write capture, cycle count, scheduler watch
 src/native/native_video.c     PPU registers and memories, VBlank/NMI/$2002/sprite-0 timing
 src/native/native_state.h     the interface for a renderer and a synth
-src/native/native_audio.c     the synth: a frame's APU writes in, its samples out (audio.md)
+src/native/native_audio.c     the synth: a frame's APU writes in, its samples out (AUDIO.md)
 src/native/native_hash.h      the per-frame state line both builds write (--ram-hash-out)
 src/native/native_main.c      ducktales_native: input routes, logs, dumps
 src/native/native_hooks.c     game.toml hook sites: the enhancements' callbacks
@@ -80,7 +80,7 @@ run, and not adopted:
 
 For UNROM it would still need DuckTales's `$2002` and sprite-0 behaviour (below), the OAM DMA stall
 and a way to compare it with the cycle build. The bus approach reuses the program that is already
-verified against the TriCNES oracle (`docs/validation.md`).
+verified against the TriCNES oracle (`docs/VALIDATION.md`).
 
 ## What DuckTales needs from the hardware
 
@@ -107,7 +107,7 @@ traces; the NMI audit (`ducktales_native --nmi-audit`) confirmed the RAM side.
   (`$C1AB`).
 - **APU**: `$4000-$4013` writes (the DMC is never used), `$4015` (always `$0F`), `$4017`. Never read.
 - **UNROM** bank writes to `$8000-$FFFF`; CHR RAM; vertical mirroring.
-- **Lag frames**: the game is a cooperative task scheduler (bank 7 `$FF35`; [functions.md](functions.md)).
+- **Lag frames**: the game is a cooperative task scheduler (bank 7 `$FF35`; [FUNCTIONS.md](FUNCTIONS.md)).
   A frame whose task has not yielded when VBlank begins is a lag frame (below).
 
 ## Design
@@ -222,7 +222,7 @@ A renderer draws frame N from `start`, applying `ppu_writes[]` in order; one tha
 split uses `split_line`. A synth plays `apu_writes[]` at their cycle offsets (1,789,773 Hz); when the
 no-slowdown mode has stretched a frame it plays it in `cycles - held_cycles` and scales the offsets
 to match, since every frame is still presented for one 60 Hz period. The synth exists:
-`native_audio_frame()` in `src/native/native_audio.h` ([audio.md](audio.md#native-synth)), and
+`native_audio_frame()` in `src/native/native_audio.h` ([AUDIO.md](AUDIO.md#native-synth)), and
 `ducktales_native --wav-out FILE` records it. Nothing in the interface is read back by the game, so a
 renderer or synth cannot change the machine.
 
@@ -426,9 +426,9 @@ NESRecomp it takes the CPU sequences and instruction templates, the hook registr
 | Original mode | Settings → Gameplay → Original mode, at the top of the page: on while No slowdown is off. Turning it on saves `NoSlowdown = off` and `DecompiledCode = off` (the recompiled original with the console's slowdown); turning it off saves both on. It has no key of its own |
 | Settings version | `[Game] SettingsVersion = 2`, written with every save. A `config.ini` without it, saved before Decompiled code was the default, gets No slowdown and Decompiled code on once when the window loads it (`ducktales_host_upgrade_settings`, `app_ui_configure`), and is saved; a later choice, Original mode included, is kept |
 | Enhancements | `native_hooks.c` binds the plugins `src/game` registers (`mod_function_hooks.h`) to the `game.toml` sites, arms `cyc_hooks_armed` while one is enabled, and runs the callbacks at the instruction boundary when the content key holds, returning from a handled routine as its RTS would: the cycle host's rules (`cyc_hooks.c`) |
-| Decompiled routines | Settings → Gameplay → Decompiled code (`[Game] DecompiledCode`, on by default in the window; off screen, `--frames N`, always off): with No slowdown on, the routines decompiled to C run alone in place of the recompiled ones (`src/decomp/decomp_native.c`, the native backend of the decompilation layer; docs/decompilation.md "On the native runtime"). With No slowdown off the toggle is disabled and its (?) says why: the C does not take the console's cycles, so with the console's lag the game would lag where the console does not. `ducktales_native --decomp replace` does the same headless, with `--lag none` only. A window session that ran the C writes `decomp-session-<time>.txt` at exit beside the cycle host's replays (`NESRECOMP_REPLAY_DIR`, `NESRECOMP_DIAGNOSTICS_DIR` or `<exe dir>/diagnostics`): the frames played and how many ran the C, the decomp error that stopped the game if any, and each routine's `decomp:` line as the cycle host prints it |
+| Decompiled routines | Settings → Gameplay → Decompiled code (`[Game] DecompiledCode`, on by default in the window; off screen, `--frames N`, always off): with No slowdown on, the routines decompiled to C run alone in place of the recompiled ones (`src/decomp/decomp_native.c`, the native backend of the decompilation layer; docs/DECOMPILATION.md "On the native runtime"). With No slowdown off the toggle is disabled and its (?) says why: the C does not take the console's cycles, so with the console's lag the game would lag where the console does not. `ducktales_native --decomp replace` does the same headless, with `--lag none` only. A window session that ran the C writes `decomp-session-<time>.txt` at exit beside the cycle host's replays (`NESRECOMP_REPLAY_DIR`, `NESRECOMP_DIAGNOSTICS_DIR` or `<exe dir>/diagnostics`): the frames played and how many ran the C, the decomp error that stopped the game if any, and each routine's `decomp:` line as the cycle host prints it |
 | Save states | F8 / F9: `<exe dir>/saves/DuckTales.native-state`, CPU registers and interrupt lines, CPU RAM, the bus (bank, cycle count, DMA, controllers, lag state) and the video state (memories, registers, frame timing), with the generated program's PRG hash; a toast confirms |
-| Sound | `native_audio.h`: `native_audio_mix(frame, out, cap)` per frame, through `native_output.h` (volume ramp, limiter, queue pacing, fades) to the device's callback at 48 kHz (docs/audio.md "Native synth", "Output stage") |
+| Sound | `native_audio.h`: `native_audio_mix(frame, out, cap)` per frame, through `native_output.h` (volume ramp, limiter, queue pacing, fades) to the device's callback at 48 kHz (docs/AUDIO.md "Native synth", "Output stage") |
 
 Off screen (`--frames N [--input ROUTE] [--lag none|faithful] [--present-out FILE --present-every K]
 [--state-check F]`) the player writes the picture the window would show at 1x, named as the cycle
@@ -438,11 +438,11 @@ host's `--present-out` names it, and can check a save state round trip.
 
 - `tests/native_player_test.py --build build/windows`: `ducktales.exe --lag faithful` and
   `ducktales_cycle.exe --extra-scanlines 0` off screen on the same route, the presented pictures
-  compared pixel for pixel (results in [validation.md](validation.md)).
+  compared pixel for pixel (results in [VALIDATION.md](VALIDATION.md)).
 - `tests/window_smoke.py --build build/windows` on `ducktales.exe` (and `--exe ducktales_cycle.exe`).
 - `tests/native_routes.py`, so any change to the bus is held to the cycle build frame by frame.
 - `tests/native_decomp_test.py --build build/headless`: the decompiled code against the recompiled
-  program, RAM after every logic step on the 12 routes (docs/decompilation.md "On the native
+  program, RAM after every logic step on the 12 routes (docs/DECOMPILATION.md "On the native
   runtime"); `window_smoke` checks that the C runs by default, that the setting runs it with No
   slowdown on and not with it off, the `config.ini` upgrade and that Original mode is kept.
 

@@ -1,6 +1,6 @@
 /*
  * devices.h - the console's device registers as decompiled code uses them
- * (docs/decompilation.md). Every access goes through Decomp_BusWrite,
+ * (docs/DECOMPILATION.md). Every access goes through Decomp_BusWrite,
  * Decomp_BusRead or Decomp_BusLoad, so a routine using these needs OUT_HW in
  * its table entry.
  */

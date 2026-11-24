@@ -1,4 +1,4 @@
-"""Which code outside the decompiled ranges reaches a routine's entry (docs/decompilation.md).
+"""Which code outside the decompiled ranges reaches a routine's entry (docs/DECOMPILATION.md).
 
 A decompiled routine needs a [[mod_function_hook]] site only if original code
 reaches it. This reads the generated code of a build (the recompiler's view of

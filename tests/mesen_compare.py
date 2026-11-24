@@ -15,7 +15,7 @@ RAM (--domains), nametable RAM (--domains ciram).
 Power-on state: Mesen2 fills CPU RAM with zeros by default (NesConfig
 RamPowerOnState = AllZeros); ducktales.exe defaults to the AccuracyCoin
 console pattern. --ram-init picks the same fill for both (zeros, ones), or
-"native" to leave each emulator at its default. See docs/mesen.md.
+"native" to leave each emulator at its default. See docs/MESEN.md.
 Exit status: 0 when every compared domain (with --ignore, CPU RAM outside the
 ignored ranges instead of all of it) matched on every frame of every route and
 alignment, 1 otherwise, 2 on a setup error.

@@ -1,6 +1,6 @@
 /*
  * flow.c - the game flow of the main task, decompiled from the fixed bank
- * (docs/game-state.md, docs/levels.md, docs/decompilation.md "Task code").
+ * (docs/GAME-STATE.md, docs/LEVELS.md, docs/DECOMPILATION.md "Task code").
  *
  * The main task runs the title, Land Select, the land load, the frame loop
  * and the ending. Its task code returns or hands off to another routine
@@ -468,7 +468,7 @@ static void Respawn_Drawn(Regs *r)
 }
 
 /* $DD52: put the camera, the map row and Scrooge at a respawn or warp entry
- * (levels.md "Respawn and warp table") and draw the screens around him. */
+ * (LEVELS.md "Respawn and warp table") and draw the screens around him. */
 static void Respawn_PlaceAt(Regs *r, uint8_t entry)
 {
     Decomp_Enter(DT_CODE_RESPAWN_ENTRY, entry, r->x, r->y);

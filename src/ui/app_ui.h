@@ -1,6 +1,6 @@
 /*
  * app_ui.h - the application around the game (window builds only,
- * DUCKTALES_WINDOW). docs/architecture.md "Application".
+ * DUCKTALES_WINDOW). docs/ARCHITECTURE.md "Application".
  *
  *   app_present.c    the picture the window shows: HUD split, overscan,
  *                  scaling, pixel aspect; frame pacing

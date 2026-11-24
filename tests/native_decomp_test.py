@@ -1,4 +1,4 @@
-"""The decompiled routines on the native runtime (src/decomp/decomp_native.c, docs/decompilation.md).
+"""The decompiled routines on the native runtime (src/decomp/decomp_native.c, docs/DECOMPILATION.md).
 
 For each route this runs ducktales_native twice with No slowdown (--lag none), the only lag mode
 the decompiled code runs in there:
@@ -40,7 +40,7 @@ from romfile import default_rom  # noqa: E402
 
 NMI_STATE = {
     0x92: 'frame counter, incremented by every NMI',
-    **{a: 'sound driver zero page (bank 3, run by the NMI; docs/audio.md "Driver RAM")' for a in range(0xD0, 0xE6)},
+    **{a: 'sound driver zero page (bank 3, run by the NMI; docs/AUDIO.md "Driver RAM")' for a in range(0xD0, 0xE6)},
 }
 TASK_SLOTS = 0x80
 TASK_RUNNING = 0x91

@@ -1,6 +1,6 @@
 /*
  * sound.c - the sound request of the fixed bank, decompiled
- * (docs/audio.md, docs/decompilation.md).
+ * (docs/AUDIO.md, docs/DECOMPILATION.md).
  *
  * Game code asks for a sound or a music by putting its id in an 8-entry ring
  * ($C8-$CF) that the NMI drains; a request finding its entry still full is

@@ -1,4 +1,4 @@
-"""Look for scrolling garbage at the picture's edges (docs/presentation.md).
+"""Look for scrolling garbage at the picture's edges (docs/PRESENTATION.md).
 
     build/headless/Release/ducktales.exe ROM --input ROUTE --frames N --frame-log captures/fl.bin --frame-log-frames A:B
     py -3 -I tools/scroll_edges.py captures/fl.bin [--first-row 56]

@@ -1,7 +1,7 @@
 /*
  * ducktales/events.h - game events for mods and enhancements.
  *
- * Most events are backed by one verified code site (docs/decompilation.md
+ * Most events are backed by one verified code site (docs/DECOMPILATION.md
  * "Events"). A handler runs at that site, inside a RAM transaction: it reads
  * and changes the game through the typed API (gPlayerMode, gObjects, gLives,
  * ...) and its changes reach the machine as CPU stores would. While no

@@ -1,5 +1,5 @@
 /*
- * dt_mods.c - DuckTales' side of the mods (app_mods.h, docs/mods.md): what
+ * dt_mods.c - DuckTales' side of the mods (app_mods.h, docs/MODS.md): what
  * the core (src/mods/core) and the NES module (src/mods/nes) are told about
  * this game, what its assets mean, and the dt table its scripts get.
  *
@@ -434,7 +434,7 @@ void app_mods_use_player_folders(const char *config_path)
 static const char *const OPTION_NAME[APP_MODS_OPTION_COUNT] = { "--mods", "--mods-dir", "--mods-order", "--mods-dump" };
 static const char *const OPTION_HELP[APP_MODS_OPTION_COUNT] = {
     "on|off: load the mods (default: config.ini [Mods] Enabled in the window, off headless)",
-    "DIR: also read mods from DIR (docs/mods.md)",
+    "DIR: also read mods from DIR (docs/MODS.md)",
     "ID:on|off,...: the mods' order and switches for this run, top first",
     "DIR: write every tile drawn, once, as DIR/<key>.png (templates for tile mods)",
 };
@@ -750,8 +750,8 @@ static bool load_mod(AppMod *m, bool use, char *err, size_t cap)
                     sounds[sound_n++] = (PendingSound){ music, id, data, size };
                     if (music ? id >= DT_SOUND_MUSIC_IDS : (id < DT_SOUND_MUSIC_IDS || id >= DT_SOUND_IDS)) {
                         snprintf(err, cap, "%s: %s", n,
-                                 music ? "music ids are 00-0F (docs/audio.md)."
-                                       : "effect ids are 10-37 (docs/audio.md).");
+                                 music ? "music ids are 00-0F (docs/AUDIO.md)."
+                                       : "effect ids are 10-37 (docs/AUDIO.md).");
                         ok = false;
                     }
                 }

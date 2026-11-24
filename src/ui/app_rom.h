@@ -1,8 +1,8 @@
 /*
  * app_rom.h - the player's ROM: identity check, the per-user data folder
- * and the one-time import (docs/architecture.md "First run").
+ * and the one-time import (docs/ARCHITECTURE.md "First run").
  *
- * The identity is the SHA-256 of the whole iNES file (docs/rom.md), compiled
+ * The identity is the SHA-256 of the whole iNES file (docs/ROM.md), compiled
  * in from the ROM the build was generated from. Import verifies a file, then
  * copies it into the data folder, where later launches find it:
  *

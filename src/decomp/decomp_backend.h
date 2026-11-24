@@ -1,6 +1,6 @@
 /*
  * decomp_backend.h - what the core of the decompilation layer (decomp.c)
- * shares with the backend linked beside it (docs/decompilation.md):
+ * shares with the backend linked beside it (docs/DECOMPILATION.md):
  *
  *   decomp_cycle.c   the cycle host: check and replace, both against the
  *                    original routine run in an isolated call

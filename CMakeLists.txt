@@ -7,9 +7,9 @@ set(DUCKTALES_ROM "" CACHE FILEPATH
 option(DUCKTALES_HEADLESS "Build the headless verification host only (no SDL window/audio)" OFF)
 option(DUCKTALES_ORACLE "Also build the TriCNES reference machine used by differential tests" OFF)
 option(DUCKTALES_DEV_DIAGNOSTICS "Developer diagnostics (typed state log, TCP commands); never in distribution builds" OFF)
-option(DUCKTALES_NATIVE "Also build ducktales_native, the native-runtime prototype (docs/native-runtime.md)" OFF)
+option(DUCKTALES_NATIVE "Also build ducktales_native, the native-runtime prototype (docs/NATIVE-RUNTIME.md)" OFF)
 # Which window executable is ducktales.exe, the game as players run it
-# (docs/native-runtime.md "The player build"). Window builds make both: the
+# (docs/NATIVE-RUNTIME.md "The player build"). Window builds make both: the
 # other one is ducktales_cycle.exe (native player, the default) or
 # ducktales_player.exe (cycle).
 set(DUCKTALES_PLAYER "native" CACHE STRING "The runtime ducktales.exe runs: native or cycle")
@@ -46,7 +46,7 @@ endif()
 file(SHA256 "${_ducktales_rom}" _ducktales_rom_sha256)
 if(NOT _ducktales_rom_sha256 STREQUAL DUCKTALES_ROM_SHA256_EXPECTED)
     message(FATAL_ERROR "${_ducktales_rom} is not DuckTales (USA): its SHA-256 is ${_ducktales_rom_sha256}, "
-        "the supported revision's is ${DUCKTALES_ROM_SHA256_EXPECTED} (docs/rom.md).")
+        "the supported revision's is ${DUCKTALES_ROM_SHA256_EXPECTED} (docs/ROM.md).")
 endif()
 message(STATUS "DuckTales ROM: ${_ducktales_rom}")
 
@@ -62,7 +62,7 @@ set(_ducktales_options PLAYERS 1)
 if(DUCKTALES_HEADLESS)
     list(APPEND _ducktales_options HEADLESS)
 endif()
-# Mods (docs/mods.md): replacement tiles, palettes, music and effects from
+# Mods (docs/MODS.md): replacement tiles, palettes, music and effects from
 # .dtmod archives. They decode PNG, OGG Vorbis and zip deflate with stb
 # (external/stb, MIT or public domain), compiled into src/mods/core/fm_codec.c only.
 # Every host links them, the native player included.
@@ -79,7 +79,7 @@ set(_ducktales_mods
     "${CMAKE_SOURCE_DIR}/src/mods/ducktales/dt_mods.c"
     "${CMAKE_SOURCE_DIR}/src/mods/ducktales/dt_mods_audio.c")
 set_property(SOURCE "${CMAKE_SOURCE_DIR}/src/mods/core/fm_codec.c" APPEND PROPERTY INCLUDE_DIRECTORIES "${STB_ROOT}")
-# Script mods (docs/mods.md "Scripts") run in Lua 5.4 (external/lua, the
+# Script mods (docs/MODS.md "Scripts") run in Lua 5.4 (external/lua, the
 # official repository at a v5.4 tag, MIT), built here as a static library of
 # the core and the libraries the sandbox opens: the io, os, package and debug
 # libraries, linit.c and the stand-alone programs are left out.
@@ -102,7 +102,7 @@ string(REGEX REPLACE "\n\\*+/?[ ]?" "\n" _lua_notice "${_lua_notice}")
 string(STRIP "${_lua_notice}" _lua_notice)
 string(APPEND _lua_notice "\n")
 file(WRITE "${CMAKE_BINARY_DIR}/lua-LICENSE.txt" "${_lua_notice}")
-# The decompiled routines and the core that runs them (docs/decompilation.md);
+# The decompiled routines and the core that runs them (docs/DECOMPILATION.md);
 # each host adds its backend: decomp_cycle.c or decomp_native.c.
 set(_ducktales_decomp
     "${CMAKE_SOURCE_DIR}/src/decomp/decomp.c"
@@ -120,10 +120,10 @@ set(_ducktales_decomp
     "${CMAKE_SOURCE_DIR}/src/decomp/flow.c"
     "${CMAKE_SOURCE_DIR}/src/decomp/nmi.c"
 )
-# The port's systems layer (docs/architecture.md): typed game state, the hook
+# The port's systems layer (docs/ARCHITECTURE.md): typed game state, the hook
 # sites it alters behaviour at, settings and options; the typed game API and
 # its events (include/ducktales/) and the decompiled routines (src/decomp/,
-# docs/decompilation.md). Both hosts link it.
+# docs/DECOMPILATION.md). Both hosts link it.
 set(_ducktales_extras
     "${CMAKE_SOURCE_DIR}/src/game/ducktales_state.c"
     "${CMAKE_SOURCE_DIR}/src/game/game_ram.c"
@@ -138,11 +138,11 @@ set(_ducktales_extras
     "${CMAKE_SOURCE_DIR}/src/native/native_render.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_cycle.c"
     ${_ducktales_mods})
-# The native renderer checked against the PPU every frame (docs/native-render.md).
+# The native renderer checked against the PPU every frame (docs/NATIVE-RENDER.md).
 if(DUCKTALES_HEADLESS)
     list(APPEND _ducktales_extras "${CMAKE_SOURCE_DIR}/src/native/native_check.c")
 endif()
-# The application (docs/architecture.md "Application"): the
+# The application (docs/ARCHITECTURE.md "Application"): the
 # program entry with the first-run ROM import, the in-game menu and live
 # settings, drawn with formae-ui (external/formae-ui) on Dear ImGui
 # (external/imgui) over the host's SDL_Renderer. Window builds only; the
@@ -180,7 +180,7 @@ nesrecomp_add_cycle_game(ducktales
 target_include_directories(ducktales PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/include")
 target_link_libraries(ducktales PRIVATE ducktales_lua)
 if(NOT DUCKTALES_HEADLESS)
-    # The ROM identity the first-run import checks (docs/rom.md: SHA-256 of
+    # The ROM identity the first-run import checks (docs/ROM.md: SHA-256 of
     # the whole file), taken from the ROM this build was generated from.
     target_compile_features(ducktales PRIVATE cxx_std_17)
     target_compile_definitions(ducktales PRIVATE DUCKTALES_WINDOW=1
@@ -260,7 +260,7 @@ if(DUCKTALES_HEADLESS)
     target_compile_definitions(mods_catalogue_test PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
 
-# The native runtime (docs/native-runtime.md): the same generated C as the
+# The native runtime (docs/NATIVE-RUNTIME.md): the same generated C as the
 # ducktales target, linked against src/native/ instead of NESRecomp's cycle
 # host, PPU and APU. Only the CPU's instruction sequences (cpu6502.c), its
 # instruction templates for uncompiled code (cpu6502_interp.c) and the hook
@@ -367,7 +367,7 @@ endif()
 # The release package (CONTRIBUTING.md "Releasing"): `cpack -C Release` in
 # build/windows writes DuckTalesRecompiled-<version>-win64.zip with the
 # executable, SDL2, the player README and every licence the binaries carry
-# (docs/licensing.md). No ROM, generated source or test tool is installed.
+# (docs/LICENSING.md). No ROM, generated source or test tool is installed.
 if(NOT DUCKTALES_HEADLESS)
     configure_file("${CMAKE_SOURCE_DIR}/packaging/README.txt.in" "${CMAKE_BINARY_DIR}/package/README.txt" @ONLY NEWLINE_STYLE CRLF)
     install(TARGETS ${_ducktales_player_target} RUNTIME DESTINATION .)

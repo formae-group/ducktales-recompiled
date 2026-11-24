@@ -1,5 +1,5 @@
 /*
- * native_voices.h - the synth's two extra voices (docs/audio.md, "Extra
+ * native_voices.h - the synth's two extra voices (docs/AUDIO.md, "Extra
  * voices"), for the native player's [Audio] MusicUnderEffects and
  * OverlapEffects:
  *

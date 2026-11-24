@@ -1,6 +1,6 @@
 /*
  * objcommon.c - object routines of the fixed bank shared by every object
- * kind, decompiled (docs/decompilation.md "Objects").
+ * kind, decompiled (docs/DECOMPILATION.md "Objects").
  *
  * The movers (Obj_WalkRight/Left, Obj_Fall, Obj_Rise) move a slot with the
  * motion primitives, test the background probes $40.. against the collision

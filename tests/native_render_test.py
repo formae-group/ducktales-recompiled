@@ -1,4 +1,4 @@
-"""Native renderer against the PPU (docs/native-render.md).
+"""Native renderer against the PPU (docs/NATIVE-RENDER.md).
 
 For each route this runs the headless build with --native-render-check, which
 fills the native renderer's input (src/native/native_render.h) from the PPU at

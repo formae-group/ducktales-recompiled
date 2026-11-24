@@ -9,12 +9,12 @@ cycle_seed_file = "ducktales.seeds"
 
 # Entry of the main task. Reset stores $D4E6 in $93/$94 and calls the task
 # creator at $FF7D; the scheduler at $FF35 starts it through JMP ($0093), which
-# static discovery cannot follow. See docs/functions.md.
+# static discovery cannot follow. See docs/FUNCTIONS.md.
 [[extra_func]]
 bank = 7
 addr = 0xD4E6
 
-# Event sites (src/game/events.c, docs/decompilation.md "Events"). Each
+# Event sites (src/game/events.c, docs/DECOMPILATION.md "Events"). Each
 # fires only while its event has a handler (an enhancement that differs from
 # the original game, or a mod); the content keys are CRC32s of the 8 bytes at
 # each site. They come before the decompilation's sites, so at an address
@@ -77,7 +77,7 @@ addr = 0x8B21
 length = 8
 crc32 = 0x5D6EF23E
 
-# Decompiled routines (src/decomp/, docs/decompilation.md): a site at the
+# Decompiled routines (src/decomp/, docs/DECOMPILATION.md): a site at the
 # entry of each routine that original code calls (routines only decompiled
 # code calls have none), enabled only with --decomp check or replace.
 
@@ -491,7 +491,7 @@ id = "ducktales.decomp.F83F"
 addr = 0xF83F
 length = 8
 crc32 = 0xFAC618EC
-# Game flow (src/decomp/flow.c, docs/decompilation.md "Task code"): the
+# Game flow (src/decomp/flow.c, docs/DECOMPILATION.md "Task code"): the
 # entries of the main task's decompiled code that original code reaches (its
 # resume points have no site: the RTS observer starts them).
 

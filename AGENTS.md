@@ -23,7 +23,7 @@ settings, presentation and enhancements. The goal is a polished PC port, not an 
   `native_decomp_test`). The headless builds and off-screen runs keep the C off.
 - Presentation changes may alter only what the window shows, never the machine picture or any hash.
 - Gameplay changes are enhancements, off by default, hooked at a site declared in `config/game.toml`
-  with a length/CRC-32 content key (see docs/architecture.md, "Adding a behaviour change"). No
+  with a length/CRC-32 content key (see docs/ARCHITECTURE.md, "Adding a behaviour change"). No
   slowdown is the one setting that changes timing and is on by default: the decompiled code needs it.
 - Never open a visible window on the developer's desktop. Use the headless builds, `--hidden` or the
   self-test modes.
@@ -105,7 +105,7 @@ checked by either; add a route. Oracle results are cached in `build/verify-cache
   owns. No comments inside function bodies.
 - Prefixes: `dt_` / `Dt` for game code, `app_` for the application layer.
 - Commit subjects are short imperative sentences in sentence case, no prefix, no trailing period.
-- Keep the README, the matching `docs/` page, `docs/validation.md` (results) and `CHANGELOG.md`
+- Keep the README, the matching `docs/` page, `docs/VALIDATION.md` (results) and `CHANGELOG.md`
   current in the same change.
 - Report what you verified with exact numbers (routes, frames, results), and say what you did not
   verify.

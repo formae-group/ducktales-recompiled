@@ -1,4 +1,4 @@
-"""Decode the game-state bytes documented in docs/game-state.md from a --frame-log.
+"""Decode the game-state bytes documented in docs/GAME-STATE.md from a --frame-log.
 
     py -3 -I tools/world_state.py LOG [--first N --last N --every K] [--changes]
 

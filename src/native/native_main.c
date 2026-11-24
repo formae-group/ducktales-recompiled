@@ -1,6 +1,6 @@
 /*
  * native_main.c - ducktales_native: the headless native-runtime prototype
- * (docs/native-runtime.md). It runs the recompiled program on the native bus
+ * (docs/NATIVE-RUNTIME.md). It runs the recompiled program on the native bus
  * (native_bus.c, native_video.c) with an input route and writes the same
  * per-frame state line as the cycle host's --ram-hash-out (native_hash.h).
  *
@@ -38,7 +38,7 @@
  * plays every frame's APU writes through the native synth (native_audio.h)
  * and writes the result as 48 kHz mono 16-bit PCM (tests/audio_compare.py).
  * --music-under-effects and --overlap-effects turn on the native player's
- * extra voices ([Audio] MusicUnderEffects, OverlapEffects; docs/audio.md),
+ * extra voices ([Audio] MusicUnderEffects, OverlapEffects; docs/AUDIO.md),
  * --audio-channels keeps only the channels of a hex mask in the mix (2 =
  * pulse 2, extra voices included). --sound-request fills the sound request
  * ring ($C6-$CF) with hex ids joined by + (13+15) after frame FRAME runs, as

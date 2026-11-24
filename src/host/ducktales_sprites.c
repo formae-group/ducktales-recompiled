@@ -1,7 +1,7 @@
 /*
  * ducktales_sprites.c - the presented picture with every sprite the game
  * wants, in a fixed order, and none of the console's per-line or OAM limits
- * (cyc_render.h stock-width compositing; docs/rendering.md "Sprites without
+ * (cyc_render.h stock-width compositing; docs/RENDERING.md "Sprites without
  * limits"). The machine still draws its own picture with all of them, so
  * the hashes, sprite-0 hit and overflow stay the console's.
  *

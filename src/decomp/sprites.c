@@ -1,6 +1,6 @@
 /*
- * sprites.c - the sprite builder of bank 5, decompiled (docs/rendering.md
- * "Sprites", docs/decompilation.md).
+ * sprites.c - the sprite builder of bank 5, decompiled (docs/RENDERING.md
+ * "Sprites", docs/DECOMPILATION.md).
  *
  * The frame loop calls Oam_Build every frame with $98 set (so the NMI does not
  * send a half-built table) after Oam_Clear parked every entry. It fills the

@@ -1,6 +1,6 @@
 /*
  * ducktales/level.h - the level's map, screen streaming, VRAM queues and
- * collision map (docs/levels.md, docs/rendering.md).
+ * collision map (docs/LEVELS.md, docs/RENDERING.md).
  *
  * A land is a grid of screens (gMapGrid, one screen id per cell, $FF = none).
  * A screen is 8x8 blocks of 32x32 px in bank 4; a block is 2x2 metatiles in

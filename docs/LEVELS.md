@@ -1,9 +1,9 @@
 # Levels
 
 How a land is laid out, how the camera and Scrooge's world position are kept, and how the
-game loads, scrolls and leaves rooms. Status words as in [memory-map.md](memory-map.md); code
+game loads, scrolls and leaves rooms. Status words as in [MEMORY-MAP.md](MEMORY-MAP.md); code
 addresses are bank 7 unless a bank is named. Game-wide state (lands, exits, timer, ending) is in
-[game-state.md](game-state.md).
+[GAME-STATE.md](GAME-STATE.md).
 
 ## Verified basics
 
@@ -25,7 +25,7 @@ user's ROM.
 | `$2A` | Rows in the current map (Amazon 7, Transylvania 8, the other lands 6) | verified | Values at frame 1000 of the five intro routes equal the `$C7B0` table; `$E8BC` refuses a row change at or past it. |
 | `$2B` | Row stride, 8 for every land | verified | Same runs; added to or subtracted from `$2D` on a row change (`$E89D-$E8C8`). |
 | `$20/$21` | Pointer to the current map's screen grid | verified | Same runs (pointers into the fixed bank); read as `($20),Y` with Y = screen index at `$E8B0` and `$DDA2`. |
-| `$F1` | Current row | verified | See [game-state.md](game-state.md#state-variables). |
+| `$F1` | Current row | verified | See [GAME-STATE.md](GAME-STATE.md#state-variables). |
 | `$2D` | Screen index of the camera: row x 8 + camera page (`$F3`) | verified | Matches `$F1 * 8 + $F3` on every sampled frame of the five intro routes (e.g. Amazon row 5 gives `$28`/`$29`, Moon row 4 gives `$20`); respawn entries store it directly. |
 | `$24` | Screen index of the column being streamed in at the screen edge | hypothesis | One more than `$2D` while scrolling right, one less after a left scroll; used as the map index when drawing columns (`$DDA0`). |
 | `$26` | Column within that screen, 0-`$3F` | hypothesis | Wraps at `$40` and then advances `$24` (`$DDAF-$DDBB`); advanced by `$20` while the camera moved 129 pixels in `amazon_intro` (so about 4 pixels per step). |
@@ -37,7 +37,7 @@ user's ROM.
 
 | Address | Meaning | Status | Evidence |
 |---|---|---|---|
-| `$F2` | Camera X within the page (low byte of the 16-bit camera X) | verified | In 5,201 of 5,250 gameplay frames of the five intro routes `$0650 = ($0730:$0720) - ($F3:$F2)`; the 49 exceptions are transition frames. Also written to `$2005` after the HUD split (rendering.md). |
+| `$F2` | Camera X within the page (low byte of the 16-bit camera X) | verified | In 5,201 of 5,250 gameplay frames of the five intro routes `$0650 = ($0730:$0720) - ($F3:$F2)`; the 49 exceptions are transition frames. Also written to `$2005` after the HUD split (RENDERING.md). |
 | `$F3` | Camera page (high byte of camera X, 0-7); bit 0 also selects the nametable after the split | verified | Same check; `$2D & 7 = $F3` in the same frames. |
 | `$0720` | Scrooge's world X, low byte (column `$0720+n` holds every object's) | verified | Same identity; set from the respawn table and land table at load. |
 | `$0730` | Scrooge's world X page (column `$0730+n` for objects) | verified | Same identity; compared with the boss-checkpoint and trigger tables. |
@@ -59,7 +59,7 @@ frames). Vertical movement between rows is a whole-screen scroll, not a camera c
   sprite palette bytes shared by every land at `$0310` (copy at `$0110`).
 
 Then it loads graphics (`$C301` with X = land), streams the current row's sprite CHR (`$C42C` until `$50`
-goes negative; see [rendering.md](rendering.md)), points the object spawner at the land's records (bank 6 `$AE20`: ten bytes `$60-$69`
+goes negative; see [RENDERING.md](RENDERING.md)), points the object spawner at the land's records (bank 6 `$AE20`: ten bytes `$60-$69`
 = five pointers) and finds the first record for the start row (bank 6 `$AE60`), then sets the
 HUD, the start time and the consumed-object bits (bank 5 `$B760`).
 
@@ -130,7 +130,7 @@ pages and directions are read from the same tables.
 African Mines checks for the key item (`$A3` bit 1) at `$EE19` after a message; without it
 `$A4 = 1` reloads the game in Transylvania (time and position reset; money kept). Verified by
 `african_mines_intro` (redirect at frame 1365) and poke run `mines_key` (no redirect with the
-bit set). Transylvania is also the land of the final trip (see game-state.md).
+bit set). Transylvania is also the land of the final trip (see GAME-STATE.md).
 
 ## Reproducing
 
@@ -147,11 +147,11 @@ py -3 -I tools/world_state.py captures/w3.bin --changes
 ```
 
 (`captures/s_amazon1100.state` and `captures/idle.txt` as in
-[game-state.md](game-state.md#reproducing).)
+[GAME-STATE.md](GAME-STATE.md#reproducing).)
 
 ## Not yet known
 
-- The screen id format is now documented in [rendering.md](rendering.md) (`$CE2C`, `$C830`,
+- The screen id format is now documented in [RENDERING.md](RENDERING.md) (`$CE2C`, `$C830`,
   `$CCBD`).
 - A route that changes rows by play, to verify the vertical transition and the odd-page rule.
 - Which in-game objects are warps 0-6 and which carry each entry.

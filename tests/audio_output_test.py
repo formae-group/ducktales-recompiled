@@ -1,4 +1,4 @@
-"""Presented sound of the native player (docs/audio.md, "Output stage"), headless.
+"""Presented sound of the native player (docs/AUDIO.md, "Output stage"), headless.
 
 ducktales.exe (build/windows, the native player) runs each route off screen with
 --audio-out: the window's frame loop and the audio device on simulated clocks

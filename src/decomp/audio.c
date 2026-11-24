@@ -1,10 +1,10 @@
 /*
- * audio.c - the sound driver of bank 3, decompiled (docs/audio.md,
- * docs/decompilation.md).
+ * audio.c - the sound driver of bank 3, decompiled (docs/AUDIO.md,
+ * docs/DECOMPILATION.md).
  *
  * The NMI maps bank 3, hands every queued request to Sound_Play ($8003) and
  * then calls Sound_Update ($8000) once. Both keep the driver RAM of
- * docs/audio.md exactly as the original does, every frame: the priorities
+ * docs/AUDIO.md exactly as the original does, every frame: the priorities
  * ($D0), speed and fade ($D7-$D9), the effect state ($DF-$E3) and the four
  * 31-byte channel records at $0370, which the native player's audio options
  * read. Scratch $D5/$D6 and $E4/$E5 are left as the original leaves them.
@@ -18,7 +18,7 @@
  *
  * The streams, headers and tables are read from the ROM (bank 3, mapped
  * while the driver runs). Music and effect commands outside the ten and
- * seven the jump tables hold never occur in the game's data (docs/audio.md)
+ * seven the jump tables hold never occur in the game's data (docs/AUDIO.md)
  * and are not modelled.
  */
 #include "decomp/decomp.h"
@@ -45,7 +45,7 @@
 #define gTemp         RAM_U8(DT_ADDR_SND_TEMP)
 #define gTempHi       RAM_U8(DT_ADDR_SND_TEMP + 1)
 
-/* Channel record offsets (docs/audio.md "Channel records"). */
+/* Channel record offsets (docs/AUDIO.md "Channel records"). */
 #define REC_STREAM       0x00 /* $00/$01 */
 #define REC_TIME         0x02 /* $02/$03, quarter frames */
 #define REC_TEMPO        0x04

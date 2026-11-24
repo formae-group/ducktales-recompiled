@@ -2,7 +2,7 @@
 and render screens or whole maps to PNG (output under captures/, never committed).
 
 Background only: the tool reads the screen, block, metatile, CHR-list and palette tables the
-game itself uses (docs/rendering.md) and draws nametable tiles from the BG pattern table.
+game itself uses (docs/RENDERING.md) and draws nametable tiles from the BG pattern table.
 
   map grid ($C7B0)      rows x 8 screen ids per map ($F6), $FF = none
   screen id (bank 4)    $8000 + id*72: 64 block ids (8x8 blocks of 32x32 px, row-major), then

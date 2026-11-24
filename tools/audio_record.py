@@ -1,4 +1,4 @@
-"""Play sound ids from a save state and measure them (docs/audio.md).
+"""Play sound ids from a save state and measure them (docs/AUDIO.md).
 
 For each id the state's request ring ($C6-$CF) is patched so the next NMI hands the id
 to the driver ($8003), the headless build runs with --wav-out, and the WAV is reduced

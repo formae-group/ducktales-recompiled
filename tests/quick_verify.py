@@ -2,7 +2,7 @@
 
 tests/verify_routes.py is the gate for a merge batch or a release (12 routes x
 4 alignments x recompiled, interpreter-only and TriCNES oracle, most of an
-hour). This is the loop for iterating on a change (docs/validation.md,
+hour). This is the loop for iterating on a change (docs/VALIDATION.md,
 "Fast verification"):
 
   --record   once, from a build that just passed the full verify_routes. For

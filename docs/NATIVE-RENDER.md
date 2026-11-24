@@ -1,7 +1,7 @@
 # Native renderer
 
 DuckTales' picture drawn natively from the game's video state, with no PPU emulation, and the
-evidence that it equals the PPU's picture. Status words as in [memory-map.md](memory-map.md).
+evidence that it equals the PPU's picture. Status words as in [MEMORY-MAP.md](MEMORY-MAP.md).
 
 | File | Contents |
 |---|---|
@@ -17,7 +17,7 @@ evidence that it equals the PPU's picture. Status words as in [memory-map.md](me
 
 - **Memories.** CHR RAM (8 KiB), CIRAM as two 1 KiB pages with the cartridge's mirroring (DuckTales:
   vertical), palette RAM (32 six-bit entries) and OAM (256 bytes), as they stand while the frame is
-  drawn. In DuckTales they change only during VBlank or while rendering is off (rendering.md: the
+  drawn. In DuckTales they change only during VBlank or while rendering is off (RENDERING.md: the
   NMI's update block, the blanked CHR loads), so at the end of the frame they are what it used.
   Verified: no frame of the five `full_*` routes differs outside the split line (below).
 - **Segments.** `NvSegment` = first line, `$2000` bits 3-5, `$2001`, and the background position
@@ -59,7 +59,7 @@ columns as `$2001` clips them, never column 255): what a runtime without a PPU a
 
 `NvRenderOptions.sprites` replaces the OAM with any list (front first, any length, each sprite with
 its own 8x8 pattern table or the line's): with `sprites_per_line = 0` this is the rule of the
-flicker-free compositor (rendering.md "Sprites without limits"), drawn natively.
+flicker-free compositor (RENDERING.md "Sprites without limits"), drawn natively.
 
 ## Verification
 

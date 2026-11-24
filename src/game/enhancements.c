@@ -198,7 +198,7 @@ uint64_t dt_enh_applied(DtEnh e)
  * reset button also resets the PPU, so no NMI follows. So the CPU is put
  * where the sequence leaves it: S lowered by 3, I set, PC from the reset
  * vector, pending interrupts dropped. The game's reset handler then
- * re-initialises everything else itself (functions.md `reset`). */
+ * re-initialises everything else itself (FUNCTIONS.md `reset`). */
 void dt_soft_reset(void)
 {
     uint16_t vector = (uint16_t)(cyc_mod_peek(0xFFFC) | cyc_mod_peek(0xFFFD) << 8);

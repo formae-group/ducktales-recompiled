@@ -18,10 +18,10 @@ build). The game as players run it, `ducktales.exe` of `build/windows`, is the n
 player by default (`DUCKTALES_PLAYER=native`); there Settings → Gameplay → Decompiled code (on by
 default, with No slowdown only) runs them alone in place of the recompiled ones, and Original mode
 turns both off ("On the native runtime" below,
-[native-runtime.md](native-runtime.md#the-player-build)).
+[NATIVE-RUNTIME.md](NATIVE-RUNTIME.md#the-player-build)).
 
 Addresses are named only in `src/game/ducktales_symbols.h`. Status words (verified, code,
-hypothesis) are used as in [memory-map.md](memory-map.md). Code addresses are in bank 7 (the fixed
+hypothesis) are used as in [MEMORY-MAP.md](MEMORY-MAP.md). Code addresses are in bank 7 (the fixed
 bank).
 
 ## The game API
@@ -78,20 +78,20 @@ records it), so they cost no hook site and take the same values with the decompi
 | Event | Seen when | Carries |
 |---|---|---|
 | `EVENT_LAND_START` | the last music `$C5` becomes the land's own (`$F6`, 0-4) after Land Select's (5) or another land's: a land load requested it (`$D9CA`). A respawn (after music `$0A`), the end of the power-up music (8) and the boss music (6) do not count | `land` |
-| `EVENT_LAND_CLEAR` | `$5D` becomes non-zero while the scene request `$78` is 0: the land is left with its "clear" result (game-state.md, "Land completion"); the Launchpad ride home sets `$78` first | `land` |
+| `EVENT_LAND_CLEAR` | `$5D` becomes non-zero while the scene request `$78` is 0: the land is left with its "clear" result (GAME-STATE.md, "Land completion"); the Launchpad ride home sets `$78` first | `land` |
 | `EVENT_CHECKPOINT` | `$7C` becomes 5: `$DC04` found Scrooge in his land's boss-checkpoint screen | `land` |
 | `EVENT_MONEY_CHANGED` | the HUD money differs from the last frame that showed it (several adds in one frame make one event) | `money`, `delta` |
 
 Evidence for each site:
 
 - `$EB5E`, `$E2A6`, `$DCB0` and `$D59C` are the enhancement sites. Their evidence is under
-  "Enhancements" in [architecture.md](architecture.md) (verified).
+  "Enhancements" in [ARCHITECTURE.md](ARCHITECTURE.md) (verified).
 - `$E3FE` is reached only by falling through from the two velocity stores at `$E3F5`/`$E3FB`.
-  See "Jump experiment" in [architecture.md](architecture.md) (verified).
+  See "Jump experiment" in [ARCHITECTURE.md](ARCHITECTURE.md) (verified).
 - `$F6DD` is the `DEC $B1` of the boss hit routine `$F6D7`. That routine is called by the boss
   objects of bank 6 and by `$FA44`, and it reaches the decrement only when the boss's cooldown
   `$06F0,X` is 0, that is, for a hit that counts. `$B1` holds the hits left (verified for Amazon and
-  Himalayas in [game-state.md](game-state.md)). With `--dt-events-log`, `full_amazon` raises
+  Himalayas in [GAME-STATE.md](GAME-STATE.md)). With `--dt-events-log`, `full_amazon` raises
   `boss-hit` at frames 7093, 7285, 7645, 7933 and 8173, exactly the frames where `$B1` drops from 5
   to 0 (verified). The cancel's effect comes from the code alone: no enhancement cancels it yet.
 - `$8932` and `$8B21` are the entries of the decompiled `Obj_Defeat` and `Pickup_Take` (bank 6).
@@ -443,7 +443,7 @@ links `decomp_cycle.c`, its check and replace modes above. The native runtime li
 The C takes no CPU cycles, so the console's timing is not kept: the work of a frame ends sooner,
 and a land load behind a blank screen ends in fewer frames. With the console's lag that would
 remove lag the console has, so the mode runs only with No slowdown, where a logic step's result
-does not depend on how long it takes ([native-runtime.md](native-runtime.md#lag)). In the player,
+does not depend on how long it takes ([NATIVE-RUNTIME.md](NATIVE-RUNTIME.md#lag)). In the player,
 Settings → Gameplay → Decompiled code (`[Game] DecompiledCode`, on by default with No slowdown) is
 disabled while No slowdown is off, and its (?) says why; Original mode, at the top of the page,
 turns both off for the recompiled original with the console's slowdown. A `config.ini` saved before
@@ -1032,7 +1032,7 @@ the events check covers.
 What has not been verified:
 
 - Replace mode in long real play. One owner session on the window build's cycle host covered one
-  land, about 8,400 frames (docs/validation.md). The native player's Decompiled code has been run
+  land, about 8,400 frames (docs/VALIDATION.md). The native player's Decompiled code has been run
   only on the routes and hidden (`tests/native_decomp_test.py`, `tests/window_smoke.py`), not in real
   play.
 - Paths no route or poke case reaches (table above). They are written from the code, and check mode

@@ -12,7 +12,7 @@ decoded with `tools/framelog.py`.
 | `$14` | Controller 1, buttons newly pressed this frame | verified | Becomes `$80` on the frame A is pressed and `$00` while it stays held (`re_amazon_moves`, frames 1600, 1780). |
 | `$16` | Controller 1, buttons held | verified | `$01` while Right is held, `$02` Left, `$80` A, `$40` B, `$C4` A+B+Down (`re_amazon_moves`). |
 | `$18` | Palette upload request; the NMI copies `$0300-$031F` to the PPU when it is set | verified | NMI code at `$C04E-$C078`. |
-| `$20/$21`, `$2A`, `$2B` | Map grid pointer, row count, row stride | verified | Loaded by `$C7B0` ([levels.md](levels.md)). |
+| `$20/$21`, `$2A`, `$2B` | Map grid pointer, row count, row stride | verified | Loaded by `$C7B0` ([LEVELS.md](LEVELS.md)). |
 | `$22/$23` | Pointer to the current screen's data (bank 4, `$8000` + id*72) | verified | `$CE2C`, `$CDAF`. |
 | `$24` | Map index of the screen being streamed | verified | `$C830`; nametable check. |
 | `$25` | Previous frame's `$F2` | verified | `$DBE4`. |
@@ -20,11 +20,11 @@ decoded with `tools/framelog.py`.
 | `$27`/`$28` | Attribute / collision byte of the block being built | verified | `$CCFE-$CD22`. |
 | `$29`/`$38` | Stream direction last used / requested | hypothesis | `$C7D3`, `$C7FB`. |
 | `$2D` | Camera screen index = row x 8 + page | verified | Five intro routes. |
-| `$39` | Scrooge's mode: 0 ground, 1 air, 2 pogo, 3 climb, 4 cane, 6 knockback, 7 stuck in snow (Himalayas, freed by a jump, no HP cost), `$0D` death, `$10` holding a land treasure | verified | Jump table at `$E387` ([player.md](player.md)); `full_himalayas` frames 4037-4069 (7) and 5018 (`$10`, with `$A0` bit 3). |
+| `$39` | Scrooge's mode: 0 ground, 1 air, 2 pogo, 3 climb, 4 cane, 6 knockback, 7 stuck in snow (Himalayas, freed by a jump, no HP cost), `$0D` death, `$10` holding a land treasure | verified | Jump table at `$E387` ([PLAYER.md](PLAYER.md)); `full_himalayas` frames 4037-4069 (7) and 5018 (`$10`, with `$A0` bit 3). |
 | `$3E`/`$3F` | Push counter (16 frames) / direction held when pushing started | verified | `$E458`, `$E45C`. |
 | `$71` | Slippery-floor flag | hypothesis | `$D1BB`, `$E48D`. |
 | `$75` | Invincibility timer | hypothesis | `$E360`, `$D282`. |
-| `$5D` | Land left: return to Land Select and bank the money | verified | Poke run ([game-state.md](game-state.md)). |
+| `$5D` | Land left: return to Land Select and bank the money | verified | Poke run ([GAME-STATE.md](GAME-STATE.md)). |
 | `$78` | Scene request (`$81` Launchpad ride home) | verified | Poke runs. |
 | `$7B` | 5 = final arena | verified | Trigger run with `$A0 = $1F`. |
 | `$7C` | 5 in the boss-checkpoint screen | verified | Poke run. |
@@ -34,7 +34,7 @@ decoded with `tools/framelog.py`.
 | `$A0` | Treasures: bits 0-4 one per land (Land Select skips taken lands), bits 5-6 extra | verified (0-4), hypothesis (5-6) | Bank 6 `$8C2E`; Land Select poke runs. |
 | `$A3` | Key items (bit 1 = African Mines item that stops the redirect to Transylvania) | verified (bit 1) | Poke runs; bank 6 `$8BF5`. |
 | `$A4` | Redirect after a land: positive = Transylvania, negative = Land Select | verified | Poke runs. |
-| `$AC`/`$AD` | Ending start / ending variant 0-2 | verified | Poke runs ([game-state.md](game-state.md)). |
+| `$AC`/`$AD` | Ending start / ending variant 0-2 | verified | Poke runs ([GAME-STATE.md](GAME-STATE.md)). |
 | `$B1` | Boss hits left: 5 when the fight starts, minus 1 per hit, 0 when the boss is beaten | verified (Amazon, Himalayas) | `full_himalayas`: 5 at frame 3722 with `$FB = $FF` and music 6, then 4/3/2/1/0 at 3806/3974/4142/4536/4864; the chest appears after 0. |
 | `$B0` | Frames per HUD time tick (60) | verified | `$E2AA`. |
 | `$E6` | Pause; bit 0 also mutes the music in the sound driver | verified | `$DB46`; driver `$827B`, poke run. |
@@ -47,7 +47,7 @@ decoded with `tools/framelog.py`.
 | `$92` | Frame counter, incremented by every NMI | verified | NMI `$C0AC`. |
 | `$93/$94` | Task entry pointer (and wait count in `$93` for `task_yield`) | verified | `task_create`, `task_yield`. |
 | `$98` | When non-zero the NMI skips sprite DMA | verified | NMI `$C034`. |
-| `$D0` | Sound priorities: high nibble current effect, low nibble current music | verified | Bank 3 `$8044`, `$80BB`; frame logs ([audio.md](audio.md)). |
+| `$D0` | Sound priorities: high nibble current effect, low nibble current music | verified | Bank 3 `$8044`, `$80BB`; frame logs ([AUDIO.md](AUDIO.md)). |
 | `$D4` | Sound driver busy while `$8003` runs | verified (static) | `$824C`. |
 | `$D7` | Sound ticks per frame (0/1 normal; unused speed control) | verified | `$86AC`; poke `$D7` = 2 halves loop periods. |
 | `$D8/$D9` | Global music fade rate (bit 7 = out) / step | verified | `$82CC-$833C`; poke runs. |
@@ -62,13 +62,13 @@ decoded with `tools/framelog.py`.
 | `$EF` | Gravity for `$F2B5` (`$33`, reloaded every frame at `$E354`); also used as scratch | verified | Trace. |
 | `$F9` | Difficulty: 0 Easy, 1 Normal, 2 Difficult | verified | RAM at frame 1800 after selecting each difficulty differs exactly this way; the damage routine at `$EB5E` applies only every other hit when it is 0. |
 | `$E8` | When non-zero the NMI skips the PPU update block | verified | NMI `$C01E`. |
-| `$EA` | Sprite-0 HUD split enabled (`$40` in play) | verified | `$D840`, NMI ([rendering.md](rendering.md)). |
+| `$EA` | Sprite-0 HUD split enabled (`$40` in play) | verified | `$D840`, NMI ([RENDERING.md](RENDERING.md)). |
 | `$E9`/`$ED`/`$EE` | Mid-frame `$2006` address for the vertical row scroll | hypothesis | `$C976`, NMI `$C0DE`. |
 | `$F7` | PRG bank holding block and metatile tables (from `$DA10` + `$F6`) | verified | `$D9DA`; four land logs. |
 | `$F8` | Turns the background off below the split | verified (code) | NMI `$C0EF`; use unknown. |
 | `$FA` | Sprite-0 Y (`$2C`) | verified | `$D83A`, OAM check. |
 | `$F0` | Playfield scroll Y written after the split (0 in play) | verified (code) | NMI `$C0FD`. |
-| `$F1` | Map row (0 = top) | verified | Land tables, warp poke runs, `$E8B6` ([levels.md](levels.md)). |
+| `$F1` | Map row (0 = top) | verified | Land tables, warp poke runs, `$E8B6` ([LEVELS.md](LEVELS.md)). |
 | `$F2`/`$F3` | Camera X low byte / page; bit 0 of `$F3` also selects the nametable after the split | verified | `$0650 = ($0730:$0720) - ($F3:$F2)` on 5,201 of 5,250 gameplay frames (exceptions are transitions). |
 | `$F6` | Current land 0-4 in Land Select order; 5 while Land Select loads and during the boss scroll; 9 in the ending | verified | Five intro routes; writers `$D746`, `$DB9D`, `$E1C6`. |
 | `$FC/$FD` | Top-of-frame scroll Y and X (0 in play) | verified | NMI `$C07E-$C085`; logs. |
@@ -82,7 +82,7 @@ column is the object slot (0-15). Slot 0 is Scrooge.
 | Row | Meaning (slot 0) | Status | Evidence |
 |---|---|---|---|
 | `$0600+n` | Flags | hypothesis | Non-zero for live slots, `$00` for empty ones. |
-| `$0620+n` | Action/animation state | verified for slot 0 | Scrooge: 0 stand, 1 walk, 2 jump, 3 crouch, 5 hurt, 6 pogo, 7 push, 8 landed (`$E6CC`), 9 cane swing ([player.md](player.md)). |
+| `$0620+n` | Action/animation state | verified for slot 0 | Scrooge: 0 stand, 1 walk, 2 jump, 3 crouch, 5 hurt, 6 pogo, 7 push, 8 landed (`$E6CC`), 9 cane swing ([PLAYER.md](PLAYER.md)). |
 | `$0640+n` | Y position on screen | verified | Scrooge falls in from `$40` to `$B4` (ground), rises on a jump and oscillates during pogo. |
 | `$0650+n` | X position on screen | verified | Scrooge goes from `$80` to `$44` while Left is held at the left edge of The Amazon; equals world X minus `$F2` (bank 5 `$80CB`). |
 | `$0660+n` | Y fraction | verified | `$F2A1`. |

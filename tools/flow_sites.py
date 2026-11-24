@@ -39,7 +39,7 @@ def main():
     src = (ROOT / "src/decomp/flow.c").read_text()
     out = [
         "",
-        HEAD + ', docs/decompilation.md "Task code"): the',
+        HEAD + ', docs/DECOMPILATION.md "Task code"): the',
         "# entries of the main task's decompiled code that original code reaches (its",
         "# resume points have no site: the RTS observer starts them).",
         "",

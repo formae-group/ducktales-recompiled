@@ -1,6 +1,6 @@
 /*
  * ducktales_ramhash.c - native-runtime verification output for the cycle host
- * (docs/native-runtime.md). Reads only.
+ * (docs/NATIVE-RUNTIME.md). Reads only.
  *
  *   --ram-hash-out FILE  one native_hash.h line per frame (CPU RAM, PPU
  *                        memories, cycles, registers), the reference the

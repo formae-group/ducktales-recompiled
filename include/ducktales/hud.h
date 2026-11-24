@@ -1,5 +1,5 @@
 /*
- * ducktales/hud.h - what the HUD shows (docs/memory-map.md "Other RAM").
+ * ducktales/hud.h - what the HUD shows (docs/MEMORY-MAP.md "Other RAM").
  *
  * The HUD keeps its values as the sprite records and tile ids it draws: HP
  * dots are sprite records at $0340 (attribute bit 0 = lost), lives the tile

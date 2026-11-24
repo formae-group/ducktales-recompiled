@@ -1,4 +1,4 @@
-"""Off-screen self-test of the native player build (docs/native-runtime.md
+"""Off-screen self-test of the native player build (docs/NATIVE-RUNTIME.md
 "The player build").
 
 Runs both window executables of build/windows off screen on route frames, no

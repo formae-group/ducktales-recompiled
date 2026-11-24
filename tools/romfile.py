@@ -1,5 +1,5 @@
 """The default ROM of the scripts in tests/ and tools/: the file in roms/ whose
-SHA-256 is the supported revision's (docs/rom.md), whatever its name, or
+SHA-256 is the supported revision's (docs/ROM.md), whatever its name, or
 roms/baserom.nes when none matches, so a missing-ROM message names a path.
 --rom overrides it in every script.
 """

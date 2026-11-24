@@ -17,7 +17,7 @@
  * the display's scaling, blurring every pixel) and the Direct3D 11 renderer
  * (flip model: even presents, no tearing with VSync off; SDL's first choice,
  * Direct3D 9, blocks in its VSync presents and drops pictures). The
- * SDL_RENDER_DRIVER environment variable still wins. docs/presentation.md.
+ * SDL_RENDER_DRIVER environment variable still wins. docs/PRESENTATION.md.
  *
  * The window build is a Windows program (no console of its own). Started from
  * a terminal with nothing redirected, it attaches to that terminal so --help,

@@ -1,4 +1,4 @@
-"""Native runtime vs the cycle host on the input routes (docs/native-runtime.md).
+"""Native runtime vs the cycle host on the input routes (docs/NATIVE-RUNTIME.md).
 
 For every route in tests/routes/*.txt this runs the cycle build (ducktales.exe)
 and the native-runtime prototype (ducktales_native.exe) with --ram-hash-out
@@ -11,7 +11,7 @@ lag mode: the no-slowdown default changes timing on purpose.
 --reuse keeps an existing cycle-host hash file instead of running it again
 (the native run takes seconds, the cycle host minutes). --voices also plays
 the native run through the synth (--wav-out, deleted afterwards) with both
-extra voices on or off (docs/audio.md, "Extra voices"), which only read the
+extra voices on or off (docs/AUDIO.md, "Extra voices"), which only read the
 machine, so the comparison must still pass.
 """
 

@@ -66,7 +66,7 @@ uint64_t dt_enh_applied(DtEnh e);
 /* The console's reset button, between frames: the CPU continues from the
  * reset vector as after its reset sequence (S - 3, I set), pending
  * interrupts dropped. The PPU and APU are not reset; the game's reset
- * handler re-initialises them itself (functions.md $FEE0). */
+ * handler re-initialises them itself (FUNCTIONS.md $FEE0). */
 void dt_soft_reset(void);
 
 #ifdef __cplusplus

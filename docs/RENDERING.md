@@ -1,7 +1,7 @@
 # Rendering
 
 How DuckTales builds its picture: map and screen data, the VRAM update queues, CHR-RAM loads,
-palettes, the HUD split and the sprite builder. Status words as in [memory-map.md](memory-map.md);
+palettes, the HUD split and the sprite builder. Status words as in [MEMORY-MAP.md](MEMORY-MAP.md);
 code addresses are bank 7 (fixed) unless a bank is named. "Check" below means
 `tools/render_map.py check` or `tools/render_oam.py check` on a `--frame-log` record: the tools
 predict nametables, attributes, CHR RAM, palette, picture and OAM from the ROM tables and compare
@@ -39,13 +39,13 @@ them with what the PPU and RAM actually hold (commands under [Reproducing](#repr
 Top-of-frame scroll `$FD/$FC` is 0 in play, so the HUD always shows nametable 0 from X = 0.
 `$E9` with `$ED/$EE` is the vertical row transition: `$C976` sets `$E9 = $0C` and moves the
 `$2006` address written after the split over 60 frames (`$30` counts to `$3C`), which scrolls the
-playfield vertically under a fixed HUD (static reading; no route changes rows, see levels.md).
+playfield vertically under a fixed HUD (static reading; no route changes rows, see LEVELS.md).
 
 ## Map, screen, block and metatile format
 
 | Level | Where | Format | Status | Evidence |
 |---|---|---|---|---|
-| Map | `$C7B0` with X = `$F6` | rows (`$CE57`), stride 8 (`$CE61`) and a grid pointer (`$CF7F/$CF89`) of screen ids, `$FF` = none | verified | levels.md; `$C71D` and `$C78F` call it with X = `$F6`. |
+| Map | `$C7B0` with X = `$F6` | rows (`$CE57`), stride 8 (`$CE61`) and a grid pointer (`$CF7F/$CF89`) of screen ids, `$FF` = none | verified | LEVELS.md; `$C71D` and `$C78F` call it with X = `$F6`. |
 | Screen id | bank 4, `$8000 + id * 72` | 64 block numbers, row-major (8 rows x 8 columns of 32x32 px), then 8 bytes giving each block a 9th bit (byte = block row, bit 7 = column 0). Blocks 0-511. | verified | `$CE2C` computes `$22/$23 = $8000 + id*72`; `$CDAF` selects bank 4, reads byte `$10` (row*8+column) and bit `$CE20[column]` of byte `$40 + row`. Check: every nametable tile and attribute below the HUD equals the decode in the Amazon (1,728/1,728 tiles, 112/112 attribute bytes). |
 | Block | bank `$F7`, `$B300 + block * 4` | metatile ids of the four 16x16 quadrants: top-left, top-right, bottom-left, bottom-right | verified | `$CDAF` builds the pointer (`block*4 + $B300`); `$CCDD-$CD98` reads Y = 3..0 and places quadrant Y at buffer offset `$CE28[Y]` = 0, 2, 8, 10 of the 4x4 tile buffer `$03F0`. |
 | Metatile | bank `$F7`, `$BB00/$BC00/$BD00/$BE00 + id` | the four 8x8 tiles (top-left, top-right, bottom-left, bottom-right) | verified | `$CD7E-$CD95`; same check. |
@@ -93,7 +93,7 @@ sets A and `$08` just before `$F4E8` was not pinned down.
 | Routine | When | What | Status | Evidence |
 |---|---|---|---|---|
 | `$C301` (X = list) | Screen blanked: title (X = 6, `$D531`), Land Select (X = 5, `$D647`), land load (X = `$F6`, `$D7CE`), scenes (`$DF61`, X = map), ending scenes (`$E0F4`, X from `$E121`) | List at `$C358/$C363 + X` of 3-byte records: high nibble = PRG bank, low nibble = pages - 1, source page (`$xx00`), PPU page; a byte `>= $80` ends. Writes `$2007` directly. | verified | `$C301-$C357`. For a land: common sprites to `$0000-$07FF`, one sprite page per land to `$0800`, common background tiles (HUD included) to `$1000-$12FF`, the land's background set to `$1300-$1FFF`. Check: CHR RAM equals the lists byte for byte in the four lands logged, except the message tile below (Transylvania, 14 bytes). |
-| `$C42C` (state `$50`) | Land load (`$D7D8`), respawn and warp (`$DCBA`), boss arena and scenes (`$D01B`, `$E00D`, `$E031`): called until `$50` goes negative | Per land row: index `$C508[$F6] + $F1` into `$C511`; a value with bit 7 set picks one of two lists by camera page (`$F3 >= 4`, Moon `>= 3`). The list (`$C563/$C583`, same record format) is queued 64 bytes per call through `$0400`. At the end it loads sprite palette 3 (`$031C-$031F`, copy at `$011C`) from `$C6D9 + 4 * $C53A[...]`. | verified | `$C42C-$C507`. Lists only target `$0900-$0FFF` (enemy sprites of the row). Check: `$0900-$0FFF` and sprite palette 3 match the row's list in the four lands logged. levels.md calls this "streams the first screens": it streams CHR, not nametables. |
+| `$C42C` (state `$50`) | Land load (`$D7D8`), respawn and warp (`$DCBA`), boss arena and scenes (`$D01B`, `$E00D`, `$E031`): called until `$50` goes negative | Per land row: index `$C508[$F6] + $F1` into `$C511`; a value with bit 7 set picks one of two lists by camera page (`$F3 >= 4`, Moon `>= 3`). The list (`$C563/$C583`, same record format) is queued 64 bytes per call through `$0400`. At the end it loads sprite palette 3 (`$031C-$031F`, copy at `$011C`) from `$C6D9 + 4 * $C53A[...]`. | verified | `$C42C-$C507`. Lists only target `$0900-$0FFF` (enemy sprites of the row). Check: `$0900-$0FFF` and sprite palette 3 match the row's list in the four lands logged. LEVELS.md calls this "streams the first screens": it streams CHR, not nametables. |
 | `$ED05` | Message box open/close | Replaces background tile `$12D` (`$12D0`) with 16 bytes from bank 2 `$A8F0` while a message shows and restores it from bank 1 `$82D0` after (`$ED8A`). | verified | `$ED13-$ED2E`; frame log of `transylvania_intro`: `$12D1-$12DF` change at frame 1370 after this entry is queued at frame 1369 (whoaccesses: `$ED15`). |
 
 `$C203` (A = nametable high byte, X = fill tile, Y = attribute) clears a nametable while blanked;
@@ -234,7 +234,7 @@ and the playfield below the sprite-0 split). It follows the 2C02's composition r
 attributes, 8x8/8x16 sprites, flips, behind-background priority, the left-column clips, greyscale and
 emphasis. It can also draw any sprite list with no per-line limit, the rule of
 [Sprites without limits](#sprites-without-limits-presentation). Its own document is
-[native-render.md](native-render.md).
+[NATIVE-RENDER.md](NATIVE-RENDER.md).
 
 | Check | Result | Status |
 |---|---|---|

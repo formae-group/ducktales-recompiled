@@ -1,7 +1,7 @@
 /*
- * dt_mods_audio.c - music and effect replacements (app_mods.h, docs/mods.md
+ * dt_mods_audio.c - music and effect replacements (app_mods.h, docs/MODS.md
  * "Music and effects"), following the game's sound driver from its RAM
- * (docs/audio.md):
+ * (docs/AUDIO.md):
  *
  *   requests   at a frame's end the ring $C8-$CF (read index $C7, $88 =
  *              empty) holds what the game queued in that frame; the NMI that
@@ -98,7 +98,7 @@ bool mods_audio_has(bool music, int id)
 bool mods_audio_add(bool music, int id, uint8_t *file, size_t size, char *err, size_t cap)
 {
     if (music ? (id < 0 || id >= MUSIC_IDS) : (id < MUSIC_IDS || id >= SOUND_IDS)) {
-        snprintf(err, cap, music ? "music ids are 00-0F (docs/audio.md)" : "effect ids are 10-37 (docs/audio.md)");
+        snprintf(err, cap, music ? "music ids are 00-0F (docs/AUDIO.md)" : "effect ids are 10-37 (docs/AUDIO.md)");
         free(file);
         return false;
     }

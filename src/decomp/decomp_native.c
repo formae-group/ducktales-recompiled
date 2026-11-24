@@ -1,6 +1,6 @@
 /*
  * decomp_native.c - the native runtime's backend of the decompilation layer
- * (decomp_backend.h, docs/decompilation.md): the decompiled routines alone,
+ * (decomp_backend.h, docs/DECOMPILATION.md): the decompiled routines alone,
  * in place of the recompiled ones. There is one mode, replace; nothing is
  * compared here (the cycle host's check and replace, decomp_cycle.c, are the
  * proof that the C does what the original does).
@@ -20,7 +20,7 @@
  *
  * The C's cycles are not the original's, so where VBlank falls in a logic step
  * changes: the player allows the mode only with No slowdown, where a step's
- * result does not depend on its cycle count (docs/native-runtime.md).
+ * result does not depend on its cycle count (docs/NATIVE-RUNTIME.md).
  */
 #include "decomp/decomp_backend.h"
 

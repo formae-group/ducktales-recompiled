@@ -1,6 +1,6 @@
 /*
  * app_present.c - the window's presentation settings and the picture it shows
- * (app_present.h, docs/presentation.md).
+ * (app_present.h, docs/PRESENTATION.md).
  *
  * The picture comes from cyc_render_present, so a compositor the game
  * installed (cyc_render.h) is already in it. This file only edits a copy:
