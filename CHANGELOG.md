@@ -183,6 +183,9 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Changed
 
+- The game flow's decompiled C is split by phase into `src/decomp/flow/` (the reset and frame loop, the
+  title, Land Select, the land load, the HUD, death, the scenes, the ending, the routine table and a
+  shared internal header) instead of one 3,200-line `flow.c`; no behaviour changed.
 - The native player (`ducktales.exe`) starts with Decompiled code and No slowdown on. Settings →
   Gameplay → Original mode, at the top of the page with a (?), turns both off for the recompiled
   original with the console's slowdown, and turning it off turns both back on. `config.ini` now
