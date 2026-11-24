@@ -153,7 +153,7 @@ end)
 | Name | What it is |
 |---|---|
 | `dt.on(event, fn)` | Calls `fn` at every `event`, in the order handlers were added; mods higher in the list run first |
-| `dt.CANCEL` | Returned by a handler of a cancelable event: the event is cancelled |
+| `dt.CANCEL` | Returned by a handler of a cancelable event: the event is cancelled. Returned for an event that cannot be cancelled, it is ignored and the log says so once |
 | `dt.state` | The game's state, read only, inside handlers (fields below) |
 | `dt.set.<field>(value)` | Sets a writable field at the frame's end, inside handlers (see [Writing the game](#writing-the-game)) |
 | `dt.toast(text)` | Shows a short notice over the picture; returns `false` when it was refused (see [Toasts](#toasts)) |
@@ -200,7 +200,9 @@ game, as the matching enhancement does.
 The value is checked when `dt.set` is called, and a value out of range is an error (catchable
 with `pcall`). Calls are only allowed inside handlers, and they are queued: the writes happen at
 the end of the frame, after the `frame` handlers, through the game's RAM transaction (the same
-helpers the enhancements use), so `dt.state` shows the new value from the next frame on. **Every
+helpers the enhancements use), so `dt.state` shows the new value from the next frame on. The
+value is checked again then, and a write the state no longer allows (the HUD stopped showing
+money) is dropped with a line in the log. **Every
 write is a gameplay change**: the machine then differs from the console's, like an enhancement
 that is on. A mod whose script stopped has its queued writes dropped.
 
@@ -234,6 +236,10 @@ which can only hold `a-z`, `0-9`, `-`, `_` and `.`, and a mod whose id is a Wind
 - An error, or a limit reached, stops that mod's script: its handlers and queued writes are dropped, the reason is
   written to the log and shown in the Mod Menu, and the game and the other mods go on. `pcall`,
   `xpcall`, `coroutine.resume` and `coroutine.close` do not catch a limit.
+- The reason names the line and where it ran: *scripts/main.lua:12: attempt to index a nil value
+  (field 'x') (in a "frame" handler)*, *scripts/main.lua:3: ran more than 1000000 instructions in
+  one callback (in a "timer-tick" handler)*, or *(when the script started)* for the script's first
+  run. The memory limit has no line: *used more than 16 MiB of memory*.
 - The instruction limit counts Lua instructions. A single long call into the C library, such as a
   pathological string pattern, is not interrupted.
 

@@ -79,8 +79,9 @@ typedef struct {
     bool folder;
     long long stamp;
     lua_State *L;
-    int handlers;   /* registry ref: a table of handler lists, event + 1 (the frame's at SCRIPT_EVENTS + 1) */
-    uint64_t wants; /* bit per event, FRAME_BIT for "frame" */
+    int handlers;    /* registry ref: a table of handler lists, event + 1 (the frame's at SCRIPT_EVENTS + 1) */
+    uint64_t wants;  /* bit per event, FRAME_BIT for "frame" */
+    uint64_t warned; /* bit per event: a dt.CANCEL it cannot take was reported */
     size_t memory;
     bool over;  /* the last growth was refused */
     long steps; /* hook steps left in this callback */
@@ -170,7 +171,9 @@ static void count_hook(lua_State *L, lua_Debug *ar)
     if (--s->steps > 0 && !s->stopped) {
         return;
     }
-    stop(s, "ran more than %d instructions in one callback", SCRIPT_INSTRUCTIONS);
+    luaL_where(L, 0);
+    stop(s, "%sran more than %d instructions in one callback", lua_tostring(L, -1), SCRIPT_INSTRUCTIONS);
+    lua_pop(L, 1);
     luaL_error(L, "%s", s->why);
 }
 
@@ -762,6 +765,13 @@ static void report(Script *s)
     s_dirty = true;
 }
 
+static const char *event_name(int e)
+{
+    return e == FRAME_BIT ? "frame" : s_game.events[e].name;
+}
+
+/* Runs the script's handlers of event e: true when one returned dt.CANCEL
+ * and e can be cancelled. */
 static bool run(Script *s, int e)
 {
     lua_State *L = s->L;
@@ -772,13 +782,24 @@ static bool run(Script *s, int e)
         stop_if_over(s);
         const char *msg = lua_tostring(L, -1);
         stop(s, "%s", msg ? msg : "an error without a message");
+        size_t n = strlen(s->why);
+        snprintf(s->why + n, sizeof s->why - n, " (in a \"%s\" handler)", event_name(e));
         lua_pop(L, 1);
         report(s);
         return false;
     }
     bool cancel = lua_toboolean(L, -1);
     lua_pop(L, 1);
-    return cancel;
+    bool cancelable = e != FRAME_BIT && s_game.events[e].cancelable;
+    if (cancel && !cancelable && !(s->warned & 1ull << e)) {
+        s->warned |= 1ull << e;
+        char text[160];
+        snprintf(text, sizeof text,
+                 "a \"%s\" handler returned dt.CANCEL, which that event ignores: it cannot be cancelled",
+                 event_name(e));
+        log_line(s, "", text);
+    }
+    return cancel && cancelable;
 }
 
 static bool live(const Script *s, int bit)
@@ -794,7 +815,7 @@ bool fm_scripts_event(int event)
             cancel |= run(s_scripts[i], event);
         }
     }
-    return cancel && s_game.events[event].cancelable;
+    return cancel;
 }
 
 static void close_script(Script *s)
@@ -876,6 +897,7 @@ static bool start_script(Script *s, char *err, size_t cap)
     s->stopped = false;
     s->why[0] = 0;
     s->wants = 0;
+    s->warned = 0;
     s->steps = SCRIPT_INSTRUCTIONS / HOOK_STEP;
     lua_State *L = lua_newstate(script_alloc, s);
     if (!L) {
@@ -898,7 +920,10 @@ static bool start_script(Script *s, char *err, size_t cap)
     if (status != LUA_OK) {
         stop_if_over(s);
         const char *msg = lua_tostring(L, -1);
-        snprintf(err, cap, "%s", s->stopped ? s->why : msg ? msg : "an error without a message");
+        snprintf(err, cap, "%s (when the script started)",
+                 s->stopped ? s->why
+                 : msg      ? msg
+                            : "an error without a message");
         close_script(s);
         return false;
     }
@@ -1012,8 +1037,15 @@ void fm_scripts_frame(void)
             const Write *w = &s_writes[i];
             const FmField *f = &s_game.fields[w->field];
             char err[160];
-            if (!w->script->stopped && f->check(w->value, err, sizeof err)) {
+            if (w->script->stopped) {
+                continue;
+            }
+            if (f->check(w->value, err, sizeof err)) {
                 f->set(w->value);
+            } else {
+                char text[260];
+                snprintf(text, sizeof text, "dt.set.%s(%lld) dropped at the frame's end: %s", f->name, w->value, err);
+                log_line(w->script, "", text);
             }
         }
         s_game.end_frame();

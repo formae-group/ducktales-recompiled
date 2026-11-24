@@ -139,6 +139,10 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   names' reason instead of using one of them silently. **Rescan** in the Mod Menu checks the files
   of the mods that are not loaded, so a broken new mod shows why before a restart, and a mod refused
   at start no longer lost its reason after a Rescan.
+- Mods: a stopped script's reason says where it ran (*in a "frame" handler*, *when the script
+  started*), and the instruction limit names the line that was running. A `dt.CANCEL` returned for
+  an event that cannot be cancelled is reported once instead of ignored silently, and a `dt.set`
+  write the state no longer allows at the frame's end is logged instead of dropped silently.
 
 ## [1.0.0] - 2026-11-23
 
