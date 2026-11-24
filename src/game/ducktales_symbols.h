@@ -70,6 +70,9 @@
 #define DT_ADDR_DIFFICULTY      0x00F9 /* 0 Easy, 1 Normal, 2 Difficult (verified) */
 #define DT_ADDR_BOSS_FIGHT      0x00FB /* bit 7 = boss fight (verified) */
 #define DT_ADDR_FRAME_COUNTER   0x0092 /* incremented by every NMI (verified) */
+#define DT_ADDR_TASKS           0x0080 /* four task slots: state, wait, saved S or entry low, entry high (verified) */
+#define DT_ADDR_TASK_CURRENT    0x0091 /* running task slot (verified) */
+#define DT_ADDR_TASK_ENTRY      0x0093 /* task entry pointer; task_yield's wait in $93 (verified) */
 #define DT_ADDR_PAD2_NEW        0x0015 /* controller 2, newly pressed (code, read_controllers) */
 #define DT_ADDR_RANDOM          0x00C0 /* 32-bit shift register stepped by $C2E6 (code) */
 #define DT_ADDR_PPU_MASK        0x00FE /* PPUMASK shadow (verified) */
@@ -411,6 +414,11 @@
 #define DT_CODE_TASK_YIELD     0xFFAC /* wait one frame */
 #define DT_CODE_TASK_WAIT      0xFFA5 /* wait X frames */
 #define DT_CODE_RTS            0xFFAB /* task_wait's RTS: the entry of task code's isolated runs */
+#define DT_CODE_SCHEDULER      0xFF35 /* runs the next runnable task slot */
+#define DT_CODE_TASK_CREATE    0xFF7D /* A = slot: state 8, entry from $93/$94 */
+#define DT_CODE_TASK_CURRENT   0xFF9F /* X = the running task's slot offset */
+#define DT_CODE_TASK_SLOT      0xFFA1 /* X = A * 4, slot A's offset */
+#define DT_TASK_WAIT_NEXT      0xFFA8 /* task_wait after each task_yield */
 #define DT_CODE_BANK_SELECT    0xFFDE
 #define DT_CODE_BANK_TABLE     0xFFE5 /* bus-conflict table: bank n is written at $FFE5 + n */
 #define DT_CODE_SCREEN_OFF     0xC197 /* $E8++, rendering off */

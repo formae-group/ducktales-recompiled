@@ -129,6 +129,11 @@ void Decomp_SetStack(uint8_t s)
     dc_cur_s = s;
 }
 
+uint8_t Decomp_Stack(void)
+{
+    return dc_cur_s;
+}
+
 void Decomp_PushReturn(uint16_t resume)
 {
     uint16_t ret = (uint16_t)(resume - 1);
@@ -283,8 +288,8 @@ void dc_add_table(const DecompRoutine *table, int n)
             dc_fail("more routines than MAX_ROUTINES", table[i].addr);
         }
         dc_routine[dc_count++] = &table[i];
-        if (table[i].site_id) {
-            nes_mod_register_function_entry_plugin(table[i].site_id, table[i].addr, dc_on_entry);
+        if (table[i].site_id && !nes_mod_register_function_entry_plugin(table[i].site_id, table[i].addr, dc_on_entry)) {
+            dc_fail("a routine's site could not be registered", table[i].addr);
         }
         if (table[i].resume) {
             dc_resume[table[i].addr >> 3] |= (uint8_t)(1u << (table[i].addr & 7));
@@ -352,6 +357,8 @@ NES_MOD_CONSTRUCTOR(dt_register_decomp_sites)
     dc_add_table(gSpriteRoutines, gSpriteRoutineCount);
     dc_add_table(gAudioRoutines, gAudioRoutineCount);
     for (int i = 0; i < gFlowStopCount; i++) {
-        nes_mod_register_function_entry_plugin(gFlowStops[i].site_id, gFlowStops[i].addr, dc_on_entry);
+        if (!nes_mod_register_function_entry_plugin(gFlowStops[i].site_id, gFlowStops[i].addr, dc_on_entry)) {
+            dc_fail("a stop site could not be registered", gFlowStops[i].addr);
+        }
     }
 }

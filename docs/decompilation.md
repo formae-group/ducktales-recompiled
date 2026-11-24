@@ -302,8 +302,9 @@ unless `--lag none` is given.
 | bytes the task never reads (`--nmi-audit`) | NMI-only state |
 | `$19`, `$90`, `$C7-$CF`, `$0370-$03EF` | the NMI-facing bytes `tests/lag_modes.py` allows (`ALLOWED`) |
 | `$92`, `$D0-$E5` | the frame counter and the sound driver's zero page, run by the NMI: it runs a different number of times before a step when loads are shorter |
+| the yielding slot's state and wait (`$80,X`, `$81,X`, X = 4 × `$91`), at one step | (4, 0) on where off has (1, 1): the C's zero cost moves `task_yield` (`$FFAC`) before the VBlank NMI, which then counts the yield's one-frame wait out between the C's stores and the scheduler's pass at `$FF38`, where the step is taken (the screen is off, so VBlank is not held back). Only that pattern is excepted, the slot must be equal on the next step, and the test prints the number of such steps per route ("NMI-counted yields") |
 
-No byte of task state differs.
+No other byte of task state differs.
 
 ### Routines
 
