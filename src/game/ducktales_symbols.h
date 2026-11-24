@@ -894,6 +894,12 @@
 #define DT_SITE_ITEM_COLLECTED    0x8B21
 #define DT_SITE_ITEM_COLLECTED_ID "ducktales.event.item-collected"
 
+/* In the frame loop: DT_FLOW_AFTER_PLAYER, where Player_Update's RTS returns
+ * (the JSR at $DB6C) before the objects move. Reached once per unpaused
+ * step of play, message boxes included. */
+#define DT_SITE_UPDATE    DT_FLOW_AFTER_PLAYER
+#define DT_SITE_UPDATE_ID "ducktales.event.update"
+
 /* The RTI of the NMI handler ($C000), its only exit: replace mode spends
  * there the cycles a replaced routine still owed when the NMI came
  * (docs/DECOMPILATION.md "Timing in replace mode"). */

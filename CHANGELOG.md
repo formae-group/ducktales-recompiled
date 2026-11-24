@@ -7,6 +7,10 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- Script mods can change gameplay (docs/MODS.md "Writing the game"): the `update` event runs once
+  per step of play, where `Player_Update` returns in the frame loop (one hook site, `$DB6F`, and the
+  decompiled frame loop raises it itself), and `dt.set` in a game event's handler writes at once.
+  Every write is logged, identical repeats counted in one line.
 - Decompiled the scheduler `$FF35-$FF7C` as timed task code (`Task_Schedule`, `Task_Pass`,
   `Task_Resume`), whose time the native runtime spends, giving the call to the original when an NMI
   is pending or VBlank would come during it. The native step dumps and lag logs are unchanged on all

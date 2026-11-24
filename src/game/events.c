@@ -60,6 +60,7 @@ static const EventInfo INFO[EVENT_COUNT] = {
     [EVENT_LAND_CLEAR] = { "land-clear", NULL, false },
     [EVENT_CHECKPOINT] = { "checkpoint", NULL, false },
     [EVENT_MONEY_CHANGED] = { "money-changed", NULL, false },
+    [EVENT_UPDATE] = { "update", DT_SITE_UPDATE_ID, false },
 };
 
 static struct {
@@ -326,6 +327,12 @@ static int on_boss_hit(uint16_t addr)
     return at_site(EVENT_BOSS_HIT);
 }
 
+static int on_update(uint16_t addr)
+{
+    (void)addr;
+    return at_site(EVENT_UPDATE);
+}
+
 static int on_enemy_defeated(uint16_t addr)
 {
     (void)addr;
@@ -348,4 +355,5 @@ NES_MOD_CONSTRUCTOR(dt_register_event_sites)
     nes_mod_register_function_entry_plugin(DT_SITE_BOSS_HIT_ID, DT_SITE_BOSS_HIT, on_boss_hit);
     nes_mod_register_function_entry_plugin(DT_SITE_ENEMY_DEFEATED_ID, DT_SITE_ENEMY_DEFEATED, on_enemy_defeated);
     nes_mod_register_function_entry_plugin(DT_SITE_ITEM_COLLECTED_ID, DT_SITE_ITEM_COLLECTED, on_item_collected);
+    nes_mod_register_function_entry_plugin(DT_SITE_UPDATE_ID, DT_SITE_UPDATE, on_update);
 }

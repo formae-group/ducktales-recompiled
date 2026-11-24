@@ -70,6 +70,7 @@ handler reads the values its event carries with `Events_Args`.
 | `EVENT_BOSS_DEFEATED` | `$F6DD`, the boss hit's | after `EVENT_BOSS_HIT` when it was not cancelled and `$B1` is 1, so the decrement beats the boss; carries `land` | not cancelable | mods |
 | `EVENT_ENEMY_DEFEATED` | bank 6 `$8932`, entry of `Obj_Defeat` | an enemy is beaten; carries `slot`, `kind` (`$0710,X`), `x` (world) and `y` | not cancelable | mods |
 | `EVENT_ITEM_COLLECTED` | bank 6 `$8B21`, entry of `Pickup_Take` | Scrooge takes a pickup; carries `slot`, `item` (`$0620,X`), `x` and `y` | not cancelable | mods |
+| `EVENT_UPDATE` | `$DB6F`, in the frame loop | `Player_Update` returned (the `JSR` at `$DB6C`) and the objects are about to move: once per unpaused step of play | not cancelable | mods |
 
 Four more events have no site. `Events_FrameEnd`, which the hosts call after every machine frame,
 compares RAM with the previous frame's while one of them has a handler (the first such frame only
@@ -94,6 +95,10 @@ Evidence for each site:
   Himalayas in [GAME-STATE.md](GAME-STATE.md)). With `--dt-events-log`, `full_amazon` raises
   `boss-hit` at frames 7093, 7285, 7645, 7933 and 8173, exactly the frames where `$B1` drops from 5
   to 0 (verified). The cancel's effect comes from the code alone: no enhancement cancels it yet.
+- `$DB6F` is the instruction after the frame loop's only `JSR $E354` (`Player_Update`, `$DB6C`), so
+  it is reached through that routine's RTS (and as the decompiled frame loop's resume point). On
+  `amazon_intro` a script counting `update` sees 513 steps in 1,500 frames, in the same frames with
+  `--decomp off`, `check` and `replace` (verified).
 - `$8932` and `$8B21` are the entries of the decompiled `Obj_Defeat` and `Pickup_Take` (bank 6).
   The enemy kinds reach `$8932` with 28 `JMP`s, and the instruction before `$8B21` is an `RTS`.
   Their 8 bytes appear at that address in no other bank, so the content key also requires bank 6.
@@ -108,7 +113,8 @@ and writes one line per raised event, with its frame and values.
 copy in `Title_Lit`, `$F6DD` is in `Boss_Hit`, and `$8932` and `$8B21` are the entries of
 `Obj_Defeat` and `Pickup_Take`. When a decompiled routine runs instead of the original, the
 original instruction never runs, so the C raises those events itself (`Decomp_RaiseEvent`,
-`Decomp_RaiseSlotEvent`, replace mode only) at the same point in its logic; the original measured
+`Decomp_RaiseSlotEvent`, replace mode only) at the same point in its logic (`$DB6F` is where the
+frame loop's C, `FrameLoop_AfterPlayer`, starts, so it raises `EVENT_UPDATE` first); the original measured
 in an isolated call raises nothing. In check mode only the original raises them. `Title_Lit` did
 not raise `EVENT_NEW_GAME` before, so StartLives had no effect with the decompiled routines on.
 `tests/decomp_test.py --modes events` checks NoDamage, JumpScale and StartLives with the decompiled
