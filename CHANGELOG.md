@@ -7,6 +7,10 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- Decompiled the scheduler `$FF35-$FF7C` as timed task code (`Task_Schedule`, `Task_Pass`,
+  `Task_Resume`): its C states the original's cycles (`Decomp_Cycles`, `Decomp_Fetch`), which check
+  compares and the native runtime spends, giving the call to the original when an NMI is pending or
+  VBlank would come during them. The native step dumps and lag logs are unchanged on all 13 routes.
 - 20 decompilation poke cases cover launched blocks, pouncers, the snapper grab, pickup respawn,
   the final stand-in spawn, and smaller object, collision, row-boundary and controller branches no
   existing route or poke case reached.
@@ -19,11 +23,11 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - Decompiled the reset `$FEE0-$FF34` as task code. Task code in replace goes to the original when
   the NMI line has risen but the CPU has not latched the edge yet, as on a warm reset at the frame
   boundary.
-- Timed task code (`DecompRoutine.timed`): task routines that poll a device with `Decomp_BusWait`
+- Polling task code (`DecompRoutine.polls`): task routines that poll a device with `Decomp_BusWait`
   are measured on a clocked snapshot in check and replace, and replace makes the C's bus operations at
   the original's cycles (the NMI's measure and replay, generalized). The reset's four-VBlank wait
   `$FEEE-$FEFA`, the credits' raster split `$E229-$E23B` and the frame loop's `$DC29` are now C; the
-  flow has 15 sites. `tests/decomp_test.py` has a `warm-reset` events case.
+  flow has 14 sites and no stop sites (`gFlowStops` is gone). `tests/decomp_test.py` has a `warm-reset` events case.
 - Bank 6's objects no longer call original code: the tile edits `$F4D8`/`$F506` are called as C,
   and the charger's bounce off a hidden block runs in C. `Bg_Probe` and the walks and fall now return
   the Y the original leaves (checked), which the charger, the block kicker and the boulder pass on.

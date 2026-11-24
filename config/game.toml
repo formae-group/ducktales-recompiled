@@ -478,8 +478,7 @@ length = 8
 crc32 = 0xFAC618EC
 # Game flow (src/decomp/flow.c, docs/decompilation.md "Task code"): the
 # entries of the main task's decompiled code that original code reaches (its
-# resume points have no site: the RTS observer starts them), then the
-# routines it hands off to, where an isolated run of the original stops.
+# resume points have no site: the RTS observer starts them).
 
 # Hud_Reset
 [[mod_function_hook]]
@@ -581,13 +580,21 @@ addr = 0xE1AF
 length = 8
 crc32 = 0xD1E4F218
 
+# END game flow
+
+# Task_Schedule, the scheduler's entry
 [[mod_function_hook]]
-id = "ducktales.decomp.stop.FF35"
+id = "ducktales.decomp.FF35"
 addr = 0xFF35
 length = 8
 crc32 = 0xEB49C2BB
 
-# END game flow
+# Task_Pass, one pass of the scheduler
+[[mod_function_hook]]
+id = "ducktales.decomp.FF38"
+addr = 0xFF38
+length = 8
+crc32 = 0xAACD8749
 
 # Obj_ClimbDown
 [[mod_function_hook]]

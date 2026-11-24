@@ -434,7 +434,7 @@ check with all five reset routines compared, and its replace run equals the chec
 frames (296 NMIs in both); there `Reset` is given to the original because the NMI edge is about
 to latch.
 
-The timed task code (the reset's wait `$FEEE-$FEFA`, the credits' split `$E229-$E23B`) and the
+The polling task code (the reset's wait `$FEEE-$FEFA`, the credits' split `$E229-$E23B`) and the
 resume point `$DC29`: `decomp_test.py --changed 7:E229-E23B FEEE-FEFA 7:DC29-DC2B --from-state
 --span 600` passed check and replace on 13/13 routes; `Reset_WaitVblank` was compared on all 65
 calls (5 a route: the first wait at power-on takes two frames and pauses once) and
@@ -444,7 +444,10 @@ check (`Reset_WaitVblank` 19 calls, `Reset_WaitVblankEnd` 16, all compared) and 
 frames equal). The ending, ending-0 and ending-2 pokes passed check and replace with `Ending_Split`
 (`$E229`) compared on all 2,718 calls. Cycle `quick_verify.py` passed 13/13 (with the NMI `$C000-$C138`
 in the ranges, as the NMI's measure and replay are now shared), and `native_decomp_test.py` passed
-13/13 with logic steps equal.
+13/13 with logic steps equal. After merging main 0d8b498 (the scheduler in C) the same runs passed
+again, with the scheduler's range `FF35-FF7C` added to the changed ranges: check and replace 13/13,
+the events, the three ending pokes, cycle `quick_verify.py` 13/13 and `native_decomp_test.py` 13/13,
+nothing given to the original.
 
 ## Decompiled level, player, flow and objects (2026-11-23)
 

@@ -140,6 +140,11 @@ static void store_image(bool (*keep)(uint16_t a, uint8_t s), uint8_t s)
     }
 }
 
+static void on_return(void);
+
+/* A routine's C made its RTS: the original's RTS starts the C of a resume
+ * point there only for a timed one (Task_Resume after the controllers); the
+ * others would move VBlank in the step, so they run as the original. */
 static int replace(int i, const CycModRegs *in)
 {
     const DecompRoutine *rt = dc_routine[i];
@@ -157,7 +162,16 @@ static int replace(int i, const CycModRegs *in)
     cpu.y = c.y;
     cpu_set_p((uint8_t)((c.p & flags) | (in->p & ~flags)));
     dc_play_ops(dc_played, (uint64_t)(dc_nops - dc_played) * OP_GAP, rt->addr);
-    return 1;
+    const uint8_t *ram = native_cpu_ram();
+    uint16_t ret = (uint16_t)((ram[0x100 | (uint8_t)(in->s + 1)] | ram[0x100 | (uint8_t)(in->s + 2)] << 8) + 1);
+    int next = dc_resume[ret >> 3] & (1u << (ret & 7)) ? dc_find_routine(ret, true) : -1;
+    if (next < 0 || !dc_routine[next]->timed) {
+        return 1;
+    }
+    cpu.s = (uint8_t)(in->s + 2);
+    cpu.pc = ret;
+    on_return();
+    return 0;
 }
 
 /* Page 1 above the C's final S (its return address included), and all of RAM
@@ -165,6 +179,24 @@ static int replace(int i, const CycModRegs *in)
 static bool task_kept(uint16_t a, uint8_t s)
 {
     return (a & 0xFF00) != 0x0100 || a < DT_ADDR_STACK_FLOOR || dc_keep_stack_ram || (uint8_t)a > s;
+}
+
+/* The time the C stated (Decomp_Cycles), spent as the original spends it: its
+ * fetches, which the lag accounting and the step dump observe, and reads of
+ * the routine's first byte for the rest. */
+static void spend_time(uint16_t addr)
+{
+    for (int k = 0; k < dc_ntime; k++) {
+        unsigned n = dc_time[k].cycles;
+        if (dc_time[k].fetch) {
+            uint8_t opcode;
+            (void)cpu_fetch(dc_time[k].fetch, &opcode);
+            n--;
+        }
+        while (n--) {
+            (void)cpu_read(addr, 0);
+        }
+    }
 }
 
 /* Task code: the C's results stored and its device stores made (the device
@@ -177,10 +209,11 @@ static bool task_replace(int i, const CycModRegs *in)
     Regs c;
     dc_run_c(rt, in, &c);
     dc_stats[i].calls++;
-    if (dc_run_original) {
+    if (dc_run_original || (dc_ntime && (cpu.nmi_edge || cpu.do_nmi || native_vblank_within(dc_cycles)))) {
         dc_stats[i].original++;
         return false;
     }
+    spend_time(rt->addr);
     store_image(task_kept, dc_cur_s);
     const uint8_t *ram = native_cpu_ram();
     uint8_t s = dc_cur_s;
@@ -202,7 +235,7 @@ static bool task_replace(int i, const CycModRegs *in)
     cpu_set_p(rti              ? c.p
               : dc_handoff_set ? (dc_handoff_uses & OUT_P ? c.p : in->p)
                                : (uint8_t)((c.p & flags) | (in->p & ~flags)));
-    if (rt->timed) {
+    if (rt->polls) {
         dc_play_ops(dc_played, (uint64_t)(dc_nops - dc_played) * OP_GAP, rt->addr);
     } else {
         for (int k = 0; k < dc_stores; k++) {
@@ -286,7 +319,9 @@ int dc_on_entry(uint16_t addr)
             return 0;
         }
         if (dc_routine[i]->task) {
-            task_replace(i, &in);
+            while (task_replace(i, &in) && dc_handoff_set && dc_handoff == addr) {
+                in = regs();
+            }
             return 0;
         }
         return replace(i, &in);

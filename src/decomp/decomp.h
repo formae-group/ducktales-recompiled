@@ -66,7 +66,8 @@ typedef struct DecompRoutine {
     bool resume;    /* task code: started where an RTS returns to its address, with no site */
     uint8_t bank;   /* entries below $C000: the bank mapped at $8000 */
     bool interrupt; /* task code of the NMI handler: its C ends in RTI, not RTS */
-    bool timed;     /* task code that polls a device (Decomp_BusWait): measured and replayed with the clock */
+    bool timed;     /* task code: its C states the original's cycles (Decomp_Cycles) */
+    bool polls;     /* task code that polls a device (Decomp_BusWait): measured and replayed with the clock */
 } DecompRoutine;
 
 typedef enum DecompMode {
@@ -107,11 +108,11 @@ void Decomp_BusWrite(uint16_t addr, uint8_t value);
 void Decomp_BusRead(uint16_t addr);
 /* A device poll (the NMI's sprite-0 wait): addr is read until its bits in
  * mask equal want. Made for real in replace mode; on an isolated copy of the
- * machine, where no clock runs, it is one read. Task code that polls is timed
- * (DecompRoutine.timed): on the cycle host check mode runs its original on a
+ * machine, where no clock runs, it is one read. Task code that polls
+ * (DecompRoutine.polls): on the cycle host check mode runs its original on a
  * snapshot with the clock to where the C ends and compares there, and replace
  * mode makes the C's operations at the original's cycles, as for the NMI;
- * the native runtime makes them in order at the C's end. A timed call may
+ * the native runtime makes them in order at the C's end. Such a call may
  * see one frame end (a wait for VBlank); before a second it pauses where its
  * original was last back at its start, and the next frame calls it again. */
 void Decomp_BusWait(uint16_t addr, uint8_t mask, uint8_t want);
@@ -191,6 +192,17 @@ void Decomp_KeepStackRam(void);
 void Decomp_SelectBank(uint8_t bank);
 void Decomp_Store(uint16_t addr, uint8_t value);
 
+/* The original's time, for task code whose cycle count the runtimes keep (the
+ * scheduler): Decomp_Cycles(n) is n of the original's CPU cycles, and
+ * Decomp_Fetch(addr) the cycle in which it fetches the instruction at addr,
+ * which the native runtime's lag accounting and step dump observe. A routine
+ * that states its time reads nothing but RAM and its registers. Check mode
+ * compares the sum with the original's cycles; the native runtime spends
+ * them, and gives the call to the original when VBlank would come during
+ * them, as the cycle host does. */
+void Decomp_Cycles(unsigned cycles);
+void Decomp_Fetch(uint16_t addr);
+
 /* N and Z of a value, the flags of a load. */
 static inline uint8_t Flags_NZ(uint8_t p, uint8_t v)
 {
@@ -252,13 +264,3 @@ extern const DecompRoutine gAudioRoutines[];
 extern const int gAudioRoutineCount;
 extern const DecompRoutine gNmiRoutines[];
 extern const int gNmiRoutineCount;
-
-/* Addresses a task routine hands off to: sites where an isolated run of the
- * original stops, with no C of their own. */
-typedef struct DecompStop {
-    uint16_t addr;
-    const char *site_id;
-} DecompStop;
-
-extern const DecompStop gFlowStops[];
-extern const int gFlowStopCount;

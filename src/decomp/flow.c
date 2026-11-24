@@ -6,7 +6,7 @@
  * and the ending. Its task code returns or hands off to another routine
  * (task_yield, the fades, the PPU loaders); the RTS observer resumes the C
  * at the address after the original JSR. The reset's VBlank waits and the
- * credits' raster split poll the PPU: those routines are timed (their bus
+ * credits' raster split poll the PPU (DecompRoutine.polls: their bus
  * operations at the original's cycles).
  * Values the original keeps across a frame go on the 6502 stack.
  * "r" holds the registers of the original at that point.
@@ -3039,8 +3039,8 @@ static void Run_RespawnEntry(Regs *r)
 #define ROUTINE(addr, site, name, fn, out)      { addr, site, name, fn, out, false, 0, false }
 #define TASK(addr, site, name, fn, locals)      { addr, site, name, fn, 0, true, locals, false }
 #define RESUME(addr, name, fn, locals)          { addr, NULL, name, fn, 0, true, locals, true }
-#define TASK_TIMED(addr, site, name, fn)        { addr, site, name, fn, 0, true, 0, false, 0, false, true }
-#define RESUME_TIMED(addr, name, fn, locals)    { addr, NULL, name, fn, 0, true, locals, true, 0, false, true }
+#define TASK_POLL(addr, site, name, fn)         { addr, site, name, fn, 0, true, 0, false, 0, false, false, true }
+#define RESUME_POLL(addr, name, fn, locals)     { addr, NULL, name, fn, 0, true, locals, true, 0, false, false, true }
 #define ROUTINE_IN(bank, addr, name, fn, out)   { addr, NULL, name, fn, out, false, 0, false, bank }
 #define TASK_AT(bank, addr, site, name, fn)     { addr, site, name, fn, 0, true, 0, false, bank }
 #define TASK_IN(bank, addr, name, fn)           { addr, NULL, name, fn, 0, true, 0, false, bank }
@@ -3168,8 +3168,8 @@ const DecompRoutine gFlowRoutines[] = {
     RESUME(DT_FLOW_M15_ARENA_CHR, "Mode15_ArenaChr", Mode15_ArenaChr, 0),
     RESUME(DT_FLOW_M15_SPAWNED, "Mode15_Spawned", Mode15_Spawned, 0),
     TASK(DT_CODE_RESET, SITE("FEE0"), "Reset", Reset, 0),
-    TASK_TIMED(DT_RESET_POLL, SITE("FEEE"), "Reset_WaitVblank", Reset_WaitVblank),
-    TASK_TIMED(DT_RESET_VBLANK_END, SITE("FEF3"), "Reset_WaitVblankEnd", Reset_WaitVblankEnd),
+    TASK_POLL(DT_RESET_POLL, SITE("FEEE"), "Reset_WaitVblank", Reset_WaitVblank),
+    TASK_POLL(DT_RESET_VBLANK_END, SITE("FEF3"), "Reset_WaitVblankEnd", Reset_WaitVblankEnd),
     RESUME(DT_RESET_NT0_READY, "Reset_SecondNametable", Reset_SecondNametable, 0),
     RESUME(DT_RESET_NT1_READY, "Reset_CreateMainTask", Reset_CreateMainTask, 0),
     RESUME(DT_RESET_CREATED, "Reset_StartScheduler", Reset_StartScheduler, 0),
@@ -3177,7 +3177,7 @@ const DecompRoutine gFlowRoutines[] = {
     TASK(DT_CODE_ENDING_BANK, NULL, "Ending_BankTransfer", Ending_BankTransfer, 0),
     RESUME(DT_FLOW_ENDING_BANKED, "Ending_Banked", Ending_Banked, 0),
     RESUME(DT_FLOW_ENDING_WAITED, "Ending_Waited", Ending_Waited, 0),
-    RESUME_TIMED(DT_FLOW_END_SPLIT_WAIT, "Ending_Split", Ending_Split, 0),
+    RESUME_POLL(DT_FLOW_END_SPLIT_WAIT, "Ending_Split", Ending_Split, 0),
     RESUME(DT_FLOW_END_SECOND, "Ending_Second", Ending_Second, 1),
     RESUME(DT_FLOW_END_OVER, "Ending_OverNext", Ending_OverNext, 0),
     RESUME(DT_FLOW_ENDING_SHOWN, "Ending_Shown", Ending_Shown, 0),
@@ -3200,14 +3200,8 @@ const DecompRoutine gFlowRoutines[] = {
 };
 const int gFlowRoutineCount = sizeof gFlowRoutines / sizeof gFlowRoutines[0];
 
-#define STOP(addr, id) { addr, "ducktales.decomp.stop." id }
-
-/* The routines the flow hands off to that have a decompiled C of their own
- * ($C42C, $C71D, $C78F, $C830, $C976, $D068, $EFE2 and bank 6 $AEA0 in level.c, $E354 in player.c, $8000 bank
- * 6 in objects.c, the fades, the PPU and CHR loaders and bank 5 $BAB0 in
- * system.c, and task_yield and task_wait there) stop the isolated runs at their
- * own sites; task_yield's C hands off to the scheduler. */
-const DecompStop gFlowStops[] = {
-    STOP(DT_CODE_SCHEDULER, "FF35"),
-};
-const int gFlowStopCount = sizeof gFlowStops / sizeof gFlowStops[0];
+/* Every routine the flow hands off to has a decompiled C of its own ($C42C,
+ * $C71D, $C78F, $C830, $C976, $D068, $EFE2 and bank 6 $AEA0 in level.c, $E354
+ * in player.c, $8000 bank 6 in objects.c, the fades, the PPU and CHR loaders
+ * and bank 5 $BAB0 in system.c, and task_yield, task_wait and the scheduler
+ * there): the isolated runs stop at their own sites. */
