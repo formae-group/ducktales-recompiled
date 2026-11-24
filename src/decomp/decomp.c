@@ -38,6 +38,8 @@ DeviceStore dc_store[MAX_STORES];
 int dc_stores;
 bool dc_task;
 int dc_nested[MAX_NESTED], dc_nnested;
+IsolatedRead dc_reads[MAX_READS];
+int dc_nreads;
 bool dc_handoff_set;
 uint16_t dc_handoff;
 uint8_t dc_handoff_uses, dc_handoff_bank;
@@ -172,6 +174,14 @@ void Decomp_SelectBank(uint8_t bank)
     record_store((uint16_t)(DT_CODE_BANK_TABLE + bank), bank);
 }
 
+void Decomp_IsolatedRead(uint16_t pc, uint16_t addr, uint8_t value)
+{
+    if (dc_nreads == MAX_READS) {
+        dc_fail("too many isolated reads in one routine", pc);
+    }
+    dc_reads[dc_nreads++] = (IsolatedRead){ pc, (uint16_t)(addr & 0x7FF), value };
+}
+
 void Decomp_Store(uint16_t addr, uint8_t value)
 {
     record_store(addr, value);
@@ -208,6 +218,7 @@ void dc_run_c(const DecompRoutine *rt, const CycModRegs *in, Regs *out)
     dc_stores = 0;
     dc_task = rt->task;
     dc_nnested = 0;
+    dc_nreads = 0;
     dc_c_begin();
     Regs r = { in->a, in->x, in->y, in->p };
     GameRam_Enter(dc_image);

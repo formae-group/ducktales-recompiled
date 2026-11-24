@@ -24,6 +24,7 @@
 #define MAX_BUS_OPS  16384
 #define MAX_STORES   64
 #define MAX_NESTED   32
+#define MAX_READS    16
 
 typedef struct {
     uint64_t calls, compared, original;
@@ -67,6 +68,15 @@ extern int dc_stores;
  * C reached in C (their comparison is part of its own). */
 extern bool dc_task;
 extern int dc_nested[MAX_NESTED], dc_nnested;
+
+/* The values the C gave the original's measuring call (Decomp_IsolatedRead). */
+typedef struct {
+    uint16_t pc, addr;
+    uint8_t value;
+} IsolatedRead;
+
+extern IsolatedRead dc_reads[MAX_READS];
+extern int dc_nreads;
 extern bool dc_handoff_set;
 extern uint16_t dc_handoff;
 extern uint8_t dc_handoff_uses, dc_handoff_bank;
