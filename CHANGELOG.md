@@ -7,6 +7,12 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- 20 decompilation poke cases cover launched blocks, pouncers, the snapper grab, pickup respawn,
+  the final stand-in spawn, and smaller object, collision, row-boundary and controller branches no
+  existing route or poke case reached.
+- `tools/decomp_gap.py`: the PRG code a static walk from the executed code reaches (branches, calls and
+  dispatch tables) but no route or poke case executes, by block and routine, and the unreached runs that
+  decode as code (docs/decompilation.md "Gap").
 - The chest's opening, sliding block and health block handlers (kinds `$16`, `$17` and `$42`)
   are decompiled, with poke cases based on three Transylvania chest records.
 - `tests/decomp_test.py` poke cases `extra-life` (the extra life `$8BB0`), `secret-treasure` (item `$74`,
