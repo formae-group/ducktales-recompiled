@@ -424,7 +424,7 @@ NESRecomp it takes the CPU sequences and instruction templates, the hook registr
 | Menu, settings, input | `app_ui_event`, `app_ui_input`, `app_ui_frame_begin`, `app_ui_audio` and `app_ui_present` called where the cycle host's extras call them; config.ini read and written with `cyc_settings` (on F11 and at exit, reconciled by `app_settings.c`); bindings evaluated with `cyc_input_eval` |
 | No slowdown | `[Game] NoSlowdown`: on (default) is `NATIVE_LAG_NONE`, off is `NATIVE_LAG_FAITHFUL` |
 | Enhancements | `native_hooks.c` binds the plugins `src/game` registers (`mod_function_hooks.h`) to the `game.toml` sites, arms `cyc_hooks_armed` while one is enabled, and runs the callbacks at the instruction boundary when the content key holds, returning from a handled routine as its RTS would: the cycle host's rules (`cyc_hooks.c`) |
-| Decompiled routines | Not linked. `src/decomp/` and `src/host/ducktales_host.c` (the `--decomp` option and `DUCKTALES_DECOMP`) are in the cycle host's sources only (`_ducktales_extras` in CMakeLists.txt); the player's source list has neither, so `ducktales.exe` always runs the recompiled 6502. The enhancements are not affected: they are hook plugins of `src/game`, which the player links |
+| Decompiled routines | Settings → Gameplay → Decompiled code (`[Game] DecompiledCode`, off by default): with No slowdown on, the routines decompiled to C run alone in place of the recompiled ones (`src/decomp/decomp_native.c`, the native backend of the decompilation layer; docs/decompilation.md "On the native runtime"). With No slowdown off the toggle is disabled and its (?) says why: the C does not take the console's cycles, so with the console's lag the game would lag where the console does not. `ducktales_native --decomp replace` does the same headless, with `--lag none` only |
 | Save states | F8 / F9: `<exe dir>/saves/DuckTales.native-state`, CPU registers and interrupt lines, CPU RAM, the bus (bank, cycle count, DMA, controllers, lag state) and the video state (memories, registers, frame timing), with the generated program's PRG hash; a toast confirms |
 | Sound | `native_audio.h`: `native_audio_frame(frame, out, cap)` per frame, queued at 48 kHz with at most 100 ms waiting (the native synth, docs/audio.md "Native synth") |
 
@@ -439,6 +439,9 @@ host's `--present-out` names it, and can check a save state round trip.
   compared pixel for pixel (results in [validation.md](validation.md)).
 - `tests/window_smoke.py --build build/windows` on `ducktales.exe` (and `--exe ducktales_cycle.exe`).
 - `tests/native_routes.py`, so any change to the bus is held to the cycle build frame by frame.
+- `tests/native_decomp_test.py --build build/headless`: the decompiled code against the recompiled
+  program, RAM after every logic step on the 12 routes (docs/decompilation.md "On the native
+  runtime"); `window_smoke` checks that the setting runs the C with No slowdown on and not with it off.
 
 ## Next steps
 

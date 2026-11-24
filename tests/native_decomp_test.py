@@ -37,7 +37,9 @@ NMI_STATE = {
     0x92: 'frame counter, incremented by every NMI',
     **{a: 'sound driver zero page (bank 3, run by the NMI; docs/audio.md "Driver RAM")' for a in range(0xD0, 0xE6)},
 }
-CALLS = re.compile(r'^decomp: mode=replace routine=\S+ addr=\$[0-9A-F]{4} calls=(\d+) compared=\d+ original=(\d+)$', re.M)
+CALLS = re.compile(
+    r'^decomp: mode=replace routine=\S+ addr=\$[0-9A-F]{4} calls=(\d+) compared=\d+ original=(\d+)$', re.M
+)
 
 
 def run(native, rom, route, out):

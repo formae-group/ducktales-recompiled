@@ -13,10 +13,11 @@ port's own files and all switched off by default:
   use, written as C on the API. Each replaces the recompiled routine at its entry, and
   each is checked against the original on every call of every route.
 
-The routines run only in the cycle host (`build/headless`, and `ducktales_cycle.exe` of a window
+The routines are checked in the cycle host (`build/headless`, and `ducktales_cycle.exe` of a window
 build). The game as players run it, `ducktales.exe` of `build/windows`, is the native runtime's
-player by default (`DUCKTALES_PLAYER=native`), which does not link `src/decomp/`
-([native-runtime.md](native-runtime.md#the-player-build)).
+player by default (`DUCKTALES_PLAYER=native`); there Settings → Gameplay → Decompiled code (off by
+default, with No slowdown only) runs them alone in place of the recompiled ones ("On the native
+runtime" below, [native-runtime.md](native-runtime.md#the-player-build)).
 
 Addresses are named only in `src/game/ducktales_symbols.h`. Status words (verified, code,
 hypothesis) are used as in [memory-map.md](memory-map.md). Code addresses are in bank 7 (the fixed
@@ -95,8 +96,8 @@ A decompiled routine that original code calls owns a `[[mod_function_hook]]` sit
 with id `ducktales.decomp.XXXX` and a content key over the routine's first 8 bytes. A routine that
 only decompiled code calls has no site: its callers' C calls its C directly (below).
 `src/decomp/decomp.c` registers the sites and runs the routines in one of three modes. The mode comes from `--decomp
-off|check|replace` in both hosts, or from the environment variable `DUCKTALES_DECOMP` when the
-option is not given.
+off|check|replace` in the cycle host, or from the environment variable `DUCKTALES_DECOMP` when the
+option is not given; the native runtime has `off` and `replace` only ("On the native runtime" below).
 
 | Mode | What runs | Machine |
 |---|---|---|
@@ -254,6 +255,46 @@ leave the jump vector in `$00/$01` as the original's loop does.
 | `Land_ApplyTables`, `Land_LoadPalette` | X = palette set (palette) | X, Y | Land Select and the title read X and Y after them |
 | `Timer_Tick`, `Hud_RefreshMoney`, `Hud_RefreshTotal` | none | none | called from the frame loop's C |
 | task code (`flow.c`) | the registers at the site or resume point | at each hand-off, the registers its target reads | see Task code |
+
+### On the native runtime
+
+`src/decomp/decomp.c` is the core every host shares: the routine tables, the state of the routine
+whose C runs and the calls every backend makes the same way (`decomp_backend.h`). The cycle host
+links `decomp_cycle.c`, its check and replace modes above. The native runtime links
+`decomp_native.c`, which has replace mode only, and there the C runs alone:
+
+- At a routine's site its C runs on the image of RAM, as on the cycle host, and its results are
+  stored, its bus operations made and its registers set; no original runs to measure cycles and
+  nothing is compared.
+- An original routine the C calls (`Decomp_Call`) runs nested in an isolated call on the native
+  bus (`native_isolated_call` in `src/native/native_bus.c`): the machine is saved, takes the C's
+  image and its bus operations so far, runs the original until it returns, and is restored; the
+  image takes the RAM back, as in the cycle host.
+- `Decomp_RunOriginal` still gives a call to the original: on the 12 routes, 14 calls of
+  `Player_Update` (its row change and modes 15 and 16, which wait for frames). The controller read
+  (`$C1AB`), which the cycle host's replace mode gives to the original because an isolated call
+  cannot time it, runs as C here (`Decomp_ConsoleTiming` is false).
+
+The C takes no CPU cycles, so the console's timing is not kept: the work of a frame ends sooner,
+and a land load behind a blank screen ends in fewer frames. With the console's lag that would
+remove lag the console has, so the mode runs only with No slowdown, where a logic step's result
+does not depend on how long it takes ([native-runtime.md](native-runtime.md#lag)). In the player,
+Settings → Gameplay → Decompiled code (`[Game] DecompiledCode`, off by default) is disabled while
+No slowdown is off, and its (?) says why; `ducktales_native --decomp replace` exits with code 2
+unless `--lag none` is given.
+
+`tests/native_decomp_test.py` runs each route off and on, with the same buttons strobe by strobe
+(`--latch-log`, `--latch-input`), and compares RAM after every logic step. On the 12 routes all
+81,922 logic steps of the off runs are equal (811,676 decompiled calls) except:
+
+| RAM | Why it differs |
+|---|---|
+| `$0100-$01FF` | the stack (pushes at different points of the frame) |
+| bytes the task never reads (`--nmi-audit`) | NMI-only state |
+| `$19`, `$90`, `$C7-$CF`, `$0370-$03EF` | the NMI-facing bytes `tests/lag_modes.py` allows (`ALLOWED`) |
+| `$92`, `$D0-$E5` | the frame counter and the sound driver's zero page, run by the NMI: it runs a different number of times before a step when loads are shorter |
+
+No byte of task state differs.
 
 ### Routines
 
@@ -626,6 +667,7 @@ A routine every route runs at power-on selects frame 0 and saves nothing; run th
 | `decomp_test --modes replace` | stock against `--decomp replace` (`--dt-ram-log`): CPU RAM outside page 1 equal after every frame; the main task's live stack equal on every frame where both runs are idle in the scheduler |
 | `decomp_test --modes pokes` | 11 poked states (modes 5, 8, 10, 11 and 12, the last HP dot, slippery floor, held timers) in check mode and stock against replace |
 | `decomp_test --modes events` | NoDamage and JumpScale with the decompiled routines raising the events: check mode, and off against replace with the option on |
+| `native_decomp_test` | the native runtime's replace mode against the recompiled program: RAM equal after every logic step on the 12 routes, with the exceptions in "On the native runtime" |
 | `verify_routes` | native, interpreter and oracle agree on every frame at 4 alignments |
 | `verify_routes` with `DUCKTALES_DECOMP=check` | the same, with check mode on in the recompiled runs |
 | `enhancements_test` | each enhancement, now an event handler, is identical to stock when off, acts when on, and can be toggled |
@@ -670,6 +712,8 @@ the events check covers.
 What has not been verified:
 
 - Replace mode in long real play. One owner session on the window build's cycle host covered one
-  land, about 8,400 frames (docs/validation.md). The native player cannot run replace mode yet.
+  land, about 8,400 frames (docs/validation.md). The native player's Decompiled code has been run
+  only on the routes and hidden (`tests/native_decomp_test.py`, `tests/window_smoke.py`), not in real
+  play.
 - Paths no route or poke case reaches (table above). They are written from the code, and check mode
   will stop on any of them that is wrong, the first time a route reaches it.
