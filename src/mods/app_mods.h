@@ -55,6 +55,9 @@ typedef FmMod AppMod;
 void app_mods_add_folder(const char *dir, bool create);
 /* The first folder: the one the menu opens. Empty when none. */
 const char *app_mods_folder(void);
+/* mods.log in the data folder, written since the start with mods on; empty
+ * when there is none. */
+const char *app_mods_log_path(void);
 /* A [Mods] key of config.ini; false when the key is unknown. */
 bool app_mods_setting(const char *key, const char *value);
 /* Reads the [Mods] section of an ini file (the host's reader skips it). */

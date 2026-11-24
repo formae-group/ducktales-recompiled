@@ -10,6 +10,7 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - Mods: with mods on, `mods.log` in the data folder holds the catalogue (each mod, loaded or why
   not), the scripts' `dt.log` lines, toasts and errors, emptied at each start and capped at 4 MiB.
   The window build has no console when started from Explorer, so `dt.log` went nowhere before.
+  The Mod Menu opens it (**Open mods log**) and marks the mods that run a script.
 - Route `difficult_himalayas` (6,200 frames): `full_himalayas` on Difficult to the LAND CLEAR tally,
   the first route on Difficult; it passes `verify_routes` at the four alignments with 100% native cycles.
 - The native player writes a session summary when its Decompiled code ran: `decomp-session-<time>.txt`

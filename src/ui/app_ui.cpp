@@ -312,8 +312,10 @@ std::string mod_detail(const AppMod *m)
         d += d.empty() ? "" : " - ";
         d += m->author;
     }
-    if (m->folder) {
-        d += d.empty() ? "folder" : " (folder)";
+    std::string kind = std::string(m->folder ? "folder" : "") + (m->folder && m->script ? ", " : "") +
+                       (m->script ? "script" : "");
+    if (!kind.empty()) {
+        d += d.empty() ? kind : " (" + kind + ")";
     }
     return d;
 }
@@ -366,6 +368,13 @@ void page_mods()
     if (ui::inline_button("Rescan")) {
         app_mods_rescan();
     }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!*app_mods_log_path());
+    if (ui::inline_button("Open mods log")) {
+        std::string url = std::string("file:///") + app_mods_log_path();
+        SDL_OpenURL(url.c_str());
+    }
+    ImGui::EndDisabled();
     if (app_mods_restart_needed()) {
         ui::note("Restart DuckTales to apply these changes.", ui::Status::ok);
     }

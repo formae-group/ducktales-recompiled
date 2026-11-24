@@ -16,7 +16,9 @@ runs exactly as the console does.
    `%APPDATA%\DuckTales Recompiled\mods` (`DUCKTALES_DATA_DIR\mods` when that variable is set). The
    game creates the folder on its first start.
 2. Open the menu (Escape) and go to **Settings, Mods**. Switch **Enable mods** on, tick the mods you
-   want and put them in order. **Open mods folder** shows the folder and **Rescan** reads it again.
+   want and put them in order. Each mod shows its version and author, and *folder* or *script*
+   when it is a loose folder or runs a script. **Open mods folder** shows the folder, **Rescan**
+   reads it again and **Open mods log** opens `mods.log` (see below).
 3. Restart the game. Mods load once, at start, so the page shows *Restart DuckTales to apply these
    changes* until you restart.
 

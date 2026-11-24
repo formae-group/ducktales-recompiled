@@ -48,6 +48,7 @@ static int s_palette_count;
 static const uint32_t *s_palette_for[LANDS + 1];
 static const uint32_t *s_painted_palette;
 static char s_store_dir[1024];
+static char s_log_path[1100];
 
 static const char *const LAND_NAMES[LANDS] = { "amazon", "transylvania", "african-mines", "himalayas", "moon" };
 
@@ -319,6 +320,11 @@ void app_mods_add_folder(const char *dir, bool create)
 const char *app_mods_folder(void)
 {
     return fm_folder();
+}
+
+const char *app_mods_log_path(void)
+{
+    return s_log_path;
 }
 
 bool app_mods_setting(const char *key, const char *value)
@@ -751,11 +757,13 @@ void app_mods_start(const uint8_t *prg, size_t prg_size)
         return;
     }
     s_started = true;
-    char log[1100];
+    char log[sizeof s_log_path];
     if (fm_enabled() && app_data_dir(log, sizeof log - 16)) {
         fm_make_dir(log);
         strcat(log, "\\mods.log");
-        fm_log_open(log);
+        if (fm_log_open(log)) {
+            memcpy(s_log_path, log, sizeof s_log_path);
+        }
     }
     if (prg && prg_size) {
         uint8_t digest[32];
