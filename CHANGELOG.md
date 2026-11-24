@@ -143,6 +143,10 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   started*), and the instruction limit names the line that was running. A `dt.CANCEL` returned for
   an event that cannot be cancelled is reported once instead of ignored silently, and a `dt.set`
   write the state no longer allows at the frame's end is logged instead of dropped silently.
+- Mods: a toast fits the picture. The 64-character cut counted bytes and could split a UTF-8
+  character; it counts characters now. The drawn notice shows a character its font lacks as `?`
+  instead of a gap, and a line wider than the picture ends in `...` instead of running past the
+  panel.
 
 ## [1.0.0] - 2026-11-23
 

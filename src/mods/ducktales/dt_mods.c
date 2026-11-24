@@ -809,11 +809,31 @@ uint32_t app_mods_color(uint16_t index, uint32_t argb)
     return s_painted_palette ? s_painted_palette[index & 0x1FF] : argb;
 }
 
+/* text as the overlay font draws it in width pixels: a character it lacks
+ * (any UTF-8 code point past ASCII included) as ?, and a line too long cut
+ * with ... at its end. */
+static void overlay_text(const char *text, int width, char *out, size_t cap)
+{
+    size_t fits = (size_t)(width - 12) / 4, n = 0;
+    for (const unsigned char *c = (const unsigned char *)text; *c && n + 1 < cap; c++) {
+        if ((*c & 0xC0) == 0x80) {
+            continue;
+        }
+        out[n++] = *c == ' ' || (*c < 0x80 && cyc_overlay_glyph((char)*c)) ? (char)*c : '?';
+    }
+    out[n] = 0;
+    if (n > fits && fits >= 3 && fits < cap) {
+        snprintf(out + fits - 3, 4, "...");
+    }
+}
+
 void app_mods_draw_overlay(uint32_t *argb, int width, int height)
 {
-    char title[128], body[128];
+    char title[128], body[300], title_shown[128], body_shown[300];
     if (argb && fm_toast(title, sizeof title, body, sizeof body)) {
-        cyc_overlay_toast(argb, width, height, title, body);
+        overlay_text(title, width, title_shown, sizeof title_shown);
+        overlay_text(body, width, body_shown, sizeof body_shown);
+        cyc_overlay_toast(argb, width, height, title_shown, body_shown);
     }
 }
 

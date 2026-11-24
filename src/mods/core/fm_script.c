@@ -14,7 +14,8 @@
  *              and queues it; the queue is applied at the frame's end, after
  *              the "frame" handlers, inside the game's write window
  *   toast      a notice for SCRIPT_TOAST_FRAMES frames, at most one per mod
- *              every SCRIPT_TOAST_GAP frames, SCRIPT_TOAST_CHARS characters;
+ *              every SCRIPT_TOAST_GAP frames, SCRIPT_TOAST_CHARS characters
+ *              (UTF-8 code points, control characters as spaces);
  *              the game draws it on its presentation, never the machine's
  *   store      strings, numbers and booleans per mod, kept in
  *              <store_dir>/<id>.ini, at most SCRIPT_STORE_BYTES; written once
@@ -109,7 +110,7 @@ static uint64_t s_frame;
 static time_t s_checked;
 static Write s_writes[SCRIPT_WRITES];
 static int s_write_count;
-static char s_toast_title[128], s_toast_body[SCRIPT_TOAST_CHARS + 1];
+static char s_toast_title[128], s_toast_body[SCRIPT_TOAST_CHARS * 4 + 1];
 static int s_toast_frames;
 static bool s_exit_hooked;
 
@@ -327,8 +328,12 @@ static int sb_toast(lua_State *L)
     }
     s->last_toast = s_frame ? s_frame : 1;
     size_t n = 0;
-    for (; text[n] && n < SCRIPT_TOAST_CHARS; n++) {
-        s_toast_body[n] = (unsigned char)text[n] < 0x20 ? ' ' : text[n];
+    for (int chars = 0; text[n] && n + 1 < sizeof s_toast_body; n++) {
+        unsigned char c = (unsigned char)text[n];
+        if ((c & 0xC0) != 0x80 && chars++ == SCRIPT_TOAST_CHARS) {
+            break;
+        }
+        s_toast_body[n] = c < 0x20 || c == 0x7F ? ' ' : (char)c;
     }
     s_toast_body[n] = 0;
     snprintf(s_toast_title, sizeof s_toast_title, "%s", s->name);

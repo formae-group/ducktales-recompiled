@@ -210,7 +210,11 @@ that is on. A mod whose script stopped has its queued writes dropped.
 
 `dt.toast(text)` shows a notice with the mod's name and `text` near the top of the picture for 3
 seconds (180 frames). At most one per mod per second is shown (a refused call returns `false`), a
-newer notice replaces the one showing, and `text` is cut to 64 characters. The notice is drawn with
+newer notice replaces the one showing, and `text` is cut to 64 characters (UTF-8 code points;
+control characters become spaces). The picture's font is small: it draws `A`-`Z` (lower case in
+capitals), `0`-`9`, the space and `- . : / ( ) = + ! ? , '`, any other character as `?`, and the
+first 61 characters of a line, ending in `...` when the text is longer. The log keeps the text as
+written. The notice is drawn with
 the hosts' overlay font (`cyc_overlay`) over the presented picture only, after the mods' tiles and
 palettes: it never reaches the machine's picture, screenshots taken from it, or any hash. It is also
 written to the log.
