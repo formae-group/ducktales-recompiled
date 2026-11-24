@@ -3196,7 +3196,7 @@ static void Obj_DrawBlock(uint8_t x, uint8_t a, uint8_t y)
  * pose $84, hidden). With the Amazon's treasure, the land's hidden items,
  * chests and pose-$1B blocks are not spawned again. $10 holds the record's
  * bit and $04/$05 the template's address. */
-static void Obj_SpawnRecord(uint8_t y)
+void Obj_SpawnRecord(uint8_t y)
 {
     Decomp_Enter(DT_CODE_SPAWN_RECORD, 0, 0, y);
     gProbeHits = (uint8_t)(1 << (y & 7));
