@@ -551,6 +551,21 @@ addr = 0xDFED
 length = 8
 crc32 = 0x0971742F
 
+# Reset
+[[mod_function_hook]]
+id = "ducktales.decomp.FEE0"
+addr = 0xFEE0
+length = 8
+crc32 = 0x446DE306
+
+# Reset_Ready
+[[mod_function_hook]]
+id = "ducktales.decomp.FEFB"
+addr = 0xFEFB
+length = 8
+crc32 = 0xE149A65C
+include_internal = true
+
 # Ending
 [[mod_function_hook]]
 id = "ducktales.decomp.E1AF"
@@ -572,11 +587,13 @@ addr = 0xFF35
 length = 8
 crc32 = 0xEB49C2BB
 
+# The reset waits for the live PPU before Reset_Ready resumes the C.
 [[mod_function_hook]]
-id = "ducktales.decomp.stop.FEE0"
-addr = 0xFEE0
+id = "ducktales.decomp.stop.FEEE"
+addr = 0xFEEE
 length = 8
-crc32 = 0x446DE306
+crc32 = 0x2D26B376
+include_internal = true
 
 # END game flow
 

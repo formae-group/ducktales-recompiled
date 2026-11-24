@@ -10,6 +10,9 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - Decompiled the ending's scene objects (bank 5 `$B380-$B50C`) and later frames
   (`$E1F9-$E28B`). Only the sprite-0 raster wait and timed PPU write stay in the original.
   The three long ending pokes exercise each variant through the end of the credits.
+- Decompiled the reset `$FEE0-$FF34` as task code; only the four-vblank PPU wait `$FEEE-$FEFA` stays in
+  the original. Task code in replace goes to the original when the NMI line has risen but the CPU has
+  not latched the edge yet, as on a warm reset at the frame boundary.
 - The chest's opening, sliding block and health block handlers (kinds `$16`, `$17` and `$42`)
   are decompiled, with poke cases based on three Transylvania chest records.
 - `tests/decomp_test.py` poke cases `extra-life` (the extra life `$8BB0`), `secret-treasure` (item `$74`,

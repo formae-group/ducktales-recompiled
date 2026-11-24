@@ -416,6 +416,11 @@
 
 /* Code of the flow and what it calls (bank 7 unless a bank is named). */
 #define DT_CODE_RESET          0xFEE0
+#define DT_RESET_POLL          0xFEEE /* wait for four vblanks, with rendering off */
+#define DT_RESET_READY         0xFEFB /* RAM, OAM, nametables and the main task */
+#define DT_RESET_NT0_READY     0xFF1B
+#define DT_RESET_NT1_READY     0xFF24
+#define DT_RESET_CREATED       0xFF31
 #define DT_CODE_TASK_YIELD     0xFFAC /* wait one frame */
 #define DT_CODE_TASK_WAIT      0xFFA5 /* wait X frames */
 #define DT_CODE_RTS            0xFFAB /* task_wait's RTS: the entry of task code's isolated runs */

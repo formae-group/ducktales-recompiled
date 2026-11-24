@@ -210,7 +210,7 @@ call can do. `flow.c` decompiles that code as **task code** (`DecompRoutine.task
   true S, with the isolated call's return address in place of the routine's own (at S + locals
   + 1). When the C hands off, the original stops where it reaches the same routine at the same
   depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`, 2 of
-  them: the scheduler `$FF35`, which `task_yield`'s C hands off to, and the reset `$FEE0`). Check compares RAM, the stack down to that depth, the registers the hand-off uses and the
+  them: the scheduler `$FF35`, which `task_yield`'s C hands off to, and the reset's PPU wait `$FEEE`). Check compares RAM, the stack down to that depth, the registers the hand-off uses and the
   number of device writes.
 - Replace mode stores the C's results, makes its device writes, spends the original's cycles up to
   the stop (without the entry RTS) and jumps there. A call that would run into VBlank or past the
@@ -531,8 +531,12 @@ objects (`$B380-$B50C`, with tables). The credits yield to the original raster s
 `$E229-$E23B`: it watches the sprite-0 flag on `$2002`, writes `$2000` at the split and
 resumes the C via the internal hook at `$E23C`. The Select refill `$E2FE` is in `player.c`;
 the scene palette tables `$E127-$E132` and `$E143-$E1AE` are read by `Palette_LoadScene` (system.c).
-The flow has 14 sites: 12 entries that original code reaches and 2 stop sites (the scheduler
-`$FF35` and reset `$FEE0`).
+The flow has 16 sites: 14 entries that original code reaches and 2 stop sites (the scheduler
+`$FF35` and the reset's PPU wait `$FEEE`). The reset `$FEE0-$FF34` is task code: `Reset` turns
+rendering off and hands the four-vblank wait `$FEEE-$FEFA` to the original, whose fall-through reaches
+the internal site `$FEFB` (`Reset_Ready`: RAM, sprites, nametables, the main task, the scheduler). A
+warm reset at the frame boundary takes an NMI before the first store to `$2000`, so replace gives
+that call to the original (the NMI line has risen but the CPU has not latched it yet).
 
 Not decompiled yet, and still run as the original from the C:
 

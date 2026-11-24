@@ -17,11 +17,14 @@
  * the consumed-record bits and the ending's scene objects.
  */
 #include "decomp/decomp.h"
+#include "decomp/devices.h"
 #include "decomp/motion.h"
 #include "decomp/objcommon.h"
 #include "decomp/player.h"
 #include "decomp/sound.h"
 #include "decomp/system.h"
+
+#include <string.h>
 
 #include "ducktales/events.h"
 #include "ducktales/game.h"
@@ -1054,6 +1057,65 @@ static void FrameLoop_Yield(Regs *r)
 
 static void Title_Loop(Regs *r);
 static void LandSelect(Regs *r);
+
+/* $FEE0: the reset vector turns rendering off and resets S. The live PPU
+ * wait at $FEEE-$FEFA lets four vblanks pass before RAM is initialized. */
+static void Reset(Regs *r)
+{
+    Decomp_Enter(DT_CODE_RESET, r->a, r->x, r->y);
+    r->p = (uint8_t)((r->p | P_I) & ~P_D);
+    Decomp_Store(PPU_CTRL, 0);
+    Decomp_Store(PPU_MASK, 0);
+    r->x = 0xFF;
+    Decomp_SetStack(r->x);
+    r->y = 4;
+    r->p = Flags_NZ(r->p, r->y);
+    Jump(DT_RESET_POLL, OUT_X | OUT_Y | OUT_P);
+}
+
+/* $FEFB: clear all eight pages (the original's pointer $00/$01 ends at
+ * $0700), park the sprites and fill the first nametable with blank tiles. */
+static void Reset_Ready(Regs *r)
+{
+    Decomp_Enter(DT_RESET_READY, r->a, r->x, r->y);
+    Decomp_KeepStackRam();
+    memset(gRam, 0, GAME_RAM_SIZE);
+    gScratch(1) = GAME_RAM_SIZE / 0x100 - 1;
+    Oam_Clear();
+    r->a = 0x20;
+    r->x = DT_MONEY_TILE_BLANK;
+    r->y = 0;
+    Jsr(DT_CODE_NT_FILL, DT_RESET_NT0_READY, OUT_A | OUT_X | OUT_Y);
+}
+
+/* $FF1B: the second nametable. */
+static void Reset_SecondNametable(Regs *r)
+{
+    Decomp_Enter(DT_RESET_NT0_READY, r->a, r->x, r->y);
+    r->a = 0x24;
+    r->x = DT_MONEY_TILE_BLANK;
+    r->y = 0;
+    Jsr(DT_CODE_NT_FILL, DT_RESET_NT1_READY, OUT_A | OUT_X | OUT_Y);
+}
+
+/* $FF24: slot 0 starts at the title. */
+static void Reset_CreateMainTask(Regs *r)
+{
+    Decomp_Enter(DT_RESET_NT1_READY, r->a, r->x, r->y);
+    Ram_SetU16(DT_ADDR_TASK_ENTRY, DT_ADDR_TASK_ENTRY + 1, DT_CODE_MAIN_TASK);
+    r->a = 0;
+    Jsr(DT_CODE_TASK_CREATE, DT_RESET_CREATED, OUT_A);
+}
+
+/* $FF31: the control byte for the main task to turn on NMIs and the
+ * background pattern table, then enter the scheduler. */
+static void Reset_StartScheduler(Regs *r)
+{
+    Decomp_Enter(DT_RESET_CREATED, r->a, r->x, r->y);
+    r->a = 0x90;
+    gRam[DT_ADDR_PPU_CTRL] = r->a;
+    Jump(DT_CODE_SCHEDULER, 0);
+}
 
 /* $D4E6: the main task starts (power-on and every reset): the title. */
 static void MainTask(Regs *r)
@@ -3067,6 +3129,11 @@ const DecompRoutine gFlowRoutines[] = {
     RESUME(DT_FLOW_M15_NEXT, "Mode15_Next", Mode15_Next, 0),
     RESUME(DT_FLOW_M15_ARENA_CHR, "Mode15_ArenaChr", Mode15_ArenaChr, 0),
     RESUME(DT_FLOW_M15_SPAWNED, "Mode15_Spawned", Mode15_Spawned, 0),
+    TASK(DT_CODE_RESET, SITE("FEE0"), "Reset", Reset, 0),
+    TASK(DT_RESET_READY, SITE("FEFB"), "Reset_Ready", Reset_Ready, 0),
+    RESUME(DT_RESET_NT0_READY, "Reset_SecondNametable", Reset_SecondNametable, 0),
+    RESUME(DT_RESET_NT1_READY, "Reset_CreateMainTask", Reset_CreateMainTask, 0),
+    RESUME(DT_RESET_CREATED, "Reset_StartScheduler", Reset_StartScheduler, 0),
     TASK(DT_CODE_ENDING, SITE("E1AF"), "Ending", Ending, 0),
     TASK(DT_CODE_ENDING_BANK, NULL, "Ending_BankTransfer", Ending_BankTransfer, 0),
     RESUME(DT_FLOW_ENDING_BANKED, "Ending_Banked", Ending_Banked, 0),
@@ -3103,6 +3170,6 @@ const int gFlowRoutineCount = sizeof gFlowRoutines / sizeof gFlowRoutines[0];
  * own sites; task_yield's C hands off to the scheduler. */
 const DecompStop gFlowStops[] = {
     STOP(DT_CODE_SCHEDULER, "FF35"),
-    STOP(DT_CODE_RESET, "FEE0"),
+    STOP(DT_RESET_POLL, "FEEE"),
 };
 const int gFlowStopCount = sizeof gFlowStops / sizeof gFlowStops[0];

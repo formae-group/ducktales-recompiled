@@ -164,7 +164,7 @@ static int replace(int i, const CycModRegs *in)
  * outside the stack. */
 static bool task_kept(uint16_t a, uint8_t s)
 {
-    return (a & 0xFF00) != 0x0100 || a < DT_ADDR_STACK_FLOOR || (uint8_t)a > s;
+    return (a & 0xFF00) != 0x0100 || a < DT_ADDR_STACK_FLOOR || dc_keep_stack_ram || (uint8_t)a > s;
 }
 
 /* Task code: the C's results stored and its device stores made (the device
@@ -199,7 +199,9 @@ static bool task_replace(int i, const CycModRegs *in)
     cpu.x = c.x;
     cpu.y = c.y;
     cpu.s = s;
-    cpu_set_p(rti ? c.p : dc_handoff_set ? in->p : (uint8_t)((c.p & flags) | (in->p & ~flags)));
+    cpu_set_p(rti              ? c.p
+              : dc_handoff_set ? (dc_handoff_uses & OUT_P ? c.p : in->p)
+                               : (uint8_t)((c.p & flags) | (in->p & ~flags)));
     for (int k = 0; k < dc_stores; k++) {
         cpu_write(dc_store[k].addr, dc_store[k].value, 0);
     }
