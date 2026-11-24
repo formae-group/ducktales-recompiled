@@ -302,8 +302,9 @@ unless `--lag none` is given.
 | bytes the task never reads (`--nmi-audit`) | NMI-only state |
 | `$19`, `$90`, `$C7-$CF`, `$0370-$03EF` | the NMI-facing bytes `tests/lag_modes.py` allows (`ALLOWED`) |
 | `$92`, `$D0-$E5` | the frame counter and the sound driver's zero page, run by the NMI: it runs a different number of times before a step when loads are shorter |
+| the yielding slot's state and wait (`$80,X`, `$81,X`, X = 4 × `$91`), at one step | (4, 0) on where off has (1, 1): the C's zero cost moves `task_yield` (`$FFAC`) before the VBlank NMI, which then counts the yield's one-frame wait out between the C's stores and the scheduler's pass at `$FF38`, where the step is taken (the screen is off, so VBlank is not held back). Only that pattern is excepted, the slot must be equal on the next step, and the test prints the number of such steps per route ("NMI-counted yields") |
 
-No byte of task state differs.
+No other byte of task state differs.
 
 ### Routines
 
@@ -727,21 +728,20 @@ indirect jump or another routine's entry, and counts as C the routines only C re
 script's docstring gives every rule. `--rev` reads the C of another branch against the same
 coverage.
 
-On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **88.9%, 22,659 of 25,489 executed
-bytes**, in 315 routines (decomp/level 978ce9a, 12 routes and 48 poke cases).
+On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **97.7%, 25,197 of 25,783 executed
+bytes**, in 356 routines (main 85ed235, 13 routes and 51 poke cases).
 
 | Group | Files | Routines | Executed bytes | Share |
 |---|---|---|---|---|
-| player | `player.c`, `motion.c`, `sound.c` | 54 | 3,622 | 14.2% |
-| objects | `objects.c`, `objcommon.c` | 96 | 9,297 | 36.5% |
-| flow | `flow.c` | 108 | 2,924 | 11.5% |
-| level | `level.c`, `collision.c` | 40 | 3,601 | 14.1% |
-| system | `system.c`, `sprites.c`, `audio.c` | 17 | 3,216 | 12.6% |
+| player | `player.c`, `motion.c`, `sound.c` | 54 | 3,622 | 14.0% |
+| objects | `objects.c`, `objcommon.c` | 106 | 11,300 | 43.8% |
+| flow | `flow.c` | 131 | 3,312 | 12.8% |
+| level | `level.c`, `collision.c` | 40 | 3,601 | 14.0% |
+| system | `system.c`, `sprites.c`, `audio.c` | 25 | 3,363 | 13.0% |
 
-60 of those bytes are also run by original routines (shared tails). `Input_ReadControllers` is
-not counted: replace mode gives every call to the original. The largest routines still original
-are the NMI `$C000` (308 bytes), the object kinds of bank 6 that `Obj_UpdateAll` still hands to the
-original (`$A5DB` 238, `$A4C7` 217, `$A3EC` 169), `$FCA0` (164) and the reset `$FEE0` (157).
+No executed byte is shared with an original routine. The routines still original are the NMI
+`$C000` (308 bytes), the reset `$FEE0` (85), the scheduler `$FF35` (72), the ending's bank-5
+objects `$B380` (71), `$B46A` (31) and `$B400` (18), and kind $00's `RTS` at bank 6 `$80B2` (1).
 
 ### Adding a routine
 
