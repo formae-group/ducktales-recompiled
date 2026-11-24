@@ -54,8 +54,9 @@ Configure with `-G "Visual Studio 17 2022" -A x64` and build with
 |---|---|
 | Game code, seeds, native runtime (every commit) | `py -3 -I tests/quick_verify.py --build build/headless [--changed <ranges>]` |
 | Hooks, host, NESRecomp extension points (every commit) | `py -3 -I tests/quick_verify.py --build build/headless --runtime cycle [--changed <ranges>]` |
-| Decompiled routine, iterating | `py -3 -I tests/decomp_test.py --build build/headless --dev-build build/headless-dev --changed <ranges> --from-state --span 600 --modes check replace` |
-| Decompiled routine, before merge | `py -3 -I tests/decomp_test.py --build build/headless --dev-build build/headless-dev` (every route, all modes) |
+| Decompiled routine, before merge | `py -3 -I tests/decomp_test.py --build build/headless --dev-build build/headless-dev --changed <ranges> --from-state --span 600 --modes check replace` |
+| Decompiled code on main, periodically and before a release | `py -3 -I tests/decomp_test.py --build build/headless --dev-build build/headless-dev` (every route, all modes) |
+| Decompiled code, owner playtest | `build/windows/Release/ducktales_cycle.exe --decomp check`: closes at the first mismatch with the routine, frame and bytes on stderr |
 | Nightly, before a release | `py -3 -I tests/verify_routes.py --build build/headless --jobs 3` |
 | Enhancements | `py -3 -I tests/enhancements_test.py --build build/headless --dev-build build/headless-dev` |
 | Sprite presentation | `py -3 -I tests/sprites_test.py --build build/headless --dev-build build/headless-dev` |
