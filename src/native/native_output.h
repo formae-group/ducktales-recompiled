@@ -6,7 +6,7 @@
  * The frame loop pushes one frame at a time; the device pulls from a ring
  * between them. The window calls both under SDL_LockAudioDevice;
  * ducktales.exe --audio-out drives them from a simulated device clock
- * (native_window.c, tests/audio_output_test.py).
+ * (native_offscreen.c, tests/audio_output_test.py).
  *
  * Owns no setting: the volume and the holds are the window's.
  */

@@ -5,12 +5,13 @@
  * renderer draws the picture (native_present.c) and the native synth
  * (native_audio.h) the sound. No part of NESRecomp's cycle host is linked.
  *
- * It is the program entry's host (host/ducktales_main.c calls
- * ducktales_host_main, as it calls NESRecomp's in the cycle build), and it
- * reaches the port through the same calls the cycle host's extras make
- * (host/ducktales_host.c), so the menu, ROM import, settings, bindings and
- * presentation in src/ui and the enhancements and sprite compositor in
- * src/game and src/host are the ones the cycle build runs:
+ * Its entry, native_player.c, is the program entry's host
+ * (host/ducktales_main.c calls ducktales_host_main, as it calls NESRecomp's
+ * in the cycle build), and the window reaches the port through the same
+ * calls the cycle host's extras make (host/ducktales_host.c), so the menu,
+ * ROM import, settings, bindings and presentation in src/ui and the
+ * enhancements and sprite compositor in src/game and src/host are the ones
+ * the cycle build runs:
  *
  *   settings      config.ini through NESRecomp's cyc_settings (the same
  *                 file and keys); written on F11 and at exit, then
@@ -24,8 +25,6 @@
  *                 their sound is queued, so the game keeps running behind the
  *                 menu ([Game] MenuPausesGame stops it and holds the sound,
  *                 app_ui.h)
- *   No slowdown   [Game] NoSlowdown: the runtime's lag mode
- *                 (NATIVE_LAG_NONE when on, NATIVE_LAG_FAITHFUL when off)
  *   decompiled    [Game] DecompiledCode, with No slowdown on only and in the
  *   code          window only (off screen runs the recompiled code): the
  *                 decompiled routines in replace mode (decomp/decomp_native.c);
@@ -56,23 +55,9 @@
  *   save states   F8 saves and F9 loads <exe dir>/saves/DuckTales.native-state:
  *                 CPU, bus, video state and the frame count (native_runtime.h)
  *
- * Options: ROM [--hidden] [--exit-after N] [--config FILE] [--uncapped]
- * [--present-out FILE [--present-every N]] and each enhancement and sprite
- * option (--jump-scale 150 ...). Off screen (no window opens):
- * --frames N [--input ROUTE] [--lag none|faithful] [--present-out FILE
- * [--present-every N]] writes the picture the window would show (at 1x, the
- * presentation settings at their defaults) after every Nth frame, named as
- * the cycle host's --present-out names them, for tests/native_player_test.py;
- * --wav-out FILE writes the synth's sound as 48 kHz mono 16-bit PCM, before
- * the window's volume and queue stretching. --audio-out FILE writes what the
- * audio device would play instead, through the window's output stage
- * (native_output.h) on simulated clocks (--audio-sim SPEC, below), as a
- * stereo WAV for tests/audio_output_test.py, and prints the output stage's
- * statistics.
- * --state-check F saves the machine after frame F, runs 300 frames, loads the
- * state and runs them again, and reports whether CPU RAM, the cycle count and
- * the video memories matched on every one. The summary line lists how often
- * each enhancement's hook acted.
+ * The player is three files that share native_player.h: native_player.c
+ * (the entry, its options and the frame both kinds of run play), this window
+ * and native_offscreen.c (the runs with no window, --frames N).
  */
 #ifndef SDL_MAIN_HANDLED
 #define SDL_MAIN_HANDLED
@@ -80,11 +65,11 @@
 #include <SDL.h>
 
 #include "native/native_present.h"
-#include "native/native_route.h"
 #include "native/native_runtime.h"
 #include "native/native_state.h"
 #include "native/native_audio.h"
 #include "native/native_output.h"
+#include "native/native_player.h"
 
 #include "decomp/decomp.h"
 #include "ducktales/events.h"
@@ -102,7 +87,6 @@
 #include "cyc_render.h"
 #include "cyc_settings.h"
 
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -117,464 +101,11 @@
 #endif
 #endif
 
-#define FRAME_HZ      60.0988
-#define AUDIO_RATE    48000
 #define STATE_MAGIC   "DTNSTATE"
 #define STATE_VERSION 1u
 
-int ducktales_host_main(int argc, char **argv);
-
-void ducktales_host_apply_no_slowdown(bool on)
-{
-    native_set_lag_mode(on ? NATIVE_LAG_NONE : NATIVE_LAG_FAITHFUL);
-    Decomp_SetMode(on && ducktales_host_decompiled() ? DECOMP_REPLACE : DECOMP_OFF);
-}
-
-static uint8_t *read_file(const char *path, size_t *size)
-{
-    FILE *f = fopen(path, "rb");
-    if (!f) {
-        return NULL;
-    }
-    fseek(f, 0, SEEK_END);
-    long n = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    uint8_t *data = n > 0 ? (uint8_t *)malloc((size_t)n) : NULL;
-    if (data && fread(data, 1, (size_t)n, f) != (size_t)n) {
-        free(data);
-        data = NULL;
-    }
-    fclose(f);
-    *size = (size_t)n;
-    return data;
-}
-
-static uint8_t s_frame_mute;
-
-static void power_on(void)
-{
-    native_power_on();
-    dt_sprites_forget();
-    app_mods_reset();
-    s_frame_mute = 0;
-    ducktales_host_apply_no_slowdown(ducktales_host_no_slowdown());
-    if (ducktales_host_no_slowdown()) {
-        printf("[ducktales] No slowdown: the native runtime holds VBlank until each frame's logic is done\n");
-    }
-    if (ducktales_host_no_slowdown() && ducktales_host_decompiled()) {
-        printf("[ducktales] Decompiled code: the routines decompiled to C run in place of the recompiled ones\n");
-    }
-    fflush(stdout);
-}
-
-static unsigned long long s_frames, s_decomp_frames;
-
-static void run_frame(uint8_t pad0, uint8_t pad1)
-{
-    s_frames++;
-    if (Decomp_Mode() == DECOMP_REPLACE) {
-        s_decomp_frames++;
-    }
-    native_set_controller(0, pad0);
-    native_set_controller(1, pad1);
-    uint8_t mute = app_mods_audio_mute();
-    native_run_frame();
-    native_present_frame(native_last_frame());
-    dt_sprites_frame_end();
-    s_frame_mute = mute;
-    if (app_mods_audio_active()) {
-        app_mods_audio_frame_end(native_cpu_ram());
-    }
-    Events_FrameEnd();
-    app_mods_scripts_frame();
-    app_mods_dump_frame();
-}
-
-/* What the window shows (ui/app_present.h, or the plain picture) for a
- * drawable of out_w x out_h; 0 x 0 for the picture at 1x. */
-static const uint32_t *picture(int *w, int *h)
-{
-    const uint32_t *p = app_ui_present(w, h);
-    return p && *w > 0 && *h > 0 ? p : cyc_render_present(w, h);
-}
-
-static void numbered_path(char *out, size_t cap, const char *base, long frame)
-{
-    const char *dot = strrchr(base, '.');
-    const char *slash = strrchr(base, '/'), *bslash = strrchr(base, '\\');
-    if (dot && ((slash && dot < slash) || (bslash && dot < bslash))) {
-        dot = NULL;
-    }
-    int stem = (int)(dot ? (size_t)(dot - base) : strlen(base));
-    snprintf(out, cap, "%.*s_%05ld%s", stem, base, frame, dot ? dot : ".png");
-}
-
-/* ---- off screen: a route, the pictures to files ---- */
-
-/* --music-under-effects / --overlap-effects for this run, else -1: the saved
- * [Audio] value (ducktales_host.h). */
-static int s_voice_override[2] = { -1, -1 };
-
-static void apply_voices(void)
-{
-    native_audio_voices(s_voice_override[0] >= 0 ? s_voice_override[0] != 0 : ducktales_host_music_under_effects(),
-                        s_voice_override[1] >= 0 ? s_voice_override[1] != 0 : ducktales_host_overlap_effects());
-}
-
-/* The frame's sound: the synth and its extra voices with the channels the
- * mods took muted, then their files mixed in (mods/app_mods.h). */
-static size_t frame_sound(int16_t *pcm, size_t cap, int rate)
-{
-    apply_voices();
-    native_audio_set_mute(s_frame_mute);
-    size_t n = native_audio_frame(native_last_frame(), pcm, cap);
-    app_mods_audio_mix(pcm, n, rate);
-    return n;
-}
-
-/* The same before the 16-bit clamp, for the output stage (native_output.h);
- * game, when not NULL, gets the synth's part alone. */
-static size_t frame_mix(double *mix, double *game, size_t cap, int rate)
-{
-    apply_voices();
-    native_audio_set_mute(s_frame_mute);
-    size_t n = native_audio_mix(native_last_frame(), mix, cap);
-    if (game) {
-        memcpy(game, mix, n * sizeof *mix);
-    }
-    app_mods_audio_add(mix, n, rate);
-    return n;
-}
-
-/* --audio-sim: the window's frame loop and the audio device on simulated
- * clocks, for --audio-out. Each frame's sound is pushed when the loop
- * starts the frame; the frame then waits for its deadline (1 / 60.0988 s)
- * and, with refresh set, for the next VSync after it, as run_window does.
- * The device pulls period samples every period / 48000 s, its clock off
- * by drift parts per million. The events stand for what the window sees:
- * menu=F:N the menu opens before frame F with MenuPausesGame on for N
- * frames; fast=F:N fast-forward for N frames; drag=F:MS the window is moved
- * for MS ms (the loop blocked in the move); hitch=F:MS the loop blocked for
- * MS ms with no warning; load=F a state loaded (the queue flushed); off=F:N
- * sound off for N frames; sweep=F the volume stepped by 5 every frame from
- * F, from 100 to 0 and back. */
-typedef struct {
-    int refresh, period, volume;
-    double drift;
-    long menu[2], fast[2], drag[2], hitch[2], off[2], load, sweep;
-} AudioSim;
-
-static bool parse_audio_sim(const char *spec, AudioSim *sim)
-{
-    memset(sim, 0, sizeof *sim);
-    sim->period = 1024;
-    sim->volume = 100;
-    sim->load = sim->sweep = -1;
-    sim->menu[0] = sim->fast[0] = sim->drag[0] = sim->hitch[0] = sim->off[0] = -1;
-    char buf[512];
-    snprintf(buf, sizeof buf, "%s", spec);
-    for (char *tok = strtok(buf, ","); tok; tok = strtok(NULL, ",")) {
-        char *eq = strchr(tok, '=');
-        if (!eq) {
-            return false;
-        }
-        *eq++ = 0;
-        long a = 0, b = 0;
-        int got = sscanf(eq, "%ld:%ld", &a, &b);
-        long *pair = !strcmp(tok, "menu")    ? sim->menu
-                     : !strcmp(tok, "fast")  ? sim->fast
-                     : !strcmp(tok, "drag")  ? sim->drag
-                     : !strcmp(tok, "hitch") ? sim->hitch
-                     : !strcmp(tok, "off")   ? sim->off
-                                             : NULL;
-        if (pair && got == 2) {
-            pair[0] = a, pair[1] = b;
-        } else if (!strcmp(tok, "refresh") && got == 1) {
-            sim->refresh = (int)a;
-        } else if (!strcmp(tok, "period") && got == 1 && a > 0 && a <= 8192) {
-            sim->period = (int)a;
-        } else if (!strcmp(tok, "volume") && got == 1) {
-            sim->volume = (int)a;
-        } else if (!strcmp(tok, "drift")) {
-            sim->drift = atof(eq);
-        } else if (!strcmp(tok, "load") && got == 1) {
-            sim->load = a;
-        } else if (!strcmp(tok, "sweep") && got == 1) {
-            sim->sweep = a;
-        } else {
-            return false;
-        }
-    }
-    return true;
-}
-
-static struct {
-    FILE *f;
-    uint32_t samples;
-    double t, device_t, next;
-    const AudioSim *sim;
-} s_sim;
-
-static void sim_wav_header(void)
-{
-    uint32_t rate = AUDIO_RATE, bytes = s_sim.samples * 4, riff = 36 + bytes, fmt = 16, byte_rate = rate * 4;
-    uint16_t pcm = 1, channels = 2, align = 4, bits = 16;
-    long at = ftell(s_sim.f);
-    fseek(s_sim.f, 0, SEEK_SET);
-    fwrite("RIFF", 1, 4, s_sim.f), fwrite(&riff, 4, 1, s_sim.f), fwrite("WAVEfmt ", 1, 8, s_sim.f);
-    fwrite(&fmt, 4, 1, s_sim.f), fwrite(&pcm, 2, 1, s_sim.f), fwrite(&channels, 2, 1, s_sim.f);
-    fwrite(&rate, 4, 1, s_sim.f), fwrite(&byte_rate, 4, 1, s_sim.f), fwrite(&align, 2, 1, s_sim.f);
-    fwrite(&bits, 2, 1, s_sim.f), fwrite("data", 1, 4, s_sim.f), fwrite(&bytes, 4, 1, s_sim.f);
-    if (at > 44) {
-        fseek(s_sim.f, at, SEEK_SET);
-    }
-}
-
-/* The device's pulls up to time t: the output and the synth's sound it came
- * from, as a stereo WAV (left the output, right half the synth's sample or
- * -32768). */
-static void sim_device_until(double t)
-{
-    static int16_t out[8192], game[8192], pair[16384];
-    const int period = s_sim.sim->period;
-    const double step = period / (AUDIO_RATE * (1.0 + s_sim.sim->drift * 1e-6));
-    while (s_sim.device_t <= t) {
-        native_output_pull(out, game, (size_t)period);
-        for (int i = 0; i < period; i++) {
-            pair[2 * i] = out[i];
-            pair[2 * i + 1] = game[i];
-        }
-        fwrite(pair, sizeof pair[0], 2 * (size_t)period, s_sim.f);
-        s_sim.samples += (uint32_t)period;
-        s_sim.device_t += step;
-    }
-}
-
-static bool sim_in(const long ev[2], long frame)
-{
-    return ev[0] >= 0 && frame >= ev[0] && frame < ev[0] + ev[1];
-}
-
-/* Before frame: the events, then the device up to the loop's start. */
-static void sim_frame_begin(long frame, bool *push)
-{
-    const AudioSim *sim = s_sim.sim;
-    const double T = 1.0 / FRAME_HZ;
-    if (frame == sim->menu[0]) {
-        native_output_hold(NATIVE_OUTPUT_HOLD_MENU, true);
-        sim_device_until(s_sim.t += sim->menu[1] * T);
-        native_output_hold(NATIVE_OUTPUT_HOLD_MENU, false);
-    }
-    if (frame == sim->drag[0]) {
-        native_output_hold(NATIVE_OUTPUT_HOLD_WINDOW, true);
-        sim_device_until(s_sim.t += sim->drag[1] / 1000.0);
-        native_output_hold(NATIVE_OUTPUT_HOLD_WINDOW, false);
-    }
-    if (frame == sim->hitch[0]) {
-        s_sim.t += sim->hitch[1] / 1000.0;
-    }
-    if (frame == sim->load) {
-        native_output_flush();
-    }
-    if (sim->sweep >= 0 && frame >= sim->sweep && frame < sim->sweep + 40) {
-        long k = frame - sim->sweep;
-        native_output_volume(k < 20 ? 95 - 5 * (int)k : 5 * (int)(k - 19));
-    }
-    bool fast = sim_in(sim->fast, frame), off = sim_in(sim->off, frame);
-    native_output_hold(NATIVE_OUTPUT_HOLD_FAST, fast);
-    native_output_hold(NATIVE_OUTPUT_HOLD_OFF, off);
-    *push = !fast && !off;
-    sim_device_until(s_sim.t);
-}
-
-/* After the frame's push: its wait for the deadline and VSync. */
-static void sim_frame_end(long frame)
-{
-    const AudioSim *sim = s_sim.sim;
-    const double T = 1.0 / FRAME_HZ;
-    bool unpaced = sim_in(sim->fast, frame);
-    if (unpaced) {
-        s_sim.t += 0.0005;
-    } else {
-        if (s_sim.t < s_sim.next) {
-            s_sim.t = s_sim.next;
-        }
-        if (sim->refresh > 0) {
-            s_sim.t = ceil(s_sim.t * sim->refresh - 1e-9) / sim->refresh;
-        }
-    }
-    s_sim.next += T;
-    if (unpaced || s_sim.t > s_sim.next + 4 * T) {
-        s_sim.next = s_sim.t;
-    }
-}
-
-static void sim_report(void)
-{
-    const NativeOutputStats *st = native_output_stats();
-    printf("native player: audio: device_samples=%u played=%llu underruns=%llu starved=%llu dropped=%llu "
-           "stretched=%llu shrunk=%llu flushes=%llu over=%llu limited=%llu peak_in=%.2f peak_out=%.2f "
-           "max_queue_ms=%.1f\n",
-           s_sim.samples, (unsigned long long)st->played, (unsigned long long)st->underruns,
-           (unsigned long long)st->starved, (unsigned long long)st->dropped, (unsigned long long)st->stretched,
-           (unsigned long long)st->shrunk, (unsigned long long)st->flushes, (unsigned long long)st->over,
-           (unsigned long long)st->limited, st->peak_in > 0 ? 20 * log10(st->peak_in / 32768.0) : -999.0,
-           st->peak_out > 0 ? 20 * log10(st->peak_out / 32768.0) : -999.0, st->max_queued * 1000.0 / AUDIO_RATE);
-}
-
-static uint64_t machine_hash(void)
-{
-    uint64_t h = 1469598103934665603ull;
-    const NativeVideoMemory *m = native_video_memory();
-    const uint8_t *parts[2] = { native_cpu_ram(), (const uint8_t *)m };
-    const size_t sizes[2] = { 0x800, sizeof *m };
-    for (int p = 0; p < 2; p++) {
-        for (size_t i = 0; i < sizes[p]; i++) {
-            h = (h ^ parts[p][i]) * 1099511628211ull;
-        }
-    }
-    return h ^ native_cycle_count();
-}
-
-static int run_off_screen(long frames, const char *input, int lag, const char *present_out, long present_every,
-                          long state_check, const char *wav_out, const char *audio_out, const AudioSim *sim)
-{
-    enum {
-        CHECK_FRAMES = 300
-    };
-
-    static uint64_t first[CHECK_FRAMES];
-    uint8_t *state = NULL;
-    size_t state_size = 0;
-    long check_mismatch = -1;
-    NativeRoute replay;
-
-    NativeRoute route;
-    memset(&route, 0, sizeof route);
-    if (input && !native_route_load(&route, input)) {
-        return 2;
-    }
-    FILE *wav = wav_out ? fopen(wav_out, "wb") : NULL;
-    if (wav_out && !wav) {
-        fprintf(stderr, "cannot write %s\n", wav_out);
-        return 2;
-    }
-    uint32_t wav_samples = 0;
-    if (wav) {
-        native_audio_reset(AUDIO_RATE);
-        native_audio_wav_header(wav, AUDIO_RATE, 0);
-    }
-    if (audio_out) {
-        s_sim.f = fopen(audio_out, "wb");
-        if (!s_sim.f) {
-            fprintf(stderr, "cannot write %s\n", audio_out);
-            return 2;
-        }
-        s_sim.sim = sim;
-        native_audio_reset(AUDIO_RATE);
-        native_output_reset(AUDIO_RATE, sim->period);
-        native_output_volume(sim->volume);
-        sim_wav_header();
-    }
-    power_on();
-    if (lag >= 0) {
-        native_set_lag_mode((NativeLagMode)lag);
-    }
-    for (long frame = 0; frame < frames; frame++) {
-        uint8_t held[2];
-        native_route_frame(&route, frame, held);
-        bool push = true;
-        if (s_sim.f) {
-            sim_frame_begin(frame, &push);
-        }
-        run_frame(held[0], held[1]);
-        if (wav) {
-            static int16_t pcm[NATIVE_AUDIO_MAX_FRAME_SAMPLES];
-            size_t n = frame_sound(pcm, NATIVE_AUDIO_MAX_FRAME_SAMPLES, AUDIO_RATE);
-            fwrite(pcm, sizeof pcm[0], n, wav);
-            wav_samples += (uint32_t)n;
-        }
-        if (s_sim.f) {
-            static double mix[NATIVE_AUDIO_MAX_FRAME_SAMPLES], game[NATIVE_AUDIO_MAX_FRAME_SAMPLES];
-            size_t n = frame_mix(mix, game, NATIVE_AUDIO_MAX_FRAME_SAMPLES, AUDIO_RATE);
-            if (push) {
-                native_output_push(mix, game, n);
-            }
-            sim_frame_end(frame);
-        }
-        if (state_check >= 0 && frame == state_check) {
-            state_size = native_state_save(NULL, 0);
-            state = (uint8_t *)malloc(state_size);
-            if (state) {
-                native_state_save(state, state_size);
-            }
-            replay = route;
-        }
-        if (state && frame > state_check && frame <= state_check + CHECK_FRAMES) {
-            first[frame - state_check - 1] = machine_hash();
-            if (frame == state_check + CHECK_FRAMES) {
-                NativeRoute saved = route;
-                bool loaded = native_state_load(state, state_size);
-                route = replay;
-                check_mismatch = loaded ? 0 : state_check;
-                for (long f = state_check + 1; loaded && f <= state_check + CHECK_FRAMES; f++) {
-                    uint8_t h2[2];
-                    native_route_frame(&route, f, h2);
-                    run_frame(h2[0], h2[1]);
-                    if (machine_hash() != first[f - state_check - 1] && !check_mismatch) {
-                        check_mismatch = f;
-                    }
-                }
-                route = saved;
-                printf("native player: state check after frame %ld: %s over %d frames\n", state_check,
-                       !loaded          ? "the state did not load"
-                       : check_mismatch ? "differs"
-                                        : "identical",
-                       CHECK_FRAMES);
-                if (check_mismatch) {
-                    printf("  first difference at frame %ld\n", check_mismatch);
-                }
-                free(state);
-                state = NULL;
-            }
-        }
-        if (present_out && present_every > 0 && frame % present_every == 0) {
-            int w, h;
-            const uint32_t *pic = picture(&w, &h);
-            char path[1100];
-            numbered_path(path, sizeof path, present_out, frame);
-            if (!cyc_write_png(path, pic, w, h)) {
-                fprintf(stderr, "cannot write %s\n", path);
-            }
-        }
-    }
-    if (wav) {
-        native_audio_wav_header(wav, AUDIO_RATE, wav_samples);
-        fclose(wav);
-    }
-    if (s_sim.f) {
-        native_output_hold(NATIVE_OUTPUT_HOLD_QUIT, true);
-        sim_device_until(s_sim.t + 0.05);
-        sim_wav_header();
-        fclose(s_sim.f);
-        s_sim.f = NULL;
-        sim_report();
-    }
-    printf("native player: frames=%ld cycles=%llu fallback_instructions=%llu unmodeled_reads=%llu\n", frames,
-           (unsigned long long)native_cycle_count(), (unsigned long long)native_fallback_instructions(),
-           (unsigned long long)native_unmodeled_reads());
-    printf("native player: hooks acted:");
-    for (int e = 0; e < DT_ENH_COUNT; e++) {
-        printf(" %s=%llu", dt_enh_info((DtEnh)e)->key, (unsigned long long)dt_enh_applied((DtEnh)e));
-    }
-    printf("\n");
-    return check_mismatch > 0 ? 1 : 0;
-}
-
 /* ---- the window ---- */
 
-static CycSettings s_set;
-static char s_set_path[1100];
 static SDL_Window *s_win;
 static SDL_Renderer *s_ren;
 static SDL_Texture *s_tex;
@@ -587,23 +118,11 @@ static bool s_fullscreen_chord;
 static char s_note_title[64], s_note_body[128];
 static uint64_t s_note_until;
 
-static void game_save(void *ctx, FILE *f)
-{
-    (void)ctx;
-    ducktales_host_write_game_settings(f);
-}
-
-static void game_load(void *ctx, const char *key, const char *value)
-{
-    (void)ctx;
-    ducktales_host_load_game_setting(key, value);
-}
-
 static void save_settings(void)
 {
-    static const CycSettingsGame GAME = { NULL, NULL, game_save };
-    if (!cyc_settings_save(&s_set, s_set_path, &GAME)) {
-        fprintf(stderr, "cannot write %s\n", s_set_path);
+    static const CycSettingsGame GAME = { NULL, NULL, player_game_save };
+    if (!cyc_settings_save(&player_settings, player_settings_path, &GAME)) {
+        fprintf(stderr, "cannot write %s\n", player_settings_path);
     }
     app_ui_host_saved();
 }
@@ -623,7 +142,7 @@ static char s_session_dir[1100], s_session_path[1200], s_session_start[32];
  * ran in this window session. */
 static void session_end(void)
 {
-    if (!s_decomp_frames) {
+    if (!player_decomp_frames) {
         return;
     }
 #ifdef _WIN32
@@ -635,7 +154,7 @@ static void session_end(void)
     }
     const char *error = Decomp_Error();
     fprintf(f, "DuckTales Recompiled native player: decompiled code session\nstarted %s\n", s_session_start);
-    fprintf(f, "frames %llu, %llu of them with the decompiled code on\n", s_frames, s_decomp_frames);
+    fprintf(f, "frames %llu, %llu of them with the decompiled code on\n", player_frames, player_decomp_frames);
     fprintf(f, "error %s\n", *error ? error : "none");
     Decomp_WriteStats(f, DECOMP_REPLACE);
     fclose(f);
@@ -700,7 +219,7 @@ static void load_state(void)
     char path[1200], why[160] = "";
     state_path(path, sizeof path);
     size_t size = 0;
-    uint8_t *data = read_file(path, &size);
+    uint8_t *data = player_read_file(path, &size);
     uint32_t head[3];
     if (!data) {
         snprintf(why, sizeof why, "no saved state");
@@ -718,7 +237,7 @@ static void load_state(void)
     if (!why[0]) {
         dt_sprites_forget();
         app_mods_reset();
-        s_frame_mute = 0;
+        player_frame_mute = 0;
     }
     note(why[0] ? "STATE NOT LOADED" : "STATE LOADED", why[0] ? why : NULL);
 }
@@ -794,7 +313,7 @@ static void apply_integer_scale(void)
 {
     int ow = 0, oh = 0;
     SDL_GetRendererOutputSize(s_ren, &ow, &oh);
-    SDL_bool want = s_set.integer_scale && ow >= s_tex_w && oh >= s_tex_h ? SDL_TRUE : SDL_FALSE;
+    SDL_bool want = player_settings.integer_scale && ow >= s_tex_w && oh >= s_tex_h ? SDL_TRUE : SDL_FALSE;
     if (SDL_RenderGetIntegerScale(s_ren) != want) {
         SDL_RenderSetIntegerScale(s_ren, want);
     }
@@ -814,7 +333,7 @@ static bool ensure_texture(int w, int h)
     if (!s_tex) {
         return false;
     }
-    SDL_SetTextureScaleMode(s_tex, s_set.linear_filter ? SDL_ScaleModeLinear : SDL_ScaleModeNearest);
+    SDL_SetTextureScaleMode(s_tex, player_settings.linear_filter ? SDL_ScaleModeLinear : SDL_ScaleModeNearest);
     SDL_RenderSetLogicalSize(s_ren, w, h);
     apply_integer_scale();
     return true;
@@ -824,8 +343,8 @@ static bool ensure_texture(int w, int h)
  * multiple that fits the display's usable area. */
 static void window_size(int display, int *w, int *h)
 {
-    int pw, ph, scale = s_set.window_scale < 1 ? 1 : s_set.window_scale;
-    picture(&pw, &ph);
+    int pw, ph, scale = player_settings.window_scale < 1 ? 1 : player_settings.window_scale;
+    player_picture(&pw, &ph);
     SDL_Rect area;
     if (display >= 0 && SDL_GetDisplayUsableBounds(display, &area) == 0) {
         while (scale > 1 && (pw * scale > area.w || ph * scale > area.h - 48)) {
@@ -838,9 +357,9 @@ static void window_size(int display, int *w, int *h)
 
 static void apply_fullscreen(void)
 {
-    Uint32 fs = s_set.fullscreen == 1   ? SDL_WINDOW_FULLSCREEN_DESKTOP
-                : s_set.fullscreen == 2 ? SDL_WINDOW_FULLSCREEN
-                                        : 0;
+    Uint32 fs = player_settings.fullscreen == 1   ? SDL_WINDOW_FULLSCREEN_DESKTOP
+                : player_settings.fullscreen == 2 ? SDL_WINDOW_FULLSCREEN
+                                                  : 0;
     if ((SDL_GetWindowFlags(s_win) & (SDL_WINDOW_FULLSCREEN | SDL_WINDOW_FULLSCREEN_DESKTOP)) == fs) {
         return;
     }
@@ -896,7 +415,7 @@ static void present_shot(const char *base, long frame)
     }
     if (SDL_RenderReadPixels(s_ren, NULL, SDL_PIXELFORMAT_ARGB8888, px, w * 4) == 0) {
         char path[1100];
-        numbered_path(path, sizeof path, base, frame);
+        player_numbered_path(path, sizeof path, base, frame);
         if (!cyc_write_png(path, px, w, h)) {
             fprintf(stderr, "cannot write %s\n", path);
         }
@@ -963,16 +482,16 @@ static void audio_hold(unsigned reasons, bool on)
 static void queue_audio(bool fast)
 {
     static double mix[NATIVE_AUDIO_MAX_FRAME_SAMPLES];
-    size_t n = frame_mix(mix, NULL, NATIVE_AUDIO_MAX_FRAME_SAMPLES, s_dev ? s_have.freq : AUDIO_RATE);
+    size_t n = player_frame_mix(mix, NULL, NATIVE_AUDIO_MAX_FRAME_SAMPLES, s_dev ? s_have.freq : AUDIO_RATE);
     if (!s_dev) {
         return;
     }
     int volume = app_ui_volume();
     SDL_LockAudioDevice(s_dev);
-    native_output_volume(volume >= 0 ? volume : s_set.volume);
+    native_output_volume(volume >= 0 ? volume : player_settings.volume);
     native_output_hold(NATIVE_OUTPUT_HOLD_MENU | NATIVE_OUTPUT_HOLD_WINDOW, false);
     native_output_hold(NATIVE_OUTPUT_HOLD_FAST, fast);
-    native_output_hold(NATIVE_OUTPUT_HOLD_OFF, !s_set.audio_enabled);
+    native_output_hold(NATIVE_OUTPUT_HOLD_OFF, !player_settings.audio_enabled);
     native_output_push(mix, NULL, n);
     SDL_UnlockAudioDevice(s_dev);
 }
@@ -1004,7 +523,7 @@ static int menu_tick(bool run)
     }
     int ran = 0;
     while (next <= now) {
-        run_frame(0, 0);
+        player_run_frame(0, 0);
         queue_audio(false);
         next += frame_ticks;
         ran++;
@@ -1012,7 +531,7 @@ static int menu_tick(bool run)
     return ran;
 }
 
-static int run_window(bool hidden, bool uncapped, long exit_after, const char *present_out, long present_every)
+int player_run_window(bool hidden, bool uncapped, long exit_after, const char *present_out, long present_every)
 {
     if (hidden) {
         SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
@@ -1041,7 +560,7 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
         SDL_Quit();
         return 1;
     }
-    set_vsync(s_set.vsync && !uncapped);
+    set_vsync(player_settings.vsync && !uncapped);
     apply_fullscreen();
 
     SDL_AudioSpec want = { 0 };
@@ -1102,21 +621,21 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
         CycInputFrame in;
         CycInputState st;
         read_frame(&in);
-        cyc_input_eval(&s_set.bind, &in, &st);
+        cyc_input_eval(&player_settings.bind, &in, &st);
         bool edge[CYC_SC_COUNT];
         for (int i = 0; i < CYC_SC_COUNT; i++) {
             edge[i] = st.shortcut[i] && !prev[i];
             prev[i] = st.shortcut[i];
         }
         if (edge[CYC_SC_FULLSCREEN]) {
-            s_set.fullscreen = s_set.fullscreen ? 0 : 1;
+            player_settings.fullscreen = player_settings.fullscreen ? 0 : 1;
             audio_hold(NATIVE_OUTPUT_HOLD_WINDOW, true);
             apply_fullscreen();
             save_settings();
         }
         if (edge[CYC_SC_SCREENSHOT]) {
             int pw, ph;
-            const uint32_t *pic = picture(&pw, &ph);
+            const uint32_t *pic = player_picture(&pw, &ph);
             char name[64];
             snprintf(name, sizeof name, "cyc_shot_%04d.png", shot++);
             if (cyc_write_png(name, pic, pw, ph)) {
@@ -1126,13 +645,13 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
         uint8_t buttons[2] = { st.buttons[0], st.buttons[1] };
         app_ui_input(buttons);
         app_ui_frame_begin();
-        run_frame(buttons[0], buttons[1]);
+        player_run_frame(buttons[0], buttons[1]);
         frames_done++;
         bool fast = st.shortcut[CYC_SC_FAST_FORWARD];
         queue_audio(fast);
 
         bool unpaced = fast || uncapped;
-        set_vsync(s_set.vsync && !unpaced);
+        set_vsync(player_settings.vsync && !unpaced);
         Uint64 now = SDL_GetPerformanceCounter();
         if (!unpaced || now - shown >= frame_ticks) {
             if (!unpaced && now < next) {
@@ -1187,147 +706,4 @@ static int run_window(bool hidden, bool uncapped, long exit_after, const char *p
     SDL_DestroyWindow(s_win);
     SDL_Quit();
     return 0;
-}
-
-static bool game_option_name(const char *name)
-{
-    for (int e = 0; e < DT_ENH_COUNT; e++) {
-        if (!strcmp(name, dt_enh_info((DtEnh)e)->option)) {
-            return true;
-        }
-    }
-    return !strcmp(name, DT_SPRITES_OPTION);
-}
-
-static int usage(const char *self)
-{
-    fprintf(stderr,
-            "usage: %s ROM [--hidden] [--exit-after N] [--config FILE] [--uncapped]\n"
-            "       [--present-out FILE [--present-every N]]\n"
-            "       [--frames N [--input ROUTE] [--lag none|faithful] [--state-check FRAME] [--wav-out FILE]\n"
-            "        [--audio-out FILE [--audio-sim SPEC]]]\n"
-            "       [--jump-scale N] [--no-damage on|off] [--infinite-time on|off] [--infinite-lives on|off]\n"
-            "       [--start-lives 0-9|off] [--no-sprite-flicker on|off]\n"
-            "       [--music-under-effects on|off] [--overlap-effects on|off]\n"
-            "       [--mods on|off] [--mods-dir DIR] [--mods-order ID:on|off,...] [--mods-dump DIR]\n",
-            self);
-    return 2;
-}
-
-int ducktales_host_main(int argc, char **argv)
-{
-    const char *rom = NULL, *present_out = NULL, *input = NULL, *config = NULL, *wav_out = NULL, *audio_out = NULL;
-    AudioSim sim;
-    parse_audio_sim("refresh=0", &sim);
-    long exit_after = -1, present_every = 1, frames = -1, state_check = -1;
-    int lag = -1;
-    bool hidden = false, uncapped = false, mod_ok = false;
-
-    struct {
-        const char *name, *value;
-    } game[16];
-
-    int game_n = 0;
-    for (int i = 1; i < argc; i++) {
-        const char *a = argv[i], *v = i + 1 < argc ? argv[i + 1] : NULL;
-        if (!strcmp(a, "--hidden")) {
-            hidden = true;
-        } else if (!strcmp(a, "--uncapped")) {
-            uncapped = true;
-        } else if (!strcmp(a, "--window-input") || !strcmp(a, "--virtual-pad")) {
-            continue;
-        } else if (!strcmp(a, "--exit-after") && v) {
-            exit_after = atol(argv[++i]);
-        } else if (!strcmp(a, "--config") && v) {
-            config = argv[++i];
-        } else if (!strcmp(a, "--present-out") && v) {
-            present_out = argv[++i];
-        } else if (!strcmp(a, "--present-every") && v) {
-            present_every = atol(argv[++i]);
-        } else if (!strcmp(a, "--frames") && v) {
-            frames = atol(argv[++i]);
-        } else if (!strcmp(a, "--input") && v) {
-            input = argv[++i];
-        } else if (!strcmp(a, "--state-check") && v) {
-            state_check = atol(argv[++i]);
-        } else if (!strcmp(a, "--wav-out") && v) {
-            wav_out = argv[++i];
-        } else if (!strcmp(a, "--audio-out") && v) {
-            audio_out = argv[++i];
-        } else if (!strcmp(a, "--audio-sim") && v) {
-            if (!parse_audio_sim(argv[++i], &sim)) {
-                fprintf(stderr, "--audio-sim %s: invalid\n", v);
-                return 2;
-            }
-        } else if (!strncmp(a, "--mods", 6) && v && app_mods_option(a, v, &mod_ok)) {
-            i++;
-            if (!mod_ok) {
-                fprintf(stderr, "%s %s: invalid value\n", a, v);
-                return 2;
-            }
-        } else if ((!strcmp(a, "--music-under-effects") || !strcmp(a, "--overlap-effects")) && v &&
-                   (!strcmp(v, "on") || !strcmp(v, "off"))) {
-            s_voice_override[a[2] == 'o'] = !strcmp(argv[++i], "on");
-        } else if (!strcmp(a, "--lag") && v && !strcmp(v, "none")) {
-            lag = NATIVE_LAG_NONE, i++;
-        } else if (!strcmp(a, "--lag") && v && !strcmp(v, "faithful")) {
-            lag = NATIVE_LAG_FAITHFUL, i++;
-        } else if (a[0] == '-' && v && game_n < 16 && game_option_name(a)) {
-            game[game_n].name = a, game[game_n++].value = argv[++i];
-        } else if (a[0] != '-' && !rom) {
-            rom = a;
-        } else {
-            return usage(argv[0]);
-        }
-    }
-    if (!rom) {
-        return usage(argv[0]);
-    }
-    size_t size;
-    uint8_t *image = read_file(rom, &size);
-    char err[160];
-    if (!image) {
-        fprintf(stderr, "cannot read %s\n", rom);
-        return 2;
-    }
-    if (!native_load_ines(image, size, err, sizeof err)) {
-        fprintf(stderr, "%s: %s\n", rom, err);
-        free(image);
-        return 2;
-    }
-    bool off_screen = frames >= 0;
-    size_t prg_at = 16 + ((image[6] & 4) ? 512 : 0), prg_size = (size_t)image[4] * 0x4000;
-    app_mods_start(prg_at + prg_size <= size ? image + prg_at : NULL, prg_at + prg_size <= size ? prg_size : 0);
-    free(image);
-    if (!native_hooks_init()) {
-        return 2;
-    }
-    if (!off_screen) {
-        snprintf(s_set_path, sizeof s_set_path, "%s", config ? config : cyc_settings_default_path());
-        static const CycSettingsGame GAME = { NULL, game_load, game_save };
-        cyc_settings_default(&s_set);
-        cyc_settings_load(&s_set, s_set_path, stderr, &GAME);
-        ducktales_host_load_audio_settings(s_set_path);
-        s_set.bind.shortcut_off |= 1u << CYC_SC_DISK;
-    } else {
-        ducktales_host_set_decompiled(false);
-    }
-    for (int g = 0; g < game_n; g++) {
-        bool ok = false;
-        ducktales_host_game_option(game[g].name, game[g].value, &ok);
-        if (!ok) {
-            fprintf(stderr, "%s %s: invalid value\n", game[g].name, game[g].value);
-            return 2;
-        }
-    }
-    dt_sprites_mods_changed();
-    if (off_screen) {
-        if (wav_out && audio_out) {
-            fprintf(stderr, "--wav-out and --audio-out cannot be used together\n");
-            return 2;
-        }
-        return run_off_screen(frames, input, lag, present_out, present_every, state_check, wav_out, audio_out, &sim);
-    }
-    power_on();
-    return run_window(hidden, uncapped, exit_after, present_out, present_every);
 }

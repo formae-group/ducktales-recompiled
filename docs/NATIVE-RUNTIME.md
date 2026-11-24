@@ -25,7 +25,9 @@ src/native/native_hash.h      the per-frame state line both builds write (--ram-
 src/native/native_main.c      ducktales_native: input routes, logs, dumps
 src/native/native_hooks.c     game.toml hook sites: the enhancements' callbacks
 src/native/native_route.c     input routes (tests/routes) for both native programs
-src/native/native_window.c    the player build's window (ducktales.exe)
+src/native/native_player.c    the player build (ducktales.exe): its entry, options and frame
+src/native/native_window.c    the player build's window
+src/native/native_offscreen.c the player build's runs with no window (--frames N, --audio-sim)
 src/native/native_present.c   the frame record drawn and offered as cyc_render.h
 src/native/native_audio.c     the native synth: each frame's APU writes to samples
 src/host/ducktales_settings.c config.ini [Game] and the game options, shared by both hosts
