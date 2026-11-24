@@ -75,19 +75,14 @@ static void Bank_Select(uint8_t bank)
  * directions held together are dropped.
  *
  * The controllers latch the strobe and shift on APU cycles, which do not run
- * in an isolated call: there the original reads one unchanging bit, so its
- * cycle count (which depends on the buttons through the final masks) is not
- * the console's. Replace mode on the cycle host therefore gives this call to
- * the original; check mode compares the C with the original on the bits an
- * isolated call reads. On the native runtime, which keeps no cycle counts,
- * the C reads the controllers on the bus. */
+ * in an isolated call: there the original reads one unchanging bit, and its
+ * cycle count depends on the buttons through the final masks. So the C gives
+ * the cycle host's measuring call the bytes those masks test, as it read them
+ * (Decomp_IsolatedRead); check mode compares the C with the original on the
+ * bits an isolated call reads. */
 static void Input_ReadControllers(void)
 {
     Decomp_Enter(DT_CODE_READ_CONTROLLERS, 0, 0, 0);
-    if (Decomp_Mode() == DECOMP_REPLACE && Decomp_ConsoleTiming()) {
-        Decomp_RunOriginal();
-        return;
-    }
     uint8_t *pads = &gRam[DT_ADDR_PAD_NEW];
     Decomp_BusWrite(JOYPAD1, 1);
     Decomp_BusWrite(JOYPAD1, 0);
@@ -107,6 +102,8 @@ static void Input_ReadControllers(void)
         pads[pad + 2] = held;
     }
     for (int i = 3; i >= 0; i--) {
+        Decomp_IsolatedRead(DT_CODE_READ_CONTROLLERS + 0x3E, (uint16_t)(DT_ADDR_PAD_NEW + i), pads[i]);
+        Decomp_IsolatedRead(DT_CODE_READ_CONTROLLERS + 0x46, (uint16_t)(DT_ADDR_PAD_NEW + i), pads[i]);
         if ((pads[i] & PAD_UP_DOWN) == PAD_UP_DOWN || (pads[i] & PAD_LEFT_RIGHT) == PAD_LEFT_RIGHT) {
             pads[i] &= 0xF0;
         }
