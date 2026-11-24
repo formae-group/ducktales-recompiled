@@ -581,11 +581,19 @@ length = 8
 crc32 = 0x1F48102F
 include_internal = true
 
+# Task_Schedule, the scheduler's entry
 [[mod_function_hook]]
-id = "ducktales.decomp.stop.FF35"
+id = "ducktales.decomp.FF35"
 addr = 0xFF35
 length = 8
 crc32 = 0xEB49C2BB
+
+# Task_Pass, one pass of the scheduler
+[[mod_function_hook]]
+id = "ducktales.decomp.FF38"
+addr = 0xFF38
+length = 8
+crc32 = 0xAACD8749
 
 # The reset waits for the live PPU before Reset_Ready resumes the C.
 [[mod_function_hook]]

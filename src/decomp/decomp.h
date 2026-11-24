@@ -66,6 +66,7 @@ typedef struct DecompRoutine {
     bool resume;    /* task code: started where an RTS returns to its address, with no site */
     uint8_t bank;   /* entries below $C000: the bank mapped at $8000 */
     bool interrupt; /* task code of the NMI handler: its C ends in RTI, not RTS */
+    bool timed;     /* task code: its C states the original's cycles (Decomp_Cycles) */
 } DecompRoutine;
 
 typedef enum DecompMode {
@@ -183,6 +184,17 @@ uint8_t Decomp_Stack(void);
 void Decomp_KeepStackRam(void);
 void Decomp_SelectBank(uint8_t bank);
 void Decomp_Store(uint16_t addr, uint8_t value);
+
+/* The original's time, for task code whose cycle count the runtimes keep (the
+ * scheduler): Decomp_Cycles(n) is n of the original's CPU cycles, and
+ * Decomp_Fetch(addr) the cycle in which it fetches the instruction at addr,
+ * which the native runtime's lag accounting and step dump observe. A routine
+ * that states its time reads nothing but RAM and its registers. Check mode
+ * compares the sum with the original's cycles; the native runtime spends
+ * them, and gives the call to the original when VBlank would come during
+ * them, as the cycle host does. */
+void Decomp_Cycles(unsigned cycles);
+void Decomp_Fetch(uint16_t addr);
 
 /* N and Z of a value, the flags of a load. */
 static inline uint8_t Flags_NZ(uint8_t p, uint8_t v)

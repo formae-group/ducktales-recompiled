@@ -209,13 +209,23 @@ call can do. `flow.c` decompiles that code as **task code** (`DecompRoutine.task
   enters through an RTS (`$FFAB`) whose return the observer moves to the start, at the routine's
   true S, with the isolated call's return address in place of the routine's own (at S + locals
   + 1). When the C hands off, the original stops where it reaches the same routine at the same
-  depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`, 2 of
-  them: the scheduler `$FF35`, which `task_yield`'s C hands off to, and the reset's PPU wait `$FEEE`). Check compares RAM, the stack down to that depth, the registers the hand-off uses and the
+  depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`, 1 of
+  them: the reset's PPU wait `$FEEE`). Check compares RAM, the stack down to that depth, the registers the hand-off uses and the
   number of device writes.
 - Replace mode stores the C's results, makes its device writes, spends the original's cycles up to
   the stop (without the entry RTS) and jumps there. A call that would run into VBlank or past the
   frame end goes to the original, as for the other routines: the NMI steps state the task code
   uses (the random generator, the scratch bytes).
+- **Timed** task code (`DecompRoutine.timed`: the scheduler's `Task_Schedule` `$FF35`, `Task_Pass`
+  `$FF38` and the resume point `Task_Resume` `$FF78`) states the original's time and reads only RAM
+  and its registers: `Decomp_Cycles(n)` is n CPU cycles, `Decomp_Fetch(addr)` the cycle that fetches
+  the instruction at addr. Check compares the sum with the original's cycles up to the hand-off (an
+  idle pass identical to the last one reuses its isolated run). The native runtime spends the
+  cycles, fetching each stated address so that its lag accounting and step dump (`$FF38`, `$FF6A`,
+  `$FF7C`) see them, and gives the call to the original when an NMI edge is pending or VBlank would
+  come during them. An empty pass hands off to `$FF38` again, so the idle loop goes to the original
+  for the pass the frame boundary falls in. After `Input_ReadControllers`' RTS to `$FF78` the native
+  runtime chains into `Task_Resume`.
 - A task routine called from another's C is not checked on its own: the caller's comparison covers
   it up to the hand-off. Its calls are counted.
 
@@ -310,6 +320,7 @@ leave the jump vector in `$00/$01` as the original's loop does.
 | `Task_Create` | A = slot | none | reset reads nothing after it |
 | `Task_CurrentSlot`, `Task_SlotOffset` | none; A = slot | X | called from the task primitives' C |
 | `Task_Yield`, `Task_Wait` (task code) | X, Y (kept on the stack); X = frames | none: they hand off to the scheduler `$FF35` | `Task_WaitNext` (`$FFA8`, the resume point) returns A, X, Y and P as its RTS leaves them |
+| `Task_Schedule`, `Task_Pass`, `Task_Resume` (timed task code) | the slots `$80-$8F` and `$90` | A, X, Y and P at each hand-off; S at `$FF` or the task's saved S | a new task starts at its entry (`JMP ($93)`), a waiting one after `Input_ReadControllers` at `$FF78`; a waiting task in a slot other than 0 goes to the original |
 | `Nmi_Handler` (interrupt routine) | the interrupted A, X, Y and P | A, X, Y and P after the RTI; hardware | see Interrupt routines |
 | `Nmi_Return` (interrupt routine) | none | A, X, Y and P after the RTI | see Interrupt routines |
 
@@ -481,6 +492,9 @@ RAM-identical in replace mode.
 | `Task_Wait` (task code) | `$FFA5` | checked | 8 | - | not measured |
 | `Task_WaitNext` (resume point after `task_yield`) | `$FFA8` | checked | 8 | - | not measured |
 | `Task_Yield` (task code) | `$FFAC` | checked | 12 | - | not measured |
+| `Task_Schedule` (timed task code) | `$FF35` | checked | 13 | - | not measured |
+| `Task_Pass` (timed task code) | `$FF38` | checked | 13 | - | not measured |
+| `Task_Resume` (timed resume point after `Input_ReadControllers`) | `$FF78` | checked | 13 | - | not measured |
 | `Nmi_Handler` (interrupt routine) | `$C000` | checked | 13 | - | not measured |
 | `Nmi_Return` (interrupt routine) | `$C132` | checked | 13 | - | not measured |
 | `Oam_Build` | bank 5 `$8000` | checked | 12 | - | not measured |
@@ -531,8 +545,8 @@ objects (`$B380-$B50C`, with tables). The credits yield to the original raster s
 `$E229-$E23B`: it watches the sprite-0 flag on `$2002`, writes `$2000` at the split and
 resumes the C via the internal hook at `$E23C`. The Select refill `$E2FE` is in `player.c`;
 the scene palette tables `$E127-$E132` and `$E143-$E1AE` are read by `Palette_LoadScene` (system.c).
-The flow has 16 sites: 14 entries that original code reaches and 2 stop sites (the scheduler
-`$FF35` and the reset's PPU wait `$FEEE`). The reset `$FEE0-$FF34` is task code: `Reset` turns
+The flow has 15 sites: 14 entries that original code reaches and 1 stop site (the reset's PPU
+wait `$FEEE`). The reset `$FEE0-$FF34` is task code: `Reset` turns
 rendering off and hands the four-vblank wait `$FEEE-$FEFA` to the original, whose fall-through reaches
 the internal site `$FEFB` (`Reset_Ready`: RAM, sprites, nametables, the main task, the scheduler). A
 warm reset at the frame boundary takes an NMI before the first store to `$2000`, so replace gives

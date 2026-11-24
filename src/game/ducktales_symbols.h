@@ -75,6 +75,7 @@
 #define DT_ADDR_SCHEDULER_PASS  0x0090 /* set to $FF by the NMI, cleared at the start of a scheduler pass (verified) */
 #define DT_ADDR_SPLIT_SCROLL_Y  0x00F0 /* playfield scroll Y written after the split (verified, code) */
 #define DT_TASK_WAITING         1      /* task slot state: waiting for its frames */
+#define DT_TASK_RUNNING         2      /* task slot state: the scheduler started or resumed it */
 #define DT_TASK_READY           4      /* task slot state: its wait is over */
 #define DT_TASK_NEW             8      /* task slot state: created, not started */
 #define DT_ADDR_TASK_ENTRY      0x0093 /* task entry pointer; task_yield's wait in $93 (verified) */
@@ -425,6 +426,10 @@
 #define DT_CODE_TASK_WAIT      0xFFA5 /* wait X frames */
 #define DT_CODE_RTS            0xFFAB /* task_wait's RTS: the entry of task code's isolated runs */
 #define DT_CODE_SCHEDULER      0xFF35 /* runs the next runnable task slot */
+#define DT_CODE_SCHEDULER_PASS 0xFF38 /* one pass over the task slots */
+#define DT_CODE_SCHEDULER_JUMP 0xFF6A /* JMP ($93): a new task starts */
+#define DT_SCHEDULER_PULL      0xFF78 /* a waiting task's Y and X off its stack, then its RTS */
+#define DT_CODE_SCHEDULER_RTS  0xFF7C /* the RTS into a waiting task */
 #define DT_CODE_TASK_CREATE    0xFF7D /* A = slot: state 8, entry from $93/$94 */
 #define DT_CODE_TASK_CURRENT   0xFF9F /* X = the running task's slot offset */
 #define DT_CODE_TASK_SLOT      0xFFA1 /* X = A * 4, slot A's offset */

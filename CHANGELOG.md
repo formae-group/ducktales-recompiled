@@ -7,6 +7,10 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- Decompiled the scheduler `$FF35-$FF7C` as timed task code (`Task_Schedule`, `Task_Pass`,
+  `Task_Resume`): its C states the original's cycles (`Decomp_Cycles`, `Decomp_Fetch`), which check
+  compares and the native runtime spends, giving the call to the original when an NMI is pending or
+  VBlank would come during them. The native step dumps and lag logs are unchanged on all 13 routes.
 - 20 decompilation poke cases cover launched blocks, pouncers, the snapper grab, pickup respawn,
   the final stand-in spawn, and smaller object, collision, row-boundary and controller branches no
   existing route or poke case reached.

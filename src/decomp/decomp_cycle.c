@@ -687,7 +687,8 @@ static int task_isolated_site(uint16_t addr)
 {
     CycModRegs r;
     cyc_mod_regs(&r);
-    if (!s_run.stop_armed || s_run.stopped || addr != s_run.stop_pc || r.s != s_run.stop_s) {
+    if (!s_run.stop_armed || s_run.stopped || addr != s_run.stop_pc || r.s != s_run.stop_s ||
+        hw_isolated_cycles == s_run.entry_cycles) {
         return 0;
     }
     if (addr < 0xC000 && hw_prg_bank4(addr) >> 2 != s_run.stop_bank) {
@@ -702,6 +703,16 @@ static int task_isolated_site(uint16_t addr)
     return 1;
 }
 
+/* The last isolated run of a timed routine, reused by the next call with the
+ * same registers, bank and RAM (the scheduler's idle passes repeat it). */
+static struct {
+    const DecompRoutine *rt;
+    CycModRegs in;
+    unsigned bank;
+    uint8_t ram[GAME_RAM_SIZE], orig[GAME_RAM_SIZE];
+    TaskRun run;
+} s_timed;
+
 /* The original task routine alone, from its start to its RTS or, when the C
  * handed off, to its arrival at the same routine at the same depth; its RAM
  * into s_orig, the rest into s_run. The call enters at an RTS: the observer
@@ -710,6 +721,21 @@ static int task_isolated_site(uint16_t addr)
  * caller (as the reset vector does) moves the sentinel above the new stack. */
 static void run_task_original(const DecompRoutine *rt, const CycModRegs *in)
 {
+    const uint8_t *ram = cyc_cpu_ram();
+    unsigned bank = hw_prg_bank4(0x8000);
+    if (dc_ntime && s_timed.rt == rt && s_timed.in.a == in->a && s_timed.in.x == in->x && s_timed.in.y == in->y &&
+        s_timed.in.s == in->s && s_timed.in.p == in->p && s_timed.bank == bank &&
+        !memcmp(s_timed.ram, ram, GAME_RAM_SIZE)) {
+        s_run = s_timed.run;
+        memcpy(s_orig, s_timed.orig, GAME_RAM_SIZE);
+        return;
+    }
+    if (dc_ntime) {
+        s_timed.rt = rt;
+        s_timed.in = *in;
+        s_timed.bank = bank;
+        memcpy(s_timed.ram, ram, GAME_RAM_SIZE);
+    }
     CycModStats before, after;
     if (!cyc_mod_isolate_begin()) {
         dc_fail("cannot open an isolated scope", rt->addr);
@@ -744,6 +770,10 @@ static void run_task_original(const DecompRoutine *rt, const CycModRegs *in)
     }
     memcpy(s_orig, cyc_cpu_ram(), GAME_RAM_SIZE);
     cyc_mod_isolate_end();
+    if (dc_ntime) {
+        s_timed.run = s_run;
+        memcpy(s_timed.orig, s_orig, GAME_RAM_SIZE);
+    }
 }
 
 /* Bytes both runs must agree on: page 1 only above the C's final S, and never
@@ -766,7 +796,8 @@ static bool task_live(uint16_t a)
 
 static bool task_same(const DecompRoutine *rt, const Regs *c)
 {
-    if (!s_run.returned || dc_handoff_set != s_run.stopped || s_run.io != (uint64_t)dc_stores) {
+    if (!s_run.returned || dc_handoff_set != s_run.stopped || s_run.io != (uint64_t)dc_stores ||
+        (dc_ntime && dc_cycles != s_run.cycles)) {
         return false;
     }
     for (uint16_t a = 0; a < GAME_RAM_SIZE; a++) {
@@ -812,6 +843,10 @@ static void task_report(const DecompRoutine *rt, const CycModRegs *in, const Reg
                                  : "did not return");
     }
     fprintf(stderr, "[decomp]   device writes original %llu decompiled %d\n", (unsigned long long)s_run.io, dc_stores);
+    if (dc_ntime) {
+        fprintf(stderr, "[decomp]   cycles original %llu decompiled %llu\n", (unsigned long long)s_run.cycles,
+                (unsigned long long)dc_cycles);
+    }
     int shown = 0;
     for (uint16_t a = 0; a < GAME_RAM_SIZE; a++) {
         if (!task_live(a) || s_orig[a] == dc_image[a]) {
@@ -868,6 +903,9 @@ static bool task_replace(int i, const CycModRegs *in)
     run_task_original(rt, in);
     if (!s_run.returned || dc_handoff_set != s_run.stopped) {
         dc_fail("the original task routine did not end where the C does in an isolated call", rt->addr);
+    }
+    if (dc_ntime && dc_cycles != s_run.cycles) {
+        dc_fail("the cycles the C states are not the original's", rt->addr);
     }
     bool rti = rt->interrupt && !dc_handoff_set;
     uint64_t debt = rti ? s_nmi_debt : 0;
@@ -1460,8 +1498,9 @@ int dc_on_entry(uint16_t addr)
         if (dc_routine[i]->task) {
             if (dc_mode == DECOMP_CHECK) {
                 task_check(i, &in);
-            } else {
-                task_replace(i, &in);
+            }
+            while (dc_mode == DECOMP_REPLACE && task_replace(i, &in) && dc_handoff_set && dc_handoff == addr) {
+                cyc_mod_regs(&in);
             }
             return 0;
         }

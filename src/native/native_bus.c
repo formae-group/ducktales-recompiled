@@ -86,6 +86,8 @@ static uint64_t fallback_instructions, unmodeled_reads;
 #define SCHEDULER_RESUME 0xFF7Cu
 #define NMI_RTI          0xC138u
 
+#define VBLANK_MARGIN_CYCLES 4
+
 static NativeLagMode lag_mode;
 static NativeLagFrame lag_cur, lag_last;
 static bool task_running, deferring, defer_released;
@@ -225,6 +227,11 @@ void native_vblank_taken(bool nmi_enabled, bool picture_on)
     }
     deferring = defer_released = false;
     defer_polls = 0;
+}
+
+bool native_vblank_within(uint64_t n)
+{
+    return video_vblank_due(3 * (cycles + n + VBLANK_MARGIN_CYCLES));
 }
 
 void native_nmi_return(void)

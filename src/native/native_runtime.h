@@ -125,6 +125,7 @@ void native_hooks_fire(uint16_t pc);
 void video_power_on(void);
 void video_advance(uint64_t dots);
 bool video_nmi_level(void);
+bool video_vblank_due(uint64_t dot);
 uint8_t video_read(uint16_t addr, uint64_t cycle);
 void video_write(uint16_t addr, uint8_t value, uint64_t cycle);
 void video_oam_dma(uint8_t page, const uint8_t data[256], uint64_t cycle);
@@ -143,6 +144,10 @@ void native_vblank_taken(bool nmi_enabled, bool picture_on);
 /* The NMI handler ended in the RTI of decompiled code (the fetch of the
  * original's RTI at $C138 tells it otherwise). */
 void native_nmi_return(void);
+/* Whether VBlank (the NMI, the frame's end) comes within the next cycles CPU
+ * cycles: decomp_native.c spends the scheduler's cycles only when it does
+ * not. */
+bool native_vblank_within(uint64_t cycles);
 
 #ifdef __cplusplus
 }
