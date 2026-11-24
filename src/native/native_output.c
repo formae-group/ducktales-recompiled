@@ -15,16 +15,17 @@
  *             most 0.5%, 2% when under half a device buffer is left, so the
  *             queue follows the frame clock and the device's clock without a
  *             gap, a jump or an audible change of pitch
- *   holds     while held nothing is queued
+ *   holds     while held nothing is queued; after a hold has faded out (or
+ *             a flush) the queue is dropped, and so are the limiter's
+ *             look-ahead samples from before it, so the sound picks up from
+ *             the frames after the hold with no seam between old and new
  *
  * Consumer (the device):
  *   fades     playing starts with a 5 ms fade-in once two device buffers and
- *             a frame are queued, from the newest of them (after a hold the
- *             older ones are the sound from before it, and the frames that
+ *             a frame are queued, from the newest of them (the frames that
  *             catch up after a stall would only add delay); a hold or a
- *             flush fades out over 5 ms of
- *             what is queued, then plays silence (a flush then drops the
- *             queue)
+ *             flush fades out over 5 ms of what is queued, then plays
+ *             silence
  *   underrun  if the queue runs dry while playing, the last sample decays
  *             to silence (3 ms time constant) instead of stepping to 0, and
  *             the sound comes back with the fade-in
@@ -49,6 +50,7 @@ static struct {
     unsigned hold;
     bool flushing, playing;
     double c, tail, last;
+    int skip;
     Slot ring[RING];
     size_t head, count;
 
@@ -95,6 +97,7 @@ void native_output_flush(void)
         return;
     }
     s.count = 0;
+    s.skip = LOOK;
     s.st.flushes++;
 }
 
@@ -173,10 +176,20 @@ void native_output_push(const double *mix, const double *game, size_t n)
     if (!n || s.hold) {
         return;
     }
+    size_t k = 0;
     for (size_t i = 0; i < n; i++) {
         double d = s.volume - s.gain;
         s.gain += d > s.ramp ? s.ramp : d < -s.ramp ? -s.ramp : d;
-        frame[i] = limit(mix[i] * s.gain, game ? game[i] : mix[i]);
+        Slot y = limit(mix[i] * s.gain, game ? game[i] : mix[i]);
+        if (s.skip > 0) {
+            s.skip--;
+            continue;
+        }
+        frame[k++] = y;
+    }
+    n = k;
+    if (n < 2) {
+        return;
     }
     s.average = s.playing ? s.average + (s.count - s.average) / 32.0 : (double)s.count;
     double off = s.average - (double)(2 * (size_t)s.device + (size_t)(s.rate / 60)), dead = n / 2.0;
@@ -225,11 +238,11 @@ void native_output_pull(int16_t *out, int16_t *game, size_t n)
             s.tail = s.last;
             if (want) {
                 s.st.underruns++;
-            }
-            if (s.flushing) {
+            } else {
                 s.count = 0;
+                s.skip = LOOK;
+                s.st.flushes += s.flushing;
                 s.flushing = false;
-                s.st.flushes++;
             }
         }
         s.tail *= s.decay;
