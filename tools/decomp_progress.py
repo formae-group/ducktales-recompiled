@@ -16,7 +16,7 @@ Routine extents. A DecompRoutine has an entry and no end, so the end is derived 
 
 - Entries: the DecompRoutines (their bank from .bank, bank 7 at $C000 and above), the original
   routines the C calls or hands off to (the constant address argument of Decomp_Call,
-  Decomp_CallP, Decomp_Handoff and flow.c's Call, Jsr and Jump), the vectors, every target of an
+  Decomp_CallP, Decomp_Handoff and the game flow's Call, Jsr and Jump), the vectors, every target of an
   executed JSR and every executed instruction no executed instruction flows into (dispatch targets).
   A JSR from the fixed bank into the switchable window names an address of every bank that executes
   it; when several do, a bank where an executed instruction falls through into that address (the
@@ -91,12 +91,25 @@ def source(rev, path):
 
 
 def decomp_sources(rev):
+    """{module: text}: each .c file of src/decomp/, and each subfolder's .h and .c files as one module named
+    after the folder (src/decomp/flow/ is flow)."""
     if not rev:
-        return {p.stem: p.read_text(encoding='utf-8') for p in sorted((ROOT / 'src' / 'decomp').glob('*.c'))}
-    names = subprocess.run(
-        ['git', 'ls-tree', '--name-only', rev, 'src/decomp/'], cwd=ROOT, capture_output=True, text=True, check=True
-    ).stdout.split()
-    return {Path(n).stem: source(rev, n) for n in names if n.endswith('.c')}
+        names = sorted(p.relative_to(ROOT).as_posix() for p in (ROOT / 'src' / 'decomp').rglob('*.[ch]'))
+    else:
+        names = subprocess.run(
+            ['git', 'ls-tree', '-r', '--name-only', rev, 'src/decomp/'],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()
+    sources = {}
+    for n in sorted(names):
+        parts = Path(n).relative_to('src/decomp').parts
+        if (len(parts) == 1 and n.endswith('.c')) or (len(parts) == 2 and n.endswith(('.c', '.h'))):
+            key = Path(n).stem if len(parts) == 1 else parts[0]
+            sources[key] = sources.get(key, '') + source(rev, n) + '\n'
+    return sources
 
 
 class Code:

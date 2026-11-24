@@ -1,4 +1,4 @@
-"""Writes the game-flow block of config/game.toml from src/decomp/flow.c.
+"""Writes the game-flow block of config/game.toml from src/decomp/flow/flow_table.c.
 
 The block holds a site for each flow routine that original code reaches
 (SITE("XXXX") in the table). Resume points have no site: the RTS observer
@@ -19,7 +19,7 @@ from romfile import default_rom  # noqa: E402
 
 ROM = Path(default_rom())
 TOML = ROOT / "config" / "game.toml"
-HEAD = "# Game flow (src/decomp/flow.c"
+HEAD = "# Game flow (src/decomp/flow/"
 TAIL = "# END game flow"
 INTERNAL = {"FEEE", "FEF3"}  # these sites also fire inside a routine
 
@@ -36,7 +36,7 @@ def main():
     syms = {}
     for m in re.finditer(r"#define\s+(DT_\w+)\s+(0x[0-9A-Fa-f]+)", (ROOT / "src/game/ducktales_symbols.h").read_text()):
         syms[m.group(1)] = int(m.group(2), 16)
-    src = (ROOT / "src/decomp/flow.c").read_text()
+    src = (ROOT / "src/decomp/flow/flow_table.c").read_text()
     out = [
         "",
         HEAD + ', docs/DECOMPILATION.md "Task code"): the',

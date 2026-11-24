@@ -491,7 +491,7 @@ id = "ducktales.decomp.F83F"
 addr = 0xF83F
 length = 8
 crc32 = 0xFAC618EC
-# Game flow (src/decomp/flow.c, docs/DECOMPILATION.md "Task code"): the
+# Game flow (src/decomp/flow/, docs/DECOMPILATION.md "Task code"): the
 # entries of the main task's decompiled code that original code reaches (its
 # resume points have no site: the RTS observer starts them).
 

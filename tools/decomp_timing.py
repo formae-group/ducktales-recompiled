@@ -1,6 +1,6 @@
 """Timing marks for a decompiled routine (docs/DECOMPILATION.md "Timing").
 
-For a routine of the tables in src/decomp/*.c, walks its original code in the ROM from its entry
+For a routine of the tables in src/decomp/ (its .c files and those of its subfolders), walks its original code in the ROM from its entry
 (fall-through, both ways of each branch, JMP; not into the routines it calls) and lists every
 instruction with its cycles and what the routine's C must say about it to be timed:
 
@@ -16,7 +16,7 @@ Reads the user's ROM locally; output is for investigation and is not committed.
 
     py -3 -I tools/decomp_timing.py Task_Pass
     py -3 -I tools/decomp_timing.py '$FF38' [--bank 0]
-    py -3 -I tools/decomp_timing.py --summary [--file system.c]
+    py -3 -I tools/decomp_timing.py --summary [--file system.c | flow | flow/flow_title.c]
 """
 
 import argparse
@@ -86,7 +86,7 @@ MACRO = re.compile(r'^#define\s+([A-Z_]+)\(([^)]*)\)\s*\{(.*)\}\s*$', re.M)
 
 
 def table_entries(text):
-    """The field lists of a file's table entries, written out or through its entry macros (flow.c's TASK, ...)."""
+    """The field lists of a file's table entries, written out or through its entry macros (flow_table.c's TASK, ...)."""
     for m in ENTRY.finditer(text):
         yield split_fields(m.group(1))
     for mac in MACRO.finditer(text):
@@ -100,7 +100,7 @@ def table_entries(text):
 def routines():
     """name -> dict(addr, bank, func, file, timed) from every table entry."""
     syms, found = symbols(), {}
-    for path in sorted((ROOT / 'src' / 'decomp').glob('*.c')):
+    for path in sorted((ROOT / 'src' / 'decomp').rglob('*.c')):
         for fields in table_entries(path.read_text(encoding='utf-8')):
             entry = {}
             if len(fields) < 4 or not fields[2].startswith('"'):
@@ -120,7 +120,7 @@ def routines():
                 'addr': addr,
                 'bank': int(bank, 0) if re.fullmatch(r'\d+|0x[0-9A-Fa-f]+', bank) else 0,
                 'func': entry.get('run', ''),
-                'file': path.name,
+                'file': defining_file(path, entry.get('run', '')),
                 'timed': entry.get('timed', 'false') == 'true',
             }
     return found
@@ -139,10 +139,27 @@ def function(text, func):
     return text[m.start() : i], text.count('\n', 0, m.start()) + 1
 
 
+def module_files(path):
+    """The file and, in a subfolder of src/decomp/ (a module split into files), the folder's other .c and .h files."""
+    if path.parent == ROOT / 'src' / 'decomp':
+        return [path]
+    return [path] + [p for p in sorted(path.parent.glob('*.[ch]')) if p != path]
+
+
+def defining_file(path, func):
+    """Where func is defined, relative to src/decomp/: the table's file or another file of its module."""
+    for p in module_files(path):
+        if function(p.read_text(encoding='utf-8'), func)[0]:
+            path = p
+            break
+    return path.relative_to(ROOT / 'src' / 'decomp').as_posix()
+
+
 def body(file, func):
-    """The C of func with the functions of the same file it calls, two calls deep (an adapter's helper)."""
-    text = (ROOT / 'src' / 'decomp' / file).read_text(encoding='utf-8')
-    src, line = function(text, func)
+    """The C of func with the functions of the same module it calls, two calls deep (an adapter's helper)."""
+    texts = [p.read_text(encoding='utf-8') for p in module_files(ROOT / 'src' / 'decomp' / file)]
+    text = '\n'.join(texts)
+    src, line = function(texts[0], func)
     seen, todo = {func}, [src]
     for _ in range(2):
         found = []
@@ -249,9 +266,9 @@ def report(rom, name, info, table, by_addr):
 
 def summary(rom, table, only):
     entries = {r['addr'] for r in table.values()}
-    print('%-28s%-8s%-14s%-7s%9s%9s' % ('routine', 'addr', 'file', 'timed', 'branches', 'missing'))
+    print('%-28s%-8s%-24s%-7s%9s%9s' % ('routine', 'addr', 'file', 'timed', 'branches', 'missing'))
     for name, r in sorted(table.items(), key=lambda kv: (kv[1]['file'], kv[1]['addr'])):
-        if only and r['file'] != only:
+        if only and only not in (r['file'], Path(r['file']).name, Path(r['file']).parts[0]):
             continue
         code = walk(rom, r['bank'], r['addr'], entries)
         src, _ = body(r['file'], r['func'])
@@ -259,7 +276,7 @@ def summary(rom, table, only):
         branches = [pc for pc, c in code.items() if c[0] in BRANCHES]
         missing = len([pc for pc in branches if pc not in marked])
         timed = 'yes' if r['timed'] else 'no'
-        print('%-28s$%04X   %-14s%-7s%9d%9d' % (name, r['addr'], r['file'], timed, len(branches), missing))
+        print('%-28s$%04X   %-24s%-7s%9d%9d' % (name, r['addr'], r['file'], timed, len(branches), missing))
 
 
 def main():
@@ -268,7 +285,7 @@ def main():
     ap.add_argument('--bank', type=int, help='the bank at $8000 for an address below $C000')
     ap.add_argument('--rom', default=default_rom())
     ap.add_argument('--summary', action='store_true', help='every routine: timed, branches and missing DC_BR')
-    ap.add_argument('--file', help='with --summary: only the routines of this file (system.c, flow.c, ...)')
+    ap.add_argument('--file', help='with --summary: only the routines of this file or folder (system.c, flow, ...)')
     args = ap.parse_args()
     rom, table = Rom(args.rom), routines()
     by_addr = {}
