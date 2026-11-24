@@ -644,6 +644,34 @@
 #define DT_CODE_KIND_FLYER           0x916C /* kind $0D */
 #define DT_CODE_KIND_SWING           0x9225 /* kind $0E */
 #define DT_CODE_KIND_SWOOPER         0x9430 /* kind $11 */
+#define DT_CODE_KIND_THIEF           0xAC3D /* kind $30 */
+#define DT_CODE_KIND_TREAT           0xA2BA /* kind $2D */
+#define DT_CODE_KIND_TREAT_SPOUT     0xA1E9 /* kind $2C */
+#define DT_CODE_KIND_ROLLER          0x9FEC /* kind $23 */
+#define DT_CODE_KIND_BOULDER         0xA024 /* kind $24 */
+#define DT_CODE_KIND_BOUNCER         0x9A81 /* kind $1B */
+#define DT_CODE_KIND_PIT_JUMPER      0x9956 /* kind $1A */
+#define DT_CODE_PIT_SPLASH_OUT       0x9A1E /* kind $1A: splash out of the pit */
+#define DT_CODE_PIT_SPLASH_IN        0x9A2A /* kind $1A: splash back into the pit */
+#define DT_CODE_KIND_PICKPOCKET      0xACBE /* kind $32 */
+#define DT_CODE_PICKPOCKET_WALK      0xAD56 /* kind $32: walk in the slot's direction */
+#define DT_CODE_PICKPOCKET_STEAL     0xAD6B /* kind $32: take 1 from the money's third digit */
+#define DT_CODE_KIND_POUNCER         0x973C /* kind $19 */
+#define DT_CODE_KIND_LEDGE_WALKER    0x9D8A /* kind $1E */
+#define DT_CODE_KIND_PACER           0x9DF7 /* kind $1F */
+#define DT_CODE_KIND_MOVING_PLATFORM 0xFE69 /* kind $39 (fixed bank) */
+#define DT_CODE_KIND_KEY_SPOT        0xFE50 /* kind $41 (fixed bank) */
+#define DT_CODE_KIND_BLOCK_DWELLER   0x9552 /* kind $12 */
+#define DT_CODE_DWELLER_LINK_BLOCK   0x9649 /* kind $12: find or make its block */
+#define DT_CODE_KIND_CEILING_HOPPER  0xA065 /* kind $25 */
+#define DT_CODE_CEILING_HOPPER_WALK  0xA1D4 /* kind $25: walk in the slot's direction */
+#define DT_CODE_KIND_DROPPING        0xAAC8 /* kind $2B */
+#define DT_CODE_KIND_RISING_SHOT     0xA5BE /* kind $27 */
+#define DT_CODE_KIND_LEAPER          0x9B10 /* kind $1C */
+#define DT_CODE_LEAPER_DUST          0x9C0A /* kind $1C: a puff of dust below the slot */
+#define DT_CODE_KIND_BOBBER          0x9E51 /* kind $20 */
+#define DT_CODE_KIND_CHARGER         0x9313 /* kind $10 */
+#define DT_CODE_KIND_PATROLLER       0x96D5 /* kind $18 */
 #define DT_CODE_OBJ_FIND_FREE_Y      0x80B3 /* highest free slot 15..1 in Y */
 #define DT_CODE_OBJ_HIT_OTHERS       0x80C1 /* the slot a thrown slot hits */
 #define DT_CODE_OBJ_SET_MOTION       0x818A /* vertical velocity and speed by index */
