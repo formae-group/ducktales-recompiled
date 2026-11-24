@@ -87,13 +87,13 @@ extern "C" {
 #define OBJ_KIND_MOVING_PLATFORM   0x39 /* a platform that carries Scrooge (code) */
 #define OBJ_KIND_FINAL_STAND_IN    0x3A /* what the spawner makes of an object in the final arena (code) */
 #define OBJ_KIND_STAND_IN_BEATEN   0x3B /* the beaten stand-in: starts mode 15's arena redraw (code) */
-#define OBJ_KIND_3C                0x3C /* (not studied; the original handler runs) */
-#define OBJ_KIND_3D                0x3D /* (not studied; the original handler runs) */
-#define OBJ_KIND_VISITOR           0x3E /* a character that comes once, holds Scrooge and leaves a kind $3F (code) */
-#define OBJ_KIND_PATH_OPENER       0x3F /* runs right to page 7, then lets Scrooge go and draws block record 6 (code) */
-#define OBJ_KIND_40                0x40 /* (not studied; the original handler runs) */
-#define OBJ_KIND_KEY_SPOT          0x41 /* a spot that needs the land's key item (code) */
-#define OBJ_KIND_42                0x42 /* (not studied; the original handler runs) */
+#define OBJ_KIND_CLIMBER     0x3C /* climbs the final climb; slot 15's arrival ends the race (code; name hypothesis) */
+#define OBJ_KIND_HIT_TALKER  0x3D /* a character a hit wakes: hops left, then shows its message (code) */
+#define OBJ_KIND_VISITOR     0x3E /* a character that comes once, holds Scrooge and leaves a kind $3F (code) */
+#define OBJ_KIND_PATH_OPENER 0x3F /* runs right to page 7, then lets Scrooge go and draws block record 6 (code) */
+#define OBJ_KIND_FINAL_TREASURE 0x40 /* the prize atop the final climb: starts the ending (code; name hypothesis) */
+#define OBJ_KIND_KEY_SPOT       0x41 /* a spot that needs the land's key item (code) */
+#define OBJ_KIND_42             0x42 /* (not studied; the original handler runs) */
 
 /* $0700 bits 0-3: the handler's step (code). */
 #define OBJ_STATE_STEP 0x0F

@@ -100,7 +100,11 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   its drop `$F99C`) of the fixed bank, reached in the Launchpad scenes, and kind `$38` (`$F9F8`,
   `Obj_SkyRope`, which lifts Scrooge out of the land), reached by the `sky-rope` and `sky-rope-dying`
   poke cases, and the final arena's stand-in, kinds `$3A` (`$FA3F`, `Obj_FinalStandIn`) and `$3B`
-  (`$FBC9`, `Obj_StandInBeaten`), reached by the `stand-in` and `stand-in-beaten` poke cases. `tests/decomp_test.py` has a `clear-keep` poke case for the object
+  (`$FBC9`, `Obj_StandInBeaten`), reached by the `stand-in` and `stand-in-beaten` poke cases, and
+  kinds `$3C` (`$FB68`, `Obj_Climber`, the final climb's climbers), `$3D` (`$FBFF`, `Obj_HitTalker`, a
+  character a hit wakes in the Himalayas) and `$40` (`$FD9E`, `Obj_FinalTreasure`, the prize atop the
+  final climb), reached by the `climbers`, `hit-talker`, `final-treasure` and `final-treasure-lost`
+  poke cases. `tests/decomp_test.py` has a `clear-keep` poke case for the object
   clear's Transylvania branch (slots 14 and 15 kept).
 - Decompiled: the boss hit `$F6D7` (`Boss_Hit`, objects.c; it raises the boss-hit event from C), the
   object clear `$F2C7` (`Obj_ClearSlots`, objcommon.c, called as C by flow.c and level.c) and the TOTAL

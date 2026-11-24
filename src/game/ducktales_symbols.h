@@ -715,9 +715,9 @@
 #define DT_CODE_KIND_22                   0x9F3D /* kind $22 */
 #define DT_CODE_KIND_FINAL_STAND_IN       0xFA3F /* kind $3A (fixed bank) */
 #define DT_CODE_KIND_STAND_IN_BEATEN      0xFBC9 /* kind $3B (fixed bank) */
-#define DT_CODE_KIND_3C                   0xFB68 /* kind $3C (fixed bank) */
-#define DT_CODE_KIND_3D                   0xFBFF /* kind $3D (fixed bank) */
-#define DT_CODE_KIND_40                   0xFD9E /* kind $40 (fixed bank) */
+#define DT_CODE_KIND_CLIMBER              0xFB68 /* kind $3C (fixed bank) */
+#define DT_CODE_KIND_HIT_TALKER           0xFBFF /* kind $3D (fixed bank) */
+#define DT_CODE_KIND_FINAL_TREASURE       0xFD9E /* kind $40 (fixed bank) */
 #define DT_CODE_KIND_42                   0x8EE6 /* kind $42 */
 #define DT_CODE_KIND_HOPPER               0x8225 /* kind 1 */
 #define DT_CODE_KIND_WALKER               0x82AF /* kind 2 */
