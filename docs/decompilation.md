@@ -253,8 +253,14 @@ left) gives `Nmi_Handler`'s call to the original.
   `$4000`-`$4017` (not `$4014` or `$4016`) in order: the C's from its bus operations, the original's
   from the trace's cycle observer (`cyc_trace_cycle_hook`; the trace's hash and cycle count are put
   back after). v, OAMADDR and the APU's clocked counters move with time and are not compared.
-- Replace mode on the cycle host gives `Nmi_Handler`'s call to the original until its bus operations
-  are made at the original's cycles; the native runtime runs the C.
+- Replace mode on the cycle host measures the original from a clocked snapshot up to its RTI. This
+  gives it the actual bus schedule, including the sprite-0 poll loop and the sprite DMA stalls.
+  It restores the snapshot, stores the C's RAM and replays the C's device operations at the measured
+  cycles, checking their order, values and timing. The cycles in between drive the original's bus
+  values and addresses without storing any of its RAM results; DMA reads the C's RAM. The handler
+  pays any NMI debt and returns through RTI. A handler that reaches a frame or observer boundary
+  or takes a nested interrupt in the measuring run goes to the original, so the host can stop there.
+  The native runtime runs the C without the timing probe.
 
 ### Calling contract
 
@@ -571,8 +577,8 @@ caller. It loads the objects' gravity (`$EF = $40`), then walks slots 1-15 with 
 and, for every slot whose status `$0700` has bit 7 set, jumps to the handler of its kind (`$0710`)
 through the 67-entry table at `$802C`/`$806F` with the return address `$8022` pushed. The C keeps the
 cursor in RAM because a handler could change it, writes the jump vector into `$00/$01` as the
-original does, and enters an original handler with A = `$22`, X = slot, Y = kind and the loop's
-flags (`Decomp_CallP`): a handler that adds without `CLC` (the Amazon boss's random step at
+original does, and dispatches every kind in C. The original enters a handler with A = `$22`,
+X = slot, Y = kind and the loop's flags: a handler that adds without `CLC` (the Amazon boss's random step at
 `$A664`) sees the carry of the caller for slot 1 and of the loop's `CPX #$10` after it.
 
 Object layout used by the handlers (all slots, `objects.h`): `$0700` bit 7 live, bit 5 world X, bit 4
@@ -736,6 +742,8 @@ call and are RAM-identical in replace mode.
 | `$13` | `$8A59` | `Obj_Pickup` | an item Scrooge takes by touching it |
 | `$14` | `$8C45` | `Obj_HiddenItem` | an item that appears when touched |
 | `$15` | `$8D19` | `Obj_Chest` | a chest the cane opens |
+| `$16` | `$8DD1` | `Obj_ChestOpening` | the opening pose that reveals a chest's contents |
+| `$17` | `$8E23` | `Obj_ChestSlider` | a block that shakes, slides and becomes a regular block |
 | `$18` | `$96D5` | `Obj_Patroller` | enemy: walks a ledge, turns at its edges and at walls |
 | `$19` | `$973C` | `Obj_Pouncer` | enemy: flies in arcs, pounces on Scrooge |
 | `$1A` | `$9956` | `Obj_PitJumper` | enemy: jumps out of a pit with a splash |
@@ -758,14 +766,20 @@ call and are RAM-identical in replace mode.
 | `$35` | `$FDF5` | `Obj_Talker` | a character that shows a message |
 | `$39` | `$FE69` | `Obj_MovingPlatform` | a platform that carries Scrooge |
 | `$41` | `$FE50` | `Obj_KeySpot` | a spot that needs the land's key item |
+| `$42` | `$8EE6` | `Obj_ChestHealth` | a solid block that releases a health pickup when hit again |
+
+The chest variants are reached by opening kind `$15`, not by spawning those kinds directly.
+The `chest-opening`, `chest-slider` and `chest-health` poke cases use Transylvania's row 5
+record `$53` and row 4 records `$34` and `$35`, respectively. The last opens the chest and
+then hits the resulting kind `$42` block a second time.
 
 Written as C inside the routines above but without an entry of their own: the drop of a beaten
 enemy (`$89DA`, entered with the caller's carry, which `Decomp_Enter` cannot pass; it is compared
 through `Obj_Defeat`), the vertical moves `$F270`/`$F284`/`$F298` and the seven item actions at
 `$8B71-$8BE7`.
 
-Not decompiled yet: the other 24 kinds, among them the bosses (their hit routine `$F6D7` raises
-`EVENT_BOSS_HIT`, so a C boss has to raise it itself). The spawner that calls `Obj_SpawnRecord`
+All 67 entries in the object handler table are handled in C. The boss hit routine `$F6D7` emits
+`EVENT_BOSS_HIT`. The spawner that calls `Obj_SpawnRecord`
 (bank 6 `$AE20-$B163`) is in `level.c`. The movers and the climbing steps test the
 background through the C of the probe `$D120` and its snaps (`collision.c`).
 

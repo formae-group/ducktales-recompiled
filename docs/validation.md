@@ -490,6 +490,16 @@ compared, none given to the original, no mismatch); and `ducktales.exe` with Dec
 No slowdown on, at fc462ad, where the owner saw no difference ("pra mim tava perfeito"; that build
 wrote no session summary yet).
 
+**NMI cycle-host replacement (2026-11-24).** `decomp_test.py --changed C000-C182 --from-state
+--span 600 --modes check replace` passed all 13 routes in both modes (7,800 replace frames).
+Check compared `Nmi_Handler` and `Nmi_Return` 7,709 times each, with no calls given to the original.
+Independent `--trace-out` captures matched all device and DMA bus records from NMI entry
+through RTI at title frame 8 and in the sprite-0 split on `full_amazon` frame 343. The split
+trace matched 961 reads of `$2002`; RTI began 9,796 cycles after entry in both runs.
+At decompilation off, `quick_verify.py --runtime cycle --changed C000-C182` matched the golden
+hashes on 13/13 routes (88,826 frames, alignment 0). `native_decomp_test.py` passed on 13/13
+routes; NMI-counted yields were unchanged (one on five routes, two on eight).
+
 ## Release 1.0.0
 
 On main `8569c86` (the release tree before its changelog and documentation commit), 2026-11-23:
