@@ -67,6 +67,7 @@ extern "C" {
 #define OBJ_KIND_DROPPING        0x2B /* something that drops and breaks on the floor (code) */
 #define OBJ_KIND_TREAT_SPOUT     0x2C /* throws out four treats when Scrooge is near (code) */
 #define OBJ_KIND_TREAT           0x2D /* a treat that gives an HP dot back (code) */
+#define OBJ_KIND_AMAZON_BOSS     0x2E /* the Amazon boss (code) */
 #define OBJ_KIND_DOOR            0x2F /* a door: warp request (code) */
 #define OBJ_KIND_THIEF           0x30 /* enemy: paces, takes money on contact (code) */
 #define OBJ_KIND_SHORT_THIEF     0x31 /* kind $30 with a shorter span (code) */

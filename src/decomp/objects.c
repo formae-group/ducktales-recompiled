@@ -81,6 +81,8 @@
 #define gPaletteUpload    RAM_U8(DT_ADDR_PALETTE_REQUEST)
 #define gHeldSlot         RAM_U8(DT_ADDR_HELD_SLOT)
 #define gRowScroll        RAM_U8(DT_ADDR_ROW_SCROLL)
+#define gRowScrollAddr    RAM_U8(DT_ADDR_ROW_SCROLL_ADDR)
+#define gSprPhase         RAM_U8(DT_ADDR_SPR_PHASE)
 #define SpawnTable(i) \
     ((uint16_t)(RAM_U8(DT_ADDR_SPAWN_TABLES + 2 * (i)) | RAM_U8(DT_ADDR_SPAWN_TABLES + 2 * (i) + 1) << 8))
 #define gProbeCount      RAM_U8(DT_ADDR_PROBE_COUNT)
@@ -344,7 +346,7 @@ static uint8_t Obj_ThrownWalk(uint8_t x)
 }
 
 /* Kind 9 ($8722): a launched block, by step ($0700 bits 0-3) through the
- * table at $88FC/$8905. It rises then falls (vdir), moves, and breaks
+ * table at $88FC/$8905 (steps 0-8; the words past it point into RAM). It rises then falls (vdir), moves, and breaks
  * against a wall or the floor or on the first object it hits; some steps
  * become a pickup or a block again. */
 static void Obj_Thrown(uint8_t x)
@@ -451,9 +453,6 @@ static void Obj_Thrown(uint8_t x)
             if (gProbeHits & 1) {
                 gObjects->kind[x] = OBJ_KIND_BLOCK;
             }
-            return;
-        default:
-            Decomp_Call(at, gScratch(1), x, step);
             return;
     }
 }
@@ -611,9 +610,6 @@ static void Pickup_Take(uint8_t x)
             gKeyItems |= gLand == 4 ? 4 : 2;
             gSceneStep = gLand == 4 ? 0x10 : 0x0E;
             gPlayerMode = PLAYER_MODE_MESSAGE;
-            break;
-        default:
-            Decomp_Call(at, gScratch(1), x, i);
             break;
     }
 }
@@ -3271,6 +3267,89 @@ void Obj_SpawnRecord(uint8_t y)
     }
 }
 
+/* Kind $2E ($A5DB): the Amazon boss. It starts at Y $AC walking right at
+ * $0100, turning at walls. When its wait runs out it jumps (vertical
+ * velocity $06B7) towards Scrooge, rises with probe $64 and falls with probe
+ * $63. Landing (sound $1E) shakes the screen for 30 frames (row scroll $E9
+ * on bit 2 of $95, split $C0 or $E0) and holds pogo bounces ($A7); then it
+ * waits 60, 120 or 180 frames, picked by a random step that adds the carry
+ * the dispatch left. A counted hit goes to the boss hit $F6D7; the last one
+ * stops the shake and beats it. */
+static void Obj_AmazonBoss(uint8_t x, bool carry)
+{
+    static const uint8_t waits[8] = { 0x3C, 0x3C, 0x78, 0x78, 0x78, 0xB4, 0xB4, 0xB4 };
+    static const uint8_t splits[2] = { 0xC0, 0xE0 };
+
+    Decomp_Enter(DT_CODE_KIND_AMAZON_BOSS, 0x22, x, gObjects->kind[x]);
+    if (gObjects->unk_0690[x] != 0) {
+        if (Boss_Hit(&x)) {
+            gRowScroll = 0;
+            gRowScrollAddr = 0xC0;
+            Obj_Defeat(x);
+            return;
+        }
+        carry = false;
+    }
+    if (Step(x) == 0) {
+        gObjects->unk_06C0[x] = 0;
+        gObjects->y[x] = 0xAC;
+        gObjects->timer[x] = 0x1E;
+        Obj_SetSpeed(x, 0x0100);
+        gObjects->dir[x] = OBJ_DIR_RIGHT;
+        RAM_U8(DT_ADDR_BOSS_05AF) = 0x44;
+        gObjects->state[x]++;
+    }
+    if (gObjects->timer[x] == 0) {
+        if (!(gObjects->state[x] & 2)) {
+            x = Obj_Rise(x, 0x64, 0);
+            if (gObjects->vy[x] & 0x80) {
+                gObjects->state[x]++;
+                Obj_SetVelocityY(x, 0);
+            }
+        } else {
+            bool shaking = gObjects->unk_06C0[x] != 0;
+            if (!shaking) {
+                x = Obj_Fall(x, 0x63, 0);
+                if (gProbeHits & 1) {
+                    Sound_Request(SFX_BOSS_LAND, x);
+                    gPogoCeiling++;
+                    gObjects->unk_06C0[x] = 0x1E;
+                    shaking = true;
+                }
+            }
+            if (shaking) {
+                if (--gObjects->unk_06C0[x] != 0) {
+                    gRowScroll = (uint8_t)((gSprPhase >> 2) & 1);
+                    gRowScrollAddr = splits[gRowScroll];
+                    return;
+                }
+                gObjects->state[x]--;
+                gRandom(0) = (uint8_t)(gRandom(0) + gRandom(3) + carry);
+                gObjects->timer[x] = waits[gRandom(0) & 7];
+                gRowScrollAddr = 0xC0;
+                gRowScroll = 0;
+                gPogoCeiling = 0;
+                return;
+            }
+        }
+    }
+    if (gObjects->dir[x] & OBJ_DIR_RIGHT) {
+        x = Obj_WalkRight(x, 0x61, 0);
+    } else {
+        x = Obj_WalkLeft(x, 0x62, 0);
+    }
+    if (gObjects->timer[x] == 0) {
+        return;
+    }
+    if (--gObjects->timer[x] == 0) {
+        Obj_SetVelocityY(x, 0x06B7);
+        Obj_FaceScrooge(x);
+    }
+    if (gProbeHits & 1) {
+        gObjects->dir[x] ^= 3;
+    }
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -3405,6 +3484,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_TREAT:
             Obj_Treat(slot);
+            break;
+        case OBJ_KIND_AMAZON_BOSS:
+            Obj_AmazonBoss(slot, r->p & P_C);
             break;
         case OBJ_KIND_DOOR:
             Obj_Door(slot);
@@ -3711,6 +3793,11 @@ static void Run_SpawnRecord(Regs *r)
     Obj_SpawnRecord(r->y);
 }
 
+static void Run_AmazonBoss(Regs *r)
+{
+    Obj_AmazonBoss(r->x, r->p & P_C);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -3880,6 +3967,7 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_AMAZON_BOSS, NULL, "Obj_AmazonBoss", Run_AmazonBoss, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_SPAWN_RECORD, "ducktales.decomp.6.AF2B", "Obj_SpawnRecord", Run_SpawnRecord, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LAUNCHER, NULL, "Obj_Launcher", Run_Launcher, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_TARGET, NULL, "Obj_Target", Run_Target, 0, .bank = DT_BANK_OBJECTS },

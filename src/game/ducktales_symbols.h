@@ -696,6 +696,7 @@
 #define DT_CODE_KIND_FLYER           0x916C /* kind $0D */
 #define DT_CODE_KIND_SWING           0x9225 /* kind $0E */
 #define DT_CODE_KIND_SWOOPER         0x9430 /* kind $11 */
+#define DT_CODE_KIND_AMAZON_BOSS     0xA5DB /* kind $2E */
 #define DT_CODE_KIND_LAUNCHER        0xADC1 /* kind $34 */
 #define DT_CODE_KIND_TARGET          0xADB9 /* kind $33 */
 #define DT_CODE_KIND_MOON_BOSS       0xAAE1 /* kind $29 */
