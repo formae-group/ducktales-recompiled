@@ -34,6 +34,7 @@ typedef struct {
     uint16_t addr;
     uint8_t value;
     bool write;
+    uint8_t wait; /* a read repeated until its bits in this mask equal value (Decomp_BusWait) */
 } BusOp;
 
 typedef struct {
@@ -96,6 +97,9 @@ void dc_report_stats(void);
  * frame number its messages give, and what runs before and after a
  * routine's C (dc_run_c). */
 int dc_on_entry(uint16_t addr);
+/* Whether the machine is an isolated copy, where no clock runs: a device wait
+ * is one read there. */
+bool dc_isolated(void);
 uint64_t dc_frame(void);
 void dc_c_begin(void);
 void dc_c_end(void);

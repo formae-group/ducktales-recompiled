@@ -72,6 +72,11 @@
 #define DT_ADDR_FRAME_COUNTER   0x0092 /* incremented by every NMI (verified) */
 #define DT_ADDR_TASKS           0x0080 /* four task slots: state, wait, saved S or entry low, entry high (verified) */
 #define DT_ADDR_TASK_CURRENT    0x0091 /* running task slot (verified) */
+#define DT_ADDR_SCHEDULER_PASS  0x0090 /* set to $FF by the NMI, cleared at the start of a scheduler pass (verified) */
+#define DT_ADDR_SPLIT_SCROLL_Y  0x00F0 /* playfield scroll Y written after the split (verified, code) */
+#define DT_TASK_WAITING         1      /* task slot state: waiting for its frames */
+#define DT_TASK_READY           4      /* task slot state: its wait is over */
+#define DT_TASK_NEW             8      /* task slot state: created, not started */
 #define DT_ADDR_TASK_ENTRY      0x0093 /* task entry pointer; task_yield's wait in $93 (verified) */
 #define DT_ADDR_PAD2_NEW        0x0015 /* controller 2, newly pressed (code, read_controllers) */
 #define DT_ADDR_RANDOM          0x00C0 /* 32-bit shift register stepped by $C2E6 (code) */
@@ -716,9 +721,9 @@
 #define DT_CODE_HOP_WALKER_WALK           0x9FC5 /* kind $22: walk, turning at walls */
 #define DT_CODE_KIND_FINAL_STAND_IN       0xFA3F /* kind $3A (fixed bank) */
 #define DT_CODE_KIND_STAND_IN_BEATEN      0xFBC9 /* kind $3B (fixed bank) */
-#define DT_CODE_KIND_3C                   0xFB68 /* kind $3C (fixed bank) */
-#define DT_CODE_KIND_3D                   0xFBFF /* kind $3D (fixed bank) */
-#define DT_CODE_KIND_40                   0xFD9E /* kind $40 (fixed bank) */
+#define DT_CODE_KIND_CLIMBER              0xFB68 /* kind $3C (fixed bank) */
+#define DT_CODE_KIND_HIT_TALKER           0xFBFF /* kind $3D (fixed bank) */
+#define DT_CODE_KIND_FINAL_TREASURE       0xFD9E /* kind $40 (fixed bank) */
 #define DT_CODE_KIND_42                   0x8EE6 /* kind $42 */
 #define DT_CODE_KIND_HOPPER               0x8225 /* kind 1 */
 #define DT_CODE_KIND_WALKER               0x82AF /* kind 2 */
@@ -851,6 +856,7 @@
  * (docs/decompilation.md "Timing in replace mode"). */
 #define DT_SITE_NMI_EXIT    0xC138
 #define DT_NMI_RETURN       0xC132 /* the handler's exit: PLA TAY PLA TAX PLA PLP RTI */
+#define DT_CODE_NMI         0xC000 /* the NMI handler (the vector at $FFFA) */
 #define DT_SITE_NMI_EXIT_ID "ducktales.decomp.nmi-exit"
 /* Levels: map and screen decoding, column streaming, the VRAM queues, the
  * camera and the background probe (docs/levels.md, docs/rendering.md,

@@ -101,7 +101,12 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - The NMI handler gets its own kind of decompiled routine, **interrupt routines**: task code whose C
   ends in RTI (`src/decomp/nmi.c`, docs/decompilation.md "Interrupt routines"). Its RTI pays the cycles
   a replaced routine owed when the NMI came, and tells the native runtime the handler ended. The
-  handler's exit `$C132` (`Nmi_Return`) is the first; the body still runs as the original.
+  handler's exit `$C132` (`Nmi_Return`) is the first.
+- The whole NMI handler `$C000` is decompiled (`Nmi_Handler`, `src/decomp/nmi.c`), with the sprite-0
+  wait as a new bus operation, `Decomp_BusWait`. Check mode makes the C's bus operations on a clocked
+  copy of the machine and compares at the original's RTI: RAM, registers, the PPU's memories and OAM,
+  the PRG bank, the PPU and APU settings the NMI writes, and the writes to `$2006`/`$2007` and the APU
+  in order. The native runtime runs it; replace mode on the cycle host still gives it to the original.
 - Decompiled: the task primitives (`src/decomp/system.c`): `task_create` `$FF7D` with the slot offsets
   `$FF9F`/`$FFA1`, and `task_yield` `$FFAC` and `task_wait` `$FFA5` (resume point `$FFA8`) as task code. Their
   sites replace the flow's stops there; `task_yield`'s C hands off to the scheduler `$FF35`, which has a
@@ -112,7 +117,11 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   its drop `$F99C`) of the fixed bank, reached in the Launchpad scenes, and kind `$38` (`$F9F8`,
   `Obj_SkyRope`, which lifts Scrooge out of the land), reached by the `sky-rope` and `sky-rope-dying`
   poke cases, and the final arena's stand-in, kinds `$3A` (`$FA3F`, `Obj_FinalStandIn`) and `$3B`
-  (`$FBC9`, `Obj_StandInBeaten`), reached by the `stand-in` and `stand-in-beaten` poke cases. `tests/decomp_test.py` has a `clear-keep` poke case for the object
+  (`$FBC9`, `Obj_StandInBeaten`), reached by the `stand-in` and `stand-in-beaten` poke cases, and
+  kinds `$3C` (`$FB68`, `Obj_Climber`, the final climb's climbers), `$3D` (`$FBFF`, `Obj_HitTalker`, a
+  character a hit wakes in the Himalayas) and `$40` (`$FD9E`, `Obj_FinalTreasure`, the prize atop the
+  final climb), reached by the `climbers`, `hit-talker`, `final-treasure` and `final-treasure-lost`
+  poke cases. `tests/decomp_test.py` has a `clear-keep` poke case for the object
   clear's Transylvania branch (slots 14 and 15 kept).
 - Decompiled: the boss hit `$F6D7` (`Boss_Hit`, objects.c; it raises the boss-hit event from C), the
   object clear `$F2C7` (`Obj_ClearSlots`, objcommon.c, called as C by flow.c and level.c) and the TOTAL

@@ -4179,6 +4179,138 @@ static void Obj_StandInBeaten(uint8_t x)
     RAM_U8(DT_ADDR_SCENE_STEP) = BEATEN_SCENE_STEP;
 }
 
+/* ---- kinds $3C, $3D and $40 (fixed bank) ---- */
+
+#define CLIMBER_SLOT       15 /* the climber whose arrival ends the race */
+#define CLIMBER_SCREEN     2
+#define CLIMBER_TOP_Y      0x90
+#define SCREEN_ROWS_LAST   0xEF /* the last Y of a 240-line screen */
+#define TREASURE_LOST_X    0xB0
+#define TREASURE_LOST_MSG  0x0C
+#define TREASURE_WAIT      0xF0
+#define SFX_TREASURE_TAKEN 0x37
+#define MUSIC_STOP         0xFF
+#define HIT_TALKER_HITBOX  0x80
+#define HIT_TALKER_SHOWN   0x40 /* message 6's bit in $A8 */
+
+/* Kind $3C ($FB68): a climber on the final climb (Transylvania, types $72
+ * and $73). Its height is a screen ($06C0, from 2) and a Y ($06B0) that it
+ * climbs 1 px a frame, wrapping from 0 to $EF of the screen above; it is
+ * drawn only on the map row that screen is. Once the climber of slot 15 is
+ * on screen 0 above Y $90, every climber stops and slot 15 keeps that Y in
+ * its $06D0, which kind $40 reads (a Y of 0 there still stops them). */
+static void Obj_Climber(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_CLIMBER, 0x22, x, gObjects->kind[x]);
+    if ((gObjects->state[x] & 0x0F) == 0) {
+        gObjects->unk_06D0[x] = 0;
+        gObjects->timer[x] = gObjects->y[x];
+        gObjects->unk_06C0[x] = CLIMBER_SCREEN;
+        gObjects->state[x]++;
+    }
+    uint8_t s = CLIMBER_SLOT;
+    if (gObjects->unk_06C0[s] == 0 && gObjects->timer[s] < CLIMBER_TOP_Y) {
+        gObjects->unk_06D0[s] = gObjects->timer[s];
+    } else if (gObjects->timer[x] == 0) {
+        gObjects->timer[x] = SCREEN_ROWS_LAST;
+        gObjects->unk_06C0[x]--;
+    } else {
+        gObjects->timer[x]--;
+    }
+    if (gObjects->unk_06C0[x] != gMapRow) {
+        gObjects->state[x] |= OBJ_STATUS_HIDDEN;
+        return;
+    }
+    gObjects->state[x] &= (uint8_t)~OBJ_STATUS_HIDDEN;
+    gObjects->y[x] = gObjects->timer[x];
+}
+
+/* Kind $3D ($FBFF): a character a hit wakes (Himalayas, type $6D). The hit
+ * sets $A2 and makes it solid (hitbox $80); it falls to the floor, jumps
+ * (vertical velocity $054B) walking left at 1 px a frame and, landing, is
+ * freed and shows its message (mode 15, the message id from its record),
+ * marked shown (message 6) and consumed. */
+static void Obj_HitTalker(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_HIT_TALKER, 0x22, x, gObjects->kind[x]);
+    if ((gObjects->state[x] & 0x0F) == 0) {
+        if (gObjects->unk_0690[x] == 0) {
+            gObjects->animTimer[x] = 0;
+            return;
+        }
+        RAM_U8(DT_ADDR_HIMALAYAS_OPEN)++;
+        gObjects->vyFrac[x] = 0;
+        gObjects->vy[x] = 0;
+        gObjects->unk_06C0[x] = 0;
+        gObjects->hitbox[x] = HIT_TALKER_HITBOX;
+        gObjects->state[x]++;
+    }
+    if (!(gObjects->state[x] & 0x02)) {
+        x = Obj_Fall(x, 0x2D, 1);
+        if (gProbeHits & 1) {
+            gObjects->speed[x] = 1;
+            gObjects->speedFrac[x] = 0;
+            Obj_SetVelocityY(x, 0x054B);
+            gObjects->state[x]++;
+        }
+        gObjects->animTimer[x] = 0;
+        return;
+    }
+    if (gObjects->unk_06C0[x] == 0) {
+        x = Obj_Rise(x, 0x2F, 1);
+        if (gObjects->vy[x] & 0x80) {
+            gObjects->unk_06C0[x]++;
+            Obj_SetVelocityY(x, 0);
+        }
+    } else {
+        x = Obj_Fall(x, 0x2D, 1);
+        if (gProbeHits & 1) {
+            gObjects->kind[x] = OBJ_KIND_NONE;
+            gPlayerMode = PLAYER_MODE_MESSAGE;
+            gMessagesShown(0) |= HIT_TALKER_SHOWN;
+            gSceneStep = gObjects->timer[x];
+            gMessageSlot = x;
+            Obj_MarkConsumed(x);
+        }
+    }
+    x = Obj_WalkLeft(x, 0x2B, 1);
+    gObjects->animTimer[x] = 0;
+}
+
+/* Kind $40 ($FD9E): the prize at the top of the final climb (Transylvania,
+ * type $71). Touched by Scrooge, unless he is dying, it holds him (mode
+ * 14), stops the music, plays sound $37 and, with the HUD time stopped, 240
+ * frames later starts the ending ($AC). Once the climber of slot 15 has
+ * arrived it slides right instead and, at world X $B0, is freed and shows
+ * message $0C (mode 15), unless Scrooge is dying. */
+static void Obj_FinalTreasure(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_FINAL_TREASURE, 0x22, x, gObjects->kind[x]);
+    if ((gObjects->state[x] & 0x0F) == 0) {
+        if (gObjects->unk_06D0[CLIMBER_SLOT] != 0 && ++gObjects->worldX[x] >= TREASURE_LOST_X) {
+            gObjects->state[x] = 0;
+            if (gPlayerMode == PLAYER_MODE_DEATH) {
+                return;
+            }
+            gSceneStep = TREASURE_LOST_MSG;
+            gPlayerMode = PLAYER_MODE_MESSAGE;
+            return;
+        }
+        if (!Obj_TouchScrooge(x) || gPlayerMode == PLAYER_MODE_DEATH) {
+            return;
+        }
+        gObjects->state[x]++;
+        Music_Request(MUSIC_STOP, x);
+        Sound_Request(SFX_TREASURE_TAKEN, x);
+        gObjects->timer[x] = TREASURE_WAIT;
+        gPlayerMode = PLAYER_MODE_14;
+    }
+    gTickFrames = 0;
+    if (--gObjects->timer[x] == 0) {
+        RAM_U8(DT_ADDR_ENDING)++;
+    }
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -4358,6 +4490,15 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
         case OBJ_KIND_STAND_IN_BEATEN:
             Obj_StandInBeaten(slot);
             break;
+        case OBJ_KIND_CLIMBER:
+            Obj_Climber(slot);
+            break;
+        case OBJ_KIND_HIT_TALKER:
+            Obj_HitTalker(slot);
+            break;
+        case OBJ_KIND_FINAL_TREASURE:
+            Obj_FinalTreasure(slot);
+            break;
         case OBJ_KIND_MOVING_PLATFORM:
             Obj_MovingPlatform(slot);
             break;
@@ -4381,15 +4522,6 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             break;
         case OBJ_KIND_HOP_WALKER:
             Obj_HopWalker(slot);
-            break;
-        case OBJ_KIND_3C:
-            *r = Decomp_CallP(DT_CODE_KIND_3C, r->a, slot, r->y, r->p);
-            break;
-        case OBJ_KIND_3D:
-            *r = Decomp_CallP(DT_CODE_KIND_3D, r->a, slot, r->y, r->p);
-            break;
-        case OBJ_KIND_40:
-            *r = Decomp_CallP(DT_CODE_KIND_40, r->a, slot, r->y, r->p);
             break;
         case OBJ_KIND_42:
             *r = Decomp_CallP(DT_CODE_KIND_42, r->a, slot, r->y, r->p);
@@ -4579,6 +4711,21 @@ static void Run_FinalStandIn(Regs *r)
 static void Run_StandInBeaten(Regs *r)
 {
     Obj_StandInBeaten(r->x);
+}
+
+static void Run_Climber(Regs *r)
+{
+    Obj_Climber(r->x);
+}
+
+static void Run_HitTalker(Regs *r)
+{
+    Obj_HitTalker(r->x);
+}
+
+static void Run_FinalTreasure(Regs *r)
+{
+    Obj_FinalTreasure(r->x);
 }
 
 static void Run_KeySpot(Regs *r)
@@ -4952,6 +5099,9 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SKY_ROPE, NULL, "Obj_SkyRope", Run_SkyRope, 0 },
     { DT_CODE_KIND_FINAL_STAND_IN, NULL, "Obj_FinalStandIn", Run_FinalStandIn, 0 },
     { DT_CODE_KIND_STAND_IN_BEATEN, NULL, "Obj_StandInBeaten", Run_StandInBeaten, 0 },
+    { DT_CODE_KIND_CLIMBER, NULL, "Obj_Climber", Run_Climber, 0 },
+    { DT_CODE_KIND_HIT_TALKER, NULL, "Obj_HitTalker", Run_HitTalker, 0 },
+    { DT_CODE_KIND_FINAL_TREASURE, NULL, "Obj_FinalTreasure", Run_FinalTreasure, 0 },
     { DT_CODE_KIND_BLOCK_DWELLER, NULL, "Obj_BlockDweller", Run_BlockDweller, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_DWELLER_LINK_BLOCK, NULL, "Obj_DwellerLinkBlock", Run_DwellerLinkBlock, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_CEILING_HOPPER, NULL, "Obj_CeilingHopper", Run_CeilingHopper, 0, .bank = DT_BANK_OBJECTS },
