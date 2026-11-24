@@ -18,6 +18,9 @@ Routine extents. A DecompRoutine has an entry and no end, so the end is derived 
   routines the C calls or hands off to (the constant address argument of Decomp_Call,
   Decomp_CallP, Decomp_Handoff and flow.c's Call, Jsr and Jump), the vectors, every target of an
   executed JSR and every executed instruction no executed instruction flows into (dispatch targets).
+  A JSR from the fixed bank into the switchable window names an address of every bank that executes
+  it; when several do, a bank where an executed instruction falls through into that address (the
+  middle of another routine, like bank 5 $8003 for the NMI's JSR to bank 3's $8003) is not one.
 - A routine's own code is what its entry reaches by fall-through, branches and JMP abs without
   entering another entry. It stops at RTS, RTI, BRK, JMP (ind), a JSR to a callee that never
   returns (no executed JSR to it is followed by the next instruction: the jump-table dispatchers),
@@ -223,7 +226,14 @@ def main():
         bank = off >> 14
         if addr >= 0xC000 or bank != code.fixed:
             return [o for o in [code.offset(bank, addr)] if o is not None]
-        return [o for b in range(code.fixed) if (o := code.offset(b, addr)) in executed]
+        found = [o for b in range(code.fixed) if (o := code.offset(b, addr)) in executed]
+        if len(found) < 2:
+            return found
+        return [
+            o
+            for o in found
+            if not any(o - k in size and size[o - k] == k and insn[o - k][0] not in ENDS for k in (1, 2, 3))
+        ]
 
     flowed, returns = set(), {}
     for o, (mn, mode, n, arg, flow, call) in insn.items():

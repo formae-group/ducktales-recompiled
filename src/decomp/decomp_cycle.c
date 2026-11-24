@@ -876,6 +876,9 @@ static void on_return(void)
             return;
         }
         int i = dc_find_routine(pc, true);
+        if (i < 0) {
+            return;
+        }
         CycModRegs in;
         cyc_mod_regs(&in);
         if (dc_mode == DECOMP_CHECK) {

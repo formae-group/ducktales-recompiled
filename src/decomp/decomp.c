@@ -218,7 +218,8 @@ bool dc_live(uint16_t a, uint8_t entry_s)
 int dc_find_routine(uint16_t addr, bool resume)
 {
     for (int i = 0; i < dc_count; i++) {
-        if (dc_routine[i]->addr == addr && dc_routine[i]->resume == resume) {
+        if (dc_routine[i]->resume == resume &&
+            (resume ? dc_at_entry(dc_routine[i], addr) : dc_routine[i]->addr == addr)) {
             return i;
         }
     }
@@ -243,9 +244,6 @@ void dc_add_table(const DecompRoutine *table, int n)
             nes_mod_register_function_entry_plugin(table[i].site_id, table[i].addr, dc_on_entry);
         }
         if (table[i].resume) {
-            if (table[i].addr < 0xC000) {
-                dc_fail("a resume point outside the fixed bank", table[i].addr);
-            }
             dc_resume[table[i].addr >> 3] |= (uint8_t)(1u << (table[i].addr & 7));
         }
     }

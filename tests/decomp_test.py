@@ -110,7 +110,8 @@ POKES = [
     ('hud-total', {0xAB: 0x01}, ['Hud_RefreshTotal']),
     ('scene-1', {0x78: 0x81}, ['Scene_Placed', 'Scene_Done']),
     ('scene-2', {0x78: 0x82}, ['Scene_Placed', 'Scene_Done']),
-    ('final-trip', {100: {0x5E: 0x01}}, ['LandSelect_FinalWait', 'LandSelect_FinalScene']),
+    ('mode15-redraw', {0x39: 0x0F, 0x6E: 0x0B}, ['Mode15_Redraw', 'Mode15_ArenaChr', 'Mode15_Spawned']),
+    ('final-trip', {100: {0x5E: 0x01}}, ['LandSelect_FinalScene', 'FinalTrip_Next', 'FinalTrip_Flashed']),
     ('all-treasures', {100: {0x5D: 0x01, 0xA0: 0x1F}}, ['LandSelect_Banked', 'LandSelect_FinalWait']),
     (
         'total-max',
@@ -283,7 +284,7 @@ POKES = [
         ['Obj_Thief', 'Obj_StealMoney'],
     ),
     # the ending flag ($AC): the frame loop starts the ending, whose first scene loads its palettes ($E08F)
-    ('ending', {0xAC: 0x01}, ['Palette_LoadScene']),
+    ('ending', {0xAC: 0x01}, ['Palette_LoadScene', 'Ending_Waited', 'EndingScreen_Streamed', 'EndingScreen_Lit']),
     # kind $33 that a blow has hit: it is beaten
     (
         'target-hit',

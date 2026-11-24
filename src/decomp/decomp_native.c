@@ -217,8 +217,12 @@ static void on_return(void)
         if (!(dc_resume[pc >> 3] & (1u << (pc & 7)))) {
             return;
         }
+        int i = dc_find_routine(pc, true);
+        if (i < 0) {
+            return;
+        }
         CycModRegs in = regs();
-        if (!task_replace(dc_find_routine(pc, true), &in) || dc_handoff_set) {
+        if (!task_replace(i, &in) || dc_handoff_set) {
             return;
         }
     }

@@ -18,6 +18,8 @@
  */
 #include "decomp/decomp.h"
 #include "decomp/level.h"
+#include "decomp/objcommon.h"
+#include "decomp/sound.h"
 
 #include "ducktales/game.h"
 #include "ducktales/level.h"
@@ -665,6 +667,516 @@ static void Level_TileEdit(int slot)
     q[14] = 0xFF;
 }
 
+/* ---- the row scroll's steps ----
+ *
+ * The row scroll ($C976) runs one step routine a frame through the pointers
+ * at $CA2A; an RTS to $C9FB ends each. A block row of the incoming row
+ * reaches the screen in two halves: $CAA1 decodes its 8 blocks, queues two
+ * of their tile rows and keeps the other two at $0460/$0480, which $CA4E
+ * queues on a later frame. $CB5A and $CB6E draw half a block row of the
+ * screens beside the camera's. The side ($2F, 0 or 4) picks each table's
+ * entry. The step routines run with the scroll's state and keep no other. */
+
+#define gScratch4   RAM_U8(DT_ADDR_SCRATCH4)
+#define gScratch5   RAM_U8(DT_ADDR_SCRATCH5)
+#define gScratch6   RAM_U8(DT_ADDR_SCRATCH5 + 1)
+#define gScratch7   RAM_U8(DT_ADDR_SCRATCH5 + 2)
+#define gRowSide    RAM_U8(DT_ADDR_ROW_SCROLL_SIDE)
+#define gRowKept    (&RAM_U8(DT_ADDR_ROW_KEPT)) /* two tile rows of 32, queued later */
+#define ROW_TILES   0x20
+#define ROW_RECORD  (3 + ROW_TILES) /* a tile row record of the queue: address high, low, count - 1, tiles */
+#define HALF_RECORD (3 + ROW_TILES / 2)
+#define ATTR_SECOND 0x40 /* attribute shadow of the second nametable */
+#define LAST_ROW    7    /* the half block row at the bottom */
+
+/* $CB1E: the headers of a block row's queue: two tile rows of 32 from block
+ * row row (the lower two with side 0) and its 8 attribute bytes. */
+static void Row_QueueHeaders(uint8_t row, uint8_t side)
+{
+    Decomp_Enter(DT_CODE_ROW_HEADERS, 0, side, row);
+    uint8_t hi = rom((uint16_t)(DT_CODE_QUEUE_TILE_HI + row)) | 0x04;
+    gVramQueue[0] = hi;
+    gVramQueue[ROW_RECORD] = hi;
+    gVramQueue[2 * ROW_RECORD] = hi | 0x03;
+    uint8_t lo = rom((uint16_t)(DT_CODE_QUEUE_TILE_LO + row)) | rom((uint16_t)(DT_CODE_ROW_ADDR_LO + side));
+    gVramQueue[1] = lo;
+    gVramQueue[ROW_RECORD + 1] = lo | 0x20;
+    gVramQueue[2 * ROW_RECORD + 1] = (uint8_t)(row << 3) | ATTR_TABLE_LO;
+    gVramQueue[2] = ROW_TILES - 1;
+    gVramQueue[ROW_RECORD + 2] = ROW_TILES - 1;
+    gVramQueue[2 * ROW_RECORD + 2] = 7;
+    gVramQueue[2 * ROW_RECORD + 3 + 8] = 0xFF;
+    gVramQueueReady = 0xFF;
+}
+
+/* $CAA1: block row $26 of the camera's screen, decoded into the queue's two
+ * tile row records (the half the side's $CC87 offset names) and the kept
+ * half; its attribute bytes are merged into the shadow of the second
+ * nametable and the queue. Ends with the headers of row $26 & 7. */
+static void Row_Draw(void)
+{
+    Decomp_Enter(DT_CODE_ROW_DRAW, 0, 0, 0);
+    Level_ScreenPointer(gCameraScreen);
+    gScratch4 = 0;
+    gScratch8 = 0;
+    for (;;) {
+        gStreamPage = 1;
+        Level_DecodeBlock();
+        gScratch5 = rom((uint16_t)(DT_CODE_ROW_BUFFER_HALF + gRowSide));
+        gScratch6 = gScratch5 ^ 0x08;
+        gScratch7 = 4;
+        do {
+            gVramQueue[3 + gScratch4] = gTileBuffer[gScratch5];
+            gVramQueue[ROW_RECORD + 3 + gScratch4] = gTileBuffer[gScratch5 + 4];
+            gRowKept[gScratch4] = gTileBuffer[gScratch6];
+            gRowKept[ROW_TILES + gScratch4] = gTileBuffer[gScratch6 + 4];
+            gScratch4++;
+            gScratch5++;
+            gScratch6++;
+        } while (--gScratch7);
+        uint8_t cell = gBlockCell | ATTR_SECOND;
+        gScratch9 = gAttrShadow[cell] & rom((uint16_t)(DT_CODE_ROW_ATTR_KEEP + gRowSide));
+        gAttrShadow[cell] = gBlockAttr;
+        gVramQueue[2 * ROW_RECORD + 3 + gScratch8] = (gBlockAttr & rom((uint16_t)(DT_CODE_ROW_ATTR_NEW + gRowSide))) |
+                                                     gScratch9;
+        gScratch8++;
+        uint8_t pos = (uint8_t)(gStreamPos + 8);
+        if (pos >= STREAM_COLUMNS) {
+            gStreamPos = pos & 7;
+            break;
+        }
+        gStreamPos = pos;
+    }
+    Row_QueueHeaders(gStreamPos, gRowSide);
+}
+
+/* $CA4A: the step that draws block row $26. */
+static void Row_DrawStep(void)
+{
+    Decomp_Enter(DT_CODE_ROW_DRAW_STEP, 0, 0, 0);
+    Row_Draw();
+}
+
+/* $CA4E: the step that queues the kept half of the last row drawn, with the
+ * attribute bytes of block row $26 from the shadow, and moves $26 a row on. */
+static void Row_KeptStep(void)
+{
+    Decomp_Enter(DT_CODE_ROW_KEPT_STEP, 0, 0, 0);
+    for (int i = ROW_TILES - 1; i >= 0; i--) {
+        gVramQueue[3 + i] = gRowKept[i];
+        gVramQueue[ROW_RECORD + 3 + i] = gRowKept[ROW_TILES + i];
+    }
+    uint8_t cell = (uint8_t)((gStreamPos & 7) << 3 | ATTR_SECOND);
+    for (int i = 0; i < 8; i++) {
+        gVramQueue[2 * ROW_RECORD + 3 + i] = gAttrShadow[cell + i];
+    }
+    uint8_t row = gStreamPos;
+    gStreamPos = (uint8_t)(row + rom((uint16_t)(DT_CODE_ROW_POS_STEP + gRowSide))) & 7;
+    Row_QueueHeaders(row, gRowSide ^ 4);
+}
+
+/* $CA8B: at the bottom block row, draws block row 7 as the other side
+ * would and moves $26 up; else the step of $CA4E. */
+static void Row_LastStep(void)
+{
+    Decomp_Enter(DT_CODE_ROW_LAST_STEP, 0, 0, 0);
+    if (gStreamPos != LAST_ROW) {
+        Row_KeptStep();
+        return;
+    }
+    uint8_t side = gRowSide;
+    gRowSide = side ^ 4;
+    Row_Draw();
+    gStreamPos--;
+    gRowSide = side;
+}
+
+/* $CB94: 4 blocks of the screen at ($22) from $26 on, one block column
+ * apart, into four tile row records of 16 at PPU column $07 and their
+ * attribute bytes. Nothing is queued when $26 names block row 0. The half
+ * block row at the bottom keeps its top tile rows, and row 1 drops the two
+ * tile rows that row 0 has, with the attribute halves the screen shows. */
+static void Row_DrawHalf(void)
+{
+    Decomp_Enter(DT_CODE_ROW_DRAW_HALF, 0, 0, 0);
+    gScratch4 = 0;
+    gScratch5 = 0;
+    gScratch6 = 4;
+    for (;;) {
+        gStreamPage = 0;
+        Level_DecodeBlock();
+        if (!(gStreamPos & 7)) {
+            gStreamPos += 8;
+            if (--gScratch6) {
+                continue;
+            }
+            return;
+        }
+        for (int i = 0; i < 4; i++) {
+            for (int k = 0; k < 4; k++) {
+                gVramQueue[k * HALF_RECORD + 3 + gScratch4] = gTileBuffer[4 * k + i];
+            }
+            gScratch4++;
+        }
+        gAttrShadow[gBlockCell] = gBlockAttr;
+        gVramQueue[4 * HALF_RECORD + 3 + gScratch5] = gBlockAttr;
+        gScratch5++;
+        gStreamPos += 8;
+        if (!--gScratch6) {
+            break;
+        }
+    }
+    uint8_t row = gStreamPos & 7;
+    uint8_t hi = rom((uint16_t)(DT_CODE_QUEUE_TILE_HI + row));
+    unsigned lo = rom((uint16_t)(DT_CODE_QUEUE_TILE_LO + row)) | gScratch7;
+    for (int k = 0; k < 4; k++) {
+        gVramQueue[k * HALF_RECORD] = hi;
+        gVramQueue[k * HALF_RECORD + 1] = (uint8_t)lo;
+        gVramQueue[k * HALF_RECORD + 2] = 0x0F;
+        lo = (lo & 0xFF) + 0x20 + (lo >> 8);
+    }
+    gVramQueue[4 * HALF_RECORD] = hi | 0x03;
+    gVramQueue[4 * HALF_RECORD + 1] = (gBlockCell & 0x3C) | ATTR_TABLE_LO;
+    gVramQueue[4 * HALF_RECORD + 2] = 3;
+    gVramQueue[4 * HALF_RECORD + 3 + 4] = 0xFF;
+    if (row == 1) {
+        for (int i = 0; i < 2 * HALF_RECORD + 8; i++) {
+            gVramQueue[i] = gVramQueue[2 * HALF_RECORD + i];
+        }
+        for (int i = 3; i >= 0; i--) {
+            gVramQueue[2 * HALF_RECORD + 3 + i] &= 0xF0;
+        }
+    } else if (row == LAST_ROW) {
+        for (int i = LAST_ROW; i >= 0; i--) {
+            gVramQueue[2 * HALF_RECORD + i] = gVramQueue[4 * HALF_RECORD + i];
+        }
+        for (int i = 3; i >= 0; i--) {
+            gVramQueue[2 * HALF_RECORD + 3 + i] &= 0x0F;
+        }
+    }
+    gVramQueueReady = 0xFF;
+}
+
+/* $CB5A/$CB6E: half a block row of the screen beside the camera's, unless
+ * the camera is at that end of the map row or no screen is there: from
+ * block column 0 of the screen to the right, at PPU column 0, or from
+ * column 4 of the screen to the left, at PPU column 16. */
+static void Row_DrawBeside(uint8_t screen, uint8_t column)
+{
+    gScratch7 = column;
+    Level_ScreenPointer(screen);
+    Row_DrawHalf();
+}
+
+static void Row_RightStep(void)
+{
+    Decomp_Enter(DT_CODE_ROW_RIGHT_STEP, 0, 0, 0);
+    uint8_t screen = (uint8_t)(gCameraScreen + 1);
+    if ((uint8_t)(gMapStride - 1) != gCameraPage && Map_Cell(screen) != 0xFF) {
+        Row_DrawBeside(screen, 0x00);
+    }
+    gStreamPos &= 7;
+}
+
+static void Row_LeftStep(void)
+{
+    Decomp_Enter(DT_CODE_ROW_LEFT_STEP, 0, 0, 0);
+    uint8_t screen = (uint8_t)(gCameraScreen - 1);
+    if (gCameraPage && Map_Cell(screen) != 0xFF) {
+        gStreamPos = (gStreamPos & 7) | 0x20;
+        Row_DrawBeside(screen, 0x10);
+    }
+    gStreamPos &= 7;
+}
+
+/* ---- the row scroll ----
+ *
+ * $C976, task code: the row change ($E8C0) hands off to it. Over 60 frames
+ * it moves the $2006 address the NMI writes after the sprite-0 split
+ * ($ED/$EE, while $E9 is set) and Scrooge's Y, runs one step routine a frame
+ * (above, or the sprite CHR stream $C42C) and rebuilds the sprites. It keeps
+ * $26 and $2C on the stack throughout, and ends with the object spawner. */
+
+#define gRowFrame   RAM_U8(DT_ADDR_ROW_SCROLL_FRAME)
+#define gSplitAddr  RAM_U8(DT_ADDR_ROW_SCROLL_ADDR)
+#define gSplitAddrH RAM_U8(DT_ADDR_ROW_SCROLL_ADDR_HI)
+#define ROW_FRAMES  0x3C
+#define ROW_LOCALS  2 /* $26 and $2C */
+
+static void Row_Call(Regs *r, uint16_t routine)
+{
+    *r = Decomp_Call(routine, r->a, r->x, r->y);
+}
+
+static void Row_SelectBank(Regs *r, uint8_t bank)
+{
+    Decomp_SelectBank(bank);
+    r->a = r->x = bank;
+}
+
+static void Row_Yield(uint16_t resume)
+{
+    Decomp_Handoff(DT_CODE_TASK_YIELD, resume, OUT_X | OUT_Y);
+}
+
+/* $C99D: one frame: Scrooge's Y and, on even frames, the split address
+ * move (wrapping once at the side's frame); then the frame's step routine,
+ * which returns to $C9FB. */
+static void Row_Frame(Regs *r)
+{
+    uint8_t side = gRowSide;
+    gObjects->y[P_] += rom((uint16_t)(DT_CODE_ROW_Y_STEP + side));
+    uint8_t step = gRowFrame & 7;
+    Decomp_Push(step);
+    if (!(step & 1)) {
+        bool wrapped = false;
+        if (gRowFrame == rom((uint16_t)(DT_CODE_ROW_WRAP_FRAME + side))) {
+            gSplitAddr = rom((uint16_t)(DT_CODE_ROW_ADDR_WRAP + side));
+            gSplitAddrH = (gSplitAddrH & 0x24) | rom((uint16_t)(DT_CODE_ROW_ADDR_WRAP + 1 + side));
+            wrapped = gSplitAddrH != 0;
+        }
+        if (!wrapped) {
+            unsigned lo = gSplitAddr + rom((uint16_t)(DT_CODE_ROW_ADDR_STEP + side));
+            gSplitAddr = (uint8_t)lo;
+            gSplitAddrH = (uint8_t)(gSplitAddrH + rom((uint16_t)(DT_CODE_ROW_ADDR_STEP + 1 + side)) + (lo >> 8));
+            gObjects->y[P_] += rom((uint16_t)(DT_CODE_ROW_Y_EXTRA + side));
+        }
+    }
+    uint8_t index = (uint8_t)((Decomp_Pull() << 1) + rom((uint16_t)(DT_CODE_ROW_STEP_BASE + side)));
+    gScratch0 = rom((uint16_t)(DT_CODE_ROW_STEPS + index));
+    gScratch1 = rom((uint16_t)(DT_CODE_ROW_STEPS + 1 + index));
+    r->a = (uint8_t)(DT_CODE_ROW_SCROLL_STEPPED - 1);
+    r->x = side;
+    r->y = index;
+    Decomp_Handoff(gPointer, DT_CODE_ROW_SCROLL_STEPPED, OUT_A | OUT_X | OUT_Y);
+}
+
+static void Row_Scroll(Regs *r)
+{
+    Decomp_Enter(DT_CODE_ROW_SCROLL, r->a, r->x, r->y);
+    uint8_t side = gPadHeld & 0x04;
+    gRowSide = side;
+    gRowScroll = 0x0C;
+    Decomp_Push(gStreamPos);
+    Decomp_Push(gStreamPage);
+    gStreamPos = rom((uint16_t)(DT_CODE_ROW_FIRST_POS + side));
+    gRowFrame = 0;
+    gChrStream = 0;
+    r->a = 0;
+    r->x = side;
+    Row_Call(r, DT_CODE_CLEAR_OBJECTS);
+    Row_Call(r, DT_CODE_OAM_CLEAR);
+    Row_Yield(DT_CODE_ROW_SCROLL_FRAME);
+}
+
+static void Row_ScrollFrame(Regs *r)
+{
+    Decomp_Enter(DT_CODE_ROW_SCROLL_FRAME, r->a, r->x, r->y);
+    Row_Frame(r);
+}
+
+/* $C9FB: after the step, the sprites, and the next frame. */
+static void Row_ScrollStepped(Regs *r)
+{
+    Decomp_Enter(DT_CODE_ROW_SCROLL_STEPPED, r->a, r->x, r->y);
+    Row_Call(r, DT_CODE_OAM_CLEAR);
+    Row_SelectBank(r, DT_SPR_BANK);
+    Row_Call(r, DT_B5_BUILD_OAM);
+    Row_Yield(DT_CODE_ROW_SCROLL_NEXT);
+}
+
+/* $CA09: the next frame, or the end: $26 and $2C back, the object spawner
+ * reset and run. */
+static void Row_ScrollNext(Regs *r)
+{
+    Decomp_Enter(DT_CODE_ROW_SCROLL_NEXT, r->a, r->x, r->y);
+    if (++gRowFrame != ROW_FRAMES) {
+        Row_Frame(r);
+        return;
+    }
+    gStreamPage = Decomp_Pull();
+    gStreamPos = Decomp_Pull();
+    Row_SelectBank(r, DT_BANK_OBJECTS);
+    Row_Call(r, DT_B6_SPAWN_RESET);
+    Decomp_Handoff(DT_B6_SPAWN, DT_CODE_ROW_SCROLL_END, 0);
+}
+
+/* $CA22: the split address no longer written; the palette uploaded. */
+static void Row_ScrollEnd(Regs *r)
+{
+    Decomp_Enter(DT_CODE_ROW_SCROLL_END, r->a, r->x, r->y);
+    gRowScroll = 0;
+    r->y = 1;
+    RAM_U8(DT_ADDR_PALETTE_REQUEST) = r->y;
+}
+
+/* ---- block draw ----
+ *
+ * $D068 queues a block record (the table at $D110, from offset Y) over the
+ * screen: a tile pair record of its metatiles' top and bottom tiles, copied
+ * down two tile rows at a time; then it throws the four debris pieces of a
+ * broken block from bank 4. The message box ($ED05, message $06) and the
+ * breaking object at $FD88 use it. */
+
+#define gBlockRecord RAM_U8(DT_ADDR_SCRATCH0) /* offset of the next metatile in the record */
+#define gBlockOut    RAM_U8(DT_ADDR_SCRATCH1) /* offset of its tiles in the first record */
+#define gBlockFirst  RAM_U8(DT_ADDR_SCRATCH3) /* the record's offset */
+#define gBlockCopies RAM_U8(DT_ADDR_TARGET_X)
+#define gDebrisY     RAM_U8(DT_ADDR_TARGET_X)
+#define gDebrisX     RAM_U8(DT_ADDR_TARGET_X + 1)
+#define PAIR_RECORD  7 /* address high, low, count - 1, 4 tiles */
+#define DEBRIS       4
+#define DEBRIS_BANK  4 /* bank of $BD80 */
+#define DEBRIS_STATE (OBJ_STATUS_LIVE | 0x20)
+#define SFX_BREAK    0x16
+
+/* bank 4 $BD80: four debris pieces around ($11, $10) in free slots, then the
+ * break sound. */
+static void Block_Debris(void)
+{
+    Decomp_Enter(DT_B4_BLOCK_DEBRIS, 0, 0, 0);
+    uint8_t slot = 0;
+    for (int i = DEBRIS - 1; i >= 0 && Obj_FindFreeSlot(&slot); i--) {
+        gObjects->state[slot] = DEBRIS_STATE;
+        gObjects->flags[slot] = DEBRIS_STATE | OBJ_FLAG_DELETE_AT_END;
+        gObjects->action[slot] = OBJ_ACTION_BREAK;
+        gObjects->animFrame[slot] = 0;
+        gObjects->hitbox[slot] = 0;
+        gObjects->kind[slot] = 0;
+        unsigned y = gDebrisY + rom((uint16_t)(DT_B4_DEBRIS_DY + i));
+        gObjects->y[slot] = (uint8_t)y;
+        gObjects->worldX[slot] = (uint8_t)(gDebrisX + rom((uint16_t)(DT_B4_DEBRIS_DX + i)) + (y >> 8));
+        gObjects->worldPage[slot] = gObjects->worldPage[P_];
+        gObjects->animTimer[slot] = rom((uint16_t)(DT_B4_DEBRIS_TIMER + i));
+    }
+    Sound_Request(SFX_BREAK, slot);
+}
+
+static void Block_Draw(uint8_t record)
+{
+    Decomp_Enter(DT_CODE_BLOCK_DRAW, 0, 0, record);
+    gBlockRecord = record;
+    gBlockFirst = record;
+    Bank_Select(gTilesetBank);
+    gBlockCopies = rom((uint16_t)(DT_CODE_BLOCK_RECORDS + record));
+    uint8_t hi = rom((uint16_t)(DT_CODE_BLOCK_RECORDS + 1 + record));
+    uint8_t lo = rom((uint16_t)(DT_CODE_BLOCK_RECORDS + 2 + record));
+    gVramQueue[0] = hi;
+    gVramQueue[PAIR_RECORD] = hi;
+    gVramQueue[1] = lo;
+    gVramQueue[PAIR_RECORD + 1] = lo | 0x20;
+    gVramQueue[2] = 3;
+    gVramQueue[PAIR_RECORD + 2] = 3;
+    gBlockOut = 0;
+    for (;;) {
+        uint8_t metatile = rom((uint16_t)(DT_CODE_BLOCK_RECORDS + 3 + gBlockRecord));
+        if (!metatile) {
+            break;
+        }
+        uint8_t i = gBlockOut;
+        gVramQueue[3 + i] = rom((uint16_t)(DT_METATILE_TILES + metatile));
+        gVramQueue[4 + i] = rom((uint16_t)(DT_METATILE_TILES + 0x100 + metatile));
+        gVramQueue[PAIR_RECORD + 3 + i] = rom((uint16_t)(DT_METATILE_TILES + 0x200 + metatile));
+        gVramQueue[PAIR_RECORD + 4 + i] = rom((uint16_t)(DT_METATILE_TILES + 0x300 + metatile));
+        gBlockOut = (uint8_t)(i + 2);
+        if (!++gBlockRecord) {
+            break;
+        }
+    }
+    uint8_t y = 0;
+    do {
+        unsigned low = gVramQueue[1 + y] + 0x40u;
+        gVramQueue[2 * PAIR_RECORD + 1 + y] = (uint8_t)low;
+        gVramQueue[3 * PAIR_RECORD + 1 + y] = (uint8_t)low | 0x20;
+        uint8_t high = (uint8_t)(gVramQueue[y] + (low >> 8));
+        gVramQueue[2 * PAIR_RECORD + y] = high;
+        gVramQueue[3 * PAIR_RECORD + y] = high;
+        for (int k = 0; k < 5; k++, y++) {
+            gVramQueue[2 * PAIR_RECORD + 2 + y] = gVramQueue[2 + y];
+            gVramQueue[3 * PAIR_RECORD + 2 + y] = gVramQueue[2 + y];
+        }
+        y = (uint8_t)(y + 9);
+    } while (--gBlockCopies);
+    gVramQueue[2 * PAIR_RECORD + y] = 0xFF;
+    gVramQueueReady = 0xFF;
+    uint8_t side = gBlockFirst & 0x02;
+    gDebrisY = rom((uint16_t)(DT_CODE_BLOCK_DEBRIS_POS + side));
+    gDebrisX = rom((uint16_t)(DT_CODE_BLOCK_DEBRIS_POS + 1 + side));
+    Bank_Select(DEBRIS_BANK);
+    Block_Debris();
+}
+
+/* ---- tile edits for objects ----
+ *
+ * Bank 6 runs the tile edit $F574 for the object in slot X through these
+ * two: $F4D8 takes the replacement from the object's action, $F506 from its
+ * $06B0 and may first spawn an object of action $F67B[$06B0] at the same
+ * place. Both close the 14-byte queue entry and map the objects' bank back,
+ * and return X and Y from $12/$13: X as it came, Y as it came for $F4D8 and
+ * the slot $F506 looked at (0 when every slot was taken). */
+
+#define gEditX            RAM_U8(DT_ADDR_TILE_EDIT_X)
+#define gEditY            RAM_U8(DT_ADDR_TILE_EDIT_Y)
+#define TILE_EDIT_ENTRY   14
+#define EDIT_FIRST_ACTION 0x1A
+#define EDIT_BY_ACTION    0x13 /* entry of the first action's replacement */
+#define EDIT_SPAWNS       0x80 /* $06C0 bit 7: the edit spawns an object */
+#define EDIT_SPAWN_STATE  (OBJ_STATUS_LIVE | OBJ_STATUS_WORLD | 1)
+#define EDIT_SPAWN_KIND   0x13
+
+/* The land's replacement entry plus entry (ADC with the carry the second
+ * ASL of the land leaves), the edit, and the queue entry closed. */
+static void Tile_EditFor(uint8_t x, uint8_t entry)
+{
+    gScratch8 = (uint8_t)((gLand << 2) + entry + (gLand >> 6 & 1));
+    Level_TileEdit(x);
+    gTileEditEnd += TILE_EDIT_ENTRY;
+    Bank_Select(DT_BANK_OBJECTS);
+}
+
+/* $F4D8: entry $13 + (action - $1A) & 3, plus 1 from action $1A on. */
+static void Tile_EditByAction(uint8_t x, uint8_t y)
+{
+    Decomp_Enter(DT_CODE_TILE_EDIT_BY_ACTION, 0, x, y);
+    gEditX = x;
+    gEditY = y;
+    uint8_t action = gObjects->action[x] & 0x7F;
+    gScratch8 = (uint8_t)(((action - EDIT_FIRST_ACTION) & 3) + EDIT_BY_ACTION + (action >= EDIT_FIRST_ACTION));
+    Tile_EditFor(x, gScratch8);
+}
+
+/* $F506 */
+static void Tile_EditBySlot(uint8_t x, uint8_t y)
+{
+    Decomp_Enter(DT_CODE_OBJ_EDIT_TILE, 0, x, y);
+    if (gObjects->unk_06C0[x] & EDIT_SPAWNS) {
+        y = 0x0F;
+        while (gObjects->state[y] & OBJ_STATUS_LIVE) {
+            if (!--y) {
+                break;
+            }
+        }
+        if (y) {
+            gObjects->state[y] = EDIT_SPAWN_STATE;
+            gObjects->animTimer[y] = 0;
+            gObjects->animFrame[y] = 0;
+            gObjects->hitbox[y] = 0;
+            gObjects->vyFrac[y] = 0;
+            gObjects->vy[y] = 0;
+            gObjects->kind[y] = EDIT_SPAWN_KIND;
+            gObjects->y[y] = gObjects->y[x];
+            gObjects->worldX[y] = gObjects->worldX[x];
+            gObjects->worldPage[y] = gObjects->worldPage[x];
+            gScratch0 = y;
+            gObjects->action[y] = rom((uint16_t)(DT_CODE_TILE_EDIT_SPAWN + gObjects->timer[x]));
+        }
+    }
+    gEditX = x;
+    gEditY = y;
+    RAM_U8(DT_ADDR_BLOCK_OPENED)++;
+    Tile_EditFor(x, gObjects->timer[x]);
+}
+
 /* ---- site adapters ---- */
 
 static void Run_MapLoadHeader(Regs *r)
@@ -730,6 +1242,78 @@ static void Run_ChrStreamRow(Regs *r)
     r->x = Chr_StreamRow(r->x);
 }
 
+static void Run_TileEditByAction(Regs *r)
+{
+    Tile_EditByAction(r->x, r->y);
+    r->x = gEditX;
+    r->y = gEditY;
+}
+
+static void Run_TileEditBySlot(Regs *r)
+{
+    Tile_EditBySlot(r->x, r->y);
+    r->x = gEditX;
+    r->y = gEditY;
+}
+
+static void Run_BlockDraw(Regs *r)
+{
+    Block_Draw(r->y);
+}
+
+static void Run_BlockDebris(Regs *r)
+{
+    (void)r;
+    Block_Debris();
+}
+
+static void Run_RowHeaders(Regs *r)
+{
+    Row_QueueHeaders(r->y, r->x);
+}
+
+static void Run_RowDraw(Regs *r)
+{
+    (void)r;
+    Row_Draw();
+}
+
+static void Run_RowDrawStep(Regs *r)
+{
+    (void)r;
+    Row_DrawStep();
+}
+
+static void Run_RowKeptStep(Regs *r)
+{
+    (void)r;
+    Row_KeptStep();
+}
+
+static void Run_RowLastStep(Regs *r)
+{
+    (void)r;
+    Row_LastStep();
+}
+
+static void Run_RowDrawHalf(Regs *r)
+{
+    (void)r;
+    Row_DrawHalf();
+}
+
+static void Run_RowRightStep(Regs *r)
+{
+    (void)r;
+    Row_RightStep();
+}
+
+static void Run_RowLeftStep(Regs *r)
+{
+    (void)r;
+    Row_LeftStep();
+}
+
 const DecompRoutine gLevelRoutines[] = {
     { DT_CODE_MAP_HEADER, "ducktales.decomp.C7B0", "Map_LoadHeader", Run_MapLoadHeader, OUT_X },
     { DT_CODE_STREAM_BLOCKS, "ducktales.decomp.C830", "Scroll_StreamBlocks", Run_StreamBlocks, OUT_X | OUT_HW },
@@ -743,5 +1327,23 @@ const DecompRoutine gLevelRoutines[] = {
     { DT_CODE_DECODE_BLOCK, NULL, "Level_DecodeBlock", Run_DecodeBlock, OUT_X },
     { DT_CODE_METATILE_AT, NULL, "Level_MetatileAt", Run_MetatileAt, OUT_A | OUT_X },
     { DT_CODE_ROW_CHR_STREAM, "ducktales.decomp.C42C", "Chr_StreamRow", Run_ChrStreamRow, OUT_X | OUT_HW },
+    { DT_CODE_ROW_HEADERS, NULL, "Row_QueueHeaders", Run_RowHeaders, 0 },
+    { DT_CODE_ROW_DRAW, NULL, "Row_Draw", Run_RowDraw, OUT_HW },
+    { DT_CODE_ROW_DRAW_HALF, NULL, "Row_DrawHalf", Run_RowDrawHalf, OUT_HW },
+    { DT_CODE_ROW_DRAW_STEP, "ducktales.decomp.CA4A", "Row_DrawStep", Run_RowDrawStep, OUT_HW },
+    { DT_CODE_ROW_KEPT_STEP, "ducktales.decomp.CA4E", "Row_KeptStep", Run_RowKeptStep, 0 },
+    { DT_CODE_ROW_LAST_STEP, "ducktales.decomp.CA8B", "Row_LastStep", Run_RowLastStep, OUT_HW },
+    { DT_CODE_ROW_RIGHT_STEP, "ducktales.decomp.CB5A", "Row_RightStep", Run_RowRightStep, OUT_HW },
+    { DT_CODE_ROW_LEFT_STEP, "ducktales.decomp.CB6E", "Row_LeftStep", Run_RowLeftStep, OUT_HW },
+    { DT_CODE_TILE_EDIT_BY_ACTION, "ducktales.decomp.F4D8", "Tile_EditByAction", Run_TileEditByAction,
+      OUT_X | OUT_Y | OUT_HW },
+    { DT_CODE_OBJ_EDIT_TILE, "ducktales.decomp.F506", "Tile_EditBySlot", Run_TileEditBySlot, OUT_X | OUT_Y | OUT_HW },
+    { DT_CODE_BLOCK_DRAW, "ducktales.decomp.D068", "Block_Draw", Run_BlockDraw, OUT_HW },
+    { DT_B4_BLOCK_DEBRIS, NULL, "Block_Debris", Run_BlockDebris, 0, .bank = DEBRIS_BANK },
+    { DT_CODE_ROW_SCROLL, "ducktales.decomp.C976", "Row_Scroll", Row_Scroll, 0, true, 0, false },
+    { DT_CODE_ROW_SCROLL_FRAME, NULL, "Row_ScrollFrame", Row_ScrollFrame, 0, true, ROW_LOCALS, true },
+    { DT_CODE_ROW_SCROLL_STEPPED, NULL, "Row_ScrollStepped", Row_ScrollStepped, 0, true, ROW_LOCALS, true },
+    { DT_CODE_ROW_SCROLL_NEXT, NULL, "Row_ScrollNext", Row_ScrollNext, 0, true, ROW_LOCALS, true },
+    { DT_CODE_ROW_SCROLL_END, NULL, "Row_ScrollEnd", Row_ScrollEnd, 0, true, 0, true },
 };
 const int gLevelRoutineCount = sizeof gLevelRoutines / sizeof gLevelRoutines[0];

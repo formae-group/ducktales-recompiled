@@ -157,6 +157,7 @@
 #define DT_ADDR_HUD_GATE        0x007F /* bit 7: the HUD groups may be drawn */
 #define DT_ADDR_MESSAGE         0x006C /* non-zero: a message is shown (no HUD sprites) */
 #define DT_ADDR_ENDING          0x00AC /* non-zero: no HUD sprites (ending) */
+#define DT_ADDR_ENDING_VARIANT  0x00AD /* the ending's variant: 2 all treasures and a million, 1 no money, 0 (code) */
 #define DT_ADDR_PAUSE           0x00E6 /* non-zero: no HUD sprites (pause) */
 #define DT_ADDR_MODE            0x0039 /* $0F: no HUD sprites, animations frozen */
 #define DT_MODE_FROZEN          0x0F
@@ -262,8 +263,8 @@
 #define DT_CODE_MESSAGE_LINE_LO  0xEF59 /* PPU address low byte of each of the box's 3 lines, high $20 (code) */
 #define DT_CODE_MESSAGE_LINE_END 0xEF5C /* queue offset where each line's entry ends (code) */
 #define DT_CODE_MESSAGE_LINE_AT  0xEF5F /* queue offset of each line's entry (code) */
-#define DT_CODE_MESSAGE_SCENE    0xDFED /* the scene draw before message $0B; waits for frames (code; not studied) */
-#define DT_CODE_BLOCK_DRAW       0xD068 /* queue the draw of block Y of the tileset (code; not studied) */
+#define DT_CODE_MESSAGE_SCENE    0xDFED /* mode 15, message $0B: map row 6 streamed, then row 2 (code) */
+#define DT_CODE_BLOCK_DRAW       0xD068 /* queue block record Y of $D110 and throw its debris (code) */
 #define DT_B1_MESSAGE_TILE_OFF  0x82D0 /* bank 1: CHR tile $12D restored when the box closes (verified, rendering.md) */
 #define DT_B2_MESSAGE_TILE      0xA8F0 /* bank 2: CHR tile $12D while a message shows (verified, rendering.md) */
 #define DT_B4_MESSAGE_LO        0xB888 /* bank 4: text of each message id, low bytes (code) */
@@ -288,10 +289,13 @@
 #define DT_CODE_HITBOX_HEIGHT      0xF498 /* half-height by hitbox entry (code) */
 #define DT_CODE_HITBOX_WIDTH       0xF4B8 /* half-width by hitbox entry (code) */
 #define DT_CODE_MUSIC_REQUEST      0xF752 /* remember the music id in $C5, then queue it */
+#define DT_CODE_SPRITES_FRAME      0xF855 /* the sprites, a frame, then bank 4 mapped (code) */
+#define DT_FLOW_SPRITES_FRAME      0xF863
 #define DT_CODE_TOTAL_MAX          0xF84A /* TOTAL's five digits set to 9 (code) */
 #define DT_CODE_SOUND_REQUEST      0xF754 /* queue a sound id in the request ring */
 #define DT_CODE_HUD_REFILL_HP      0xF812 /* every HP dot full (fixed bank) */
 #define DT_CODE_OAM_BUILD          0x8000 /* bank 5: the sprite builder */
+#define DT_CODE_OAM_SLOT           0x80BE /* bank 5: one object slot of the builder, X = slot */
 #define DT_CODE_READ_CONTROLLERS   0xC1AB /* read both pads into $14-$17 */
 #define DT_CODE_PALETTE_SCENE      0xF76D /* load a scene's palettes */
 #define DT_CODE_BANK_SELECT_TEMP   0xFFE0 /* map bank A without recording it */
@@ -409,6 +413,7 @@
 #define DT_CODE_OAM_CLEAR      0xC267
 #define DT_CODE_FADE_IN        0xC279
 #define DT_CODE_FADE_OUT       0xC282
+#define DT_CODE_FADE_IN_KEEP   0xC27C /* the fade in, the sprites kept */
 #define DT_CODE_FADE_WAIT      0xC2B2 /* the fades after their task_yield: next frame or next step */
 #define DT_CODE_RANDOM         0xC2E6 /* steps the generator at $C0 (code) */
 #define DT_CODE_CHR_LOAD       0xC301
@@ -425,10 +430,14 @@
 #define DT_B5_PAUSE_TEXT       0xB580 /* pause or message text into the VRAM queue (code) */
 #define DT_B5_PPU_STRINGS      0xBAB0 /* X = set: PPU address and data strings written to the PPU (code) */
 #define DT_B5_CONSUMED_BITS    0xB760 /* the land's consumed-record bits $0120-$013F (code) */
+#define DT_B5_ENDING_OBJECTS   0xB380 /* the ending screen's objects ($24), then the sprites (code) */
 #define DT_B5_SELECT_MESSAGE   0xB800 /* Land Select: the message for $5E, $5D and $78 into the VRAM queue (code) */
 #define DT_B5_MESSAGE          0xB81C /* X = Land Select message: its strings into the VRAM queue (code) */
 #define DT_BANK_FINAL_TRIP     4
 #define DT_B4_FINAL_TRIP       0xBE00 /* the final trip's take-off scene; waits for frames (code) */
+#define DT_B4_FLOW_TRIP_FRAME  0xBE73 /* bank 4: after the take-off scene's frame */
+#define DT_B4_FLOW_TRIP_DARK   0xBE96 /* bank 4: the flashes, after the bright frames */
+#define DT_B4_FLOW_TRIP_FLASH  0xBEA2 /* bank 4: after the dark frames */
 #define DT_BANK_OBJECTS        6
 #define DT_B6_OBJECTS          0x8000 /* every object's per-frame code */
 #define DT_B6_SPAWN_TABLES     0xAE20 /* the land's spawn table pointers into $60-$69 (code) */
@@ -457,6 +466,8 @@
 #define DT_CODE_LAND_EXIT     0xDF08
 #define DT_CODE_SCENE         0xDF27
 #define DT_CODE_ENDING        0xE1AF
+#define DT_CODE_ENDING_SCREEN 0xE054 /* show ending screen $24 */
+#define DT_CODE_ENDING_BANK   0xFFC7 /* the money banked into TOTAL in the HUD as the ending starts */
 #define DT_CODE_TIMER_TICK    0xE28C
 
 /* Where the flow's task code resumes after a call (the address after the JSR). */
@@ -522,6 +533,25 @@
 #define DT_FLOW_SELECT_NEXT        0xD792
 #define DT_FLOW_BANK_NEXT          0xD9B8
 #define DT_FLOW_WAIT_A_NEXT        0xD9C7
+#define DT_FLOW_M15_ROW_CHR        0xE010
+#define DT_FLOW_M15_STREAMED       0xE025
+#define DT_FLOW_M15_NEXT           0xE02A
+#define DT_FLOW_M15_ARENA_CHR      0xE034
+#define DT_FLOW_M15_SPAWNED        0xE04F
+#define DT_FLOW_ENDING_BANKED      0xE1BA
+#define DT_FLOW_ENDING_WAITED      0xE1BF
+#define DT_FLOW_ENDING_SHOWN       0xE1EC
+#define DT_FLOW_END_FADED          0xE057
+#define DT_FLOW_END_BLACK          0xE07C
+#define DT_FLOW_END_SCREEN_OFF     0xE07F
+#define DT_FLOW_END_FILLED         0xE088
+#define DT_FLOW_END_PALETTE        0xE092
+#define DT_FLOW_END_STREAMED       0xE0A0
+#define DT_FLOW_END_STRINGS        0xE0E3
+#define DT_FLOW_END_CHR            0xE0F7
+#define DT_FLOW_END_SHOWN          0xE0FA
+#define DT_FLOW_END_NEXT           0xE0FD
+#define DT_FLOW_END_LIT            0xE116
 #define DT_FLOW_LOAD_FADED         0xD79E
 #define DT_FLOW_LOAD_BLACK         0xD7A5
 #define DT_FLOW_LOAD_SCREEN_OFF    0xD7A8
@@ -569,6 +599,11 @@
 #define DT_DATA_CHECKPOINT_ROW    0xDC2C /* per land: boss-checkpoint row and page */
 #define DT_DATA_CHECKPOINT_PAGE   0xDC35
 #define DT_DATA_RESPAWN           0xDDC1 /* 9-byte respawn and warp entries (levels.md) */
+#define DT_DATA_ENDING_TILESET    0xE11B /* per ending screen: tileset bank */
+#define DT_DATA_ENDING_CHR        0xE121 /* per ending screen: CHR list */
+#define DT_DATA_ENDING_TEXT_AT    0xE133 /* per ending screen: its string sets' offset from DT_DATA_ENDING_TEXT */
+#define DT_DATA_ENDING_TEXT       0xE139 /* $BAB0 sets, 0 ends; bit 7: low nibble + variant (8: + difficulty) */
+#define DT_DATA_ENDING_SPRITE0_Y  0xE141 /* sprite-0 Y of screens 4 and 5 */
 #define DT_DATA_SCENE_OBJECTS_AT  0xDFCE /* per scene: its objects' offset from DT_DATA_SCENE_OBJECTS */
 #define DT_DATA_SCENE_OBJECTS     0xDFD1 /* action, X, page, Y, kind, hitbox each; $FF ends a scene's */
 #define DT_DATA_SCENE_MODE        0xDFEA /* per scene: Scrooge's mode ($39) */
@@ -845,13 +880,53 @@
 #define DT_CODE_QUADRANT_KEEP         0xF693 /* mask keeping the other three quadrants of a byte */
 #define DT_ADDR_TILE_EDIT_END         0x005C /* end of the tile edit queue being written (verified) */
 #define DT_ROW_TILE_Y                 0x0740 /* Y of the tile an object edits (code) */
-#define DT_CODE_ROW_CHR_STREAM        0xC42C
-#define DT_CODE_ROW_CHR_BASE          0xC508 /* first entry of each land in the row tables */
-#define DT_CODE_ROW_CHR_LIST          0xC511 /* CHR list per row; bit 7: two lists chosen by camera page */
-#define DT_CODE_ROW_PALETTE           0xC53A /* sprite palette 3 per row */
-#define DT_CODE_CHR_LIST_LO           0xC563 /* CHR list pointers */
-#define DT_CODE_CHR_LIST_HI           0xC583
-#define DT_CODE_SPRITE_PALETTES       0xC6D9 /* 4-byte sprite palettes */
+/* The row scroll's step routines ($C976 runs one a frame through $CA2A) and
+ * their tables by side ($2F: 0 or 4). */
+#define DT_ADDR_ROW_SCROLL_SIDE     0x002F /* row scroll: 0 or 4, from $16 & 4 at its start (code) */
+#define DT_ADDR_ROW_KEPT            0x0460 /* row scroll: the half of a block row queued later, 2 x 32 tiles (code) */
+#define DT_CODE_ROW_DRAW_STEP       0xCA4A /* step: draw block row $26 */
+#define DT_CODE_ROW_KEPT_STEP       0xCA4E /* step: queue the kept half, $26 to the next row */
+#define DT_CODE_ROW_LAST_STEP       0xCA8B /* step: block row 7 as the other side, else as $CA4E */
+#define DT_CODE_ROW_DRAW            0xCAA1 /* decode block row $26 of screen $2D into the queue and the kept half */
+#define DT_CODE_ROW_HEADERS         0xCB1E /* queue headers of a block row, Y = row, X = side */
+#define DT_CODE_ROW_RIGHT_STEP      0xCB5A /* step: half a block row of the screen to the right */
+#define DT_CODE_ROW_LEFT_STEP       0xCB6E /* step: half a block row of the screen to the left */
+#define DT_CODE_ROW_DRAW_HALF       0xCB94 /* 4 blocks of screen ($22) from $26 into the queue at PPU column $07 */
+#define DT_CODE_ROW_SCROLL_FRAME    0xC99D /* row scroll: a frame, after task_yield */
+#define DT_CODE_ROW_SCROLL_STEPPED  0xC9FB /* row scroll: after the step routine */
+#define DT_CODE_ROW_SCROLL_NEXT     0xCA09 /* row scroll: the next frame, after task_yield */
+#define DT_CODE_ROW_SCROLL_END      0xCA22 /* row scroll: after the object spawner */
+#define DT_ADDR_ROW_SCROLL_FRAME    0x0030 /* row scroll: frames done, to $3C (code) */
+#define DT_CODE_ROW_STEPS           0xCA2A /* step routine pointers by side base + frame & 7 */
+#define DT_CODE_ROW_FIRST_POS       0xCC85 /* first $26 */
+#define DT_CODE_ROW_POS_STEP        0xCC86 /* step of $26 after a kept half */
+#define DT_CODE_ROW_BUFFER_HALF     0xCC87 /* tile buffer offset of the half queued at once */
+#define DT_CODE_ROW_ADDR_LO         0xCC88 /* PPU address low of the half queued at once */
+#define DT_CODE_ROW_ATTR_KEEP       0xCC8E /* attribute bits kept from the shadow */
+#define DT_CODE_ROW_ATTR_NEW        0xCC8F /* attribute bits taken from the block */
+#define DT_CODE_ROW_STEP_BASE       0xCC8D /* first step pointer index of the side */
+#define DT_CODE_ROW_WRAP_FRAME      0xCC90 /* frame where the split address wraps */
+#define DT_CODE_ROW_ADDR_STEP       0xCC95 /* split address step, 16-bit */
+#define DT_CODE_ROW_ADDR_WRAP       0xCC97 /* split address after the wrap, 16-bit */
+#define DT_CODE_ROW_Y_EXTRA         0xCCA5 /* Scrooge's Y step on even frames */
+#define DT_CODE_ROW_Y_STEP          0xCCA6 /* Scrooge's Y step every frame */
+#define DT_CODE_ROW_CHR_STREAM      0xC42C
+#define DT_CODE_TILE_EDIT_BY_ACTION 0xF4D8 /* tile edit for slot X, replacement by its action (code) */
+#define DT_CODE_TILE_EDIT_SPAWN     0xF67B /* action of the object $F506 spawns, by $06B0 */
+#define DT_ADDR_TILE_EDIT_X         0x0012 /* $F4D8/$F506: X kept across the edit (code) */
+#define DT_ADDR_TILE_EDIT_Y         0x0013 /* $F4D8/$F506: Y kept across the edit (code) */
+#define DT_CODE_BLOCK_RECORDS       0xD110 /* block records: copies, PPU address high, low, metatiles, 0 */
+#define DT_CODE_BLOCK_DEBRIS_POS    0xD11C /* debris Y, world X by record bit 1 */
+#define DT_B4_BLOCK_DEBRIS          0xBD80 /* four debris pieces at ($11, $10) and the break sound */
+#define DT_B4_DEBRIS_DY             0xBDC7
+#define DT_B4_DEBRIS_DX             0xBDCB
+#define DT_B4_DEBRIS_TIMER          0xBDCF
+#define DT_CODE_ROW_CHR_BASE        0xC508 /* first entry of each land in the row tables */
+#define DT_CODE_ROW_CHR_LIST        0xC511 /* CHR list per row; bit 7: two lists chosen by camera page */
+#define DT_CODE_ROW_PALETTE         0xC53A /* sprite palette 3 per row */
+#define DT_CODE_CHR_LIST_LO         0xC563 /* CHR list pointers */
+#define DT_CODE_CHR_LIST_HI         0xC583
+#define DT_CODE_SPRITE_PALETTES     0xC6D9 /* 4-byte sprite palettes */
 #define DT_ADDR_CHR_STREAM 0x0050 /* row CHR stream: 0 start, 1 next record, 2 in a record, negative done (verified) */
 #define DT_ADDR_CHR_BANK   0x0051 /* bank of the record being streamed (code) */
 #define DT_ADDR_CHR_LIST   0x0052 /* pointer to the CHR list (code) */

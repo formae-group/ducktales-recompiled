@@ -196,16 +196,17 @@ call can do. `flow.c` decompiles that code as **task code** (`DecompRoutine.task
   (frame counters, the land and row around a redraw). `Decomp_SelectBank` and `Decomp_Store` make
   the device writes the C needs (the mapper, `$2000`), for real in replace mode.
 - Its C starts at a site (original code reaches it: `$D4E6` from the scheduler's `JMP ($93)`, `$D79B`
-  from Land Select, `$DB36` after each frame, `$DD52` from the scenes), from another task routine's
-  C (a plain C call), or at a **resume point** (`DecompRoutine.resume`): the address an RTS returns
+  from Land Select, `$DB36` after each frame, `$DD52` from the scenes, `$DFED` from the message
+  box), from another task routine's C (a plain C call), or at a **resume point** (`DecompRoutine.resume`): the address an RTS returns
   to after the original a hand-off reached. Resume points have no site: the RTS observer
-  (`cyc_mod_set_return_hook`) sees every RTS and starts the C when it lands on one. On the routes
+  (`cyc_mod_set_return_hook`) sees every RTS and starts the C when it lands on one (one in the
+  switchable window, bank 4's take-off scene, only with its bank mapped). On the routes
   no interrupt is pending at any of them.
 - Check mode runs the original from the same point in an isolated call with hooks allowed. It
   enters through an RTS (`$FFAB`) whose return the observer moves to the start, at the routine's
   true S, with the isolated call's return address in place of the routine's own (at S + locals
   + 1). When the C hands off, the original stops where it reaches the same routine at the same
-  depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`, 10 of
+  depth: at that routine's site, or at a **stop site** registered for it (`gFlowStops`, 8 of
   them). Check compares RAM, the stack down to that depth, the registers the hand-off uses and the
   number of device writes.
 - Replace mode stores the C's results, makes its device writes, spends the original's cycles up to
@@ -380,6 +381,23 @@ RAM-identical in replace mode.
 | `Bg_SnapFeet` | `$D4D6` | checked | 12 | 11 of 11 | not measured |
 | `Level_TileEdit` | `$F574` | checked | 9 | - | not measured |
 | `Chr_StreamRow` | `$C42C` | checked | 12 | 11 of 11 | not measured |
+| `Row_Scroll` (task code) | `$C976` | checked | 6 | - | not measured |
+| `Row_ScrollFrame` (task code) | `$C99D` | checked | 6 | - | not measured |
+| `Row_ScrollStepped` (task code) | `$C9FB` | checked | 6 | - | not measured |
+| `Row_ScrollNext` (task code) | `$CA09` | checked | 6 | - | not measured |
+| `Row_ScrollEnd` (task code) | `$CA22` | checked | 6 | - | not measured |
+| `Row_DrawStep` | `$CA4A` | checked | 6 | - | not measured |
+| `Row_KeptStep` | `$CA4E` | checked | 6 | - | not measured |
+| `Row_LastStep` | `$CA8B` | checked | 4 | - | not measured |
+| `Row_Draw` | `$CAA1` | checked | 6 | - | not measured |
+| `Row_QueueHeaders` | `$CB1E` | checked | 6 | - | not measured |
+| `Row_RightStep` | `$CB5A` | checked | 6 | - | not measured |
+| `Row_LeftStep` | `$CB6E` | checked | 6 | - | not measured |
+| `Row_DrawHalf` | `$CB94` | checked | 5 | - | not measured |
+| `Block_Draw` | `$D068` | checked | 1 | message-block | not measured |
+| `Block_Debris` | bank 4 `$BD80` | checked | 1 | message-block | not measured |
+| `Tile_EditByAction` | `$F4D8` | checked | 6 | - | not measured |
+| `Tile_EditBySlot` | `$F506` | checked | 1 | - | not measured |
 | `Nmi_Handler` | `$C000` | claimed (decomp/system): the NMI has no site form yet | - | - | - |
 | `Ppu_NmiOff` | `$C183` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
 | `Ppu_NmiOn` | `$C18D` | claimed (decomp/system): no JSR, JMP or pointer in the ROM reaches it | - | - | - |
@@ -398,6 +416,7 @@ RAM-identical in replace mode.
 | `Bank_Select` | `$FFDE` | checked | 12 | - | not measured |
 | `Bank_SelectTemp` | `$FFE0` | checked | 12 | - | not measured |
 | `Oam_Build` | bank 5 `$8000` | checked | 12 | - | not measured |
+| `Oam_DrawSlot` | bank 5 `$80BE` | checked | 12 | - | not measured |
 | `Text_DrawStrings` | bank 5 `$BAB0` | checked | 12 | - | not measured |
 | `Sound_Update` | bank 3 `$8000` | checked | 12 | - | not measured |
 | `Sound_Play` | bank 3 `$8003` | checked | 12 | - | not measured |
@@ -410,9 +429,13 @@ RAM-identical in replace mode.
 | `MainTask` and `Title_*` (13 resume points) | `$D4E6-$D609` | checked | 12 | - | not measured |
 | `BossTrigger` (2 resume points) | `$CF93-$D04C` | checked | 12 (the arena scroll in 4) | - | not measured; the Transylvania redirect to Land Select |
 | `LandLoad` (12 resume points) | `$D79B-$D8A5` | checked | 12 | - | not measured |
-| `LandSelect` (16 resume points) | `$D630-$D79A` | checked | 12 (the return from a land in 5) | final-trip, all-treasures | not measured; the take-off scene (bank 4 `$BE00`) runs as the original |
+| `LandSelect` (16 resume points) | `$D630-$D79A` | checked | 12 (the return from a land in 5) | final-trip, all-treasures | not measured |
+| `FinalTrip` (3 resume points), `SpritesFrame` (1 resume point) | bank 4 `$BE00-$BEAA`, `$F855-$F868` | checked | 0 | final-trip | not measured |
 | `BankTransfer` (1 resume point) | `$D8D9-$D9BD` | checked | 5 | all-treasures (no money), total-max (TOTAL at 99999) | not measured |
 | `Scene` (6 resume points) | `$DF27-$DFEC` | checked | 0 | scene-1, scene-2 | not measured |
+| `Mode15_Redraw` (5 resume points) | `$DFED-$E053` | checked | 0 | mode15-redraw, message-scene | not measured |
+| `Ending` (3 resume points), `Ending_BankTransfer` (`$FFC7`) | `$E1AF-$E1F8` | checked (first frame; the later frames run the original) | 0 | ending | not measured |
+| `EndingScreen` (11 resume points) | `$E054-$E11A` | checked | 0 | ending | not measured |
 | `WaitA` (1 resume point) | `$D9BE` | checked | 5 | final-trip | not measured |
 | `FrameLoop` and its resume points | `$DB36-$DC3D` | checked | 12 | - | not measured; the scene request (`$DBC5`) |
 | `DeathOrWarp`, `Death_*` and `Respawn_*` | `$DC3E`, `$DD4E`, `$DD52` | checked | 10 | - | not measured |
@@ -425,13 +448,18 @@ RAM-identical in replace mode.
 (`$D4E6-$D620`), Land Select with its tables, the bank transfer of money and the wait for A
 (`$D630-$D79A`, `$D8A6-$D9C9`), the land load (`$D79B-$D8A5`), the per-land tables and palettes
 (`$D9CA-$DA0F`), the frame loop with pause, the boss checkpoint, death, warps, respawn, game over and
-land exit (`$DB36-$DF26`), the special scenes with their tables (`$DF27-$DFEC`), the HUD timer
-(`$E28C-$E2FD`) and the boss trigger with the arena scroll (`$CF93-$D04C`): 2,814 of the 3,880 bytes,
-or 73% (tables inside the ranges included). Not yet: the scene set-up that Scrooge's code calls
-(`$DFED-$E053`), the ending (`$E054-$E28B`) and the Select refill `$E2FE` (Scrooge's), which still run
-as the original: the flow hands off to them. The flow has 18 sites: 8 entries that original code
-reaches and 10 stop sites (one for `Player_RowChange`'s hand-off to the row scroll `$C976`, and three
-for Scrooge's message box: the scene set-up `$DFED`, the block draw `$D068` and bank 5 `$B580`).
+land exit (`$DB36-$DF26`), the special scenes with their tables (`$DF27-$DFEC`), the scene set-up
+of message `$0B` that Scrooge's message box calls (`$DFED-$E053`), the ending's screens and its
+first frame with their tables (`$E054-$E126`, `$E133-$E142`, `$E1AF-$E1F8`), the HUD timer
+(`$E28C-$E2FD`) and the boss trigger with the arena scroll (`$CF93-$D04C`): 3,218 of the 3,880 bytes,
+or 83% (tables inside the ranges included). Outside these ranges the flow also has the final trip's
+take-off scene (bank 4 `$BE00-$BEAA`) with the sprites frame it waits with (`$F855-$F868`). Not
+yet: the ending's later frames (`$E1F9-$E28B`: the credits scroll with a raster split polled on
+`$2002`, which `Ending` gives to the original) and the Select refill `$E2FE` (Scrooge's); the
+scene palette tables `$E127-$E132` and `$E143-$E1AE` are read by `Palette_LoadScene` (system.c).
+The flow has 18 sites: 10 entries that original code reaches and 8 stop sites (one for
+`Player_RowChange`'s hand-off to the row scroll `$C976`, and two for Scrooge's message box: the
+block draw `$D068` and bank 5 `$B580`).
 
 Not decompiled yet, and still run as the original from the C:
 
@@ -682,21 +710,21 @@ indirect jump or another routine's entry, and counts as C the routines only C re
 script's docstring gives every rule. `--rev` reads the C of another branch against the same
 coverage.
 
-On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **71.8%, 18,231 of 25,403 executed
-bytes**, in 262 routines (main 7bf545d after the objects batch, 12 routes and 45 poke cases).
+On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **79.0%, 20,060 of 25,403 executed
+bytes**, in 280 routines (decomp/level with main 1ab2759, 12 routes and 45 poke cases).
 
 | Group | Files | Routines | Executed bytes | Share |
 |---|---|---|---|---|
 | player | `player.c`, `motion.c`, `sound.c` | 53 | 3,569 | 14.0% |
 | objects | `objects.c`, `objcommon.c` | 90 | 7,671 | 30.2% |
 | flow | `flow.c` | 85 | 2,408 | 9.5% |
-| level | `level.c`, `collision.c` | 18 | 1,935 | 7.6% |
-| system | `system.c`, `sprites.c`, `audio.c` | 16 | 2,648 | 10.4% |
+| level | `level.c`, `collision.c` | 35 | 3,196 | 12.6% |
+| system | `system.c`, `sprites.c`, `audio.c` | 17 | 3,216 | 12.7% |
 
-317 of those bytes are also run by original routines (shared tails). `Input_ReadControllers` is
+263 of those bytes are also run by original routines (shared tails). `Input_ReadControllers` is
 not counted: replace mode gives every call to the original. The largest routines still original
 are the object kinds of bank 6 that `Obj_UpdateAll` hands to the original (`$A6D3` 469 bytes,
-`$A8D6` 466, `$AAE1` 342, `$AF2B` 263), bank 5 `$80BE` (381, under the entry `$8003`) and the NMI `$C000` (308).
+`$A8D6` 466, `$AAE1` 342, `$AF2B` 263) and the NMI `$C000` (308).
 
 ### Adding a routine
 
