@@ -554,11 +554,11 @@ static void Level_DrawScreen(void)
  * boss arena: stream the sprite CHR of the current row ($0900-$0FFF) 64 bytes
  * per call through the $0400 queue, from the list the row picks (by camera
  * page where the row has two), then load the row's sprite palette 3. */
-static void Chr_StreamRow(void)
+static uint8_t Chr_StreamRow(uint8_t x)
 {
-    Decomp_Enter(DT_CODE_ROW_CHR_STREAM, 0, 0, 0);
+    Decomp_Enter(DT_CODE_ROW_CHR_STREAM, 0, x, 0);
     if (gChrStream & 0x80) {
-        return;
+        return x;
     }
     uint8_t row = (uint8_t)(rom((uint16_t)(DT_CODE_ROW_CHR_BASE + gLand)) + gMapRow);
     if (!gChrStream) {
@@ -589,7 +589,7 @@ static void Chr_StreamRow(void)
                 RAM_U8(DT_ADDR_PALETTE_SHOWN + 0x1C + i) = color;
                 RAM_U8(DT_ADDR_PALETTE + 0x1C + i) = color;
             }
-            return;
+            return 4;
         }
         gChrBank = head >> 4;
         gChrPages = head & 0x0F;
@@ -615,7 +615,7 @@ static void Chr_StreamRow(void)
             gChrStream--;
         }
     }
-    Vram_EndQueue(3 + CHR_CHUNK, CHR_CHUNK);
+    return Vram_EndQueue(3 + CHR_CHUNK, CHR_CHUNK);
 }
 
 /* $F574: replace the metatile under the object in slot (its world X and
@@ -727,8 +727,7 @@ static void Run_TileEdit(Regs *r)
 
 static void Run_ChrStreamRow(Regs *r)
 {
-    (void)r;
-    Chr_StreamRow();
+    r->x = Chr_StreamRow(r->x);
 }
 
 const DecompRoutine gLevelRoutines[] = {
@@ -743,6 +742,6 @@ const DecompRoutine gLevelRoutines[] = {
     { DT_CODE_SCREEN_POINTER, NULL, "Level_ScreenPointer", Run_ScreenPointer, OUT_X },
     { DT_CODE_DECODE_BLOCK, NULL, "Level_DecodeBlock", Run_DecodeBlock, OUT_X },
     { DT_CODE_METATILE_AT, NULL, "Level_MetatileAt", Run_MetatileAt, OUT_A | OUT_X },
-    { DT_CODE_ROW_CHR_STREAM, "ducktales.decomp.C42C", "Chr_StreamRow", Run_ChrStreamRow, OUT_HW },
+    { DT_CODE_ROW_CHR_STREAM, "ducktales.decomp.C42C", "Chr_StreamRow", Run_ChrStreamRow, OUT_X | OUT_HW },
 };
 const int gLevelRoutineCount = sizeof gLevelRoutines / sizeof gLevelRoutines[0];

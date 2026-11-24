@@ -49,15 +49,18 @@ static uint8_t rom(uint16_t addr)
 
 /* $D350: the collision class (0-3) under probe point "point" of the object
  * in slot. A point left of page 0 is empty; one above the row is solid and
- * one below it empty. */
-static uint8_t Bg_ClassAt(int slot, uint8_t point)
+ * one below it empty. carry is the C flag the original returns with: the
+ * page or row sum's, or the last bit its shifts dropped. */
+static uint8_t Bg_ClassAt(int slot, uint8_t point, bool *carry)
 {
     uint8_t dx = rom((uint16_t)(DT_CODE_PROBE_DX + point));
     gScratch2 = (dx & 0x80) ? 0xFF : 0;
     unsigned x = (unsigned)gObjects->worldX[slot] + dx;
     gProbeX = (uint8_t)x;
-    gProbePage = (uint8_t)(gObjects->worldPage[slot] + gScratch2 + (x >> 8));
+    unsigned page = gObjects->worldPage[slot] + gScratch2 + (x >> 8);
+    gProbePage = (uint8_t)page;
     if (gProbePage & 0x80) {
+        *carry = page > 0xFF;
         return 0;
     }
     gProbeQuadrant = gProbeX >> 4 & 1;
@@ -66,13 +69,25 @@ static uint8_t Bg_ClassAt(int slot, uint8_t point)
     gScratch2 = (dy & 0x80) ? 0xFF : 0;
     unsigned y = (unsigned)gObjects->y[slot] + dy;
     gProbeY = (uint8_t)y;
-    if ((uint8_t)(gMapRow + gScratch2 + (y >> 8)) != gMapRow) {
+    uint8_t probeRow = (uint8_t)(gMapRow + gScratch2 + (y >> 8));
+    if (probeRow != gMapRow) {
+        *carry = probeRow >= gMapRow;
         return gScratch2 & 1;
     }
     uint8_t row = (uint8_t)(gProbeY >> 2);
     gProbeCell |= (uint8_t)((row & 0x38) | rom((uint16_t)(DT_CODE_PROBE_PAGE_BIT + (gProbePage & 1))));
     gProbeQuadrant |= row >> 1 & 2;
-    return gCollisionMap[gProbeCell] >> 2 * gProbeQuadrant & 3;
+    uint8_t classes = gCollisionMap[gProbeCell];
+    *carry = gProbeQuadrant ? classes >> (2 * gProbeQuadrant - 1) & 1 : row & 1;
+    return classes >> 2 * gProbeQuadrant & 3;
+}
+
+/* $D350 entered on its own: Player_ContactV falls into it, with X = the
+ * slot touched and Y = its hitbox as the point, and reads the carry. */
+uint8_t Bg_ProbePoint(int slot, uint8_t point, bool *carry)
+{
+    Decomp_Enter(DT_CODE_PROBE_POINT, 0, (uint8_t)slot, point);
+    return Bg_ClassAt(slot, point, carry);
 }
 
 static uint8_t Bg_Solid(void)
@@ -157,7 +172,8 @@ void Bg_Probe(int slot)
     gObjects->flags[slot] &= (uint8_t)~FLAG_BEHIND;
     gProbeHits = 0;
     for (;;) {
-        uint8_t cls = Bg_ClassAt(slot, gProbeFirst);
+        bool carry;
+        uint8_t cls = Bg_ClassAt(slot, gProbeFirst, &carry);
         gProbeClass(gProbeCount) = cls;
         uint8_t tested = cls == CLASS_SPECIAL ? Bg_SpecialTile(slot) : (gProbeHits |= cls);
         if (slot != PLAYER_SLOT && (tested & 1)) {
@@ -227,11 +243,19 @@ static void Run_SnapFeet(Regs *r)
     Bg_SnapFeet(r->x);
 }
 
+static void Run_ProbePoint(Regs *r)
+{
+    bool carry;
+    r->a = Bg_ProbePoint(r->x, r->y, &carry);
+    r->p = (uint8_t)((r->p & ~P_C) | (carry ? P_C : 0));
+}
+
 const DecompRoutine gCollisionRoutines[] = {
     { DT_CODE_BG_PROBE, "ducktales.decomp.D120", "Bg_Probe", Run_Probe, OUT_X | OUT_HW },
     { DT_CODE_SNAP_RIGHT, "ducktales.decomp.D49A", "Bg_SnapRight", Run_SnapRight, OUT_X },
     { DT_CODE_SNAP_LEFT, "ducktales.decomp.D4B2", "Bg_SnapLeft", Run_SnapLeft, OUT_X },
     { DT_CODE_SNAP_HEAD, "ducktales.decomp.D4C8", "Bg_SnapHead", Run_SnapHead, OUT_X },
     { DT_CODE_SNAP_FEET, "ducktales.decomp.D4D6", "Bg_SnapFeet", Run_SnapFeet, OUT_X },
+    { DT_CODE_PROBE_POINT, NULL, "Bg_ProbePoint", Run_ProbePoint, OUT_A | OUT_C },
 };
 const int gCollisionRoutineCount = sizeof gCollisionRoutines / sizeof gCollisionRoutines[0];
