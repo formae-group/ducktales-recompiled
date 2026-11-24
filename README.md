@@ -43,7 +43,8 @@ ROM-derived code locally.
 - **Input.** Keyboard, mouse and SDL game controllers, fully rebindable.
 - **Mods.** `.dtmod` archives and loose folders replace tiles, palettes, music and sound effects,
   and Lua 5.4 scripts react to the game's events in a sandbox. Off by default and ordered in the
-  Mod Menu; asset mods never touch the machine. See [docs/mods.md](docs/mods.md).
+  Mod Menu; asset mods never touch the machine. The Mods page opens the log for load and script
+  errors. See [docs/mods.md](docs/mods.md).
 - **A start on decompilation.** A typed C API over the game's RAM, game events for mods, and
   C versions of Scrooge's per-frame routines and parts of the game loop and HUD. The cycle host can
   compare them with the original (`--decomp check`) or run them in its place

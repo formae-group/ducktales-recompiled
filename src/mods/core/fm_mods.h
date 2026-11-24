@@ -89,6 +89,7 @@ const char *fm_archive_name(const FmArchive *a, int index);
 uint8_t *fm_archive_read(const FmArchive *a, int index, size_t *size, char *err, size_t cap);
 /* UTF-8 path helpers (wide calls on Windows). */
 uint8_t *fm_read_file(const char *path, size_t *size);
+FILE *fm_open_file(const char *path, const char *mode);
 bool fm_is_dir(const char *path);
 /* Creates the folder and its missing parents; true when it is there. */
 bool fm_make_dir(const char *path);
@@ -153,13 +154,16 @@ bool fm_enabled(void);
 void fm_set_enabled(bool on);
 /* The order and switches, "id:on, id:off, ..." top first. */
 void fm_set_order(const char *text);
+/* One-run overrides; only edits in the menu replace the saved settings. */
+void fm_override_enabled(bool on);
+void fm_override_order(const char *text);
 /* Reads the folders into the catalogue. */
 void fm_scan(void);
 /* What is enabled now loads: fm_restart_needed compares against it. */
 void fm_mark_loaded_set(void);
 int fm_count(void);
 FmMod *fm_get(int index);
-FmMod *fm_find(const char *id);
+void fm_set_script_error(const char *id, const char *path, const char *why);
 void fm_set_mod_enabled(int index, bool on);
 void fm_move(int from, int to);
 /* Reads the folders again; what is loaded does not change until a restart. */

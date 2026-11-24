@@ -332,7 +332,7 @@ void page_mods()
     for (int i = 0; i < app_mods_count(); i++) {
         const AppMod *m = app_mods_get(i);
         ui::ListRow row;
-        row.id = m->id;
+        row.id = m->path;
         row.name = *m->name ? m->name : m->id;
         row.detail = mod_detail(m);
         row.error = m->error;
@@ -644,6 +644,7 @@ extern "C" bool app_menu_run(SDL_Window *win)
         { TAB_SETTINGS, 3, -1, -1, 0, 0, false, "menu_04_settings_controls" },
         { TAB_SETTINGS, 3, 0, -1, 0, 0, false, "menu_05_settings_controls_capture" },
         { TAB_SETTINGS, 4, -1, -1, 0, 0, false, "menu_06_settings_gameplay" },
+        { TAB_SETTINGS, 5, -1, -1, 0, 0, false, "menu_15_settings_mods" },
         { TAB_ENHANCEMENTS, 0, -1, -1, 0, 0, false, "menu_07_enhancements_gameplay" },
         { TAB_ENHANCEMENTS, 1, -1, -1, 0, 0, false, "menu_08_enhancements_restore_defaults" },
         { TAB_ABOUT, 0, -1, -1, 0, 0, false, "menu_09_about" },

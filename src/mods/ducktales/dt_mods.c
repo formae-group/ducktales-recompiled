@@ -40,6 +40,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
 #define LANDS 5
 
 static bool s_configured, s_started;
@@ -392,29 +397,35 @@ bool app_mods_option(const char *name, const char *value, bool *ok)
         bool on = false;
         *ok = value && fm_word_on(value, &on);
         if (*ok) {
-            fm_set_enabled(on);
+            fm_override_enabled(on);
         }
         return true;
     }
-    if (!strcmp(name, "--mods-dir")) {
-        *ok = value && fm_is_dir(value) && fm_add_folder(value, false);
+    bool dump = !strcmp(name, "--mods-dump");
+    if (dump || !strcmp(name, "--mods-dir")) {
+        char path[1024];
+#ifdef _WIN32
+        wchar_t wide[1024];
+        bool named = value && *value && MultiByteToWideChar(CP_ACP, 0, value, -1, wide, 1024) &&
+                     WideCharToMultiByte(CP_UTF8, 0, wide, -1, path, sizeof path, NULL, NULL);
+#else
+        bool named = value && *value && snprintf(path, sizeof path, "%s", value) < (int)sizeof path;
+#endif
+        bool exists = named && fm_is_dir(path);
+        *ok = named && (dump ? app_mods_dump_dir(path) : exists && fm_add_folder(path, false));
         if (!*ok) {
-            fprintf(stderr, "[ducktales] --mods-dir %s: %s\n", value ? value : "",
-                    value && fm_is_dir(value) ? "at most 4 mods folders" : "not a folder");
-        }
-        return true;
-    }
-    if (!strcmp(name, "--mods-dump")) {
-        *ok = value && app_mods_dump_dir(value);
-        if (!*ok) {
-            fprintf(stderr, "[ducktales] --mods-dump %s: the folder cannot be made\n", value ? value : "");
+            const char *why = !named    ? "missing or invalid path"
+                              : dump    ? "the folder cannot be made"
+                              : !exists ? "not a folder"
+                                        : "at most 4 additional mods folders";
+            fprintf(stderr, "[ducktales] %s %s: %s\n", name, value ? value : "", why);
         }
         return true;
     }
     if (!strcmp(name, "--mods-order")) {
         *ok = value != NULL;
         if (*ok) {
-            fm_set_order(value);
+            fm_override_order(value);
         }
         return true;
     }
@@ -531,7 +542,7 @@ static int by_key(const void *a, const void *b)
     return x->palette < y->palette ? -1 : x->palette > y->palette;
 }
 
-/* The archive's name of a tile file another one of the mod has the key of, or NULL. */
+/* The archive's name of the later of two tile files with the same key, or NULL. */
 static const char *same_tile(const FmArchive *a, const FmNesTile *tiles, const int *entries, int n)
 {
     TileKey *keys = malloc((size_t)n * sizeof *keys + 1);
@@ -545,7 +556,7 @@ static const char *same_tile(const FmArchive *a, const FmNesTile *tiles, const i
     qsort(keys, (size_t)n, sizeof *keys, by_key);
     for (int i = 1; i < n && !twice; i++) {
         if (!by_key(&keys[i - 1], &keys[i])) {
-            twice = fm_archive_name(a, keys[i].entry);
+            twice = fm_archive_name(a, keys[i - 1].entry > keys[i].entry ? keys[i - 1].entry : keys[i].entry);
         }
     }
     free(keys);
@@ -762,7 +773,7 @@ void app_mods_start(const uint8_t *prg, size_t prg_size)
         fm_make_dir(log);
         strcat(log, "\\mods.log");
         if (fm_log_open(log)) {
-            memcpy(s_log_path, log, sizeof s_log_path);
+            snprintf(s_log_path, sizeof s_log_path, "%s", log);
         }
     }
     if (prg && prg_size) {

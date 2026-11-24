@@ -69,7 +69,7 @@ static wchar_t *wide(const char *utf8)
     return w;
 }
 
-static FILE *open_utf8(const char *path, const char *mode)
+FILE *fm_open_file(const char *path, const char *mode)
 {
     wchar_t *w = wide(path), wmode[8];
     if (!w) {
@@ -148,7 +148,7 @@ void fm_list_dir(const char *dir, void (*fn)(void *user, const char *name, bool 
 
 uint8_t *fm_read_file(const char *path, size_t *size)
 {
-    FILE *f = open_utf8(path, "rb");
+    FILE *f = fm_open_file(path, "rb");
     if (!f) {
         return NULL;
     }

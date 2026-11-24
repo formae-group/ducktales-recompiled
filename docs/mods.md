@@ -19,8 +19,10 @@ runs exactly as the console does.
    want and put them in order. Each mod shows its version and author, and *folder* or *script*
    when it is a loose folder or runs a script. **Open mods folder** shows the folder, **Rescan**
    reads it again and **Open mods log** opens `mods.log` (see below).
-3. Restart the game. Mods load once, at start, so the page shows *Restart DuckTales to apply these
-   changes* until you restart.
+3. Restart the game to apply changes to which mods load, their priority, or their source folders
+   and archives. The page asks you to restart when the selection differs from what is running;
+   undoing a change clears the prompt. Edited assets inside an already loaded mod still need a
+   restart even if the selection hasn't changed.
 
 Mods higher in the list win: when two mods replace the same tile, palette or sound, the one nearer
 the top is used. A mod that cannot be loaded stays in the list with the reason under its name, in
@@ -31,7 +33,7 @@ mod shows its reason before you restart. A mod whose script stopped is named und
 the reason (see [Scripts](#scripts)).
 
 With mods on, the game writes what it loaded, every refused mod with its reason, and the scripts'
-`dt.log` lines, toasts and errors to `mods.log` in the data folder (next to `config.ini`), emptied
+`dt.log` lines, toasts and errors to `mods.log` in the data folder, emptied
 at each start and capped at 4 MiB. The same lines go to the console when the game runs from one.
 Attach that file to a bug report about a mod.
 
@@ -43,16 +45,19 @@ Enabled = on
 Order = hd-hud:on,purple-amazon:off,title-remix:on
 ```
 
-`Order` lists the mods by id, top first. New mods join the bottom of the list, switched on.
+`Order` lists the mods by id, top first. New mods join the bottom of the list, switched on. A
+refused copy cannot take another mod's saved position or switch.
 
-The command line selects mods without the menu, in the window and in the headless host:
+The command line selects mods without the menu, in the window and in the headless host. Its
+switch and order override `config.ini` for that run without changing the saved values. Off-screen
+runs do not scan the player's mods folder, so pass `--mods-dir` explicitly.
 
 | Option | Meaning |
 |---|---|
 | `--mods on\|off` | Load mods or not (the window's default is `[Mods] Enabled`; headless runs default to off) |
 | `--mods-dir DIR` | Another folder to scan (repeatable, up to 4); a path that is not a folder is an error |
 | `--mods-order ID:on\|off,...` | The order and switches, as `[Mods] Order` |
-| `--mods-dump DIR` | Writes every tile drawn, once, as the template a tile replacement starts from; `DIR` and its missing parents are created |
+| `--mods-dump DIR` | Writes every tile drawn, once, as a replacement template, even with mods off. Creates missing parent folders and reports a write failure before stopping the dump |
 
 ## Making a mod
 
@@ -95,7 +100,8 @@ PRG is refused.
 A mod.toml that breaks these rules is listed with the reason and the line: *mod.toml is missing
 version, prg_sha256*, *mod.toml line 3: version must be a quoted string (version = "...")*,
 *mod.toml line 5: name is set twice*. The file may start with a UTF-8 byte order mark (Notepad
-writes one), and so may `scripts/main.lua`. File and folder names inside a mod are matched
+writes one), and so may `scripts/main.lua`. A NUL byte is refused, rather than silently ending
+the manifest before the rest of the file. File and folder names inside a mod are matched
 whatever their case (`Scripts/Main.lua`, `MOD.TOML`), as Windows matches them.
 
 ### Tiles
@@ -107,7 +113,7 @@ tile's 16 CHR bytes in 16 hex digits, optionally followed by `_` and the palette
 - `tiles/<hash>_<palette>.png` replaces the tile drawn with that palette.
 - `tiles/<hash>.png` replaces the tile with any palette. A palette-specific file wins over it.
 
-Run the game with `--mods on --mods-dump DIR` and play to the place you want to change: `DIR`
+Run the game with `--mods-dump DIR` and play to the place you want to change: `DIR`
 fills with `<hash>_<palette>.png`, one per tile and palette drawn, each the tile as the console
 shows it. Edit a copy and put it in `tiles/`. Replacements are 8x8 for now. Pixels with alpha
 below 128 show the original pixel, so a replacement can change part of a tile.
@@ -285,5 +291,6 @@ Both hosts and the native player call the same entry points:
   each frame (including the frames the open menu runs) the `frame` handlers run and the queued
   `dt.set` writes are applied in one RAM transaction.
 
-The tests are in `tests/mods_test.py`. They generate their mods on the fly from the player's own
+The tests are in `tests/mods_test.py`, `tests/mods_catalogue_test.c` and `tests/window_smoke.py`.
+They generate their fixtures in scratch folders, and the tile templates come from the player's own
 ROM; no game content is committed.

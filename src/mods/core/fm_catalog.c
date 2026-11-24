@@ -17,13 +17,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef _WIN32
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-#endif
-
 typedef struct {
     char id[64];
     bool on;
@@ -31,15 +24,20 @@ typedef struct {
 
 static FmGame s_game = { "", "target_sha256", "target", ".mod", "[mods]" };
 static char s_target[65];
-static char s_folders[FM_MAX_FOLDERS][1024];
+static char s_folders[FM_MAX_FOLDERS + 1][1024];
 static int s_folder_count;
+static bool s_player_folder;
 static bool s_enabled = false;
+static int s_saved_enabled = -1;
 static OrderItem s_order[FM_MAX_MODS];
 static int s_order_count;
+static OrderItem s_saved_order[FM_MAX_MODS];
+static int s_saved_order_count = -1;
 static FmMod s_mods[FM_MAX_MODS];
 static int s_count;
 static bool s_marked, s_loaded_enabled;
-static char s_loaded_set[FM_MAX_MODS * 66];
+static FmMod s_loaded[FM_MAX_MODS];
+static int s_loaded_count;
 
 void fm_configure(const FmGame *game)
 {
@@ -65,12 +63,7 @@ bool fm_log_open(const char *path)
         fclose(s_log);
         s_log = NULL;
     }
-#ifdef _WIN32
-    wchar_t w[1024];
-    s_log = MultiByteToWideChar(CP_UTF8, 0, path, -1, w, 1024) ? _wfopen(w, L"wb") : NULL;
-#else
-    s_log = fopen(path, "wb");
-#endif
+    s_log = fm_open_file(path, "wb");
     s_log_bytes = 0;
     return s_log != NULL;
 }
@@ -224,7 +217,7 @@ static void order_from_catalogue(void)
     OrderItem kept[FM_MAX_MODS];
     int n = 0;
     for (int i = 0; i < s_count && n < FM_MAX_MODS; i++) {
-        if (!fm_valid_id(s_mods[i].id)) {
+        if (s_mods[i].error[0]) {
             continue;
         }
         bool dup = false;
@@ -277,7 +270,8 @@ void fm_read_config(const char *path)
         return;
     }
     bool in = false;
-    for (char *line = strtok(text, "\n"); line; line = strtok(NULL, "\n")) {
+    char *next = NULL;
+    for (char *line = strtok_s(text, "\n", &next); line; line = strtok_s(NULL, "\n", &next)) {
         char *t = trim(line);
         if (*t == '[') {
             in = !_strnicmp(t, "[Mods]", 6);
@@ -295,9 +289,12 @@ void fm_read_config(const char *path)
 
 void fm_write_settings(FILE *f)
 {
-    fprintf(f, "[Mods]\nEnabled = %s\nOrder = ", s_enabled ? "on" : "off");
-    for (int i = 0; i < s_order_count; i++) {
-        fprintf(f, "%s%s:%s", i ? ", " : "", s_order[i].id, s_order[i].on ? "on" : "off");
+    bool enabled = s_saved_enabled < 0 ? s_enabled : s_saved_enabled != 0;
+    const OrderItem *order = s_saved_order_count < 0 ? s_order : s_saved_order;
+    int count = s_saved_order_count < 0 ? s_order_count : s_saved_order_count;
+    fprintf(f, "[Mods]\nEnabled = %s\nOrder = ", enabled ? "on" : "off");
+    for (int i = 0; i < count; i++) {
+        fprintf(f, "%s%s:%s", i ? ", " : "", order[i].id, order[i].on ? "on" : "off");
     }
     fprintf(f, "\n");
 }
@@ -309,7 +306,25 @@ bool fm_enabled(void)
 
 void fm_set_enabled(bool on)
 {
+    s_saved_enabled = -1;
     s_enabled = on;
+}
+
+void fm_override_enabled(bool on)
+{
+    if (s_saved_enabled < 0) {
+        s_saved_enabled = s_enabled;
+    }
+    s_enabled = on;
+}
+
+void fm_override_order(const char *text)
+{
+    if (s_saved_order_count < 0) {
+        s_saved_order_count = s_order_count;
+        memcpy(s_saved_order, s_order, (size_t)s_order_count * sizeof s_order[0]);
+    }
+    fm_set_order(text);
 }
 
 bool fm_add_folder(const char *dir, bool create)
@@ -322,7 +337,7 @@ bool fm_add_folder(const char *dir, bool create)
             return true;
         }
     }
-    if (s_folder_count >= FM_MAX_FOLDERS) {
+    if (s_folder_count >= FM_MAX_FOLDERS + s_player_folder) {
         return false;
     }
     if (create) {
@@ -339,14 +354,18 @@ const char *fm_folder(void)
 
 void fm_put_folder_first(const char *dir)
 {
-    char moved[FM_MAX_FOLDERS][1024];
-    int n = s_folder_count;
-    memcpy(moved, s_folders, sizeof moved);
-    s_folder_count = 0;
-    fm_add_folder(dir, true);
-    for (int i = 0; i < n; i++) {
-        fm_add_folder(moved[i], false);
+    int i = 0;
+    while (i < s_folder_count && _stricmp(s_folders[i], dir)) {
+        i++;
     }
+    if (i == FM_MAX_FOLDERS + 1) {
+        return;
+    }
+    s_folder_count += i == s_folder_count;
+    memmove(s_folders + 1, s_folders, (size_t)i * sizeof s_folders[0]);
+    fm_make_dir(dir);
+    snprintf(s_folders[0], sizeof s_folders[0], "%s", dir);
+    s_player_folder = true;
 }
 
 /* ---- mod.toml: top-level keys with string values (basic, literal and multi-line) ---- */
@@ -403,6 +422,9 @@ static bool parse_toml(char *text, FmMod *m, char *game, size_t game_cap, char *
     while (*p) {
         while (*p == ' ' || *p == '\t' || *p == '\r') {
             p++;
+        }
+        if (!*p) {
+            break;
         }
         if (*p == '\n') {
             p++;
@@ -495,6 +517,11 @@ static bool parse_toml(char *text, FmMod *m, char *game, size_t game_cap, char *
         char *const FIELD[7] = { m->id, m->name, m->version, m->author, m->description, game, target };
         const size_t FIELD_CAP[7] = { sizeof m->id,          sizeof m->name, sizeof m->version, sizeof m->author,
                                       sizeof m->description, game_cap,       target_cap };
+        if ((known == 0 || known >= 5) && strlen(value) >= FIELD_CAP[known]) {
+            snprintf(err, cap, "mod.toml line %d: %s is longer than %zu bytes", line, KEYS[known],
+                     FIELD_CAP[known] - 1);
+            return false;
+        }
         snprintf(FIELD[known], FIELD_CAP[known], "%s", value);
     }
     return true;
@@ -539,7 +566,12 @@ static void read_mod(FmMod *m)
         const char *const REQUIRED[5] = { "id", "name", "version", "game", s_game.target_key };
         const char *const VALUE[5] = { m->id, m->name, m->version, game, target };
         char missing[128] = "";
-        bool parsed = parse_toml(text, m, game, sizeof game, target, sizeof target, err, sizeof err);
+        bool parsed = false;
+        if (memchr(text, 0, size)) {
+            snprintf(err, sizeof err, "mod.toml contains a NUL byte; save it as UTF-8 text.");
+        } else {
+            parsed = parse_toml(text, m, game, sizeof game, target, sizeof target, err, sizeof err);
+        }
         for (int k = 0; k < 5; k++) {
             if (!VALUE[k][0]) {
                 size_t used = strlen(missing);
@@ -624,7 +656,9 @@ static void scan_entry(void *user, const char *name, bool folder)
 
 static int by_name(const void *a, const void *b)
 {
-    return _stricmp(((const FmMod *)a)->name, ((const FmMod *)b)->name);
+    const FmMod *left = a, *right = b;
+    int name = _stricmp(left->name, right->name);
+    return name ? name : _stricmp(left->path, right->path);
 }
 
 void fm_scan(void)
@@ -648,7 +682,7 @@ void fm_scan(void)
     int n = 0;
     for (int j = 0; j < s_order_count; j++) {
         for (int i = 0; i < s_count; i++) {
-            if (!used[i] && !strcmp(s_mods[i].id, s_order[j].id)) {
+            if (!used[i] && !s_mods[i].error[0] && !strcmp(s_mods[i].id, s_order[j].id)) {
                 used[i] = true;
                 sorted[n] = s_mods[i];
                 sorted[n++].enabled = s_order[j].on;
@@ -666,19 +700,9 @@ void fm_scan(void)
     order_from_catalogue();
 }
 
-static void loaded_set(char *out, size_t cap, bool *enabled)
+static bool same_mod(const FmMod *a, const FmMod *b)
 {
-    size_t n = 0;
-    out[0] = 0;
-    *enabled = s_enabled;
-    if (!s_enabled) {
-        return;
-    }
-    for (int i = 0; i < s_count; i++) {
-        if (s_mods[i].enabled && !s_mods[i].error[0]) {
-            n += (size_t)snprintf(out + n, n < cap ? cap - n : 0, "%s,", s_mods[i].id);
-        }
-    }
+    return !strcmp(a->id, b->id) && !_stricmp(a->path, b->path);
 }
 
 int fm_count(void)
@@ -693,10 +717,11 @@ FmMod *fm_get(int index)
 
 void fm_set_mod_enabled(int index, bool on)
 {
-    if (index < 0 || index >= s_count) {
+    if (index < 0 || index >= s_count || s_mods[index].error[0]) {
         return;
     }
     s_mods[index].enabled = on;
+    s_saved_order_count = -1;
     order_from_catalogue();
 }
 
@@ -712,46 +737,70 @@ void fm_move(int from, int to)
         memmove(&s_mods[to + 1], &s_mods[to], (size_t)(from - to) * sizeof m);
     }
     s_mods[to] = m;
+    s_saved_order_count = -1;
     order_from_catalogue();
 }
 
 void fm_rescan(void)
 {
-    static FmMod before[FM_MAX_MODS];
-    int n = s_count;
-    memcpy(before, s_mods, (size_t)n * sizeof before[0]);
-    order_from_catalogue();
     fm_scan();
     for (int i = 0; i < s_count; i++) {
-        for (int k = 0; k < n; k++) {
-            if (!strcmp(before[k].id, s_mods[i].id)) {
-                s_mods[i].loaded = before[k].loaded;
-                memcpy(s_mods[i].script_error, before[k].script_error, sizeof s_mods[i].script_error);
+        for (int k = 0; k < s_loaded_count; k++) {
+            if (same_mod(&s_loaded[k], &s_mods[i])) {
+                s_mods[i].loaded = true;
+                memcpy(s_mods[i].script_error, s_loaded[k].script_error, sizeof s_mods[i].script_error);
+                break;
             }
         }
     }
 }
 
-FmMod *fm_find(const char *id)
+void fm_set_script_error(const char *id, const char *path, const char *why)
 {
-    for (int i = 0; i < s_count; i++) {
-        if (!strcmp(s_mods[i].id, id)) {
-            return &s_mods[i];
+    for (int i = 0; i < s_loaded_count; i++) {
+        FmMod *m = &s_loaded[i];
+        if (!strcmp(m->id, id) && !_stricmp(m->path, path)) {
+            snprintf(m->script_error, sizeof m->script_error, "%s", why);
+            break;
         }
     }
-    return NULL;
+    for (int i = 0; i < s_count; i++) {
+        FmMod *m = &s_mods[i];
+        if (!strcmp(m->id, id) && !_stricmp(m->path, path)) {
+            snprintf(m->script_error, sizeof m->script_error, "%s", why);
+            break;
+        }
+    }
 }
 
 void fm_mark_loaded_set(void)
 {
-    loaded_set(s_loaded_set, sizeof s_loaded_set, &s_loaded_enabled);
+    s_loaded_enabled = s_enabled;
+    s_loaded_count = 0;
+    for (int i = 0; i < s_count; i++) {
+        if (s_mods[i].loaded) {
+            s_loaded[s_loaded_count++] = s_mods[i];
+        }
+    }
     s_marked = true;
 }
 
 bool fm_restart_needed(void)
 {
-    static char now[sizeof s_loaded_set];
-    bool enabled;
-    loaded_set(now, sizeof now, &enabled);
-    return s_marked && (enabled != s_loaded_enabled || strcmp(now, s_loaded_set));
+    if (!s_marked || !s_enabled) {
+        return s_marked && s_loaded_enabled;
+    }
+    if (!s_loaded_enabled) {
+        return true;
+    }
+    int n = 0;
+    for (int i = 0; i < s_count; i++) {
+        if (s_mods[i].enabled && !s_mods[i].error[0]) {
+            if (n == s_loaded_count || !same_mod(&s_loaded[n], &s_mods[i])) {
+                return true;
+            }
+            n++;
+        }
+    }
+    return n != s_loaded_count;
 }

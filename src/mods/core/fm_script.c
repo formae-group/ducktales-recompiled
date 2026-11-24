@@ -791,10 +791,7 @@ static int dispatch(lua_State *L)
 static void report(Script *s)
 {
     log_line(s, "script stopped: ", s->why);
-    FmMod *m = fm_find(s->id);
-    if (m) {
-        snprintf(m->script_error, sizeof m->script_error, "%s", s->why);
-    }
+    fm_set_script_error(s->id, s->path, s->why);
     s_dirty = true;
 }
 
@@ -1025,10 +1022,7 @@ static void reload_changed(void)
         char err[300];
         if (start_script(s, err, sizeof err)) {
             log_line(s, "script reloaded", "");
-            FmMod *m = fm_find(s->id);
-            if (m) {
-                m->script_error[0] = 0;
-            }
+            fm_set_script_error(s->id, s->path, "");
         } else {
             s->stamp = stamp;
             s->stopped = true;

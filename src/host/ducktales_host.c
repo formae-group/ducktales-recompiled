@@ -174,9 +174,6 @@ static void start_mods(void)
         return;
     }
     started = true;
-#if DUCKTALES_WINDOW
-    app_mods_use_player_folders(app_settings_path());
-#endif
     size_t size = cyc_mod_copy_cart_payload(NULL, 0);
     uint8_t *prg = size ? malloc(size) : NULL;
     if (prg && cyc_mod_copy_cart_payload(prg, size) != size) {
