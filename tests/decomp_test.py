@@ -146,6 +146,20 @@ FINAL_TREASURE = {
 }
 # name, {address: value} stored before POKE_FRAME (or {frame: {...}}), routines that must be compared,
 # optionally {frame: buttons} pad states added to the route
+ENDING_FRAMES = 3950  # to the frames after the last screen, about 3880 frames in
+ENDING_WANT = [
+    'Palette_LoadScene',
+    'Ending_Waited',
+    'EndingScreen_Streamed',
+    'EndingScreen_Lit',
+    'EndingObjects',
+    'EndingObjects_Update',
+    'EndingObjects_Exit',
+    'EndingObjects_Done',
+    'Ending_Split',
+    'Ending_Second',
+    'Ending_OverNext',
+]
 POKES = [
     ('hurt-wait', {0x39: 0x05, 0x7D: 0x20}, ['Player_Hurt']),
     ('hurt-now', {0x39: 0x05, 0x7D: 0x00}, ['Player_Hurt', 'Player_TakeDamage']),
@@ -399,8 +413,24 @@ POKES = [
         },
         ['Obj_Thief', 'Obj_StealMoney'],
     ),
-    # the ending flag ($AC): the frame loop starts the ending, whose first scene loads its palettes ($E08F)
-    ('ending', {0xAC: 0x01}, ['Palette_LoadScene', 'Ending_Waited', 'EndingScreen_Streamed', 'EndingScreen_Lit']),
+    # the ending flag ($AC): the frame loop starts the ending, whose first scene loads its palettes ($E08F);
+    # then the scene's objects, the credits under the sprite-0 split, and the frames after the last screen.
+    # TOTAL ($0330 packet) and the treasures ($A0), poked before the variant is picked, give variants 0 and 2
+    ('ending', {0xAC: 0x01}, ENDING_WANT + ['EndingObjects_Walk'], None, ENDING_FRAMES),
+    (
+        'ending-0',
+        {POKE_FRAME: {0xAC: 0x01}, POKE_FRAME + 60: {0x33A: 0x01}},
+        ENDING_WANT + ['EndingObjects_Hop'],
+        None,
+        ENDING_FRAMES,
+    ),
+    (
+        'ending-2',
+        {POKE_FRAME: {0xAC: 0x01}, POKE_FRAME + 60: {0xA0: 0x7F, 0x334: 0x01}},
+        ENDING_WANT + ['EndingObjects_Wait'],
+        None,
+        ENDING_FRAMES,
+    ),
     # kind $33 that a blow has hit: it is beaten
     (
         'target-hit',

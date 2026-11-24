@@ -22,6 +22,7 @@ ROM = Path(default_rom())
 TOML = ROOT / "config" / "game.toml"
 HEAD = "# Game flow (src/decomp/flow.c"
 TAIL = "# END game flow"
+INTERNAL = {"E23C"}  # reached by fall-through, not a JSR: the hook also fires inside a routine
 NOTES = {
     "C976": "The row scroll the row change ($E8C0, src/decomp/player.c) hands off to.",
     "DFED": "What the message box ($ED05, src/decomp/player.c) hands off to besides task_wait:\n"
@@ -56,7 +57,9 @@ def main():
         addr = syms[sym]
         bank = int(site.split(".")[0]) if "." in site else 7
         out += [f"# {name}", "[[mod_function_hook]]", f'id = "ducktales.decomp.{site}"', f"addr = 0x{addr:04X}"]
-        out += ["length = 8", f"crc32 = 0x{crc(bank, addr):08X}", ""]
+        out += ["length = 8", f"crc32 = 0x{crc(bank, addr):08X}"]
+        out += ["include_internal = true"] if site in INTERNAL else []
+        out += [""]
         count += 1
     for m in re.finditer(r'STOP\((\w+), "([\w.]+)"\)', src):
         sym, site = m.groups()

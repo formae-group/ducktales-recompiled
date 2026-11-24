@@ -457,6 +457,17 @@
 #define DT_B5_PPU_STRINGS      0xBAB0 /* X = set: PPU address and data strings written to the PPU (code) */
 #define DT_B5_CONSUMED_BITS    0xB760 /* the land's consumed-record bits $0120-$013F (code) */
 #define DT_B5_ENDING_OBJECTS   0xB380 /* the ending screen's objects ($24), then the sprites (code) */
+#define DT_B5_END_OBJ_LIST     0xB3CC /* bank 5: per scene, the offset of its first object entry (code) */
+#define DT_B5_END_OBJ_ENTRIES  0xB3D2 /* bank 5: action, Y, world X per slot, up to slot 0's kind (code) */
+#define DT_B5_END_OBJ_UPDATE   0xB400 /* a frame of the ending scene's slot 0, by its kind (code) */
+#define DT_B5_END_OBJ_PLACE    0xB382 /* place the objects of ending screen X (code) */
+#define DT_B5_END_OBJ_HOP      0xB412 /* ending step 0 (code) */
+#define DT_B5_END_OBJ_WALK     0xB46A /* ending step 1 (code) */
+#define DT_B5_END_OBJ_WAIT     0xB48F /* ending step 2 (code) */
+#define DT_B5_END_OBJ_EXIT     0xB4B5 /* ending step 3 (code) */
+#define DT_B5_END_OBJ_DONE     0xB507 /* ending steps 4 and 5 (code) */
+#define DT_B5_END_OBJ_LO       0xB50D /* bank 5: the handlers by kind, low bytes (code) */
+#define DT_B5_END_OBJ_HI       0xB513 /* their high bytes (code) */
 #define DT_B5_SELECT_MESSAGE   0xB800 /* Land Select: the message for $5E, $5D and $78 into the VRAM queue (code) */
 #define DT_B5_MESSAGE          0xB81C /* X = Land Select message: its strings into the VRAM queue (code) */
 #define DT_B5_MESSAGE_LIST     0xB86C /* bank 5: per message, the index of its first entry below (code) */
@@ -584,6 +595,10 @@
 #define DT_FLOW_ENDING_BANKED      0xE1BA
 #define DT_FLOW_ENDING_WAITED      0xE1BF
 #define DT_FLOW_ENDING_SHOWN       0xE1EC
+#define DT_FLOW_END_SPLIT_WAIT     0xE229 /* the original's sprite-0 wait after a credits frame */
+#define DT_FLOW_END_SPLIT          0xE23C
+#define DT_FLOW_END_SECOND         0xE271
+#define DT_FLOW_END_OVER           0xE289
 #define DT_FLOW_END_FADED          0xE057
 #define DT_FLOW_END_BLACK          0xE07C
 #define DT_FLOW_END_SCREEN_OFF     0xE07F

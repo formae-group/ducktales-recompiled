@@ -419,6 +419,14 @@ in replace), plus 11 poke cases and both event cases. At default decompilation s
 and matching oracle and interpreter output. The full 12-route decompilation suite passed on
 the flow branch before integration; it has not been rerun in full on this merge.
 
+The long ending pokes compare all three variants (`$AD = 0, 1, 2`) from a saved Amazon state
+through the credits and the final wait. All three passed check and replace (4,150 frames each).
+The objects at `5:$B380` and `5:$B400` were compared on all their calls (9 and 2,622), the
+variant-1 walk at `5:$B46A` on all 353, and the code after the raster split at `7:$E23C` on
+all 2,718. The pokes also compared all 12 calls to the CHR loader, whose return registers are
+kept across the yield after unblanking. Cycle quick verification passed 13/13 affected routes
+(7,800 frames from golden states, alignment 0).
+
 ## Decompiled level, player, flow and objects (2026-11-23)
 
 Each branch passed its own gate before the merge: format, `quick_verify.py` native and cycle

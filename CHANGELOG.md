@@ -7,6 +7,10 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- Decompiled the ending's scene objects (bank 5 `$B380-$B50C`) and later frames
+  (`$E1F9-$E28B`). Only the sprite-0 raster wait and timed PPU write stay in the original.
+  The three long ending pokes exercise each variant through the end of the credits.
+
 - `tests/decomp_test.py` poke cases `extra-life` (the extra life `$8BB0`), `secret-treasure` (item `$74`,
   message `$0D` instead of the treasure pose, `$8C37`) and `row-end-right` (Scrooge's X clamped to `$F0` at a
   row's right end, `$F08B`): code no route or poke case ran before.
