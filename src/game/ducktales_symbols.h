@@ -709,6 +709,16 @@
 #define DT_CODE_KIND_LAUNCHPAD_RIDE       0xF869 /* kind $36 (fixed bank) */
 #define DT_CODE_KIND_SKY_FLYER            0xF8F2 /* kind $37 (fixed bank) */
 #define DT_CODE_KIND_SKY_ROPE             0xF9F8 /* kind $38 (fixed bank) */
+#define DT_CODE_KIND_16                   0x8DD1 /* kind $16 */
+#define DT_CODE_KIND_17                   0x8E23 /* kind $17 */
+#define DT_CODE_KIND_21                   0x9EB3 /* kind $21 */
+#define DT_CODE_KIND_22                   0x9F3D /* kind $22 */
+#define DT_CODE_KIND_3A                   0xFA3F /* kind $3A (fixed bank) */
+#define DT_CODE_KIND_3B                   0xFBC9 /* kind $3B (fixed bank) */
+#define DT_CODE_KIND_3C                   0xFB68 /* kind $3C (fixed bank) */
+#define DT_CODE_KIND_3D                   0xFBFF /* kind $3D (fixed bank) */
+#define DT_CODE_KIND_40                   0xFD9E /* kind $40 (fixed bank) */
+#define DT_CODE_KIND_42                   0x8EE6 /* kind $42 */
 #define DT_CODE_KIND_HOPPER               0x8225 /* kind 1 */
 #define DT_CODE_KIND_WALKER               0x82AF /* kind 2 */
 #define DT_CODE_KIND_THROWER              0x830E /* kind 3 */

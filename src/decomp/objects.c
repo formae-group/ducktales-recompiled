@@ -7,7 +7,8 @@
  * slot 1-15 (status bit 7), chosen by its kind through the handler table at
  * $802C/$806F. The slot cursor lives in RAM ($4A) because the original keeps
  * it there across the handler call. Kinds whose handler is decompiled run as
- * C; the others run the original handler through Decomp_CallP.
+ * C; the others call their original handler at its own address through
+ * Decomp_CallP. Kinds $43 and up have no handler entry and do nothing.
  *
  * Decompiled kinds: the Amazon's enemies (1-5, 7, $0A, $0C, $0D) and its
  * swinging hold ($0E), the Himalayas' dangler (6), Transylvania's swooper
@@ -3948,7 +3949,8 @@ static void Obj_SkyRope(uint8_t x)
  * JMP ($0000) vector), A = $22 (the low byte of the return it pushed),
  * X = slot and Y = kind. The flags are those of the loop: the caller's carry
  * for slot 1, the CPX of the loop for the others, and the V the previous
- * handler left. *r gets the registers an original handler returns with. */
+ * handler left. *r gets the registers an original handler returns with.
+ * Kinds $43 and up read past the table in the original; here they do nothing. */
 static void Obj_RunHandler(uint8_t slot, Regs *r)
 {
     uint8_t kind = gObjects->kind[slot];
@@ -4126,8 +4128,35 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
         case OBJ_KIND_KEY_SPOT:
             Obj_KeySpot(slot);
             break;
-        default:
-            *r = Decomp_CallP((uint16_t)(gScratch1 << 8 | gScratch0), r->a, slot, r->y, r->p);
+        case OBJ_KIND_16:
+            *r = Decomp_CallP(DT_CODE_KIND_16, r->a, slot, r->y, r->p);
+            break;
+        case OBJ_KIND_17:
+            *r = Decomp_CallP(DT_CODE_KIND_17, r->a, slot, r->y, r->p);
+            break;
+        case OBJ_KIND_21:
+            *r = Decomp_CallP(DT_CODE_KIND_21, r->a, slot, r->y, r->p);
+            break;
+        case OBJ_KIND_22:
+            *r = Decomp_CallP(DT_CODE_KIND_22, r->a, slot, r->y, r->p);
+            break;
+        case OBJ_KIND_FINAL_STAND_IN:
+            *r = Decomp_CallP(DT_CODE_KIND_3A, r->a, slot, r->y, r->p);
+            break;
+        case OBJ_KIND_3B:
+            *r = Decomp_CallP(DT_CODE_KIND_3B, r->a, slot, r->y, r->p);
+            break;
+        case OBJ_KIND_3C:
+            *r = Decomp_CallP(DT_CODE_KIND_3C, r->a, slot, r->y, r->p);
+            break;
+        case OBJ_KIND_3D:
+            *r = Decomp_CallP(DT_CODE_KIND_3D, r->a, slot, r->y, r->p);
+            break;
+        case OBJ_KIND_40:
+            *r = Decomp_CallP(DT_CODE_KIND_40, r->a, slot, r->y, r->p);
+            break;
+        case OBJ_KIND_42:
+            *r = Decomp_CallP(DT_CODE_KIND_42, r->a, slot, r->y, r->p);
             break;
     }
 }
