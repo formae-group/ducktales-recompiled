@@ -60,8 +60,8 @@ extern "C" {
 #define OBJ_KIND_LEDGE_WALKER      0x1E /* enemy: walks a ledge, turns at its edges (code) */
 #define OBJ_KIND_PACER             0x1F /* enemy: paces left and right (code) */
 #define OBJ_KIND_BOBBER            0x20 /* enemy: bobs up and down in place (code) */
-#define OBJ_KIND_21                0x21 /* (not studied; the original handler runs) */
-#define OBJ_KIND_22                0x22 /* (not studied; the original handler runs) */
+#define OBJ_KIND_CART              0x21 /* a cart Scrooge rides (code) */
+#define OBJ_KIND_HOP_WALKER        0x22 /* enemy: hops once when Scrooge comes near, then walks (code) */
 #define OBJ_KIND_ROLLER            0x23 /* something that rolls left on the floor (code) */
 #define OBJ_KIND_BOULDER           0x24 /* a boulder that rolls right and pushes Scrooge (code) */
 #define OBJ_KIND_CEILING_HOPPER    0x25 /* an enemy that drops from the ceiling and hops at Scrooge (code) */

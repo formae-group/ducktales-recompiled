@@ -396,6 +396,54 @@ POKES = [
         },
         ['Obj_BlockKicker', 'Obj_KickBlock', 'Obj_LaunchBlock'],
     ),
+    # slot 9 a cart (kind $21) on Scrooge: he rides it (modes 10 and 11) as it rolls left
+    (
+        'cart-ride',
+        {
+            0x709: 0xA0,
+            0x719: 0x21,
+            0x629: 0x40,
+            0x649: 0xA6,
+            0x729: 0x62,
+            0x739: 0x00,
+            0x609: 0x80,
+            0x7D9: 0x00,
+            0x699: 0x00,
+        },
+        ['Obj_Cart'],
+    ),
+    # slot 9 a kind $22 near Scrooge: it hops, then walks
+    (
+        'hop-walker',
+        {
+            0x709: 0xA0,
+            0x719: 0x22,
+            0x629: 0x3D,
+            0x649: 0xA6,
+            0x729: 0x70,
+            0x739: 0x00,
+            0x609: 0x80,
+            0x7D9: 0x11,
+            0x699: 0x00,
+        },
+        ['Obj_HopWalker', 'Obj_HopWalkerWalk'],
+    ),
+    # slot 9 a kind $22 near Scrooge whose first step hits the floor: it turns each frame instead of hopping
+    (
+        'hop-walker-turn',
+        {
+            0x709: 0xA0,
+            0x719: 0x22,
+            0x629: 0x3D,
+            0x649: 0xB4,
+            0x729: 0x70,
+            0x739: 0x00,
+            0x609: 0x80,
+            0x7D9: 0x11,
+            0x699: 0x00,
+        },
+        ['Obj_HopWalker', 'Obj_HopWalkerWalk'],
+    ),
 ]
 
 # name, route, options, routines that must be compared

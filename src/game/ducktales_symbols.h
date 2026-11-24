@@ -710,8 +710,9 @@
 #define DT_CODE_KIND_37                   0xF8F2 /* kind $37 (fixed bank) */
 #define DT_CODE_KIND_16                   0x8DD1 /* kind $16 */
 #define DT_CODE_KIND_17                   0x8E23 /* kind $17 */
-#define DT_CODE_KIND_21                   0x9EB3 /* kind $21 */
-#define DT_CODE_KIND_22                   0x9F3D /* kind $22 */
+#define DT_CODE_KIND_CART                 0x9EB3 /* kind $21 */
+#define DT_CODE_KIND_HOP_WALKER           0x9F3D /* kind $22 */
+#define DT_CODE_HOP_WALKER_WALK           0x9FC5 /* kind $22: walk, turning at walls */
 #define DT_CODE_KIND_38                   0xF9F8 /* kind $38 (fixed bank) */
 #define DT_CODE_KIND_3A                   0xFA3F /* kind $3A (fixed bank) */
 #define DT_CODE_KIND_3B                   0xFBC9 /* kind $3B (fixed bank) */

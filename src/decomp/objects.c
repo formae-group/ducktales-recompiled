@@ -66,6 +66,7 @@
 #define SFX_BOSS_TURN    0x23
 #define SFX_LAUNCH       0x28
 #define SFX_BOSS_SHOTS   0x1C
+#define SFX_CART         0x33
 
 #define gObjCursor        RAM_U8(DT_ADDR_OBJ_CURSOR)
 #define gScratch0         RAM_U8(DT_ADDR_SCRATCH0)
@@ -3914,6 +3915,117 @@ static void Obj_Kind37(uint8_t x)
     }
 }
 
+/* Kind $21 ($9EB3): a cart Scrooge rides. Touched, it takes him (mode 10,
+ * his pose $8B, its pose $3E) and rolls left at $0180 (probes $38) once on
+ * the rails (probe $31 below). While he rides, his mode is 10 on the rails
+ * and 11 in the air, he sits $0B px above it, and each new animation frame
+ * of the cart plays sound $33. */
+static void Obj_Cart(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_CART, 0x22, x, gObjects->kind[x]);
+    if (Step(x) == 0) {
+        if (!Obj_TouchScrooge(x)) {
+            return;
+        }
+        gPlayerMode = PLAYER_MODE_CARRIED_A;
+        gObjects->action[x] = 0x3E;
+        gObjects->action[P_] = 0x8B;
+        gObjects->animTimer[x] = 0;
+        gObjects->animTimer[P_] = 0;
+        gObjects->animFrame[x] = 0;
+        gObjects->animFrame[P_] = 0;
+        gObjects->state[x]++;
+        Obj_SetVelocityY(x, 0);
+        Obj_SetSpeed(x, 0x0180);
+    }
+    gObjects->timer[x] = PLAYER_MODE_CARRIED_B;
+    x = Obj_Fall(x, 0x31, 2);
+    if (gProbeHits & 1) {
+        x = Obj_WalkLeft(x, 0x38, 0);
+        gObjects->timer[x] = PLAYER_MODE_CARRIED_A;
+    }
+    if (gPlayerMode != PLAYER_MODE_CARRIED_A && gPlayerMode != PLAYER_MODE_CARRIED_B) {
+        return;
+    }
+    gPlayerMode = gObjects->timer[x];
+    gObjects->y[P_] = (uint8_t)(gObjects->y[x] - 0x0B);
+    gObjects->worldX[P_] = gObjects->worldX[x];
+    gObjects->worldPage[P_] = gObjects->worldPage[x];
+    if (gObjects->animTimer[x] == 0) {
+        Sound_Request(SFX_CART, x);
+    }
+}
+
+/* $9FC5: kind $22 walks the way of $07E0 bit 0 (set: probes $39 with the
+ * left mover, clear: probes $36 with the right one) and turns at a wall. */
+static uint8_t Obj_HopWalkerWalk(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_HOP_WALKER_WALK, 0, x, 0);
+    if (gObjects->dir[x] & 1) {
+        x = Obj_WalkLeft(x, 0x39, 0);
+    } else {
+        x = Obj_WalkRight(x, 0x36, 0);
+    }
+    if (gProbeHits & 1) {
+        gObjects->dir[x] ^= 3;
+    }
+    return x;
+}
+
+/* Kind $22 ($9F3D): with Scrooge within $32 px it starts at $0180 with $07E0
+ * = 1 and a vertical velocity of $02D4; until then its animation stays at
+ * timer 0, facing left. Its first step walks; unless that turned it, it
+ * jumps (probe $53) and, past the top, falls (probe $31, sound $27 on each
+ * new animation frame) and walks on once on the floor. A turn on the first
+ * step holds the animation as before. It always tests contact with
+ * Scrooge. */
+static void Obj_HopWalker(uint8_t x)
+{
+    Decomp_Enter(DT_CODE_KIND_HOP_WALKER, 0x22, x, gObjects->kind[x]);
+    if (Step(x) == 0) {
+        if (Obj_DistanceX(x) >= 0x32) {
+            gObjects->animTimer[x] = 0;
+            gObjects->flags[x] &= (uint8_t)~OBJ_FLAG_FACING_RIGHT;
+            return;
+        }
+        Obj_SetVelocityY(x, 0x02D4);
+        Obj_SetSpeed(x, 0x0180);
+        gObjects->dir[x] = 1;
+        gObjects->state[x]++;
+    }
+    (void)Obj_TouchScrooge(x);
+    switch (Step(x)) {
+        case 2:
+            x = Obj_Rise(x, 0x53, 0);
+            if (!(gObjects->vy[x] & 0x80)) {
+                return;
+            }
+            Obj_SetVelocityY(x, 0);
+            gObjects->state[x]++;
+            return;
+        case 3:
+            if (gObjects->animTimer[x] == 0) {
+                Sound_Request(SFX_ROLL, x);
+            }
+            x = Obj_Fall(x, 0x31, 2);
+            if (gProbeHits & 1) {
+                (void)Obj_HopWalkerWalk(x);
+            }
+            return;
+        default: {
+            uint8_t dir = gObjects->dir[x];
+            x = Obj_HopWalkerWalk(x);
+            if (dir == gObjects->dir[x]) {
+                gObjects->state[x]++;
+                return;
+            }
+            gObjects->animTimer[x] = 0;
+            gObjects->flags[x] &= (uint8_t)~OBJ_FLAG_FACING_RIGHT;
+            return;
+        }
+    }
+}
+
 /* ---- the dispatch ---- */
 
 /* One live slot: the dispatch leaves the handler's address in $00/$01 (the
@@ -4102,11 +4214,11 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
         case OBJ_KIND_17:
             *r = Decomp_CallP(DT_CODE_KIND_17, r->a, slot, r->y, r->p);
             break;
-        case OBJ_KIND_21:
-            *r = Decomp_CallP(DT_CODE_KIND_21, r->a, slot, r->y, r->p);
+        case OBJ_KIND_CART:
+            Obj_Cart(slot);
             break;
-        case OBJ_KIND_22:
-            *r = Decomp_CallP(DT_CODE_KIND_22, r->a, slot, r->y, r->p);
+        case OBJ_KIND_HOP_WALKER:
+            Obj_HopWalker(slot);
             break;
         case OBJ_KIND_38:
             *r = Decomp_CallP(DT_CODE_KIND_38, r->a, slot, r->y, r->p);
@@ -4446,6 +4558,21 @@ static void Run_Visitor(Regs *r)
     Obj_Visitor(r->x);
 }
 
+static void Run_Cart(Regs *r)
+{
+    Obj_Cart(r->x);
+}
+
+static void Run_HopWalker(Regs *r)
+{
+    Obj_HopWalker(r->x);
+}
+
+static void Run_HopWalkerWalk(Regs *r)
+{
+    Obj_HopWalkerWalk(r->x);
+}
+
 static void Run_Swooper(Regs *r)
 {
     Obj_Swooper(r->x);
@@ -4620,6 +4747,9 @@ const DecompRoutine gObjectRoutines[] = {
     { DT_CODE_KIND_SWING, NULL, "Obj_Swing", Run_Swing, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_LIFT, NULL, "Obj_Lift", Run_Lift, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_SWOOPER, NULL, "Obj_Swooper", Run_Swooper, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_HOP_WALKER, NULL, "Obj_HopWalker", Run_HopWalker, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_HOP_WALKER_WALK, NULL, "Obj_HopWalkerWalk", Run_HopWalkerWalk, 0, .bank = DT_BANK_OBJECTS },
+    { DT_CODE_KIND_CART, NULL, "Obj_Cart", Run_Cart, 0, .bank = DT_BANK_OBJECTS },
     { DT_CODE_KIND_VISITOR, NULL, "Obj_Visitor", Run_Visitor, 0 },
     { DT_CODE_KIND_PATH_OPENER, NULL, "Obj_PathOpener", Run_PathOpener, 0 },
     { DT_CODE_KIND_BLOCK_KICKER, NULL, "Obj_BlockKicker", Run_BlockKicker, 0, .bank = DT_BANK_OBJECTS },
