@@ -183,6 +183,9 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Changed
 
+- The object system's `src/decomp/objects.c` is split by object family into `src/decomp/objects/`
+  (dispatch, blocks, items, enemies, walkers, thieves, flyers, hazards, props, bosses, scenes), each
+  with its adapters and routine table; the code is unchanged.
 - The native player (`ducktales.exe`) starts with Decompiled code and No slowdown on. Settings →
   Gameplay → Original mode, at the top of the page with a (?), turns both off for the recompiled
   original with the console's slowdown, and turning it off turns both back on. `config.ini` now
