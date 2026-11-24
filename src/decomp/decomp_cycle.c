@@ -100,8 +100,13 @@
  * mode measures the original on a clocked snapshot, then runs the C's bus
  * operations at those cycles, with the original's intervening bus traffic
  * supplying open-bus values and DMA halt addresses.
+ *
+ * The backend is four files that share decomp_cycle.h: this one (the
+ * isolated scope, the plain routines' check and replace, the sites and
+ * --decomp), decomp_cycle_task.c (task code), decomp_cycle_nmi.c (the NMI
+ * handler) and decomp_cycle_clock.c (the original on the running clock).
  */
-#include "decomp/decomp_backend.h"
+#include "decomp/decomp_cycle.h"
 #include "decomp/devices.h"
 
 #include "ducktales/events.h"
@@ -121,44 +126,22 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* nesrecomp counts the device stores made inside isolated calls
- * (runner/cyc/hw_machine.c); task code compares them. */
-extern uint64_t hw_isolated_io_writes;
-
 #define FRAME_END_MARGIN 32
-#define SCOPE_OP_GAP     8
 #define LOAD_GAP         3
-#define REGS_TEXT        0x4000
 
-static uint8_t s_orig[GAME_RAM_SIZE];
+uint8_t dc_orig[GAME_RAM_SIZE];
 static bool s_scope;
 static bool s_inner;
-static int s_damage_replayed;
+int dc_damage_replayed;
 
 static int s_ops_in_scope;
-
-typedef struct {
-    uint64_t ciram, palette, chr, oam, regs;
-    unsigned bank;
-} HwState;
 
 static HwState s_orig_hw;
 static char s_orig_regs[REGS_TEXT], s_c_regs[REGS_TEXT];
 static FILE *s_dump;
-static uint64_t s_early, s_nmi_debt;
+static uint64_t s_early;
+uint64_t dc_nmi_debt;
 static bool s_regs_text;
-
-typedef struct {
-    uint16_t start, stop_pc;
-    uint8_t start_s, call_s, stop_s, stop_bank;
-    uint8_t ret[2]; /* the isolated call's return address, where the RTS observer left it */
-    bool fixup, stop_armed, stopped, returned, rti;
-    CycModRegs regs;
-    uint64_t entry_cycles, cycles, io;
-} TaskRun;
-
-static TaskRun s_run;
-static bool s_run_active;
 
 uint64_t dc_frame(void)
 {
@@ -195,7 +178,7 @@ static bool device_line_compared(const char *line)
 }
 
 /* The machine's device fields as text, one per line, in the scratch file. */
-static FILE *device_dump(void)
+FILE *dc_device_dump(void)
 {
     if (!s_dump && !(s_dump = tmpfile())) {
         dc_fail("cannot open a scratch file for the device state", 0);
@@ -211,7 +194,7 @@ static FILE *device_dump(void)
 /* The machine's device registers as text, the lines compared. */
 static void device_regs(char *regs)
 {
-    FILE *f = device_dump();
+    FILE *f = dc_device_dump();
     char line[512];
     size_t used = 0;
     while (fgets(line, sizeof line, f) && line[0]) {
@@ -234,7 +217,7 @@ static uint64_t device_hash(void)
     return fnv((const uint8_t *)h, sizeof h);
 }
 
-static HwState hw_state(void)
+HwState dc_hw_state(void)
 {
     size_t n = 0;
     HwState s;
@@ -332,10 +315,7 @@ static uint8_t isolated_read(uint16_t pc, uint16_t addr, uint8_t value)
     return value;
 }
 
-static bool s_fresh;
-static void timing_check(const DecompRoutine *rt, const CycModRegs *in);
-
-/* The original routine alone on the machine's state: its RAM into s_orig,
+/* The original routine alone on the machine's state: its RAM into dc_orig,
  * its registers into *out; returns its cycle count, 0 when it did not
  * return. */
 static uint64_t run_original(const DecompRoutine *rt, const CycModRegs *in, CycModRegs *out, bool hooked)
@@ -344,15 +324,15 @@ static uint64_t run_original(const DecompRoutine *rt, const CycModRegs *in, CycM
     if (!cyc_mod_isolate_begin()) {
         dc_fail("cannot open an isolated scope", rt->addr);
     }
-    s_damage_replayed = 0;
+    dc_damage_replayed = 0;
     cyc_mod_allow_isolated_hooks(hooked);
     cyc_mod_stats(&before);
     *out = *in;
     bool returned = cyc_mod_call(rt->addr, out);
     cyc_mod_stats(&after);
-    memcpy(s_orig, cyc_cpu_ram(), GAME_RAM_SIZE);
+    memcpy(dc_orig, cyc_cpu_ram(), GAME_RAM_SIZE);
     if (rt->out & OUT_HW) {
-        s_orig_hw = hw_state();
+        s_orig_hw = dc_hw_state();
         if (s_regs_text) {
             device_regs(s_orig_regs);
         }
@@ -371,13 +351,13 @@ static uint64_t spare_cycles(uint64_t cycles)
 
 /* Stops early when an NMI comes: the rest is spent when the handler returns
  * (on_nmi_exit), so the interrupted code resumes at the console's time. */
-static void spend_cycles(uint16_t addr, uint64_t cycles)
+void dc_spend_cycles(uint16_t addr, uint64_t cycles)
 {
     while (cycles > 1 && !cpu.nmi_edge) {
         (void)cpu_read(addr, 0);
         cycles--;
     }
-    s_nmi_debt += cycles - 1;
+    dc_nmi_debt += cycles - 1;
     (void)cpu_read(addr, CYC_POLL | CYC_DONE);
 }
 
@@ -454,7 +434,7 @@ static void check_hw(const DecompRoutine *rt, const CycModRegs *in, uint64_t cyc
         dc_fail("cannot open an isolated scope", rt->addr);
     }
     dc_play_ops(0, spare_cycles(cycles), rt->addr);
-    HwState c = hw_state();
+    HwState c = dc_hw_state();
     bool regs_same = c.regs == s_orig_hw.regs;
     if (!regs_same) {
         device_regs(s_c_regs);
@@ -506,14 +486,14 @@ static void check(int i, const CycModRegs *in)
         return;
     }
     Regs orig = { o.a, o.x, o.y, o.p };
-    if (!agree(rt, in->s, cycles != 0, s_orig, &orig, dc_image, &c)) {
-        report(rt, in, NULL, cycles != 0, s_orig, &orig, dc_image, &c);
+    if (!agree(rt, in->s, cycles != 0, dc_orig, &orig, dc_image, &c)) {
+        report(rt, in, NULL, cycles != 0, dc_orig, &orig, dc_image, &c);
     }
     if (rt->out & OUT_HW) {
         check_hw(rt, in, cycles);
     }
     if (rt->timed) {
-        timing_check(rt, in);
+        dc_timing_check(rt, in);
     }
     dc_stats[i].compared++;
 }
@@ -614,7 +594,7 @@ void Decomp_FrameEnd(void)
 
 /* Whether a routine taking this many cycles from now would still run when
  * the frame ends (with a margin of a few instructions). */
-static bool spans_frame_end(uint64_t cycles)
+bool dc_spans_frame_end(uint64_t cycles)
 {
     if (cpu.do_nmi || cpu.nmi_edge) {
         return true;
@@ -631,7 +611,7 @@ static int replace(int i, const CycModRegs *in)
     CycModRegs o;
     uint64_t cycles = run_original(rt, in, &o, false);
     dc_stats[i].calls++;
-    if (cycles && spans_frame_end(cycles)) {
+    if (cycles && dc_spans_frame_end(cycles)) {
         dc_stats[i].original++;
         return 0;
     }
@@ -666,1219 +646,8 @@ static int replace(int i, const CycModRegs *in)
     CycModRegs set = { c.a, c.x, c.y, in->s, (uint8_t)((c.p & flags) | (in->p & ~flags)), 0 };
     cyc_mod_set_regs(&set);
     uint64_t spare = spare_cycles(cycles);
-    spend_cycles(rt->addr, spare - dc_play_ops(dc_played, spare, rt->addr));
+    dc_spend_cycles(rt->addr, spare - dc_play_ops(dc_played, spare, rt->addr));
     return 1;
-}
-
-/* ---- task code ---- */
-
-/* Whether VBlank starts within this many cycles from now (a margin covers the
- * last instruction). The NMI's handler steps state the task code also uses
- * (the random generator, the scratch bytes): the original takes it inside a
- * long task routine, and taking it after the C's results would change the
- * order, so such a call goes to the original. So does a call made while the
- * NMI line has risen but the CPU has not latched the edge yet (a warm reset
- * at the frame boundary: the original takes that NMI before its first store
- * to $2000). */
-static bool crosses_vblank(uint64_t cycles)
-{
-    hw_native_flush();
-    if (ppu_nmi_output() && !cpu.nmi_input) {
-        return true;
-    }
-    long now = (long)ppu.scanline * 341 + ppu.dot;
-    long dots = 241L * 341 + 1 - now;
-    if (dots <= 0) {
-        dots += 262L * 341;
-    }
-    return cycles + 12 >= (uint64_t)(dots / 3);
-}
-
-/* A site reached inside the isolated run of a task routine's original. */
-static int task_isolated_site(uint16_t addr)
-{
-    CycModRegs r;
-    cyc_mod_regs(&r);
-    if (!s_run.stop_armed || s_run.stopped || addr != s_run.stop_pc || r.s != s_run.stop_s ||
-        hw_isolated_cycles == s_run.entry_cycles) {
-        return 0;
-    }
-    if (addr < 0xC000 && hw_prg_bank4(addr) >> 2 != s_run.stop_bank) {
-        return 0;
-    }
-    s_run.stopped = true;
-    s_run.regs = r;
-    cyc_mod_poke((uint16_t)(0x100 | (uint8_t)(s_run.call_s - 1)), s_run.ret[0]);
-    cyc_mod_poke((uint16_t)(0x100 | s_run.call_s), s_run.ret[1]);
-    r.s = (uint8_t)(s_run.call_s - 2);
-    cyc_mod_set_regs(&r);
-    return 1;
-}
-
-/* The last isolated run of a timed routine, reused by the next call with the
- * same registers, bank and RAM (the scheduler's idle passes repeat it). */
-static struct {
-    const DecompRoutine *rt;
-    CycModRegs in;
-    unsigned bank;
-    uint8_t ram[GAME_RAM_SIZE], orig[GAME_RAM_SIZE];
-    TaskRun run;
-} s_timed;
-
-/* The original task routine alone, from its start to its RTS or, when the C
- * handed off, to its arrival at the same routine at the same depth; its RAM
- * into s_orig, the rest into s_run. The call enters at an RTS: the observer
- * moves its return to the start, with S as the routine has it there (the
- * RTS's cycles are not the routine's). A TXS that raises S past the synthetic
- * caller (as the reset vector does) moves the sentinel above the new stack. */
-static void run_task_original(const DecompRoutine *rt, const CycModRegs *in)
-{
-    const uint8_t *ram = cyc_cpu_ram();
-    unsigned bank = hw_prg_bank4(0x8000);
-    s_fresh = false;
-    if (rt->timed && s_timed.rt == rt && s_timed.in.a == in->a && s_timed.in.x == in->x && s_timed.in.y == in->y &&
-        s_timed.in.s == in->s && s_timed.in.p == in->p && s_timed.bank == bank &&
-        !memcmp(s_timed.ram, ram, GAME_RAM_SIZE)) {
-        s_run = s_timed.run;
-        memcpy(s_orig, s_timed.orig, GAME_RAM_SIZE);
-        return;
-    }
-    if (rt->timed) {
-        s_timed.rt = rt;
-        s_timed.in = *in;
-        s_timed.bank = bank;
-        memcpy(s_timed.ram, ram, GAME_RAM_SIZE);
-    }
-    CycModStats before, after;
-    if (!cyc_mod_isolate_begin()) {
-        dc_fail("cannot open an isolated scope", rt->addr);
-    }
-    cyc_mod_allow_isolated_hooks(true);
-    memset(&s_run, 0, sizeof s_run);
-    s_damage_replayed = 0;
-    s_run.start = rt->addr;
-    s_run.start_s = in->s;
-    s_run.call_s = (uint8_t)(in->s + rt->locals + 2);
-    if ((int8_t)(dc_rebased_s - s_run.call_s) > 0) {
-        s_run.call_s = dc_rebased_s;
-    }
-    s_run.fixup = true;
-    s_run.rti = rt->interrupt;
-    s_run.stop_armed = dc_handoff_set;
-    s_run.stop_pc = dc_handoff;
-    s_run.stop_s = dc_cur_s;
-    s_run.stop_bank = dc_handoff_bank;
-    s_run_active = true;
-    uint64_t io = hw_isolated_io_writes;
-    cyc_mod_stats(&before);
-    CycModRegs r = *in;
-    r.s = s_run.call_s;
-    s_fresh = true;
-    s_run.returned = cyc_mod_call(DT_CODE_RTS, &r) && !s_run.fixup;
-    cyc_mod_stats(&after);
-    s_run_active = false;
-    s_run.io = hw_isolated_io_writes - io;
-    s_run.cycles = after.cycles - before.cycles - s_run.entry_cycles;
-    if (!s_run.stopped) {
-        s_run.regs = r;
-    }
-    memcpy(s_orig, cyc_cpu_ram(), GAME_RAM_SIZE);
-    cyc_mod_isolate_end();
-    if (rt->timed) {
-        s_timed.run = s_run;
-        memcpy(s_timed.orig, s_orig, GAME_RAM_SIZE);
-    }
-}
-
-/* Bytes both runs must agree on: page 1 only above the C's final S, and never
- * the slot of the isolated call's return address (which wraps to the bottom of
- * page 1 for the main task's start, entered with S = $FF). */
-static bool task_live(uint16_t a)
-{
-    if ((a & 0xFF00) != 0x0100) {
-        return true;
-    }
-    uint8_t off = (uint8_t)a;
-    if (off == s_run.call_s || off == (uint8_t)(s_run.call_s - 1)) {
-        return false;
-    }
-    if (a < DT_ADDR_STACK_FLOOR || dc_keep_stack_ram) {
-        return true;
-    }
-    return dc_handoff_set ? off > dc_cur_s : off >= dc_cur_s + 3u;
-}
-
-static bool task_same(const DecompRoutine *rt, const Regs *c)
-{
-    if (!s_run.returned || dc_handoff_set != s_run.stopped || s_run.io != (uint64_t)dc_stores) {
-        return false;
-    }
-    for (uint16_t a = 0; a < GAME_RAM_SIZE; a++) {
-        if (task_live(a) && s_orig[a] != dc_image[a]) {
-            return false;
-        }
-    }
-    const CycModRegs *o = &s_run.regs;
-    uint8_t out = dc_handoff_set ? dc_handoff_uses : rt->out;
-    if ((out & OUT_A) && o->a != c->a) {
-        return false;
-    }
-    if ((out & OUT_X) && o->x != c->x) {
-        return false;
-    }
-    if ((out & OUT_Y) && o->y != c->y) {
-        return false;
-    }
-    uint8_t p_mask = P_N | P_V | P_Z | P_C;
-    if (dc_handoff_set) {
-        p_mask |= P_I | P_D;
-    }
-    if ((out & OUT_P) && ((o->p ^ c->p) & p_mask)) {
-        return false;
-    }
-    return true;
-}
-
-static void task_report(const DecompRoutine *rt, const CycModRegs *in, const Regs *c)
-{
-    const CycModRegs *o = &s_run.regs;
-    fprintf(stderr, "[decomp] MISMATCH %s ($%04X) at frame %llu, entry A=%02X X=%02X Y=%02X S=%02X P=%02X\n", rt->name,
-            rt->addr, (unsigned long long)cyc_ring_frame, in->a, in->x, in->y, in->s, in->p);
-    if (dc_handoff_set) {
-        fprintf(stderr, "[decomp]   the C hands off to $%04X at S=%02X; the original %s\n", dc_handoff, dc_cur_s,
-                s_run.stopped    ? "got there"
-                : s_run.returned ? "returned instead"
-                                 : "did not return or get there");
-    } else {
-        fprintf(stderr, "[decomp]   the C returns; the original %s\n",
-                s_run.stopped    ? "stopped"
-                : s_run.returned ? "returned too"
-                                 : "did not return");
-    }
-    fprintf(stderr, "[decomp]   device writes original %llu decompiled %d\n", (unsigned long long)s_run.io, dc_stores);
-    if (rt->timed) {
-        fprintf(stderr, "[decomp]   cycles original %llu decompiled %llu\n", (unsigned long long)s_run.cycles,
-                (unsigned long long)dc_cycles);
-    }
-    int shown = 0;
-    for (uint16_t a = 0; a < GAME_RAM_SIZE; a++) {
-        if (!task_live(a) || s_orig[a] == dc_image[a]) {
-            continue;
-        }
-        if (shown++ < 24) {
-            fprintf(stderr, "[decomp]   $%04X original %02X decompiled %02X\n", a, s_orig[a], dc_image[a]);
-        }
-    }
-    if (shown > 24) {
-        fprintf(stderr, "[decomp]   ... %d bytes differ\n", shown);
-    }
-    fprintf(stderr,
-            "[decomp]   registers original A=%02X X=%02X Y=%02X P=%02X decompiled A=%02X X=%02X Y=%02X P=%02X\n", o->a,
-            o->x, o->y, o->p, c->a, c->x, c->y, c->p);
-    fflush(stderr);
-    exit(3);
-}
-
-static void poll_check(int i, const CycModRegs *in, const Regs *c);
-static bool poll_replace(int i, const CycModRegs *in, const Regs *c);
-
-/* Check mode: the polling routine last compared, whose original runs for real
- * until this cycle; its poll looping back to the site is not a new call. */
-static struct {
-    int routine;
-    uint64_t until;
-} s_poll_run = { -1, 0 };
-
-static void task_check(int i, const CycModRegs *in)
-{
-    const DecompRoutine *rt = dc_routine[i];
-    if (rt->polls && i == s_poll_run.routine && cyc_cycle_count() < s_poll_run.until) {
-        return;
-    }
-    Regs c;
-    dc_run_c(rt, in, &c);
-    dc_stats[i].calls++;
-    if (dc_run_original) {
-        dc_stats[i].original++;
-        return;
-    }
-    if (rt->polls) {
-        poll_check(i, in, &c);
-        return;
-    }
-    run_task_original(rt, in);
-    if (rt->interrupt && !dc_handoff_set) {
-        c.p = dc_image[0x100 | (uint8_t)(dc_cur_s + 1)];
-    }
-    if (!task_same(rt, &c)) {
-        task_report(rt, in, &c);
-    }
-    if (rt->timed && s_fresh) {
-        timing_check(rt, in);
-    } else if (rt->timed && dc_cycles != s_run.cycles) {
-        dc_fail("TIMING: the C's path takes other cycles than the original's last run with this entry", rt->addr);
-    }
-    dc_stats[i].compared++;
-    dc_nested_compared();
-}
-
-/* Replace mode: the C's results stored, its device writes made and the
- * original's cycles spent; then the CPU goes on where the C ends (the routine
- * it hands off to, or its RTS). False when the original runs instead. */
-static bool task_replace(int i, const CycModRegs *in)
-{
-    const DecompRoutine *rt = dc_routine[i];
-    Regs c;
-    dc_run_c(rt, in, &c);
-    dc_stats[i].calls++;
-    if (dc_run_original) {
-        dc_stats[i].original++;
-        return false;
-    }
-    if (rt->polls) {
-        return poll_replace(i, in, &c);
-    }
-    run_task_original(rt, in);
-    if (!s_run.returned || dc_handoff_set != s_run.stopped) {
-        dc_fail("the original task routine did not end where the C does in an isolated call", rt->addr);
-    }
-    if (rt->timed && !dc_nops && dc_cycles != s_run.cycles) {
-        dc_fail("the cycles the C states are not the original's", rt->addr);
-    }
-    bool rti = rt->interrupt && !dc_handoff_set;
-    uint64_t debt = rti ? s_nmi_debt : 0;
-    if (spans_frame_end(s_run.cycles + debt) || crosses_vblank(s_run.cycles + debt)) {
-        dc_stats[i].original++;
-        return false;
-    }
-    const uint8_t *ram = cyc_cpu_ram();
-    for (uint16_t a = 0; a < GAME_RAM_SIZE; a++) {
-        /* The routine's own return address is not compared (the isolated run
-         * has its own there), but a C that popped it and pushed another (the
-         * row change) leaves the bytes the original would. */
-        bool own_return = (a & 0xFF00) == 0x0100 &&
-                          ((uint8_t)a == s_run.call_s || (uint8_t)a == (uint8_t)(s_run.call_s - 1));
-        if ((task_live(a) || own_return) && ram[a] != dc_image[a]) {
-            cyc_mod_poke(a, dc_image[a]);
-        }
-    }
-    uint8_t s = dc_cur_s;
-    uint16_t pc = dc_handoff;
-    if (rti) {
-        c.p = ram[0x100 | (uint8_t)(s + 1)];
-        pc = (uint16_t)(ram[0x100 | (uint8_t)(s + 2)] | ram[0x100 | (uint8_t)(s + 3)] << 8);
-        s = (uint8_t)(s + 3);
-    } else if (!dc_handoff_set) {
-        pc = (uint16_t)((ram[0x100 | (uint8_t)(s + 1)] | ram[0x100 | (uint8_t)(s + 2)] << 8) + 1);
-        s = (uint8_t)(s + 2);
-    }
-    uint8_t flags = P_N | P_V | P_Z | P_C;
-    uint8_t p = rti              ? c.p
-                : dc_handoff_set ? (dc_handoff_uses & OUT_P ? c.p : in->p)
-                                 : (uint8_t)((c.p & flags) | (in->p & ~flags));
-    CycModRegs set = { c.a, c.x, c.y, s, p, 0 };
-    if (dc_handoff_set) {
-        if (!(dc_handoff_uses & OUT_A)) {
-            set.a = s_run.regs.a;
-        }
-        if (!(dc_handoff_uses & OUT_X)) {
-            set.x = s_run.regs.x;
-        }
-        if (!(dc_handoff_uses & OUT_Y)) {
-            set.y = s_run.regs.y;
-        }
-    }
-    cyc_mod_set_regs(&set);
-    for (int k = 0; k < dc_stores; k++) {
-        cpu_write(dc_store[k].addr, dc_store[k].value, 0);
-    }
-    s_nmi_debt -= debt;
-    spend_cycles(rt->addr, (s_run.cycles > (uint64_t)dc_stores ? s_run.cycles - (uint64_t)dc_stores : 1) + debt);
-    dc_stats[i].compared++;
-    dc_nested_compared();
-    cpu.pc = pc;
-    return true;
-}
-
-/* The RTS observer: inside a task routine's isolated run it moves the entry
- * RTS to the routine's start; on the machine it starts the C of a resume
- * point the RTS returned to (and of the next one, when that C returns). */
-static void on_return(void)
-{
-    if (cyc_mod_isolated()) {
-        if (s_run_active && s_run.fixup) {
-            s_run.fixup = false;
-            s_run.entry_cycles = hw_isolated_cycles;
-            s_run.ret[0] = cyc_cpu_ram()[0x100 | (uint8_t)(s_run.call_s - 1)];
-            s_run.ret[1] = cyc_cpu_ram()[0x100 | s_run.call_s];
-            if (s_run.rti) {
-                uint16_t ret = (uint16_t)((s_run.ret[0] | s_run.ret[1] << 8) + 1);
-                cyc_mod_poke((uint16_t)(0x100 | (uint8_t)(s_run.call_s - 1)), (uint8_t)ret);
-                cyc_mod_poke((uint16_t)(0x100 | s_run.call_s), (uint8_t)(ret >> 8));
-            }
-            CycModRegs r;
-            cyc_mod_regs(&r);
-            r.s = s_run.start_s;
-            cyc_mod_set_regs(&r);
-            cpu.pc = s_run.start;
-        }
-        return;
-    }
-    for (;;) {
-        uint16_t pc = cpu.pc;
-        if (!(dc_resume[pc >> 3] & (1u << (pc & 7)))) {
-            return;
-        }
-        int i = dc_find_routine(pc, true);
-        if (i < 0) {
-            return;
-        }
-        CycModRegs in;
-        cyc_mod_regs(&in);
-        if (dc_mode == DECOMP_CHECK) {
-            task_check(i, &in);
-            return;
-        }
-        if (!task_replace(i, &in) || dc_handoff_set) {
-            return;
-        }
-    }
-}
-
-/* ---- interrupt routines: the NMI handler ---- */
-
-#define NMI_WRITES_MAX 1024
-
-/* The writes to $2006, $2007 and the APU's registers (not the sprite DMA or
- * the joypad strobe), in order. */
-typedef struct {
-    int n;
-
-    struct {
-        uint16_t addr;
-        uint8_t value;
-    } w[NMI_WRITES_MAX];
-} NmiWrites;
-
-static bool sequenced(uint16_t addr)
-{
-    return addr == PPU_ADDR || addr == PPU_DATA ||
-           (addr >= APU_BASE && addr <= APU_FRAME && addr != OAM_DMA && addr != JOYPAD1);
-}
-
-static void nmi_write(NmiWrites *s, uint16_t addr, uint8_t value)
-{
-    if (s->n == NMI_WRITES_MAX) {
-        dc_fail("too many device writes in one NMI", DT_CODE_NMI);
-    }
-    s->w[s->n].addr = addr;
-    s->w[s->n].value = value;
-    s->n++;
-}
-
-/* Check mode's live check of the NMI handler: the C's results, kept from the
- * NMI until the original's RTI. */
-static struct {
-    bool armed;
-    int routine;
-    uint8_t s;
-    Regs regs;
-    uint8_t ram[GAME_RAM_SIZE];
-    HwState hw;
-    uint8_t oam[256];
-    char fields[REGS_TEXT];
-    NmiWrites c, live;
-} s_nmi;
-
-/* The device fields the NMI sets that stay as set until its RTI: the PPU's
- * control and mask bits, t, fine X and the write latch (v, OAMADDR and the
- * status flags move with rendering), and the APU's written registers, frame
- * counter mode and DMC settings, with the $4015 enables (the length counters
- * and timers run). */
-static const char *const NMI_FIELDS[] = {
-    "ppu.nmi_enable",     "ppu.inc32",      "ppu.sprite16",  "ppu.sprite_table",    "ppu.bg_table",
-    "ppu.show_bg8",       "ppu.show_spr8",  "ppu.show_bg",   "ppu.show_spr",        "ppu.t",
-    "ppu.fine_x",         "ppu.addr_latch", "apu.five_step", "apu.irq_inhibit",     "apu.reg",
-    "apu.dmc_irq_enable", "apu.dmc_loop",   "apu.dmc_rate",  "apu.dmc_sample_addr", "apu.dmc_sample_len",
-    "apu.dmc_enable",
-};
-#define LENGTH_COUNTER_BYTES 5 /* count, halt, reload, reload value, enabled ($4015) */
-
-static bool nmi_field(const char *line)
-{
-    for (size_t k = 0; k < sizeof NMI_FIELDS / sizeof NMI_FIELDS[0]; k++) {
-        size_t n = strlen(NMI_FIELDS[k]);
-        if (!strncmp(line, NMI_FIELDS[k], n) && line[n] == ' ') {
-            return true;
-        }
-    }
-    return false;
-}
-
-/* The fields of NMI_FIELDS as text, and the enabled byte of each length
- * counter. */
-static void nmi_fields(char *out)
-{
-    FILE *f = device_dump();
-    char line[512];
-    size_t used = 0;
-    while (fgets(line, sizeof line, f) && line[0]) {
-        if (!strncmp(line, "apu.len ", 8)) {
-            const char *hex = line + 8;
-            char enabled[64];
-            int n = snprintf(enabled, sizeof enabled, "apu.len.enabled");
-            for (int ch = 0; ch < 4; ch++) {
-                const char *b = hex + 2 * (ch * LENGTH_COUNTER_BYTES + LENGTH_COUNTER_BYTES - 1);
-                n += snprintf(enabled + n, sizeof enabled - (size_t)n, " %c%c", b[0], b[1]);
-            }
-            snprintf(line, sizeof line, "%s\n", enabled);
-        } else if (!nmi_field(line)) {
-            continue;
-        }
-        size_t len = strlen(line);
-        if (used + len + 1 > REGS_TEXT) {
-            dc_fail("the NMI's device fields do not fit", DT_CODE_NMI);
-        }
-        memcpy(out + used, line, len);
-        used += len;
-    }
-    out[used] = 0;
-}
-
-/* The original's writes, from the trace's cycle observer between the NMI and
- * its RTI; the trace's own state is put back after. */
-static struct {
-    bool on, was;
-    void *file;
-    uint64_t hash;
-    uint32_t cycle;
-    void (*prev)(const CycTraceCycle *cycle);
-} s_watch;
-
-static void nmi_observe(const CycTraceCycle *cycle)
-{
-    if (s_watch.prev) {
-        s_watch.prev(cycle);
-    }
-    if (cycle->kind == 'W' && !cycle->dma && sequenced(cycle->addr)) {
-        nmi_write(&s_nmi.live, cycle->addr, cycle->value);
-    }
-}
-
-static void nmi_watch(bool on)
-{
-    if (on == s_watch.on) {
-        return;
-    }
-    s_watch.on = on;
-    if (on) {
-        s_watch.was = cyc_trace_enabled;
-        s_watch.file = cyc_trace_file;
-        s_watch.hash = cyc_trace_hash;
-        s_watch.cycle = cyc_trace_cycle;
-        s_watch.prev = cyc_trace_cycle_hook;
-        if (!s_watch.was) {
-            cyc_trace_file = NULL;
-        }
-        cyc_trace_cycle_hook = nmi_observe;
-        cyc_trace_enabled = true;
-        return;
-    }
-    cyc_trace_cycle_hook = s_watch.prev;
-    cyc_trace_enabled = s_watch.was;
-    if (!s_watch.was) {
-        cyc_trace_file = s_watch.file;
-        cyc_trace_hash = s_watch.hash;
-        cyc_trace_cycle = s_watch.cycle;
-    }
-}
-
-/* The C at the NMI, its bus operations made on a copy of the machine; the
- * original then runs for real. */
-static void nmi_check(int i, const CycModRegs *in)
-{
-    const DecompRoutine *rt = dc_routine[i];
-    if (s_nmi.armed) {
-        dc_fail("the NMI handler did not reach its RTI", rt->addr);
-    }
-    Regs c;
-    dc_run_c(rt, in, &c);
-    dc_stats[i].calls++;
-    if (dc_run_original) {
-        dc_stats[i].original++;
-        return;
-    }
-    static CycSnapshot *snap;
-    if (!snap && !(snap = cyc_snapshot_new())) {
-        dc_fail("out of memory for the machine snapshot", rt->addr);
-    }
-    cyc_snapshot_take(snap);
-    memcpy(hw.ram, dc_image, sizeof hw.ram);
-    cyc_ring_muted = 1;
-    cyc_hooks_suspend(true);
-    dc_play_ops(0, (uint64_t)dc_nops * SCOPE_OP_GAP, rt->addr);
-    s_nmi.hw = hw_state();
-    memcpy(s_nmi.oam, cyc_ppu_oam(), sizeof s_nmi.oam);
-    nmi_fields(s_nmi.fields);
-    cyc_snapshot_restore(snap);
-    cyc_hooks_suspend(false);
-    cyc_ring_muted = 0;
-    s_nmi.c.n = s_nmi.live.n = 0;
-    for (int k = 0; k < dc_nops; k++) {
-        if (dc_ops[k].write && sequenced(dc_ops[k].addr)) {
-            nmi_write(&s_nmi.c, dc_ops[k].addr, dc_ops[k].value);
-        }
-    }
-    nmi_watch(true);
-    memcpy(s_nmi.ram, dc_image, GAME_RAM_SIZE);
-    s_nmi.regs = c;
-    s_nmi.s = in->s;
-    s_nmi.routine = i;
-    s_nmi.armed = true;
-}
-
-/* Page 1 above the handler's entry S (the interrupt's P and return address)
- * and all of RAM outside it; what the handler pushed below is dead after its
- * RTI. */
-static bool nmi_live(uint16_t a)
-{
-    return (a & 0xFF00) != 0x0100 || a < DT_ADDR_STACK_FLOOR || (uint8_t)a > s_nmi.s;
-}
-
-static void nmi_report(const DecompRoutine *rt, const CycModRegs *o, const uint8_t *ram, const HwState *hw,
-                       const char *fields)
-{
-    const Regs *c = &s_nmi.regs;
-    fprintf(stderr, "[decomp] MISMATCH %s ($%04X) at its RTI, frame %llu\n", rt->name, rt->addr,
-            (unsigned long long)cyc_ring_frame);
-    int shown = 0;
-    for (uint16_t a = 0; a < GAME_RAM_SIZE; a++) {
-        if (nmi_live(a) && ram[a] != s_nmi.ram[a] && shown++ < 24) {
-            fprintf(stderr, "[decomp]   $%04X original %02X decompiled %02X\n", a, ram[a], s_nmi.ram[a]);
-        }
-    }
-    if (shown > 24) {
-        fprintf(stderr, "[decomp]   ... %d bytes differ\n", shown);
-    }
-    fprintf(stderr,
-            "[decomp]   registers original A=%02X X=%02X Y=%02X S=%02X P=%02X decompiled A=%02X X=%02X Y=%02X S=%02X "
-            "P=%02X\n",
-            o->a, o->x, o->y, o->s, o->p, c->a, c->x, c->y, s_nmi.s, c->p);
-    fprintf(stderr, "[decomp]   hardware:%s%s%s%s%s\n", hw->ciram != s_nmi.hw.ciram ? " CIRAM" : "",
-            hw->palette != s_nmi.hw.palette ? " palette" : "", hw->chr != s_nmi.hw.chr ? " CHR-RAM" : "",
-            hw->oam != s_nmi.hw.oam ? " OAM" : "", hw->bank != s_nmi.hw.bank ? " PRG bank" : "");
-    const uint8_t *oam = cyc_ppu_oam();
-    for (int k = 0, n = 0; k < 256 && n < 8; k++) {
-        if (oam[k] != s_nmi.oam[k]) {
-            fprintf(stderr, "[decomp]   OAM $%02X original %02X decompiled %02X\n", k, oam[k], s_nmi.oam[k]);
-            n++;
-        }
-    }
-    const NmiWrites *lw = &s_nmi.live, *cw = &s_nmi.c;
-    if (lw->n != cw->n || memcmp(lw->w, cw->w, sizeof lw->w[0] * (size_t)lw->n)) {
-        int k = 0;
-        while (k < lw->n && k < cw->n && lw->w[k].addr == cw->w[k].addr && lw->w[k].value == cw->w[k].value) {
-            k++;
-        }
-        fprintf(stderr, "[decomp]   device writes: original %d decompiled %d, first difference at %d:", lw->n, cw->n,
-                k);
-        if (k < lw->n) {
-            fprintf(stderr, " original $%04X=%02X", lw->w[k].addr, lw->w[k].value);
-        }
-        if (k < cw->n) {
-            fprintf(stderr, " decompiled $%04X=%02X", cw->w[k].addr, cw->w[k].value);
-        }
-        fputc('\n', stderr);
-    }
-    const char *x = fields, *d = s_nmi.fields;
-    while (*x && *d) {
-        size_t lx = strcspn(x, "\n"), ld = strcspn(d, "\n");
-        if (lx != ld || memcmp(x, d, lx)) {
-            fprintf(stderr, "[decomp]   original %.*s / decompiled %.*s\n", (int)lx, x, (int)ld, d);
-        }
-        x += lx + (x[lx] != 0);
-        d += ld + (d[ld] != 0);
-    }
-    fflush(stderr);
-    exit(3);
-}
-
-/* At the original's RTI: the machine as the original left it against the
- * C's. */
-static void nmi_compare(void)
-{
-    if (!s_nmi.armed) {
-        return;
-    }
-    s_nmi.armed = false;
-    nmi_watch(false);
-    const DecompRoutine *rt = dc_routine[s_nmi.routine];
-    CycModRegs o;
-    cyc_mod_regs(&o);
-    const uint8_t *ram = cyc_cpu_ram();
-    HwState hw = hw_state();
-    static char fields[REGS_TEXT];
-    nmi_fields(fields);
-    const Regs *c = &s_nmi.regs;
-    bool same = o.s == s_nmi.s && o.a == c->a && o.x == c->x && o.y == c->y &&
-                !((o.p ^ c->p) & (P_N | P_V | P_Z | P_C)) && hw.ciram == s_nmi.hw.ciram &&
-                hw.palette == s_nmi.hw.palette && hw.chr == s_nmi.hw.chr && hw.oam == s_nmi.hw.oam &&
-                hw.bank == s_nmi.hw.bank && !strcmp(fields, s_nmi.fields) && s_nmi.live.n == s_nmi.c.n &&
-                !memcmp(s_nmi.live.w, s_nmi.c.w, sizeof s_nmi.c.w[0] * (size_t)s_nmi.c.n);
-    for (uint16_t a = 0; same && a < GAME_RAM_SIZE; a++) {
-        same = !nmi_live(a) || ram[a] == s_nmi.ram[a];
-    }
-    if (!same) {
-        nmi_report(rt, &o, ram, &hw, fields);
-    }
-    dc_stats[s_nmi.routine].compared++;
-}
-
-#define CLOCK_CYCLE_LIMIT 65536
-
-static struct {
-    uint64_t start;
-    unsigned n;
-    bool fetch;
-    uint16_t routine;
-    bool leave_start; /* a stop at the start counts only after the first instruction */
-
-    struct {
-        uint32_t offset;
-        uint16_t addr;
-        uint8_t value;
-        char kind;
-        bool fetch, done;
-    } cycles[CLOCK_CYCLE_LIMIT];
-} s_timing;
-
-static void clock_measure_cycle(const CycTraceCycle *cycle)
-{
-    if (cycle->dma) {
-        return;
-    }
-    unsigned k = s_timing.n++;
-    if (k >= CLOCK_CYCLE_LIMIT || hw.cycles - s_timing.start >= CLOCK_CYCLE_LIMIT || cycle->kind == '-') {
-        dc_fail("cannot record a bus cycle", s_timing.routine);
-    }
-    s_timing.cycles[k].offset = (uint32_t)(hw.cycles - s_timing.start);
-    s_timing.cycles[k].addr = cycle->addr;
-    s_timing.cycles[k].value = cycle->value;
-    s_timing.cycles[k].kind = cycle->kind;
-    s_timing.cycles[k].fetch = s_timing.fetch;
-    s_timing.cycles[k].done = cycle->done;
-    s_timing.fetch = false;
-}
-
-typedef enum {
-    CLOCK_REACHED,
-    CLOCK_PAUSED,
-    CLOCK_INTERRUPTED,
-    CLOCK_MISSED
-} ClockEnd;
-
-/* Timing comes from the same machine and sprite-0 hit, with only the game
- * CPU interpreting, from the routine's start until it reaches stop_pc. Stop
- * before giving up an observer boundary or a nested interrupt. Task code
- * waiting for VBlank sees it in the next frame, so frame_ends may pass; at
- * one more (the read that races the flag's rise at power-on finds it clear,
- * and the wait takes a frame longer) the run is paused where the original
- * was last back at its start with the same S before it, provided it wrote
- * nothing: the next frame calls the routine there again. Only the bus
- * schedule survives, and the original's registers and RAM at the end when
- * asked for. */
-static ClockEnd clock_measure(uint16_t routine, uint16_t stop_pc, uint8_t stop_s, int frame_ends, uint64_t *duration,
-                              CycModRegs *regs, uint8_t *ram)
-{
-    static CycSnapshot *snap;
-    if (!snap && !(snap = cyc_snapshot_new())) {
-        dc_fail("out of memory for the timing snapshot", routine);
-    }
-    cyc_snapshot_take(snap);
-    bool frame_done = hw_frame_done, frame_end = hw_frame_end_hit, observe = hw_observe_hit;
-    bool traced = cyc_trace_enabled;
-    void *file = cyc_trace_file;
-    uint64_t hash = cyc_trace_hash;
-    uint32_t cycle = cyc_trace_cycle;
-    void (*observer)(const CycTraceCycle *) = cyc_trace_cycle_hook;
-    void (*return_hook)(void) = cyc_cpu_rts_observer;
-    uint8_t muted = cyc_ring_muted;
-    cyc_trace_enabled = true;
-    cyc_trace_file = NULL;
-    cyc_trace_cycle_hook = clock_measure_cycle;
-    cyc_cpu_rts_observer = NULL;
-    cyc_ring_muted = 1;
-    s_timing.routine = routine;
-    s_timing.start = cyc_cycle_count();
-    s_timing.n = 0;
-    uint16_t start_pc = cpu.pc;
-    uint8_t start_s = cpu.s;
-    bool can_pause = frame_ends > 0;
-    unsigned pause_n = 0;
-    uint64_t pause_at = 0;
-    CycModRegs pause_regs;
-    ClockEnd end = CLOCK_MISSED;
-    for (;;) {
-        if (hw_frame_done) {
-            if (hw_observe_hit || !hw_frame_end_hit) {
-                end = CLOCK_INTERRUPTED;
-                break;
-            }
-            if (frame_ends-- == 0) {
-                end = can_pause && pause_n ? CLOCK_PAUSED : CLOCK_INTERRUPTED;
-                for (unsigned k = 0; end == CLOCK_PAUSED && k < pause_n; k++) {
-                    if (s_timing.cycles[k].kind == 'W') {
-                        end = CLOCK_INTERRUPTED;
-                    }
-                }
-                break;
-            }
-            hw_frame_done = hw_frame_end_hit = false;
-        }
-        if (can_pause && s_timing.n && cpu.pc == start_pc && cpu.s == start_s) {
-            pause_n = s_timing.n;
-            pause_at = cyc_cycle_count() - s_timing.start;
-            cyc_mod_regs(&pause_regs);
-        }
-        if (cpu.jammed || cpu.do_nmi || cpu.do_irq || cpu.do_reset) {
-            end = CLOCK_INTERRUPTED;
-            break;
-        }
-        if (cpu.pc == stop_pc && (s_timing.n || !s_timing.leave_start)) {
-            end = cpu.s == stop_s ? CLOCK_REACHED : CLOCK_MISSED;
-            break;
-        }
-        if (cyc_cycle_count() - s_timing.start >= CLOCK_CYCLE_LIMIT - 1024) {
-            break;
-        }
-        s_timing.fetch = true;
-        cpu_interp_step();
-    }
-    *duration = cyc_cycle_count() - s_timing.start;
-    if (regs) {
-        cyc_mod_regs(regs);
-    }
-    if (ram) {
-        memcpy(ram, cyc_cpu_ram(), GAME_RAM_SIZE);
-    }
-    if (end == CLOCK_PAUSED) {
-        s_timing.n = pause_n;
-        *duration = pause_at;
-        if (regs) {
-            *regs = pause_regs;
-        }
-    }
-    cyc_snapshot_restore(snap);
-    hw_frame_done = frame_done;
-    hw_frame_end_hit = frame_end;
-    hw_observe_hit = observe;
-    cyc_trace_enabled = traced;
-    cyc_trace_file = file;
-    cyc_trace_hash = hash;
-    cyc_trace_cycle = cycle;
-    cyc_trace_cycle_hook = observer;
-    cyc_cpu_rts_observer = return_hook;
-    cyc_ring_muted = muted;
-    return end;
-}
-
-/* ---- the original's time for timed routines (decomp_timing.c) ---- */
-
-/* Calls of timed routines whose original met an interrupt or the frame end
- * before it got where the C ends, so their path was not compared. */
-static uint64_t s_timing_unmeasured;
-
-static void timing_summary(void)
-{
-    if (s_timing_unmeasured) {
-        printf("decomp: timing not compared on %llu calls interrupted before they ended\n",
-               (unsigned long long)s_timing_unmeasured);
-    }
-}
-
-static void show_path(const char *who, bool original, int from, int to)
-{
-    fprintf(stderr, "[decomp]   %s", who);
-    for (int k = from; k < to; k++) {
-        if (original) {
-            fprintf(stderr, " $%04X@%d", s_timing.cycles[k].addr, k);
-        } else {
-            fprintf(stderr, " $%04X@%u", dc_path[k].pc, dc_path[k].at);
-        }
-    }
-    fprintf(stderr, "\n");
-}
-
-/* The first difference between the C's walked path and the original's run:
- * instruction i of the C's path against the fetch at cycle k of the
- * original's (n cycles in all), or what. */
-static void timing_report(const DecompRoutine *rt, const CycModRegs *in, int i, int k, int n, const char *what)
-{
-    char mark[256];
-    fprintf(stderr, "[decomp] TIMING %s ($%04X) at frame %llu, entry A=%02X X=%02X Y=%02X S=%02X P=%02X\n", rt->name,
-            rt->addr, (unsigned long long)cyc_ring_frame, in->a, in->x, in->y, in->s, in->p);
-    if (what) {
-        fprintf(stderr, "[decomp]   %s\n", what);
-    } else if (k < n && i < dc_npath) {
-        fprintf(stderr,
-                "[decomp]   instruction %d: the original fetches $%04X at cycle %d, the C's path $%04X at cycle %u\n",
-                i, s_timing.cycles[k].addr, k, dc_path[i].pc, dc_path[i].at);
-    } else if (k < n) {
-        fprintf(stderr,
-                "[decomp]   instruction %d: the original goes on to $%04X at cycle %d, where the C's path ends\n", i,
-                s_timing.cycles[k].addr, k);
-    } else if (i < dc_npath) {
-        fprintf(stderr, "[decomp]   instruction %d: the original ends at cycle %d, the C's path goes on to $%04X\n", i,
-                n, dc_path[i].pc);
-    } else {
-        fprintf(stderr, "[decomp]   the original takes %d cycles, the C's path %llu\n", n,
-                (unsigned long long)dc_cycles);
-    }
-    int at = i < dc_npath ? i : dc_npath - 1;
-    if (!what && i > 0 && i <= dc_npath && k > 0 && (i == dc_npath || dc_path[i].pc == s_timing.cycles[k].addr)) {
-        fprintf(stderr,
-                "[decomp]   the instruction at $%04X takes other cycles: a page crossing needs DC_EA, a branch DC_BR\n",
-                dc_path[i - 1].pc);
-    }
-    fprintf(stderr, "[decomp]   the C's path there follows %s\n",
-            dc_mark_text(at >= 0 ? (int16_t)dc_path[at].mark : -1, mark, sizeof mark));
-    if (!what) {
-        int fetches[8], nf = 0;
-        for (int c = k; c >= 0 && nf < 5; c--) {
-            if (c < n && s_timing.cycles[c].fetch) {
-                fetches[nf++] = c;
-            }
-        }
-        fprintf(stderr, "[decomp]   original:");
-        for (int f = nf - 1; f >= 0; f--) {
-            fprintf(stderr, " $%04X@%d", s_timing.cycles[fetches[f]].addr, fetches[f]);
-        }
-        fprintf(stderr, "\n");
-        show_path("the C's: ", false, i > 4 ? i - 4 : 0, i + 1 < dc_npath ? i + 1 : dc_npath);
-    }
-    fflush(stderr);
-    exit(3);
-}
-
-/* The instruction of the C's path that cycle falls in. */
-static int step_at(uint32_t cycle)
-{
-    int i = 0;
-    while (i + 1 < dc_npath && dc_path[i + 1].at <= cycle) {
-        i++;
-    }
-    return i;
-}
-
-/* Check mode: the C's walked path against the original run on the machine
- * from the same state (clock_measure, restored afterwards) until it gets
- * where the C ends: each instruction's address and fetch cycle, the total,
- * then each device access (address, direction, value and cycle). Cycles
- * count without DMA, which the bus adds where the original's would come. */
-static void timing_check(const DecompRoutine *rt, const CycModRegs *in)
-{
-    uint16_t stop_pc;
-    uint8_t stop_s;
-    if (dc_handoff_set) {
-        stop_pc = dc_handoff;
-        stop_s = dc_cur_s;
-    } else if (rt->interrupt) {
-        s_timing_unmeasured++;
-        return;
-    } else {
-        stop_s = (uint8_t)(in->s + rt->locals + 2);
-        const uint8_t *ram = cyc_cpu_ram();
-        stop_pc = (uint16_t)((ram[0x100 | (uint8_t)(stop_s - 1)] | ram[0x100 | stop_s] << 8) + 1);
-    }
-    uint64_t duration;
-    s_timing.leave_start = true;
-    ClockEnd end = clock_measure(rt->addr, stop_pc, stop_s, 0, &duration, NULL, NULL);
-    s_timing.leave_start = false;
-    if (end != CLOCK_REACHED) {
-        s_timing_unmeasured++;
-        return;
-    }
-    int n = (int)s_timing.n, i = 0, k = 0;
-    for (; k < n; k++) {
-        if (!s_timing.cycles[k].fetch) {
-            continue;
-        }
-        if (i == dc_npath || dc_path[i].pc != s_timing.cycles[k].addr || dc_path[i].at != (uint32_t)k) {
-            timing_report(rt, in, i, k, n, NULL);
-        }
-        i++;
-    }
-    if (i != dc_npath || dc_cycles != (uint64_t)n) {
-        timing_report(rt, in, i, k, n, NULL);
-    }
-    int j = 0;
-    for (k = 0; k < n; k++) {
-        uint16_t addr = s_timing.cycles[k].addr;
-        bool write = s_timing.cycles[k].kind == 'W';
-        uint8_t value = s_timing.cycles[k].value;
-        if (addr < 0x2000 || (addr >= 0x4020 && !(write && addr >= 0x8000))) {
-            continue;
-        }
-        if (j == dc_nops || dc_ops[j].addr != addr || dc_ops[j].write != write || (write && dc_ops[j].value != value) ||
-            dc_op_at[j] != (uint32_t)k) {
-            char msg[200];
-            if (j == dc_nops) {
-                snprintf(msg, sizeof msg, "bus operation %d: the original %s $%04X at cycle %d, the C makes no more", j,
-                         write ? "writes" : "reads", addr, k);
-            } else {
-                snprintf(msg, sizeof msg,
-                         "bus operation %d: the original %s $%04X=%02X at cycle %d, the C %s $%04X=%02X at %u", j,
-                         write ? "writes" : "reads", addr, value, k, dc_ops[j].write ? "writes" : "reads",
-                         dc_ops[j].addr, dc_ops[j].value, dc_op_at[j]);
-            }
-            timing_report(rt, in, step_at(j < dc_nops ? dc_op_at[j] : (uint32_t)k), 0, n, msg);
-        }
-        j++;
-    }
-    if (j != dc_nops) {
-        char msg[160];
-        snprintf(msg, sizeof msg, "bus operation %d: the C %s $%04X at cycle %u, the original makes no more", j,
-                 dc_ops[j].write ? "writes" : "reads", dc_ops[j].addr, dc_op_at[j]);
-        timing_report(rt, in, step_at(dc_op_at[j]), 0, n, msg);
-    }
-}
-
-/* Report the first bus operation that could not be placed at its original
- * cycle. A mismatch must not silently turn into a replace fallback. */
-static void timing_fail(unsigned k, int op, uint16_t routine)
-{
-    fprintf(stderr, "[decomp] $%04X timing: original cycle %u %c $%04X=%02X, C bus operation %d of %d\n", routine,
-            s_timing.cycles[k].offset, s_timing.cycles[k].kind, s_timing.cycles[k].addr, s_timing.cycles[k].value, op,
-            dc_nops);
-    if (op < dc_nops) {
-        fprintf(stderr, "[decomp]   C %c $%04X=%02X mask=%02X\n", dc_ops[op].write ? 'W' : 'R', dc_ops[op].addr,
-                dc_ops[op].value, dc_ops[op].wait);
-    }
-    dc_fail("bus operation does not match the original", routine);
-}
-
-/* A device access of the measured original: writes, and the reads of an
- * instruction's last cycle below $6000. */
-static bool clock_device(unsigned k)
-{
-    uint16_t addr = s_timing.cycles[k].addr;
-    return addr >= 0x2000 && (s_timing.cycles[k].kind == 'W' || (addr < 0x6000 && s_timing.cycles[k].done));
-}
-
-/* Drive the original's non-device bus traffic without storing any of its
- * RAM results. DMA sees the C's RAM, and RDY generates the same stalls as
- * before; each CPU access checks its offset after those stalls. A C wait
- * consumes as many original reads as it takes to satisfy its mask. */
-static void clock_replay(uint64_t duration, uint16_t routine, int ops)
-{
-    uint64_t start = cyc_cycle_count();
-    int op = 0;
-    for (unsigned k = 0; k < s_timing.n; k++) {
-        uint16_t addr = s_timing.cycles[k].addr;
-        uint8_t value = s_timing.cycles[k].value;
-        bool write = s_timing.cycles[k].kind == 'W';
-        bool device = clock_device(k);
-        if (device) {
-            if (op == dc_nops || dc_ops[op].addr != addr || dc_ops[op].write != write ||
-                (write && dc_ops[op].value != value)) {
-                timing_fail(k, op, routine);
-            }
-            if (write) {
-                value = dc_ops[op].value;
-            }
-        }
-        hw_cycle_start(addr, write ? HW_WRITE : s_timing.cycles[k].fetch ? HW_FETCH : HW_READ);
-        if (cyc_cycle_count() - start != s_timing.cycles[k].offset) {
-            timing_fail(k, op, routine);
-        }
-        if (write && device) {
-            hw_write(addr, value);
-        } else if (write) {
-            hw.data_bus = hw.internal_bus = value;
-            if (cyc_trace_enabled) {
-                cyc_trace_access(addr, value, true);
-            }
-        } else if (addr < 0x2000) {
-            (void)hw_read_code_ram(addr, value);
-        } else {
-            uint8_t read = hw_read(addr);
-            if (device && read != value) {
-                timing_fail(k, op, routine);
-            }
-            value = read;
-        }
-        if (device && (!dc_ops[op].wait || (value & dc_ops[op].wait) == dc_ops[op].value)) {
-            op++;
-        }
-        hw_cycle_finish(s_timing.cycles[k].done);
-    }
-    if (op != ops || cyc_cycle_count() - start != duration) {
-        dc_fail("the routine did not use its full bus schedule", routine);
-    }
-}
-
-/* Check mode: the C's bus operations against the measured original's, placed
- * as clock_replay places them, ops of them made. Returns the original's
- * device writes. */
-static int clock_match(uint16_t routine, int ops)
-{
-    int op = 0, writes = 0;
-    for (unsigned k = 0; k < s_timing.n; k++) {
-        if (!clock_device(k)) {
-            continue;
-        }
-        uint16_t addr = s_timing.cycles[k].addr;
-        uint8_t value = s_timing.cycles[k].value;
-        bool write = s_timing.cycles[k].kind == 'W';
-        if (op == dc_nops || dc_ops[op].addr != addr || dc_ops[op].write != write ||
-            (write && dc_ops[op].value != value)) {
-            timing_fail(k, op, routine);
-        }
-        writes += write;
-        if (!dc_ops[op].wait || (value & dc_ops[op].wait) == dc_ops[op].value) {
-            op++;
-        }
-    }
-    if (op != ops) {
-        fprintf(stderr, "[decomp] $%04X timing: the original ends at C bus operation %d of %d, not %d\n", routine, op,
-                dc_nops, ops);
-        dc_fail("bus operation does not match the original", routine);
-    }
-    return writes;
-}
-
-/* Where task code ends: the routine it hands off to, or the return of its
- * RTS (S after it). */
-static uint16_t task_end(uint8_t *s)
-{
-    *s = dc_cur_s;
-    if (dc_handoff_set) {
-        return dc_handoff;
-    }
-    *s = (uint8_t)(dc_cur_s + 2);
-    return (uint16_t)((dc_image[0x100 | (uint8_t)(dc_cur_s + 1)] | dc_image[0x100 | (uint8_t)(dc_cur_s + 2)] << 8) + 1);
-}
-
-/* Polling task code (DecompRoutine.polls): its original runs on a snapshot of
- * the running machine, the clock with it, to where the C ends; RAM, the
- * registers and the device operations are compared there. The original then
- * runs for real. */
-static void poll_check(int i, const CycModRegs *in, const Regs *c)
-{
-    const DecompRoutine *rt = dc_routine[i];
-    uint8_t s;
-    uint16_t pc = task_end(&s);
-    if (pc < 0xC000) {
-        dc_fail("polling task code ends below $C000", rt->addr);
-    }
-    memset(&s_run, 0, sizeof s_run);
-    s_run.call_s = (uint8_t)(in->s + rt->locals + 2);
-    uint64_t duration;
-    ClockEnd end = clock_measure(rt->addr, pc, s, 1, &duration, &s_run.regs, s_orig);
-    s_poll_run.routine = i;
-    s_poll_run.until = cyc_cycle_count() + duration;
-    if (end == CLOCK_INTERRUPTED) {
-        dc_stats[i].original++;
-        return;
-    }
-    if (end == CLOCK_PAUSED) {
-        clock_match(rt->addr, 0);
-        dc_stats[i].compared++;
-        return;
-    }
-    s_run.returned = end == CLOCK_REACHED;
-    s_run.stopped = s_run.returned && dc_handoff_set;
-    if (s_run.returned) {
-        s_run.io = (uint64_t)clock_match(rt->addr, dc_nops);
-    }
-    if (!task_same(rt, c)) {
-        task_report(rt, in, c);
-    }
-    dc_stats[i].compared++;
-    dc_nested_compared();
-}
-
-/* Replace mode: the C's RAM, then the original's bus schedule with the C's
- * device operations at the original's cycles (a wait as many reads as the
- * original made); the CPU goes on where the C ends. False when the original
- * runs instead (an interrupt or an observation point inside). */
-static bool poll_replace(int i, const CycModRegs *in, const Regs *c)
-{
-    const DecompRoutine *rt = dc_routine[i];
-    uint8_t s;
-    uint16_t pc = task_end(&s);
-    if (pc < 0xC000) {
-        dc_fail("polling task code ends below $C000", rt->addr);
-    }
-    memset(&s_run, 0, sizeof s_run);
-    s_run.call_s = (uint8_t)(in->s + rt->locals + 2);
-    uint64_t duration;
-    ClockEnd end = clock_measure(rt->addr, pc, s, 1, &duration, &s_run.regs, NULL);
-    if (end == CLOCK_INTERRUPTED) {
-        dc_stats[i].original++;
-        return false;
-    }
-    if (end == CLOCK_MISSED) {
-        dc_fail("the original task routine did not end where the C does", rt->addr);
-    }
-    if (end == CLOCK_PAUSED) {
-        clock_replay(duration, rt->addr, 0);
-        CycModRegs set = s_run.regs;
-        cyc_mod_set_regs(&set);
-        dc_stats[i].compared++;
-        cpu.pc = rt->addr;
-        return true;
-    }
-    const uint8_t *ram = cyc_cpu_ram();
-    for (uint16_t a = 0; a < GAME_RAM_SIZE; a++) {
-        bool own_return = (a & 0xFF00) == 0x0100 &&
-                          ((uint8_t)a == s_run.call_s || (uint8_t)a == (uint8_t)(s_run.call_s - 1));
-        if ((task_live(a) || own_return) && ram[a] != dc_image[a]) {
-            cyc_mod_poke(a, dc_image[a]);
-        }
-    }
-    clock_replay(duration, rt->addr, dc_nops);
-    const CycModRegs *o = &s_run.regs;
-    uint8_t uses = dc_handoff_set ? dc_handoff_uses : OUT_A | OUT_X | OUT_Y;
-    uint8_t flags = P_N | P_V | P_Z | P_C;
-    uint8_t p = dc_handoff_set ? (uses & OUT_P ? c->p : o->p) : (uint8_t)((c->p & flags) | (o->p & ~flags));
-    CycModRegs set = { uses & OUT_A ? c->a : o->a, uses & OUT_X ? c->x : o->x, uses & OUT_Y ? c->y : o->y, s, p, 0 };
-    cyc_mod_set_regs(&set);
-    dc_stats[i].compared++;
-    dc_nested_compared();
-    cpu.pc = pc;
-    return true;
-}
-
-static void nmi_replace(int i, const CycModRegs *in)
-{
-    const DecompRoutine *rt = dc_routine[i];
-    Regs c;
-    dc_run_c(rt, in, &c);
-    dc_stats[i].calls++;
-    uint64_t duration;
-    if (dc_run_original ||
-        clock_measure(rt->addr, DT_SITE_NMI_EXIT, in->s, 0, &duration, NULL, NULL) != CLOCK_REACHED) {
-        dc_stats[i].original++;
-        return;
-    }
-    const uint8_t *ram = cyc_cpu_ram();
-    for (uint16_t a = 0; a < GAME_RAM_SIZE; a++) {
-        if (ram[a] != dc_image[a]) {
-            cyc_mod_poke(a, dc_image[a]);
-        }
-    }
-    clock_replay(duration, rt->addr, dc_nops);
-    CycModRegs set = { c.a, c.x, c.y, dc_cur_s, c.p, 0 };
-    cyc_mod_set_regs(&set);
-    uint64_t debt = s_nmi_debt;
-    s_nmi_debt = 0;
-    if (debt) {
-        spend_cycles(DT_SITE_NMI_EXIT, debt);
-    }
-    cpu.pc = DT_SITE_NMI_EXIT;
-    cpu_interp_step();
-    dc_stats[i].compared++;
 }
 
 bool dc_isolated(void)
@@ -1889,10 +658,11 @@ bool dc_isolated(void)
 int dc_on_entry(uint16_t addr)
 {
     if (cyc_mod_isolated()) {
-        if (s_run_active && task_isolated_site(addr)) {
+        if (dc_run_active && dc_task_isolated_site(addr)) {
             return 1;
         }
-        return addr == DT_SITE_DAMAGE && s_damage_replayed < dc_damage_raised && dc_damage_cancel[s_damage_replayed++];
+        return addr == DT_SITE_DAMAGE && dc_damage_replayed < dc_damage_raised &&
+               dc_damage_cancel[dc_damage_replayed++];
     }
     for (int i = 0; i < dc_count; i++) {
         if (!dc_at_entry(dc_routine[i], addr) || !dc_routine[i]->site_id) {
@@ -1902,17 +672,17 @@ int dc_on_entry(uint16_t addr)
         cyc_mod_regs(&in);
         if (dc_routine[i]->interrupt && !dc_routine[i]->task) {
             if (dc_mode == DECOMP_CHECK) {
-                nmi_check(i, &in);
+                dc_nmi_check(i, &in);
             } else {
-                nmi_replace(i, &in);
+                dc_nmi_replace(i, &in);
             }
             return 0;
         }
         if (dc_routine[i]->task) {
             if (dc_mode == DECOMP_CHECK) {
-                task_check(i, &in);
+                dc_task_check(i, &in);
             }
-            while (dc_mode == DECOMP_REPLACE && task_replace(i, &in) && dc_handoff_set && dc_handoff == addr) {
+            while (dc_mode == DECOMP_REPLACE && dc_task_replace(i, &in) && dc_handoff_set && dc_handoff == addr) {
                 cyc_mod_regs(&in);
             }
             return 0;
@@ -1926,38 +696,13 @@ int dc_on_entry(uint16_t addr)
     return 0;
 }
 
-/* The original NMI handler's RTI: check mode's comparison with the C, or the
- * cycles a replaced routine still owed when the NMI came. Not in an isolated
- * run (Nmi_Return's original reaches it). */
-static int on_nmi_exit(uint16_t addr)
-{
-    if (cyc_mod_isolated()) {
-        return 0;
-    }
-    if (dc_mode == DECOMP_CHECK) {
-        nmi_compare();
-        return 0;
-    }
-    uint64_t debt = s_nmi_debt;
-    s_nmi_debt = 0;
-    if (debt) {
-        spend_cycles(addr, debt);
-    }
-    return 0;
-}
-
-NES_MOD_CONSTRUCTOR(dt_register_decomp_nmi_exit)
-{
-    nes_mod_register_function_entry_plugin(DT_SITE_NMI_EXIT_ID, DT_SITE_NMI_EXIT, on_nmi_exit);
-}
-
 bool Decomp_SetMode(DecompMode mode)
 {
     static bool registered;
     if (!registered && mode != DECOMP_OFF) {
         registered = true;
         atexit(dc_report_stats);
-        atexit(timing_summary);
+        atexit(dc_timing_summary);
     }
     dc_mode = mode;
     const char *only = getenv("DT_DECOMP_ONLY");
@@ -1968,9 +713,8 @@ bool Decomp_SetMode(DecompMode mode)
         }
     }
     nes_mod_set_function_hook_enabled(DT_SITE_NMI_EXIT_ID, mode != DECOMP_OFF);
-    s_nmi_debt = 0;
-    s_nmi.armed = false;
-    nmi_watch(false);
-    cyc_mod_set_return_hook(mode != DECOMP_OFF ? on_return : NULL);
+    dc_nmi_debt = 0;
+    dc_nmi_disarm();
+    cyc_mod_set_return_hook(mode != DECOMP_OFF ? dc_on_return : NULL);
     return true;
 }

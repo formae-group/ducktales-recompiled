@@ -1,6 +1,6 @@
 /*
  * ducktales_settings.c - the port's settings, shared by every host (the cycle
- * host's ducktales_host.c and the native player's native/native_window.c):
+ * host's ducktales_host.c and the native player's native/native_player.c):
  * what config.ini [Game] keeps and what a command-line option may override
  * for one run (ducktales_host.h).
  *

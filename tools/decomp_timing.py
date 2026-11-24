@@ -259,7 +259,7 @@ def report(rom, name, info, table, by_addr):
 
 def summary(rom, table, only):
     entries = {r['addr'] for r in table.values()}
-    print('%-28s%-8s%-18s%-7s%9s%9s' % ('routine', 'addr', 'file', 'timed', 'branches', 'missing'))
+    print('%-28s%-8s%-22s%-7s%9s%9s' % ('routine', 'addr', 'file', 'timed', 'branches', 'missing'))
     for name, r in sorted(table.items(), key=lambda kv: (kv[1]['file'], kv[1]['addr'])):
         if only and only not in (r['file'], Path(r['file']).name):
             continue
@@ -269,7 +269,7 @@ def summary(rom, table, only):
         branches = [pc for pc, c in code.items() if c[0] in BRANCHES]
         missing = len([pc for pc in branches if pc not in marked])
         timed = 'yes' if r['timed'] else 'no'
-        print('%-28s$%04X   %-18s%-7s%9d%9d' % (name, r['addr'], r['file'], timed, len(branches), missing))
+        print('%-28s$%04X   %-22s%-7s%9d%9d' % (name, r['addr'], r['file'], timed, len(branches), missing))
 
 
 def main():
@@ -278,7 +278,10 @@ def main():
     ap.add_argument('--bank', type=int, help='the bank at $8000 for an address below $C000')
     ap.add_argument('--rom', default=default_rom())
     ap.add_argument('--summary', action='store_true', help='every routine: timed, branches and missing DC_BR')
-    ap.add_argument('--file', help='with --summary: only the routines of this file (system.c, player/player.c, ...)')
+    ap.add_argument(
+        '--file',
+        help='with --summary: only the routines of this file (system.c, player/player.c, objects/walkers.c, ...)',
+    )
     args = ap.parse_args()
     rom, table = Rom(args.rom), routines()
     by_addr = {}

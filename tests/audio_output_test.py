@@ -2,7 +2,7 @@
 
 ducktales.exe (build/windows, the native player) runs each route off screen with
 --audio-out: the window's frame loop and the audio device on simulated clocks
-(--audio-sim, native_window.c), the sound going through the same output stage
+(--audio-sim, native_offscreen.c), the sound going through the same output stage
 (src/native/native_output.c) the window feeds the device with. The WAV it writes is
 stereo: left what the device played, right half the game's own sample each output
 sample was made from (the synth with the extra voices, after the queue's resampling and

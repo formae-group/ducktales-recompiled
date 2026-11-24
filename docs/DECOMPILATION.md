@@ -431,7 +431,9 @@ byte-identical to those of main 902ef07.
 
 `src/decomp/decomp.c` is the core every host shares: the routine tables, the state of the routine
 whose C runs and the calls every backend makes the same way (`decomp_backend.h`). The cycle host
-links `decomp_cycle.c`, its check and replace modes above. The native runtime links
+links `decomp_cycle.c`, its check and replace modes above (with task code in `decomp_cycle_task.c`,
+the NMI handler in `decomp_cycle_nmi.c` and the clocked original and timing check in
+`decomp_cycle_clock.c`, sharing `decomp_cycle.h`). The native runtime links
 `decomp_native.c`, which has replace mode only, and there the C runs alone:
 
 - At a routine's site its C runs on the image of RAM, as on the cycle host, and its results are
@@ -664,7 +666,7 @@ Not decompiled yet, and still run as the original from the C:
 
 - Called as C: the background probe `$D120`, its snaps `$D49A`/`$D4B2`/`$D4C8`/`$D4D6` and the probe point
   `$D350` (where `Player_ContactV` falls through to) are the C of `collision.c`, the walls move `$F0F8` and
-  the climbing steps `$F192`/`$F1A8` the C of `objcommon.c` and the HP refill `$F812` the C of `objects.c`, and
+  the climbing steps `$F192`/`$F1A8` the C of `objcommon.c` and the HP refill `$F812` the C of `objects/items.c`, and
   `player/` calls that C directly. So does the message box with the OAM clear `$C267` (`system.c`), the
   sprite builder (bank 5 `$8000`, `sprites.c`) and the consumed-record bits (bank 5 `$B76A`,
   `Records_MarkTaken` in `player/message.c`).
@@ -697,8 +699,11 @@ task code runs.
 
 ### Objects
 
-`src/decomp/objects.c` (bank 6) and `src/decomp/objcommon.c` (fixed bank) decompile the object
-system. The frame loop maps bank 6 and calls `Obj_UpdateAll` (`$8000`) at `$DB78`, its only
+`src/decomp/objects/` (bank 6 and the fixed bank's kinds) and `src/decomp/objcommon.c` (fixed bank) decompile the
+object system. `objects/dispatch.c` has the update, the dispatch and the record spawn; `blocks.c`,
+`items.c`, `enemies.c`, `walkers.c`, `thieves.c`, `flyers.c`, `hazards.c`, `props.c`, `bosses.c` and
+`scenes.c` each hold one family's handlers with their adapters and routine table; `objects_internal.h` has
+what they share. The frame loop maps bank 6 and calls `Obj_UpdateAll` (`$8000`) at `$DB78`, its only
 caller. It loads the objects' gravity (`$EF = $40`), then walks slots 1-15 with the cursor in `$4A`
 and, for every slot whose status `$0700` has bit 7 set, jumps to the handler of its kind (`$0710`)
 through the 67-entry table at `$802C`/`$806F` with the return address `$8022` pushed. The C keeps the
@@ -926,7 +931,7 @@ bytes**, in 391 routines (main d54b09b, 13 routes and 92 poke cases).
 | Group | Files | Routines | Executed bytes | Share |
 |---|---|---|---|---|
 | player | `player/`, `motion.c`, `sound.c` | 54 | 3,626 | 12.8% |
-| objects | `objects.c`, `objcommon.c` | 118 | 13,465 | 47.5% |
+| objects | `objects/*.c`, `objcommon.c` | 118 | 13,465 | 47.5% |
 | flow | `flow.c` | 149 | 3,901 | 13.7% |
 | level | `level/`, `collision.c` | 40 | 3,643 | 12.8% |
 | system | `system.c`, `sprites.c`, `audio.c` | 28 | 3,463 | 12.2% |

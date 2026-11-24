@@ -25,7 +25,7 @@
  * The background probe, its snaps and the probe point $D350 (where the
  * vertical contact test can fall through to) are the C of collision.c, the
  * walls move $F0F8 and the climbing steps $F192/$F1A8 the C of objcommon.c
- * and the HP refill $F812 the C of objects.c.
+ * and the HP refill $F812 the C of objects/items.c.
  * Player_Update is task code (decomp.h): modes 15 and 16 (message box and
  * treasure) wait for frames, and the row change at $E8C0 drops
  * Player_Update's return address and hands off to the row scroll, which goes
