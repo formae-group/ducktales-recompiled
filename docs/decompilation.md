@@ -778,8 +778,8 @@ indirect jump or another routine's entry, and counts as C the routines only C re
 script's docstring gives every rule. `--rev` reads the C of another branch against the same
 coverage.
 
-On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **97.8%, 25,634 of 26,217 executed
-bytes**, in 360 routines (main 51338e2, 13 routes and 58 poke cases).
+On this tree (`py -3 -I tools/decomp_progress.py --golden DIR`): **98.9%, 25,940 of 26,217 executed
+bytes**, in 361 routines (main 88bb6d6, 13 routes and 58 poke cases).
 
 | Group | Files | Routines | Executed bytes | Share |
 |---|---|---|---|---|
@@ -789,8 +789,8 @@ bytes**, in 360 routines (main 51338e2, 13 routes and 58 poke cases).
 | level | `level.c`, `collision.c` | 40 | 3,602 | 13.7% |
 | system | `system.c`, `sprites.c`, `audio.c` | 25 | 3,363 | 12.8% |
 
-No executed byte is shared with an original routine. The routines still original are the NMI
-`$C000` (306 bytes), the reset `$FEE0` (85), the scheduler `$FF35` (72), the ending's bank-5
+No executed byte is shared with an original routine. The routines still original are the
+reset `$FEE0` (85), the scheduler `$FF35` (72), the ending's bank-5
 objects `$B380` (71), `$B46A` (31) and `$B400` (18). Kinds $3C, $3D and $40 have no C yet, and no route or poke reaches them.
 
 ### Adding a routine
