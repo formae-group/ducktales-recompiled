@@ -22,10 +22,12 @@ ROM = Path(default_rom())
 TOML = ROOT / "config" / "game.toml"
 HEAD = "# Game flow (src/decomp/flow.c"
 TAIL = "# END game flow"
+INTERNAL = {"E23C", "FEEE", "FEFB"}  # these sites also fire inside a routine
 NOTES = {
     "C976": "The row scroll the row change ($E8C0, src/decomp/player.c) hands off to.",
     "DFED": "What the message box ($ED05, src/decomp/player.c) hands off to besides task_wait:\n"
     "the scene set-up of message $0B, the block draw of message $06 and the pause text.",
+    "FEEE": "The reset waits for the live PPU before Reset_Ready resumes the C.",
 }
 
 
@@ -56,7 +58,9 @@ def main():
         addr = syms[sym]
         bank = int(site.split(".")[0]) if "." in site else 7
         out += [f"# {name}", "[[mod_function_hook]]", f'id = "ducktales.decomp.{site}"', f"addr = 0x{addr:04X}"]
-        out += ["length = 8", f"crc32 = 0x{crc(bank, addr):08X}", ""]
+        out += ["length = 8", f"crc32 = 0x{crc(bank, addr):08X}"]
+        out += ["include_internal = true"] if site in INTERNAL else []
+        out += [""]
         count += 1
     for m in re.finditer(r'STOP\((\w+), "([\w.]+)"\)', src):
         sym, site = m.groups()
@@ -64,7 +68,9 @@ def main():
         bank = int(site.split(".")[1]) if "." in site else 7
         out += [f"# {line}" for line in NOTES.get(site, "").splitlines()]
         out += ["[[mod_function_hook]]", f'id = "ducktales.decomp.stop.{site}"', f"addr = 0x{addr:04X}"]
-        out += ["length = 8", f"crc32 = 0x{crc(bank, addr):08X}", ""]
+        out += ["length = 8", f"crc32 = 0x{crc(bank, addr):08X}"]
+        out += ["include_internal = true"] if site in INTERNAL else []
+        out += [""]
         count += 1
     out.append(TAIL)
     text = TOML.read_bytes().decode().replace("\r\n", "\n")

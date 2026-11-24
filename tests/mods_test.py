@@ -23,7 +23,13 @@ templates come from the player's own ROM through --mods-dump and are deleted wit
      until the frame after the title requests it (frame 7), then the 440 Hz tone carries almost
      all of the energy (the driver's channels are muted), while without the mod it does not;
   7. with the mod loaded the machine's own audio hash is unaffected: the run's --hash-out equals
-     the run without mods (step 1 covers it).
+     the run without mods (step 1 covers it);
+  8. scripts (the native player, else headless): the sandbox, the limits and errors with where they
+     ran, a dt.CANCEL an event cannot take, dt.state, dt.set, toasts (cut at 64 UTF-8 characters),
+     dt.store (no temporary file left), mods.log in the data folder and hot reload;
+  9. the catalogue: mod.toml and main.lua with a byte order mark, names in any case, mod.toml
+     errors (missing keys, unquoted value, key set twice, malformed prg_sha256), two files for one
+     tile, palette or sound, and --mods-dir with a path that is not a folder.
 
     py -3 -I tests/mods_test.py --build build/headless
 """
@@ -169,6 +175,32 @@ def png_bytes(w, h, pixels, tmp):
     return p.read_bytes()
 
 
+def pick_drawn_tile(keys, pixels):
+    frame = struct.pack(f'<{len(pixels)}I', *pixels)
+    stride = 256 * 4
+    for key in keys:
+        _, _, px = png_read(key)
+        rows = [px[y * 8 : (y + 1) * 8] for y in range(8)]
+        if (
+            len(set(px)) < 3
+            or any(p >> 24 != 255 for p in px)
+            or rows == rows[::-1]
+            or rows == [row[::-1] for row in rows]
+        ):
+            continue
+        raw = [struct.pack('<8I', *row) for row in rows]
+        at = frame.find(raw[0])
+        while at >= 0:
+            if (
+                at % 4 == 0
+                and at % stride <= stride - 32
+                and all(frame.startswith(row, at + dy * stride) for dy, row in enumerate(raw))
+            ):
+                return key
+            at = frame.find(raw[0], at + 1)
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--build', default='build/headless')
@@ -187,6 +219,7 @@ def main():
     if native:
         native_checks(native, route)
     script_checks(native or exe, route, native is not None)
+    catalogue_checks(native or exe, route, native is not None)
     print(f'\n{"FAILED: " + ", ".join(failures) if failures else "all mods checks passed"}')
     return 1 if failures else 0
 
@@ -219,6 +252,7 @@ def tone_wav(path):
 def native_checks(exe, route):
     with tempfile.TemporaryDirectory() as t:
         tmp = Path(t)
+        env = dict(os.environ, DUCKTALES_DATA_DIR=str(tmp / 'data'))
 
         def run(name, mods=None, frames=1501, every=300, wav=False, extra=()):
             out = tmp / name
@@ -243,7 +277,7 @@ def native_checks(exe, route):
                 cmd += ['--mods', 'on', '--mods-dir', mods]
             if wav:
                 cmd += ['--wav-out', out / 'a.wav']
-            p = subprocess.run([str(c) for c in [*cmd, *extra]], capture_output=True, text=True, timeout=3600)
+            p = subprocess.run([str(c) for c in [*cmd, *extra]], capture_output=True, text=True, timeout=3600, env=env)
             if p.returncode:
                 print(p.stdout + p.stderr)
                 raise SystemExit(f'native {name}: exit {p.returncode}')
@@ -257,9 +291,7 @@ def native_checks(exe, route):
         dump = tmp / 'dump'
         run('dump', every=1500, extra=('--mods', 'on', '--mods-dump', dump))
         keys = sorted(dump.glob('*.png'))
-        key = next(
-            (k for k in keys if len(set(png_read(k)[2])) >= 3 and all(p >> 24 == 255 for p in png_read(k)[2])), None
-        )
+        key = pick_drawn_tile(keys, base.get(1500, []))
         check(key is not None and 1500 in base, f'native player: --mods-dump wrote {len(keys)} tile templates')
         if key is None or 1500 not in base:
             return
@@ -318,6 +350,9 @@ dt.on("frame", function(frame)
     if frame == 1200 then
         dt.toast("sandbox")
     end
+    if frame == 1300 then
+        dt.toast(string.rep("\u{E9}", 70))
+    end
 end)
 '''
 
@@ -363,6 +398,8 @@ LIMIT_LUA = {
         't[i] = string.rep("x", 1000000) .. i end end) end end)'
     ),
     'error': 'dt.on("frame", function(f) if f == 130 then error("boom") end end)',
+    'start-error': 'error("early")',
+    'cancel-ignored': 'dt.on("new-game", function() return dt.CANCEL end)',
 }
 
 CANCEL_LUA = r'''
@@ -417,7 +454,7 @@ def script_checks(exe, route, native):
         for mod_id, text in LIMIT_LUA.items():
             script_mod(all_dir, mod_id, text)
         log = run('all', all_dir)
-        check('5 loaded' in log and '5 scripts' in log, f'{host}: five script mods load', log)
+        check('7 loaded' in log and '7 scripts' in log, f'{host}: seven script mods load', log)
         check(
             'Mod sandbox: sandbox\tclosed\tbinary-refused\t42' in log,
             f'{host}: io, os, package, debug, require, dofile, loadfile and string.dump are absent; '
@@ -426,13 +463,36 @@ def script_checks(exe, route, native):
         )
         check('Mod sandbox: event\tnew-game' in log, f'{host}: dt.on("new-game") runs at the title\'s set-up', log)
         reasons = {
-            'loop': 'ran more than 1000000 instructions in one callback',
-            'pcall-loop': 'ran more than 1000000 instructions in one callback',
-            'memory': 'used more than 16 MiB of memory',
-            'error': 'scripts/main.lua:1: boom',
+            'loop': 'scripts/main.lua:1: ran more than 1000000 instructions in one callback (in a "frame" handler)',
+            'pcall-loop': 'scripts/main.lua:1: ran more than 1000000 instructions in one callback (in a "frame" handler)',
+            'memory': 'used more than 16 MiB of memory (in a "frame" handler)',
+            'error': 'scripts/main.lua:1: boom (in a "frame" handler)',
+            'start-error': 'scripts/main.lua:1: early (when the script started)',
         }
         for mod_id, why in reasons.items():
             check(f'Mod {mod_id}: script stopped: {why}' in log, f'{host}: {mod_id}: stopped with "{why}"', log)
+        ignored = 'Mod cancel-ignored: a "new-game" handler returned dt.CANCEL, which that event ignores'
+        check(
+            log.count(ignored) == 1 and 'Mod cancel-ignored: script stopped' not in log,
+            f'{host}: dt.CANCEL for an event that cannot be cancelled is reported once and the script runs on',
+            log,
+        )
+        mods_log = (data / 'mods.log').read_bytes() if (data / 'mods.log').exists() else b''
+        check(
+            b'[ducktales] Mods: on, 7 found, 7 loaded' in mods_log
+            and b'Mod sandbox: Sandbox 1.0.0, loaded' in mods_log
+            and b'Mod error: script stopped: scripts/main.lua:1: boom' in mods_log
+            and b'Mod sandbox: state\t1000' in mods_log,
+            f'{host}: mods.log in the data folder holds the catalogue, dt.log lines and stopped scripts '
+            f'({len(mods_log)} bytes)',
+            mods_log.decode('utf-8', 'replace'),
+        )
+        cut = b'Mod sandbox: toast: ' + '\u00e9'.encode() * 64 + b'\r\n'
+        check(
+            cut in mods_log,
+            f'{host}: dt.toast cuts 70 two-byte characters at 64 characters, not bytes',
+            mods_log.decode('utf-8', 'replace')[-2000:],
+        )
         seen = states(log, 'sandbox')
         check(
             sorted(seen) == [1000, 1400] and all(len(v) == 4 for v in seen.values()),
@@ -514,6 +574,10 @@ def script_checks(exe, route, native):
         log = run('api-again', api_dir, frames=10)
         stored = (data / 'mods-data' / 'api.ini').read_text() if (data / 'mods-data' / 'api.ini').exists() else ''
         check(
+            not (data / 'mods-data' / 'api.ini.tmp').exists(),
+            f'{host}: dt.store leaves no temporary file after its write',
+        )
+        check(
             'Mod api: store\t2\ttrue\t3.5\ttrue' in log
             and 'runs = i:2' in stored
             and 'text = s:a\\nb\\\\c = d' in stored,
@@ -527,10 +591,19 @@ def script_checks(exe, route, native):
         (reload_dir / 'reload' / 'mod.toml').write_text(mod_toml('reload', 'Reload'))
         versions = [
             'dt.on("frame", function(f) if f % 30 == 0 then dt.log("version one") end end)',
-            'dt.on("frame", function(f) if f % 30 == 0 then dt.log("version two!" end end)',
-            'dt.on("frame", function(f) if f % 30 == 0 then dt.log("version three") end end) -- fixed',
+            'dt.on("frame", function(f) if f % 30 == 0 then dt.log("version two") end end)',
+            'dt.on("frame", function(',
+            'dt.on("frame", function(f) if f % 30 == 0 then dt.log("version three") end end)',
         ]
-        script.write_text(versions[0])
+        stamp = (int(time.time()) - 1) * 10**9
+
+        def save(version):
+            pending = script.with_suffix('.tmp')
+            pending.write_text(versions[version])
+            os.utime(pending, ns=(stamp, stamp + version * 10**8))
+            pending.replace(script)
+
+        save(0)
         cmd = [exe, ROM, '--frames', '2000000', '--input', route, '--mods', 'on', '--mods-dir', reload_dir]
         if native:
             cmd += ['--config', tmp / 'x.ini']
@@ -539,7 +612,8 @@ def script_checks(exe, route, native):
         )
         steps = [
             ('Mod reload: version one', 1),
-            ('Mod reload: script stopped: scripts/main.lua:1:', 2),
+            ('Mod reload: version two', 2),
+            ('Mod reload: script stopped: scripts/main.lua:1:', 3),
             ('Mod reload: version three', None),
         ]
         got = []
@@ -552,16 +626,109 @@ def script_checks(exe, route, native):
                         got.append(want)
                         break
                 if write is not None:
-                    time.sleep(1.2)
-                    script.write_text(versions[write])
+                    save(write)
         finally:
             watchdog.cancel()
             p.kill()
             p.wait()
         check(
-            len(got) == 3,
-            f'{host}: hot reload: a changed script starts again, a broken one is stopped with its '
-            f'syntax error and the fixed one runs ({len(got)} of 3 steps seen)',
+            len(got) == len(steps),
+            f'{host}: hot reload: same-size edit in the same timestamp second runs, a broken script '
+            f'stops and the fix runs ({len(got)} of {len(steps)} steps seen)',
+        )
+
+
+def catalogue_checks(exe, route, native):
+    """mod.toml validation, names in any case, a byte order mark, two files for one asset and
+    --mods-dir errors, from the log of one short run."""
+    host = 'native player' if native else 'headless'
+    with tempfile.TemporaryDirectory() as t:
+        tmp = Path(t)
+        mods = tmp / 'mods'
+        mods.mkdir()
+        env = dict(os.environ, DUCKTALES_DATA_DIR=str(tmp / 'data'))
+
+        def run(*extra):
+            cmd = [exe, ROM, '--frames', '30', '--input', route, *extra]
+            if native:
+                cmd += ['--lag', 'faithful', '--config', tmp / 'x.ini']
+            return subprocess.run([str(c) for c in cmd], capture_output=True, text=True, timeout=600, env=env)
+
+        def raw(name, files):
+            with zipfile.ZipFile(mods / f'{name}.dtmod', 'w', zipfile.ZIP_DEFLATED) as z:
+                for path, data in files.items():
+                    z.writestr(path, data)
+
+        toml = mod_toml('bom', 'Bom').encode()
+        raw('bom', {'mod.toml': b'\xef\xbb\xbf' + toml, 'scripts/main.lua': b'\xef\xbb\xbfdt.log("bom", "ok")'})
+        raw('case', {'MOD.TOML': mod_toml('case', 'Case') + '   ', 'Scripts/Main.lua': 'dt.log("case", "ok")'})
+        raw('wrong-target', {'mod.toml': mod_toml('case', 'A different game', prg='0' * 64)})
+        bad = {
+            'missing': 'id = "missing"\nname = "Missing"\ngame = "DuckTales (USA)"\n',
+            'unquoted': mod_toml('unquoted', 'Unquoted').replace('version = "1.0.0"', 'version = 1.0'),
+            'twice': mod_toml('twice', 'Twice') + 'name = "Again"\n',
+            'bad-sha': mod_toml('bad-sha', 'Bad Sha', prg='abc'),
+            'long-id': mod_toml('a' * 64, 'Long Id'),
+            'nul-byte': mod_toml('nul-byte', 'Nul Byte') + '\0name = "Hidden"',
+        }
+        for name, text in bad.items():
+            raw(name, {'mod.toml': text})
+        tile = png_bytes(8, 8, [0xFFFF00FF] * 64, tmp)
+        wav = tone_wav(tmp / 'tone.wav')
+        make_mod(mods, 'dup-tile', {'tiles/a/0123456789abcdef.png': tile, 'tiles/b/0123456789ABCDEF.png': tile})
+        make_mod(mods, 'dup-pal', {'palettes/amazon.pal': bytes(192), 'palettes/x/Amazon.pal': bytes(192)})
+        make_mod(mods, 'dup-sfx', {'sfx/13.wav': wav, 'sfx/13-swing.wav': wav})
+        p = run('--mods', 'on', '--mods-dir', mods)
+        log = p.stdout + p.stderr
+        check(p.returncode == 0 and '12 found, 2 loaded' in log, f'{host}: two good mods load beside ten bad ones', log)
+        check(
+            'Mod bom: bom\tok' in log and 'Mod case: case\tok' in log,
+            f'{host}: mod.toml and scripts/main.lua with a UTF-8 byte order mark, and MOD.TOML and '
+            'Scripts/Main.lua, load',
+            log,
+        )
+        reasons = {
+            'missing': 'mod.toml is missing version, prg_sha256.',
+            'unquoted': 'Cannot be read: mod.toml line 3: version must be a quoted string (version = "...")',
+            'twice': 'Cannot be read: mod.toml line 8: name is set twice',
+            'bad-sha': 'mod.toml: prg_sha256 must be the 64 hex digits of the PRG\'s SHA-256.',
+            'dup-tile': 'Not loaded: tiles/b/0123456789ABCDEF.png: the mod has another file for this tile and palette.',
+            'dup-pal': 'Not loaded: palettes/x/Amazon.pal: the mod has another amazon.pal.',
+            'dup-sfx': 'Not loaded: sfx/13-swing.wav: the mod has another file for effect 13.',
+            'long-id.dtmod': 'Cannot be read: mod.toml line 1: id is longer than 63 bytes',
+            'nul-byte.dtmod': 'Cannot be read: mod.toml contains a NUL byte; save it as UTF-8 text.',
+        }
+        for mod_id, why in reasons.items():
+            check(f'Mod {mod_id}: {why}' in log, f'{host}: {mod_id} is refused with "{why}"', log)
+        p = run('--mods', 'on', '--mods-dir', mods, '--mods-order', 'case:off')
+        log = p.stdout + p.stderr
+        check(
+            p.returncode == 0 and '12 found, 1 loaded' in log and 'Mod case: case\tok' not in log,
+            f'{host}: a refused package with the same id does not steal the valid mod switch',
+            log,
+        )
+        dump = tmp / 't\u00edles' / 'nested'
+        hashes = () if native else ('--hash-out', tmp / 'dump.txt')
+        p = run('--mods-dump', dump, *hashes)
+        keys = list(dump.glob('*.png'))
+        check(
+            p.returncode == 0 and keys and png_read(keys[0])[:2] == (8, 8),
+            f'{host}: dumping with mods off creates a nested UTF-8 path and writes {len(keys)} templates',
+            p.stdout + p.stderr,
+        )
+        if not native:
+            plain = run('--hash-out', tmp / 'plain.txt')
+            expected = (tmp / 'plain.txt').read_bytes()
+            check(
+                plain.returncode == 0 and expected and (tmp / 'dump.txt').read_bytes() == expected,
+                'headless: collecting templates leaves all 30 machine hash records identical',
+                plain.stdout + plain.stderr,
+            )
+        p = run('--mods-dir', tmp / 'nowhere')
+        check(
+            p.returncode != 0 and 'not a folder' in p.stdout + p.stderr,
+            f'{host}: --mods-dir with a path that is not a folder is refused (exit {p.returncode})',
+            p.stdout + p.stderr,
         )
 
 
@@ -569,6 +736,7 @@ def headless_checks(exe, route):
 
     with tempfile.TemporaryDirectory() as t:
         tmp = Path(t)
+        env = dict(os.environ, DUCKTALES_DATA_DIR=str(tmp / 'data'))
 
         def run(name, mods=None, order=None, frames=1500, every=300, hashes=False, wav=False, extra=(), on=True):
             out = tmp / name
@@ -595,7 +763,7 @@ def headless_checks(exe, route):
                 cmd += ['--hash-out', out / 'hash.txt']
             if wav:
                 cmd += ['--wav-out', out / 'a.wav']
-            p = subprocess.run([str(c) for c in [*cmd, *extra]], capture_output=True, text=True)
+            p = subprocess.run([str(c) for c in [*cmd, *extra]], capture_output=True, text=True, env=env)
             if p.returncode:
                 print(p.stdout + p.stderr)
                 raise SystemExit(f'{name}: exit {p.returncode}')
@@ -614,18 +782,8 @@ def headless_checks(exe, route):
         keys = sorted(dump.glob('*.png'))
         check(len(keys) > 20, f'--mods-dump wrote the tiles drawn ({len(keys)} templates)')
 
-        def lopsided(path):
-            w, h, px = png_read(path)
-            rows = [px[y * 8 : (y + 1) * 8] for y in range(8)]
-            return (
-                len(set(px)) >= 3
-                and rows != rows[::-1]
-                and rows != [r[::-1] for r in rows]
-                and all(p >> 24 == 255 for p in px)
-            )
-
-        key = next((k for k in keys if lopsided(k)), None)
-        check(key is not None, 'a lopsided, opaque tile is among them', '')
+        key = pick_drawn_tile(keys, base.get(1500, []))
+        check(key is not None, 'a lopsided, opaque tile drawn in frame 1500 is among them')
         if key is None:
             return 1
 

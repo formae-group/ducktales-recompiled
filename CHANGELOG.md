@@ -7,11 +7,35 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- Decompiled the scheduler `$FF35-$FF7C` as timed task code (`Task_Schedule`, `Task_Pass`,
+  `Task_Resume`): its C states the original's cycles (`Decomp_Cycles`, `Decomp_Fetch`), which check
+  compares and the native runtime spends, giving the call to the original when an NMI is pending or
+  VBlank would come during them. The native step dumps and lag logs are unchanged on all 13 routes.
+- 20 decompilation poke cases cover launched blocks, pouncers, the snapper grab, pickup respawn,
+  the final stand-in spawn, and smaller object, collision, row-boundary and controller branches no
+  existing route or poke case reached.
+- `tools/decomp_gap.py`: the PRG code a static walk from the executed code reaches (branches, calls and
+  dispatch tables) but no route or poke case executes, by block and routine, and the unreached runs that
+  decode as code (docs/decompilation.md "Gap").
+- Decompiled the ending's scene objects (bank 5 `$B380-$B50C`) and later frames
+  (`$E1F9-$E28B`). Only the sprite-0 raster wait and timed PPU write stay in the original.
+  The three long ending pokes exercise each variant through the end of the credits.
+- Decompiled the reset `$FEE0-$FF34` as task code; only the four-vblank PPU wait `$FEEE-$FEFA` stays in
+  the original. Task code in replace goes to the original when the NMI line has risen but the CPU has
+  not latched the edge yet, as on a warm reset at the frame boundary.
+- Bank 6's objects no longer call original code: the tile edits `$F4D8`/`$F506` are called as C,
+  and the charger's bounce off a hidden block runs in C. `Bg_Probe` and the walks and fall now return
+  the Y the original leaves (checked), which the charger, the block kicker and the boulder pass on.
+  New poke cases `charger-hidden-block` and `kicker-hidden-block`.
 - The chest's opening, sliding block and health block handlers (kinds `$16`, `$17` and `$42`)
   are decompiled, with poke cases based on three Transylvania chest records.
 - `tests/decomp_test.py` poke cases `extra-life` (the extra life `$8BB0`), `secret-treasure` (item `$74`,
   message `$0D` instead of the treasure pose, `$8C37`) and `row-end-right` (Scrooge's X clamped to `$F0` at a
   row's right end, `$F08B`): code no route or poke case ran before.
+- Mods: with mods on, `mods.log` in the data folder holds the catalogue (each mod, loaded or why
+  not), the scripts' `dt.log` lines, toasts and errors, emptied at each start and capped at 4 MiB.
+  The window build has no console when started from Explorer, so `dt.log` went nowhere before.
+  The Mod Menu opens it (**Open mods log**) and marks the mods that run a script.
 - Route `difficult_himalayas` (6,200 frames): `full_himalayas` on Difficult to the LAND CLEAR tally,
   the first route on Difficult; it passes `verify_routes` at the four alignments with 100% native cycles.
 - The native player writes a session summary when its Decompiled code ran: `decomp-session-<time>.txt`
@@ -155,6 +179,36 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - `tests/decomp_test.py --from-state` starts only from a golden state where the game's scheduler is
   idle. `full_moon` saved at frame 500 inside a task, and replace mode failed on its first frame
   from there, because the run resumed the original's task while replace ran the C.
+- Mods: a mod.toml saved by Notepad (with a UTF-8 byte order mark) failed on line 1, and so did a
+  `scripts/main.lua`; both load now. Names inside a mod match whatever their case, so
+  `Scripts/Main.lua` no longer showed as a script that then could not be found. mod.toml errors name
+  the missing keys, a key set twice and a key that is not a quoted string, and a `prg_sha256` that is
+  not 64 hex digits is reported as such instead of as a mod for another version of the game.
+- Mods: a mod with two files for the same tile key, land palette or sound id is refused with a
+  reason instead of silently using one. **Rescan** in the Mod Menu checks the files
+  of the mods that are not loaded, so a broken new mod shows why before a restart, and a mod refused
+  at start no longer lost its reason after a Rescan.
+- Mods: a stopped script's reason says where it ran (*in a "frame" handler*, *when the script
+  started*), and the instruction limit names the line that was running. A `dt.CANCEL` returned for
+  an event that cannot be cancelled is reported once instead of ignored silently, and a `dt.set`
+  write the state no longer allows at the frame's end is logged instead of dropped silently.
+- Mods: a toast fits the picture. The 64-character cut counted bytes and could split a UTF-8
+  character; it counts characters now. The drawn notice shows a character its font lacks as `?`
+  instead of a gap, and a line wider than the picture ends in `...` instead of running past the
+  panel.
+- Mods: `dt.store` files are written to a temporary file and moved into place, so a crash or a
+  full disk cannot leave half a store; a failed write is logged and tried again instead of lost.
+  `--mods-dir` with a path that is not a folder, or a fifth folder, is refused instead of ignored,
+  and `--mods-dump` creates the folder's missing parents.
+- Mods: hot reload compares the script's write time to the 100 ns instead of the second, so a
+  save of the same size within the second of the last one is no longer missed.
+- Mods: the window keeps `[Mods]` when saving display defaults on startup; command-line overrides
+  take effect without changing the saved choices. A refused package no longer takes the saved
+  position and switch of a valid mod with the same ID. Rescan and the restart prompt distinguish
+  packages by source, so replacing a file with the same ID doesn't make it appear already loaded.
+- Mods: `--mods-dump` writes to paths with accented characters and reports a failed PNG write
+  instead of silently dropping tiles. An off-screen run dumps tiles without needing a
+  second option to request a presented picture.
 
 ## [1.0.0] - 2026-11-23
 

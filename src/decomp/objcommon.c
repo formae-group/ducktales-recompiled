@@ -120,6 +120,7 @@ static bool Obj_FindBlock(uint8_t slot, bool horizontal)
             continue;
         }
         uint8_t box = gObjects->hitbox[x] & HITBOX_INDEX;
+        gProbeExitY = box;
         uint8_t dy = AbsDiff(gScratch(1), gObjects->y[x]);
         uint8_t dx = AbsDiff16(wx, Obj_GetWorldX(x));
         if (horizontal) {
@@ -182,6 +183,7 @@ uint8_t Obj_WalkRight(uint8_t slot, uint8_t first, uint8_t count)
     uint8_t page = gObjects->worldPage[slot];
     Obj_MoveRight(slot);
     if (page == 0xFF && gObjects->worldPage[slot] == 0) {
+        gProbeExitY = count;
         Obj_Despawn(slot);
         return slot;
     }
@@ -209,6 +211,7 @@ uint8_t Obj_WalkLeft(uint8_t slot, uint8_t first, uint8_t count)
     uint8_t page = gObjects->worldPage[slot];
     Obj_MoveLeft(slot);
     if (page == 0 && gObjects->worldPage[slot] == 0xFF) {
+        gProbeExitY = count;
         Obj_Despawn(slot);
         return slot;
     }
@@ -459,16 +462,19 @@ static void Run_TouchScrooge(Regs *r)
 static void Run_WalkRight(Regs *r)
 {
     r->x = Obj_WalkRight(r->x, r->a, r->y);
+    r->y = gProbeExitY;
 }
 
 static void Run_WalkLeft(Regs *r)
 {
     r->x = Obj_WalkLeft(r->x, r->a, r->y);
+    r->y = gProbeExitY;
 }
 
 static void Run_Fall(Regs *r)
 {
     r->x = Obj_Fall(r->x, r->a, r->y);
+    r->y = gProbeExitY;
 }
 
 static void Run_ClimbDown(Regs *r)
@@ -555,9 +561,9 @@ static void Run_FindFreeSlot(Regs *r)
 
 const DecompRoutine gObjCommonRoutines[] = {
     { DT_CODE_OBJ_TOUCH_SCROOGE, "ducktales.decomp.F436", "Obj_TouchScrooge", Run_TouchScrooge, OUT_X | OUT_C },
-    { DT_CODE_MOVE_WITH_WALLS, "ducktales.decomp.F0F8", "Obj_WalkRight", Run_WalkRight, OUT_X },
-    { DT_CODE_OBJ_WALK_LEFT, "ducktales.decomp.F13B", "Obj_WalkLeft", Run_WalkLeft, OUT_X },
-    { DT_CODE_OBJ_FALL, "ducktales.decomp.F1BE", "Obj_Fall", Run_Fall, OUT_X },
+    { DT_CODE_MOVE_WITH_WALLS, "ducktales.decomp.F0F8", "Obj_WalkRight", Run_WalkRight, OUT_X | OUT_Y },
+    { DT_CODE_OBJ_WALK_LEFT, "ducktales.decomp.F13B", "Obj_WalkLeft", Run_WalkLeft, OUT_X | OUT_Y },
+    { DT_CODE_OBJ_FALL, "ducktales.decomp.F1BE", "Obj_Fall", Run_Fall, OUT_X | OUT_Y },
     { DT_CODE_OBJ_RISE, "ducktales.decomp.F1F9", "Obj_Rise", Run_Rise, OUT_X },
     { DT_CODE_CLIMB_DOWN, "ducktales.decomp.F192", "Obj_ClimbDown", Run_ClimbDown, OUT_X },
     { DT_CODE_CLIMB_UP, "ducktales.decomp.F1A8", "Obj_ClimbUp", Run_ClimbUp, OUT_X },

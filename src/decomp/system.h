@@ -14,3 +14,5 @@ uint8_t Oam_Build(void);
 /* $FFDE: map PRG bank at $8000 and remember it in $E7. */
 void Bank_Select(uint8_t bank);
 void Bank_SelectTemp(uint8_t bank);
+/* $F76D: the palette of scene Y (the ending's and the special scenes'). */
+void Palette_LoadScene(uint8_t scene);

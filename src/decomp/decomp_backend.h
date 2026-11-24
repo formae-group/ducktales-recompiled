@@ -56,7 +56,8 @@ extern uint8_t dc_resume[0x10000 / 8];
  * operations (dc_played of them made so far, dc_loads of them reads whose
  * value it used), its device stores and where it hands off. */
 extern uint8_t dc_image[GAME_RAM_SIZE];
-extern uint8_t dc_entry_s, dc_entry_p, dc_cur_s, dc_c_bank;
+extern uint8_t dc_entry_s, dc_entry_p, dc_cur_s, dc_rebased_s, dc_c_bank;
+extern bool dc_keep_stack_ram;
 extern bool dc_run_original;
 extern const DecompRoutine *dc_top;
 extern bool dc_top_entered;

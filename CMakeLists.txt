@@ -250,6 +250,13 @@ if(DUCKTALES_HEADLESS)
         "${CMAKE_SOURCE_DIR}/src/ui/app_rom.c")
     target_include_directories(app_rom_test PRIVATE "${CMAKE_SOURCE_DIR}/src")
     target_compile_definitions(app_rom_test PRIVATE _CRT_SECURE_NO_WARNINGS)
+    add_executable(mods_catalogue_test
+        "${CMAKE_SOURCE_DIR}/tests/mods_catalogue_test.c"
+        "${CMAKE_SOURCE_DIR}/src/mods/core/fm_archive.c"
+        "${CMAKE_SOURCE_DIR}/src/mods/core/fm_catalog.c"
+        "${CMAKE_SOURCE_DIR}/src/mods/core/fm_codec.c")
+    target_include_directories(mods_catalogue_test PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/external/stb")
+    target_compile_definitions(mods_catalogue_test PRIVATE _CRT_SECURE_NO_WARNINGS)
 endif()
 
 # The native runtime (docs/native-runtime.md): the same generated C as the

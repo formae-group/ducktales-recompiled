@@ -21,3 +21,5 @@ uint8_t Vram_FlushQueue(void);
 void Vram_FlushTileEdits(void);
 uint8_t Camera_Update(uint8_t x);
 void Block_Draw(uint8_t record);
+void Tile_EditByAction(uint8_t x, uint8_t y);
+void Tile_EditBySlot(uint8_t x, uint8_t y);

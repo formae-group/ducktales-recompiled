@@ -14,7 +14,8 @@
  *              and queues it; the queue is applied at the frame's end, after
  *              the "frame" handlers, inside the game's write window
  *   toast      a notice for SCRIPT_TOAST_FRAMES frames, at most one per mod
- *              every SCRIPT_TOAST_GAP frames, SCRIPT_TOAST_CHARS characters;
+ *              every SCRIPT_TOAST_GAP frames, SCRIPT_TOAST_CHARS characters
+ *              (UTF-8 code points, control characters as spaces);
  *              the game draws it on its presentation, never the machine's
  *   store      strings, numbers and booleans per mod, kept in
  *              <store_dir>/<id>.ini, at most SCRIPT_STORE_BYTES; written once
@@ -79,15 +80,16 @@ typedef struct {
     bool folder;
     long long stamp;
     lua_State *L;
-    int handlers;   /* registry ref: a table of handler lists, event + 1 (the frame's at SCRIPT_EVENTS + 1) */
-    uint64_t wants; /* bit per event, FRAME_BIT for "frame" */
+    int handlers;    /* registry ref: a table of handler lists, event + 1 (the frame's at SCRIPT_EVENTS + 1) */
+    uint64_t wants;  /* bit per event, FRAME_BIT for "frame" */
+    uint64_t warned; /* bit per event: a dt.CANCEL it cannot take was reported */
     size_t memory;
     bool over;  /* the last growth was refused */
     long steps; /* hook steps left in this callback */
     bool stopped;
     char why[300];
     uint64_t last_toast;
-    bool store_loaded, store_dirty;
+    bool store_loaded, store_dirty, store_failed;
     StoreItem *store;
     int store_count;
     size_t store_bytes;
@@ -108,7 +110,7 @@ static uint64_t s_frame;
 static time_t s_checked;
 static Write s_writes[SCRIPT_WRITES];
 static int s_write_count;
-static char s_toast_title[128], s_toast_body[SCRIPT_TOAST_CHARS + 1];
+static char s_toast_title[128], s_toast_body[SCRIPT_TOAST_CHARS * 4 + 1];
 static int s_toast_frames;
 static bool s_exit_hooked;
 
@@ -170,14 +172,15 @@ static void count_hook(lua_State *L, lua_Debug *ar)
     if (--s->steps > 0 && !s->stopped) {
         return;
     }
-    stop(s, "ran more than %d instructions in one callback", SCRIPT_INSTRUCTIONS);
+    luaL_where(L, 0);
+    stop(s, "%sran more than %d instructions in one callback", lua_tostring(L, -1), SCRIPT_INSTRUCTIONS);
+    lua_pop(L, 1);
     luaL_error(L, "%s", s->why);
 }
 
 static void log_line(const Script *s, const char *what, const char *text)
 {
-    printf("%s Mod %s: %s%.1000s\n", fm_log_prefix(), s->id, what, text);
-    fflush(stdout);
+    fm_log("Mod %s: %s%.1000s", s->id, what, text);
 }
 
 /* ---- the sandbox's replacements ---- */
@@ -325,8 +328,12 @@ static int sb_toast(lua_State *L)
     }
     s->last_toast = s_frame ? s_frame : 1;
     size_t n = 0;
-    for (; text[n] && n < SCRIPT_TOAST_CHARS; n++) {
-        s_toast_body[n] = (unsigned char)text[n] < 0x20 ? ' ' : text[n];
+    for (int chars = 0; text[n] && n + 1 < sizeof s_toast_body; n++) {
+        unsigned char c = (unsigned char)text[n];
+        if ((c & 0xC0) != 0x80 && chars++ == SCRIPT_TOAST_CHARS) {
+            break;
+        }
+        s_toast_body[n] = c < 0x20 || c == 0x7F ? ' ' : (char)c;
     }
     s_toast_body[n] = 0;
     snprintf(s_toast_title, sizeof s_toast_title, "%s", s->name);
@@ -482,6 +489,7 @@ static void store_load(Script *s)
     if (!text) {
         return;
     }
+    int dropped = 0;
     for (char *line = strtok(text, "\r\n"); line; line = strtok(NULL, "\r\n")) {
         char *eq = strstr(line, " = ");
         if (!eq) {
@@ -493,35 +501,62 @@ static void store_load(Script *s)
             char *copy = malloc(strlen(v) + 1);
             if (copy) {
                 strcpy(copy, v);
-                store_put(s, line, copy);
             }
+            dropped += !copy || !store_put(s, line, copy);
         }
     }
     free(text);
+    if (dropped) {
+        char why[100];
+        snprintf(why, sizeof why, ": %d keys past %d bytes were dropped", dropped, SCRIPT_STORE_BYTES);
+        log_line(s, path, why);
+    }
 }
 
+/* Writes the store to <id>.ini.tmp, then puts it in place of <id>.ini, so a
+ * crash or a full disk never leaves half a file; a failure keeps it dirty
+ * (tried again a second later) and is logged once. */
 static void store_write(Script *s)
 {
-    char path[1200];
+    char path[1200], tmp[1210];
     if (!s->store_dirty || !store_path(s, path, sizeof path)) {
         return;
     }
-    s->store_dirty = false;
+    snprintf(tmp, sizeof tmp, "%s.tmp", path);
     fm_make_dir(s_game.store_dir);
 #ifdef _WIN32
-    wchar_t w[1200];
-    FILE *f = MultiByteToWideChar(CP_UTF8, 0, path, -1, w, 1200) ? _wfopen(w, L"wb") : NULL;
+    wchar_t w[1210], wt[1210];
+    bool named = MultiByteToWideChar(CP_UTF8, 0, path, -1, w, 1210) &&
+                 MultiByteToWideChar(CP_UTF8, 0, tmp, -1, wt, 1210);
+    FILE *f = named ? _wfopen(wt, L"wb") : NULL;
 #else
-    FILE *f = fopen(path, "wb");
+    FILE *f = fopen(tmp, "wb");
 #endif
-    if (!f) {
-        return;
+    bool ok = f != NULL;
+    if (f) {
+        fprintf(f, "; dt.store of the mod %s\n", s->id);
+        for (int i = 0; i < s->store_count; i++) {
+            fprintf(f, "%s = %s\n", s->store[i].key, s->store[i].value);
+        }
+        ok = !ferror(f);
+        ok = fclose(f) == 0 && ok;
     }
-    fprintf(f, "; dt.store of the mod %s\n", s->id);
-    for (int i = 0; i < s->store_count; i++) {
-        fprintf(f, "%s = %s\n", s->store[i].key, s->store[i].value);
+#ifdef _WIN32
+    ok = ok && MoveFileExW(wt, w, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+    if (!ok && named) {
+        DeleteFileW(wt);
     }
-    fclose(f);
+#else
+    ok = ok && rename(tmp, path) == 0;
+    if (!ok) {
+        remove(tmp);
+    }
+#endif
+    s->store_dirty = !ok;
+    if (!ok && !s->store_failed) {
+        log_line(s, "dt.store could not be written to ", path);
+    }
+    s->store_failed = !ok;
 }
 
 static int sb_store_get(lua_State *L)
@@ -756,13 +791,17 @@ static int dispatch(lua_State *L)
 static void report(Script *s)
 {
     log_line(s, "script stopped: ", s->why);
-    FmMod *m = fm_find(s->id);
-    if (m) {
-        snprintf(m->script_error, sizeof m->script_error, "%s", s->why);
-    }
+    fm_set_script_error(s->id, s->path, s->why);
     s_dirty = true;
 }
 
+static const char *event_name(int e)
+{
+    return e == FRAME_BIT ? "frame" : s_game.events[e].name;
+}
+
+/* Runs the script's handlers of event e: true when one returned dt.CANCEL
+ * and e can be cancelled. */
 static bool run(Script *s, int e)
 {
     lua_State *L = s->L;
@@ -773,13 +812,24 @@ static bool run(Script *s, int e)
         stop_if_over(s);
         const char *msg = lua_tostring(L, -1);
         stop(s, "%s", msg ? msg : "an error without a message");
+        size_t n = strlen(s->why);
+        snprintf(s->why + n, sizeof s->why - n, " (in a \"%s\" handler)", event_name(e));
         lua_pop(L, 1);
         report(s);
         return false;
     }
     bool cancel = lua_toboolean(L, -1);
     lua_pop(L, 1);
-    return cancel;
+    bool cancelable = e != FRAME_BIT && s_game.events[e].cancelable;
+    if (cancel && !cancelable && !(s->warned & 1ull << e)) {
+        s->warned |= 1ull << e;
+        char text[160];
+        snprintf(text, sizeof text,
+                 "a \"%s\" handler returned dt.CANCEL, which that event ignores: it cannot be cancelled",
+                 event_name(e));
+        log_line(s, "", text);
+    }
+    return cancel && cancelable;
 }
 
 static bool live(const Script *s, int bit)
@@ -795,7 +845,7 @@ bool fm_scripts_event(int event)
             cancel |= run(s_scripts[i], event);
         }
     }
-    return cancel && s_game.events[event].cancelable;
+    return cancel;
 }
 
 static void close_script(Script *s)
@@ -835,17 +885,19 @@ static long long file_stamp(const char *path)
 {
 #ifdef _WIN32
     wchar_t w[1024];
-    struct _stat64 st;
-    if (!MultiByteToWideChar(CP_UTF8, 0, path, -1, w, 1024) || _wstat64(w, &st)) {
+    WIN32_FILE_ATTRIBUTE_DATA st;
+    if (!MultiByteToWideChar(CP_UTF8, 0, path, -1, w, 1024) || !GetFileAttributesExW(w, GetFileExInfoStandard, &st)) {
         return -1;
     }
+    long long written = (long long)st.ftLastWriteTime.dwHighDateTime << 32 | st.ftLastWriteTime.dwLowDateTime;
+    return written * 31 + ((long long)st.nFileSizeHigh << 32 | st.nFileSizeLow);
 #else
     struct stat st;
     if (stat(path, &st)) {
         return -1;
     }
-#endif
     return (long long)st.st_mtime * 1000003 + (long long)st.st_size;
+#endif
 }
 
 /* A fresh state running scripts/main.lua; false with the reason. */
@@ -877,6 +929,7 @@ static bool start_script(Script *s, char *err, size_t cap)
     s->stopped = false;
     s->why[0] = 0;
     s->wants = 0;
+    s->warned = 0;
     s->steps = SCRIPT_INSTRUCTIONS / HOOK_STEP;
     lua_State *L = lua_newstate(script_alloc, s);
     if (!L) {
@@ -889,7 +942,8 @@ static bool start_script(Script *s, char *err, size_t cap)
     lua_pushcfunction(L, setup);
     int status = lua_pcall(L, 0, 0, 0);
     if (status == LUA_OK) {
-        status = luaL_loadbufferx(L, (const char *)text, size, "=scripts/main.lua", "t");
+        const char *chunk = fm_skip_bom((const char *)text);
+        status = luaL_loadbufferx(L, chunk, size - (size_t)(chunk - (const char *)text), "=scripts/main.lua", "t");
     }
     if (status == LUA_OK) {
         status = lua_pcall(L, 0, 0, 0);
@@ -898,7 +952,10 @@ static bool start_script(Script *s, char *err, size_t cap)
     if (status != LUA_OK) {
         stop_if_over(s);
         const char *msg = lua_tostring(L, -1);
-        snprintf(err, cap, "%s", s->stopped ? s->why : msg ? msg : "an error without a message");
+        snprintf(err, cap, "%s (when the script started)",
+                 s->stopped ? s->why
+                 : msg      ? msg
+                            : "an error without a message");
         close_script(s);
         return false;
     }
@@ -965,10 +1022,7 @@ static void reload_changed(void)
         char err[300];
         if (start_script(s, err, sizeof err)) {
             log_line(s, "script reloaded", "");
-            FmMod *m = fm_find(s->id);
-            if (m) {
-                m->script_error[0] = 0;
-            }
+            fm_set_script_error(s->id, s->path, "");
         } else {
             s->stamp = stamp;
             s->stopped = true;
@@ -1012,8 +1066,15 @@ void fm_scripts_frame(void)
             const Write *w = &s_writes[i];
             const FmField *f = &s_game.fields[w->field];
             char err[160];
-            if (!w->script->stopped && f->check(w->value, err, sizeof err)) {
+            if (w->script->stopped) {
+                continue;
+            }
+            if (f->check(w->value, err, sizeof err)) {
                 f->set(w->value);
+            } else {
+                char text[260];
+                snprintf(text, sizeof text, "dt.set.%s(%lld) dropped at the frame's end: %s", f->name, w->value, err);
+                log_line(w->script, "", text);
             }
         }
         s_game.end_frame();

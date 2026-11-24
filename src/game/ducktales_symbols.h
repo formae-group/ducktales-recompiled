@@ -417,6 +417,11 @@
 
 /* Code of the flow and what it calls (bank 7 unless a bank is named). */
 #define DT_CODE_RESET          0xFEE0
+#define DT_RESET_POLL          0xFEEE /* wait for four vblanks, with rendering off */
+#define DT_RESET_READY         0xFEFB /* RAM, OAM, nametables and the main task */
+#define DT_RESET_NT0_READY     0xFF1B
+#define DT_RESET_NT1_READY     0xFF24
+#define DT_RESET_CREATED       0xFF31
 #define DT_CODE_TASK_YIELD     0xFFAC /* wait one frame */
 #define DT_CODE_TASK_WAIT      0xFFA5 /* wait X frames */
 #define DT_CODE_RTS            0xFFAB /* task_wait's RTS: the entry of task code's isolated runs */
@@ -462,6 +467,17 @@
 #define DT_B5_PPU_STRINGS      0xBAB0 /* X = set: PPU address and data strings written to the PPU (code) */
 #define DT_B5_CONSUMED_BITS    0xB760 /* the land's consumed-record bits $0120-$013F (code) */
 #define DT_B5_ENDING_OBJECTS   0xB380 /* the ending screen's objects ($24), then the sprites (code) */
+#define DT_B5_END_OBJ_LIST     0xB3CC /* bank 5: per scene, the offset of its first object entry (code) */
+#define DT_B5_END_OBJ_ENTRIES  0xB3D2 /* bank 5: action, Y, world X per slot, up to slot 0's kind (code) */
+#define DT_B5_END_OBJ_UPDATE   0xB400 /* a frame of the ending scene's slot 0, by its kind (code) */
+#define DT_B5_END_OBJ_PLACE    0xB382 /* place the objects of ending screen X (code) */
+#define DT_B5_END_OBJ_HOP      0xB412 /* ending step 0 (code) */
+#define DT_B5_END_OBJ_WALK     0xB46A /* ending step 1 (code) */
+#define DT_B5_END_OBJ_WAIT     0xB48F /* ending step 2 (code) */
+#define DT_B5_END_OBJ_EXIT     0xB4B5 /* ending step 3 (code) */
+#define DT_B5_END_OBJ_DONE     0xB507 /* ending steps 4 and 5 (code) */
+#define DT_B5_END_OBJ_LO       0xB50D /* bank 5: the handlers by kind, low bytes (code) */
+#define DT_B5_END_OBJ_HI       0xB513 /* their high bytes (code) */
 #define DT_B5_SELECT_MESSAGE   0xB800 /* Land Select: the message for $5E, $5D and $78 into the VRAM queue (code) */
 #define DT_B5_MESSAGE          0xB81C /* X = Land Select message: its strings into the VRAM queue (code) */
 #define DT_B5_MESSAGE_LIST     0xB86C /* bank 5: per message, the index of its first entry below (code) */
@@ -589,6 +605,10 @@
 #define DT_FLOW_ENDING_BANKED      0xE1BA
 #define DT_FLOW_ENDING_WAITED      0xE1BF
 #define DT_FLOW_ENDING_SHOWN       0xE1EC
+#define DT_FLOW_END_SPLIT_WAIT     0xE229 /* the original's sprite-0 wait after a credits frame */
+#define DT_FLOW_END_SPLIT          0xE23C
+#define DT_FLOW_END_SECOND         0xE271
+#define DT_FLOW_END_OVER           0xE289
 #define DT_FLOW_END_FADED          0xE057
 #define DT_FLOW_END_BLACK          0xE07C
 #define DT_FLOW_END_SCREEN_OFF     0xE07F
@@ -798,7 +818,6 @@
 #define DT_CODE_OBJ_SHATTER               0x88E4 /* the debris animation */
 #define DT_CODE_OBJ_DEFEAT                0x8932 /* an enemy is beaten */
 #define DT_CODE_BOSS_HIT                  0xF6D7 /* a counted hit on a boss; carry set when it beat it (code) */
-#define DT_CODE_OBJ_DRAW_BLOCK            0xF4D8 /* a spawned block's tiles into the background (code) */
 #define DT_CODE_SPAWN_RECORD              0xAF2B /* spawn one land record (code) */
 #define DT_CODE_SPAWN_TEMPLATES           0xBE16 /* 4-byte object templates by record type (code) */
 #define DT_CODE_OBJ_OPEN_BLOCK            0x8A11 /* an opened block or chest picks its item */

@@ -18,7 +18,7 @@ folder (DUCKTALES_DATA_DIR):
      give (docs/presentation.md);
   7. DUCKTALES_UI_SELFTEST: the in-game menu opens by itself at frame 120, walks
      every tab and category (Settings: General, Graphics, Audio, Controls with
-     a capture, Gameplay; Enhancements: Gameplay, Restore defaults; About),
+     a capture, Gameplay, Mods; Enhancements: Gameplay, Restore defaults; About),
      draws Graphics and About off screen at 1280x720 and 3840x2160, opens the
      Reset and Quit confirmations without confirming them, and closes; the
      first-run screen shows a refused ROM. Each state is written as a PNG (into
@@ -257,7 +257,15 @@ def main():
         shots.mkdir(parents=True, exist_ok=True)
         for old in shots.glob('*.png'):
             old.unlink()
-        (tmp / 'e.ini').write_text('[Game]\nMenuPausesGame = on\n')
+        (tmp / 'e.ini').write_text('[Game]\nMenuPausesGame = on\n\n[Mods]\nOrder = disabled:off\nEnabled = on\n')
+        mods = data / 'mods'
+        fixture = mods / 'disabled'
+        fixture.mkdir(parents=True, exist_ok=True)
+        (fixture / 'mod.toml').write_text(
+            'id = "disabled"\nname = "Disabled fixture"\nversion = "1"\ngame = "DuckTales (USA)"\n'
+            'prg_sha256 = "8ba8baed01a9fbaf1e9ff29e0c9825db1963ac2aff211d6f1f3bcfd3839e2013"\n'
+        )
+        (mods / 'broken.dtmod').write_bytes(b'not a zip')
         code, out = run(
             args.rom,
             '--hidden',
@@ -283,6 +291,7 @@ def main():
             'menu_12_about_2160p',
             'menu_13_reset',
             'menu_14_quit',
+            'menu_15_settings_mods',
         ]
         check(
             code == 0
@@ -302,6 +311,20 @@ def main():
         )
         check(
             'menu closed, 0 game frames ran' in out, 'with MenuPausesGame = on no game frame runs behind the menu', out
+        )
+        mod_log = (data / 'mods.log').read_text() if (data / 'mods.log').exists() else ''
+        check(
+            'Mods: on, 2 found, 0 loaded' in mod_log
+            and 'Mod disabled: Disabled fixture 1, not loaded, switched off' in mod_log
+            and 'Mod broken.dtmod: Cannot be read: Not a zip archive' in mod_log,
+            'the window reads Enabled after Order, retains a disabled mod and reports the broken archive',
+            out + mod_log,
+        )
+        code, out = run(args.rom, '--hidden', '--exit-after', '10', '--config', str(tmp / 'e.ini'), '--mods', 'off')
+        check(
+            code == 0 and 'Mods: off, 2 found, 0 loaded' in out and 'Enabled = on' in (tmp / 'e.ini').read_text(),
+            'the command line can turn mods off despite Enabled = on in the window config',
+            out,
         )
         running = tmp / 'shots-running'
         running.mkdir()

@@ -664,10 +664,16 @@ static int replace(int i, const CycModRegs *in)
  * last instruction). The NMI's handler steps state the task code also uses
  * (the random generator, the scratch bytes): the original takes it inside a
  * long task routine, and taking it after the C's results would change the
- * order, so such a call goes to the original. */
+ * order, so such a call goes to the original. So does a call made while the
+ * NMI line has risen but the CPU has not latched the edge yet (a warm reset
+ * at the frame boundary: the original takes that NMI before its first store
+ * to $2000). */
 static bool crosses_vblank(uint64_t cycles)
 {
     hw_native_flush();
+    if (ppu_nmi_output() && !cpu.nmi_input) {
+        return true;
+    }
     long now = (long)ppu.scanline * 341 + ppu.dot;
     long dots = 241L * 341 + 1 - now;
     if (dots <= 0) {
@@ -697,11 +703,8 @@ static int task_isolated_site(uint16_t addr)
     return 1;
 }
 
-/* The original task routine alone, from its start to its RTS or, when the C
- * handed off, to its arrival at the same routine at the same depth; its RAM
- * into s_orig, the rest into s_run. The call enters at an RTS: the observer
- * moves its return to the start, with S as the routine has it there (the
- * RTS's cycles are not the routine's). */
+/* The last isolated run of a timed routine, reused by the next call with the
+ * same registers, bank and RAM (the scheduler's idle passes repeat it). */
 static struct {
     const DecompRoutine *rt;
     CycModRegs in;
@@ -710,6 +713,12 @@ static struct {
     TaskRun run;
 } s_timed;
 
+/* The original task routine alone, from its start to its RTS or, when the C
+ * handed off, to its arrival at the same routine at the same depth; its RAM
+ * into s_orig, the rest into s_run. The call enters at an RTS: the observer
+ * moves its return to the start, with S as the routine has it there (the
+ * RTS's cycles are not the routine's). A TXS that raises S past the synthetic
+ * caller (as the reset vector does) moves the sentinel above the new stack. */
 static void run_task_original(const DecompRoutine *rt, const CycModRegs *in)
 {
     const uint8_t *ram = cyc_cpu_ram();
@@ -736,7 +745,10 @@ static void run_task_original(const DecompRoutine *rt, const CycModRegs *in)
     s_damage_replayed = 0;
     s_run.start = rt->addr;
     s_run.start_s = in->s;
-    s_run.call_s = rt->own_stack ? 0xFF : (uint8_t)(in->s + rt->locals + 2);
+    s_run.call_s = (uint8_t)(in->s + rt->locals + 2);
+    if ((int8_t)(dc_rebased_s - s_run.call_s) > 0) {
+        s_run.call_s = dc_rebased_s;
+    }
     s_run.fixup = true;
     s_run.rti = rt->interrupt;
     s_run.stop_armed = dc_handoff_set;
@@ -776,7 +788,7 @@ static bool task_live(uint16_t a)
     if (off == s_run.call_s || off == (uint8_t)(s_run.call_s - 1)) {
         return false;
     }
-    if (a < DT_ADDR_STACK_FLOOR) {
+    if (a < DT_ADDR_STACK_FLOOR || dc_keep_stack_ram) {
         return true;
     }
     return dc_handoff_set ? off > dc_cur_s : off >= dc_cur_s + 3u;
@@ -804,7 +816,11 @@ static bool task_same(const DecompRoutine *rt, const Regs *c)
     if ((out & OUT_Y) && o->y != c->y) {
         return false;
     }
-    if ((out & OUT_P) && ((o->p ^ c->p) & (P_N | P_V | P_Z | P_C))) {
+    uint8_t p_mask = P_N | P_V | P_Z | P_C;
+    if (dc_handoff_set) {
+        p_mask |= P_I | P_D;
+    }
+    if ((out & OUT_P) && ((o->p ^ c->p) & p_mask)) {
         return false;
     }
     return true;
@@ -919,9 +935,9 @@ static bool task_replace(int i, const CycModRegs *in)
         s = (uint8_t)(s + 2);
     }
     uint8_t flags = P_N | P_V | P_Z | P_C;
-    uint8_t p = rti                                            ? c.p
-                : dc_handoff_set && !(dc_handoff_uses & OUT_P) ? in->p
-                                                               : (uint8_t)((c.p & flags) | (in->p & ~flags));
+    uint8_t p = rti              ? c.p
+                : dc_handoff_set ? (dc_handoff_uses & OUT_P ? c.p : in->p)
+                                 : (uint8_t)((c.p & flags) | (in->p & ~flags));
     CycModRegs set = { c.a, c.x, c.y, s, p, 0 };
     if (dc_handoff_set) {
         if (!(dc_handoff_uses & OUT_A)) {

@@ -460,16 +460,17 @@ static void Random_Next(void)
  * the PRG bank (high nibble) and pages - 1 (low nibble), the source page and
  * the PPU page; a byte with bit 7 set ends the list. The source bank stays
  * selected. */
-static void Chr_LoadList(uint8_t n)
+static void Chr_LoadList(Regs *r)
 {
-    Decomp_Enter(DT_CODE_CHR_LOAD, 0, n, 0);
+    Decomp_Enter(DT_CODE_CHR_LOAD, r->a, r->x, r->y);
     Ppu_SetCtrl(gPpuCtrl & 0xFE);
-    uint16_t list = rom_pointer(DT_TABLE_CHR_LIST_LO, DT_TABLE_CHR_LIST_HI, n);
+    uint16_t list = rom_pointer(DT_TABLE_CHR_LIST_LO, DT_TABLE_CHR_LIST_HI, r->x);
     Ram_SetU16(DT_ADDR_CHR_LOAD_LIST, DT_ADDR_CHR_LOAD_LIST + 1, list);
     uint8_t i = 0;
     do {
-        uint8_t head = Game_ReadRom((uint16_t)(list + i));
+        uint8_t head = r->a = Game_ReadRom((uint16_t)(list + i));
         if (head & CHR_LIST_END) {
+            r->y = i;
             return;
         }
         RAM_U8(DT_ADDR_CHR_LOAD_BANK) = head >> 4;
@@ -482,15 +483,18 @@ static void Chr_LoadList(uint8_t n)
         Ppu_SetAddress((uint16_t)(Game_ReadRom((uint16_t)(list + i)) << 8));
         RAM_U8(DT_ADDR_CHR_LOAD_INDEX) = i;
         Bank_Select(RAM_U8(DT_ADDR_CHR_LOAD_BANK));
+        r->x = RAM_U8(DT_ADDR_CHR_LOAD_BANK);
         do {
             uint16_t page = Ram_GetU16(DT_ADDR_CHR_LOAD_SOURCE, DT_ADDR_CHR_LOAD_SOURCE + 1);
             for (int b = 0; b < 0x100; b++) {
-                Ppu_Write(Game_ReadRom((uint16_t)(page + b)));
+                r->a = Game_ReadRom((uint16_t)(page + b));
+                Ppu_Write(r->a);
             }
             RAM_U8(DT_ADDR_CHR_LOAD_SOURCE + 1)++;
         } while ((int8_t)--RAM_U8(DT_ADDR_CHR_LOAD_PAGES) >= 0);
         i = (uint8_t)(RAM_U8(DT_ADDR_CHR_LOAD_INDEX) + 1);
     } while (i);
+    r->y = i;
 }
 
 static uint8_t string_byte(uint8_t y)
@@ -541,7 +545,7 @@ static void Text_DrawStrings(uint8_t set)
 /* $F76D: both palette halves of scene y into the buffer and the master copy
  * (two 16-byte entries of one table, read backwards from their last byte);
  * bit 7 of the sprite index also loads sprite palette 3 by $F9. */
-static void Palette_LoadScene(uint8_t scene)
+void Palette_LoadScene(uint8_t scene)
 {
     Decomp_Enter(DT_CODE_PALETTE_SCENE, 0, 0, scene);
     RAM_U8(DT_ADDR_SCRATCH0) = Game_ReadRom((uint16_t)(DT_TABLE_SCENE_BG + scene));
@@ -622,11 +626,6 @@ static void Run_RandomNext(Regs *r)
     r->y = 0;
 }
 
-static void Run_ChrLoadList(Regs *r)
-{
-    Chr_LoadList(r->x);
-}
-
 static void Run_PaletteLoadScene(Regs *r)
 {
     Palette_LoadScene(r->y);
@@ -655,7 +654,7 @@ const DecompRoutine gSystemRoutines[] = {
       false },
     { DT_CODE_FADE_OUT, "ducktales.decomp.C282", "Palette_FadeOut", Palette_FadeOut, FADE_RETURNS, true, 0, false },
     { DT_CODE_FADE_WAIT, NULL, "Palette_FadeWait", Palette_FadeWait, FADE_RETURNS, true, 1, true },
-    { DT_CODE_CHR_LOAD, "ducktales.decomp.C301", "Chr_LoadList", Run_ChrLoadList, OUT_HW },
+    { DT_CODE_CHR_LOAD, "ducktales.decomp.C301", "Chr_LoadList", Chr_LoadList, OUT_A | OUT_X | OUT_Y | OUT_HW },
     { DT_CODE_PALETTE_SCENE, "ducktales.decomp.F76D", "Palette_LoadScene", Run_PaletteLoadScene, 0 },
     { DT_CODE_DRAW_STRINGS, "ducktales.decomp.5.BAB0", "Text_DrawStrings", Run_TextDrawStrings, OUT_HW,
       .bank = STRINGS_BANK },
@@ -665,8 +664,7 @@ const DecompRoutine gSystemRoutines[] = {
     { DT_CODE_TASK_YIELD, "ducktales.decomp.FFAC", "Task_Yield", Task_Yield, 0, true, 0, false },
     { DT_CODE_TASK_WAIT, "ducktales.decomp.FFA5", "Task_Wait", Task_Wait, 0, true, 0, false },
     { DT_TASK_WAIT_NEXT, NULL, "Task_WaitNext", Task_WaitNext, OUT_A | OUT_X | OUT_Y | OUT_P, true, 0, true },
-    { DT_CODE_SCHEDULER, "ducktales.decomp.FF35", "Task_Schedule", Task_Schedule, 0, true, 0, false, .timed = true,
-      .own_stack = true },
+    { DT_CODE_SCHEDULER, "ducktales.decomp.FF35", "Task_Schedule", Task_Schedule, 0, true, 0, false, .timed = true },
     { DT_CODE_SCHEDULER_PASS, "ducktales.decomp.FF38", "Task_Pass", Task_Pass, 0, true, 0, false, .timed = true },
     { DT_SCHEDULER_PULL, NULL, "Task_Resume", Task_Resume, TASK_REGS, true, 2, true, .timed = true },
 };

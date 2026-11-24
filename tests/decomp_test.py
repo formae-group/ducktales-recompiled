@@ -163,6 +163,20 @@ CHEST_RECORD = {
 } | CHEST_SWING
 # name, {address: value} stored before POKE_FRAME (or {frame: {...}}), routines that must be compared,
 # optionally {frame: buttons} pad states added to the route
+ENDING_FRAMES = 3950  # to the frames after the last screen, about 3880 frames in
+ENDING_WANT = [
+    'Palette_LoadScene',
+    'Ending_Waited',
+    'EndingScreen_Streamed',
+    'EndingScreen_Lit',
+    'EndingObjects',
+    'EndingObjects_Update',
+    'EndingObjects_Exit',
+    'EndingObjects_Done',
+    'Ending_Split',
+    'Ending_Second',
+    'Ending_OverNext',
+]
 POKES = [
     (
         'chest-opening',
@@ -289,6 +303,186 @@ POKES = [
         ['Camera_Update'],
         {POKE_FRAME + 1: 'RIGHT'},
     ),
+    # slot 9 made a launched block (kind 9) at step 6 ($87D0) and step 8 ($87FF) above the floor
+    (
+        'thrown-6',
+        {0x709: 0xA6, 0x719: 0x09, 0x649: 0x90, 0x729: 0x90, 0x739: 0x00, 0x789: 0x00, 0x609: 0x80},
+        ['Obj_Thrown'],
+    ),
+    (
+        'thrown-8',
+        {0x709: 0xA8, 0x719: 0x09, 0x649: 0x90, 0x729: 0x90, 0x739: 0x00, 0x789: 0x00, 0x609: 0x80},
+        ['Obj_Thrown'],
+    ),
+    # kind $19 in the air at step 4 ($98C8): it falls, lands and waits; at step 2 next to Scrooge it pounces ($98A8)
+    (
+        'pouncer-land',
+        {0x709: 0xA4, 0x719: 0x19, 0x629: 0x3C, 0x639: 0x00, 0x649: 0x80, 0x729: 0x90, 0x739: 0x00, 0x609: 0x80},
+        ['Obj_Pouncer'],
+    ),
+    (
+        'pouncer-near',
+        {0x709: 0xA2, 0x719: 0x19, 0x629: 0x39, 0x6B9: 0x05, 0x649: 0xA6, 0x729: 0x62, 0x739: 0x00, 0x609: 0x80},
+        ['Obj_Pouncer'],
+    ),
+    # kind 7 on Scrooge: it grabs him ($85DA) and lets go when $7D reaches 8
+    (
+        'snapper-grab',
+        {0x709: 0xA0, 0x719: 0x07, 0x629: 0x12, 0x619: 0x00, 0x649: 0xA6, 0x729: 0x62, 0x739: 0x00, 0x609: 0x80},
+        ['Obj_Snapper'],
+    ),
+    # a pickup of action $29 off screen: it frees its slot and clears its record's consumed bit ($8A6B)
+    (
+        'pickup-off-screen',
+        {0x709: 0xA2, 0x719: 0x13, 0x629: 0x29, 0x7F9: 0x0A, 0x649: 0xA6, 0x729: 0x62, 0x739: 0x05, 0x609: 0x00},
+        ['Obj_Pickup'],
+    ),
+    # a boss fight with every treasure: the camera window admits record $74, which becomes the stand-in ($B005)
+    ('spawn-stand-in', {0xFB: 0x80, 0xA0: 0x1F, 0xF2: 0x40}, ['Obj_SpawnRecord'], {POKE_FRAME: 'RIGHT'}),
+    # a dropper (kind $0A) off screen frees its slot ($88B6)
+    (
+        'dropper-off-screen',
+        {0x709: 0xA0, 0x719: 0x0A, 0x649: 0x90, 0x729: 0x90, 0x739: 0x05, 0x609: 0x00},
+        ['Obj_Dropper'],
+    ),
+    # a treat (kind $2D) and a rising shot (kind $27) moving left ($A2F5, $A5D1)
+    (
+        'treat-left',
+        {0x709: 0xA0, 0x719: 0x2D, 0x7E9: 0x02, 0x649: 0x90, 0x729: 0x90, 0x739: 0x00, 0x609: 0x80},
+        ['Obj_Treat'],
+    ),
+    (
+        'rising-shot-left',
+        {0x709: 0xA0, 0x719: 0x27, 0x7E9: 0x00, 0x649: 0x90, 0x729: 0x90, 0x739: 0x00, 0x609: 0x80},
+        ['Obj_RisingShot'],
+    ),
+    # the sky flyer leaves its rope behind at page 0, X below $70, then rises off screen ($F98C)
+    (
+        'sky-flyer-exit',
+        {
+            0x709: 0xA2,
+            0x719: 0x37,
+            0x6B9: 0x00,
+            0x6C9: 0x02,
+            0x649: 0x80,
+            0x729: 0x60,
+            0x739: 0x00,
+            0x7C9: 0x02,
+            0x609: 0x80,
+        },
+        ['Obj_SkyFlyer'],
+    ),
+    # a solid collision cell meets the thrower's wall probes and the kicker's floor and wall probes
+    (
+        'thrower-wall',
+        {
+            0x709: 0xA1,
+            0x719: 0x03,
+            0x649: 0xA6,
+            0x729: 0x90,
+            0x739: 0x00,
+            0x7C9: 0x00,
+            0x7B9: 0x00,
+            0x7E9: 0x01,
+            0x609: 0x80,
+            0x5AC: 0x55,
+        },
+        ['Obj_Thrower'],
+    ),
+    (
+        'block-kicker-wall',
+        {
+            0x709: 0xA1,
+            0x719: 0x1D,
+            0x6C9: 0x00,
+            0x649: 0xA6,
+            0x729: 0x90,
+            0x739: 0x00,
+            0x7C9: 0x00,
+            0x7B9: 0x00,
+            0x7E9: 0x01,
+            0x609: 0x80,
+            0x5AC: 0x55,
+        },
+        ['Obj_BlockKicker'],
+    ),
+    # a treat restores a lost HP dot ($8B96)
+    (
+        'treat-restore-dot',
+        {
+            0x709: 0xA0,
+            0x719: 0x2D,
+            0x649: 0xA6,
+            0x729: 0x62,
+            0x739: 0x00,
+            0x7D9: 0x01,
+            0x7E9: 0x00,
+            0x609: 0x80,
+            0x342: 0x01,
+        },
+        ['Obj_Treat', 'Hud_RestoreDot'],
+    ),
+    # an item emerging on Difficult changes pose from $25 to $28 ($F839)
+    (
+        'pickup-difficult',
+        {
+            0xF9: 0x02,
+            0x709: 0xA1,
+            0x719: 0x13,
+            0x629: 0x2A,
+            0x619: 0x01,
+            0x639: 0x05,
+            0x6B9: 0x25,
+            0x649: 0x90,
+            0x729: 0x90,
+            0x739: 0x00,
+            0x609: 0x80,
+        },
+        ['Obj_Pickup', 'Obj_DifficultAction'],
+    ),
+    # a flyer crossing left from page 0 despawns ($9212)
+    (
+        'flyer-off-left',
+        {
+            0x709: 0xA1,
+            0x719: 0x0D,
+            0x6B9: 0x02,
+            0x649: 0x90,
+            0x729: 0x00,
+            0x739: 0x00,
+            0x769: 0x00,
+            0x779: 0x02,
+            0x7E9: 0x02,
+            0x609: 0x80,
+        },
+        ['Obj_Flyer'],
+    ),
+    # a left-facing thrower's probes extend left of page 0 ($D3CB)
+    (
+        'probe-off-left',
+        {
+            0x709: 0xA1,
+            0x719: 0x03,
+            0x649: 0x90,
+            0x729: 0x04,
+            0x739: 0x00,
+            0x769: 0x00,
+            0x779: 0x00,
+            0x7E9: 0x02,
+            0x609: 0x80,
+        },
+        ['Obj_Thrower', 'Bg_Probe'],
+    ),
+    # falling out the bottom of the last map row has no row below it ($E73D)
+    ('air-last-row', {0x39: 0x01, 0x2A: 0x06, 0x640: 0xF0, 0x7C0: 0xFE}, ['Player_Air']),
+    # the row below exists, but an even camera page rejects the crossing ($E8E2)
+    (
+        'air-row-blocked',
+        {0x39: 0x01, 0x640: 0xF0, 0x7C0: 0xFE},
+        ['Player_Air'],
+    ),
+    # opposite horizontal directions are cleared together ($C1F9)
+    ('opposed-directions', {}, ['Input_ReadControllers'], {POKE_FRAME: 'LEFT+RIGHT', POKE_FRAME + 8: 'LEFT'}),
     (
         'money-max',
         {
@@ -320,6 +514,36 @@ POKES = [
         'charger-hit',
         {0x709: 0xA2, 0x719: 0x10, 0x699: 0x01, 0x649: 0xA6, 0x729: 0x90, 0x739: 0x00, 0x609: 0x80},
         ['Obj_Charger', 'Obj_Defeat'],
+    ),
+    # slot 9 the charging enemy running right at a hidden block in slot 10: it uncovers and knocks it
+    (
+        'charger-hidden-block',
+        {
+            0x709: 0xA2,
+            0x719: 0x10,
+            0x629: 0x2D,
+            0x649: 0xB4,
+            0x729: 0x50,
+            0x739: 0x00,
+            0x609: 0x80,
+            0x699: 0x00,
+            0x6C9: 0x00,
+            0x7E9: 0x01,
+            0x779: 0x02,
+            0x769: 0x00,
+            0x70A: 0xB0,
+            0x71A: 0x08,
+            0x62A: 0x1A,
+            0x64A: 0xB4,
+            0x72A: 0x68,
+            0x73A: 0x00,
+            0x60A: 0x80,
+            0x7DA: 0x80,
+            0x69A: 0x00,
+            0x6CA: 0x00,
+            0x6BA: 0x00,
+        },
+        ['Obj_Charger', 'Obj_HitBlock', 'Tile_EditBySlot'],
     ),
     # slot 9 made a bobbing enemy (kind $20) that a blow has hit: it is beaten
     (
@@ -434,8 +658,24 @@ POKES = [
         },
         ['Obj_Thief', 'Obj_StealMoney'],
     ),
-    # the ending flag ($AC): the frame loop starts the ending, whose first scene loads its palettes ($E08F)
-    ('ending', {0xAC: 0x01}, ['Palette_LoadScene', 'Ending_Waited', 'EndingScreen_Streamed', 'EndingScreen_Lit']),
+    # the ending flag ($AC): the frame loop starts the ending, whose first scene loads its palettes ($E08F);
+    # then the scene's objects, the credits under the sprite-0 split, and the frames after the last screen.
+    # TOTAL ($0330 packet) and the treasures ($A0), poked before the variant is picked, give variants 0 and 2
+    ('ending', {0xAC: 0x01}, ENDING_WANT + ['EndingObjects_Walk'], None, ENDING_FRAMES),
+    (
+        'ending-0',
+        {POKE_FRAME: {0xAC: 0x01}, POKE_FRAME + 60: {0x33A: 0x01}},
+        ENDING_WANT + ['EndingObjects_Hop'],
+        None,
+        ENDING_FRAMES,
+    ),
+    (
+        'ending-2',
+        {POKE_FRAME: {0xAC: 0x01}, POKE_FRAME + 60: {0xA0: 0x7F, 0x334: 0x01}},
+        ENDING_WANT + ['EndingObjects_Wait'],
+        None,
+        ENDING_FRAMES,
+    ),
     # kind $33 that a blow has hit: it is beaten
     (
         'target-hit',
@@ -537,6 +777,40 @@ POKES = [
             0x69A: 0x00,
         },
         ['Obj_BlockKicker', 'Obj_KickBlock', 'Obj_LaunchBlock'],
+    ),
+    # the same with the block hidden: the kick uncovers its tile first
+    (
+        'kicker-hidden-block',
+        {
+            0x709: 0xA1,
+            0x719: 0x1D,
+            0x629: 0x58,
+            0x649: 0xB4,
+            0x729: 0x50,
+            0x739: 0x00,
+            0x609: 0x80,
+            0x699: 0x00,
+            0x7D9: 0x91,
+            0x7E9: 0x01,
+            0x779: 0x01,
+            0x769: 0x00,
+            0x6C9: 0x00,
+            0x6B9: 0x00,
+            0x7C9: 0x00,
+            0x7B9: 0x00,
+            0x70A: 0xB0,
+            0x6CA: 0x00,
+            0x6BA: 0x00,
+            0x71A: 0x08,
+            0x62A: 0x1A,
+            0x64A: 0xB4,
+            0x72A: 0x68,
+            0x73A: 0x00,
+            0x60A: 0x80,
+            0x7DA: 0x80,
+            0x69A: 0x00,
+        },
+        ['Obj_BlockKicker', 'Obj_KickBlock', 'Tile_EditBySlot', 'Obj_LaunchBlock'],
     ),
     # slot 9 a cart (kind $21) on Scrooge: he rides it (modes 10 and 11) as it rolls left
     (

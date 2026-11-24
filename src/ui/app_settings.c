@@ -46,6 +46,7 @@
 #include "cyc_render.h"
 #include "cyc_settings.h"
 #include "host/ducktales_host.h"
+#include "mods/app_mods.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -117,6 +118,9 @@ void app_ui_configure(const AppLaunch *launch)
     }
     s_loaded = false;
     ensure_loaded();
+    if (!s_flags.off_screen) {
+        app_mods_use_player_folders(s_path);
+    }
     AppPresentation p;
     app_present_get(&p);
     if (p.pacing == APP_PACING_AUTO && SDL_InitSubSystem(SDL_INIT_VIDEO) == 0) {
@@ -129,7 +133,9 @@ void app_ui_configure(const AppLaunch *launch)
     int vsync = app_present_vsync_for(p.pacing, s_refresh_hz);
     if (s_cfg.vsync != vsync) {
         s_cfg.vsync = vsync;
-        save_now();
+        if (!s_flags.off_screen) {
+            save_now();
+        }
     }
     s_launch.vsync = vsync;
 }

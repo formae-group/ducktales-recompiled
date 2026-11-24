@@ -1135,7 +1135,7 @@ static void Tile_EditFor(uint8_t x, uint8_t entry)
 }
 
 /* $F4D8: entry $13 + (action - $1A) & 3, plus 1 from action $1A on. */
-static void Tile_EditByAction(uint8_t x, uint8_t y)
+void Tile_EditByAction(uint8_t x, uint8_t y)
 {
     Decomp_Enter(DT_CODE_TILE_EDIT_BY_ACTION, 0, x, y);
     gEditX = x;
@@ -1146,7 +1146,7 @@ static void Tile_EditByAction(uint8_t x, uint8_t y)
 }
 
 /* $F506 */
-static void Tile_EditBySlot(uint8_t x, uint8_t y)
+void Tile_EditBySlot(uint8_t x, uint8_t y)
 {
     Decomp_Enter(DT_CODE_OBJ_EDIT_TILE, 0, x, y);
     if (gObjects->unk_06C0[x] & EDIT_SPAWNS) {

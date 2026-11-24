@@ -419,6 +419,21 @@ in replace), plus 11 poke cases and both event cases. At default decompilation s
 and matching oracle and interpreter output. The full 12-route decompilation suite passed on
 the flow branch before integration; it has not been rerun in full on this merge.
 
+The long ending pokes compare all three variants (`$AD = 0, 1, 2`) from a saved Amazon state
+through the credits and the final wait. All three passed check and replace (4,150 frames each).
+The objects at `5:$B380` and `5:$B400` were compared on all their calls (9 and 2,622), the
+variant-1 walk at `5:$B46A` on all 353, and the code after the raster split at `7:$E23C` on
+all 2,718. The pokes also compared all 12 calls to the CHR loader, whose return registers are
+kept across the yield after unblanking. Cycle quick verification passed 13/13 affected routes
+(7,800 frames from golden states, alignment 0).
+
+The reset `$FEE0-$FF34` is compared from power-on on all 13 routes: `decomp_test.py --changed
+FEE0-FF34 --from-state --span 600` passed check and replace (13/13 each, every reset routine 13/13
+compared). A warm reset (`--dt-reset-at 1200` on `amazon_intro` from its frame-1000 state) passed
+check with all five reset routines compared, and its replace run equals the check run on all 301
+frames (296 NMIs in both); there `Reset` is given to the original because the NMI edge is about
+to latch.
+
 ## Decompiled level, player, flow and objects (2026-11-23)
 
 Each branch passed its own gate before the merge: format, `quick_verify.py` native and cycle
@@ -509,6 +524,25 @@ On main `8569c86` (the release tree before its changelog and documentation commi
   keyboard and controller, and the sound is right.
 - The mods branch before its merge: `tests/package_test.py` 12/12 (13 files), `tests/mods_test.py`
   47/47, `tests/native_player_test.py` `full_amazon` 60 of 60 pictures identical.
+
+## Mods polish (2026-11-24)
+
+On `mods/polish` (based on 1b91636, tree of 81e5db3), with `--jobs 2`:
+
+- `tests/mods_test.py`: 63/63 PASS on the cycle/headless host (167 s) and 42/42 on the native
+  player. Each run generates throwaway fixtures in the test itself: two good mod.toml files (byte
+  order mark, mixed case) load, and ten bad packages are refused with their reason (missing key,
+  unquoted value, key set twice, malformed `prg_sha256`, an id over 63 bytes, a NUL byte,
+  duplicate tile, palette and sound, and a refused copy with the id of a valid mod). It also checks
+  `mods.log`, script errors at start, ignored cancels, the UTF-8 toast cut, the atomic store and
+  a hot reload saved twice within one second. `--mods-dump` with mods off writes 127 templates to
+  a nested UTF-8 path, and all 30 machine hash records are identical with and without the dump.
+- `mods_catalogue_test`: 8/8.
+- `tests/window_smoke.py --build build/windows`: all passed, 15 pictures, including
+  `menu_15_settings_mods`; `--mods off` leaves `Enabled = on` in the config.
+- `tests/quick_verify.py --runtime cycle`: 13/13 routes pass, 88,826 frames, 274.3 s.
+
+Not run on this tree: the full `verify_routes.py`, `decomp_test.py` and the window by eye.
 
 ## Not verified
 

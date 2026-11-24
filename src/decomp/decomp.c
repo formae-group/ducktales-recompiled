@@ -28,7 +28,8 @@ DecompMode dc_mode = DECOMP_OFF;
 uint8_t dc_resume[0x10000 / 8];
 
 uint8_t dc_image[GAME_RAM_SIZE];
-uint8_t dc_entry_s, dc_entry_p, dc_cur_s, dc_c_bank;
+uint8_t dc_entry_s, dc_entry_p, dc_cur_s, dc_rebased_s, dc_c_bank;
+bool dc_keep_stack_ram;
 bool dc_run_original;
 const DecompRoutine *dc_top;
 bool dc_top_entered;
@@ -148,12 +149,17 @@ uint8_t Decomp_Pull(void)
 
 void Decomp_SetStack(uint8_t s)
 {
-    dc_cur_s = s;
+    dc_rebased_s = dc_cur_s = s;
 }
 
 uint8_t Decomp_Stack(void)
 {
     return dc_cur_s;
+}
+
+void Decomp_KeepStackRam(void)
+{
+    dc_keep_stack_ram = true;
 }
 
 void Decomp_PushReturn(uint16_t resume)
@@ -259,7 +265,8 @@ void dc_run_c(const DecompRoutine *rt, const CycModRegs *in, Regs *out)
     dc_top_entered = false;
     dc_nops = dc_played = dc_loads = 0;
     dc_c_bank = (uint8_t)(hw_prg_bank4(0x8000) >> 2);
-    dc_cur_s = in->s;
+    dc_rebased_s = dc_cur_s = in->s;
+    dc_keep_stack_ram = false;
     dc_handoff_set = false;
     dc_stores = 0;
     dc_task = rt->task;

@@ -40,6 +40,12 @@ void fm_configure(const FmGame *game);
 /* The running target's SHA-256 in lower-case hex; mods made for another are refused. */
 void fm_set_target(const char *sha256_hex);
 const char *fm_log_prefix(void);
+/* A line of the mods' log (the prefix and a newline are added): stdout, and
+ * the log file once fm_log_open started one, up to FM_LOG_BYTES. */
+#define FM_LOG_BYTES (4u << 20)
+void fm_log(const char *fmt, ...);
+/* Starts the log file at path, emptied; false when it cannot be written. */
+bool fm_log_open(const char *path);
 
 /* ---- small helpers ---- */
 
@@ -49,6 +55,8 @@ bool fm_valid_id(const char *id);
 bool fm_ends_with(const char *s, const char *tail);
 bool fm_parse_hex(const char *s, int digits, uint64_t *out);
 void fm_base_name(const char *path, char *out, size_t cap);
+/* text past a UTF-8 byte order mark (Notepad's), or text itself. */
+const char *fm_skip_bom(const char *text);
 
 #define FM_NAME_MAX 256
 
@@ -81,7 +89,9 @@ const char *fm_archive_name(const FmArchive *a, int index);
 uint8_t *fm_archive_read(const FmArchive *a, int index, size_t *size, char *err, size_t cap);
 /* UTF-8 path helpers (wide calls on Windows). */
 uint8_t *fm_read_file(const char *path, size_t *size);
+FILE *fm_open_file(const char *path, const char *mode);
 bool fm_is_dir(const char *path);
+/* Creates the folder and its missing parents; true when it is there. */
 bool fm_make_dir(const char *path);
 /* Calls fn for each entry of dir (not . or ..), with its name and whether it is a folder. */
 void fm_list_dir(const char *dir, void (*fn)(void *user, const char *name, bool folder), void *user);
@@ -125,8 +135,10 @@ typedef struct {
     char script_error[320]; /* non-empty: its script stopped (error or limit) and why */
 } FmMod;
 
-/* Adds a folder to scan, created if missing when create is set. */
-void fm_add_folder(const char *dir, bool create);
+/* Adds a folder to scan, created if missing when create is set; false when
+ * dir is empty or FM_MAX_FOLDERS are taken. */
+#define FM_MAX_FOLDERS 4
+bool fm_add_folder(const char *dir, bool create);
 /* The first folder: the one the menu opens. Empty when none. */
 const char *fm_folder(void);
 /* Moves the folders added so far after dir (the player's own folder first). */
@@ -142,13 +154,16 @@ bool fm_enabled(void);
 void fm_set_enabled(bool on);
 /* The order and switches, "id:on, id:off, ..." top first. */
 void fm_set_order(const char *text);
+/* One-run overrides; only edits in the menu replace the saved settings. */
+void fm_override_enabled(bool on);
+void fm_override_order(const char *text);
 /* Reads the folders into the catalogue. */
 void fm_scan(void);
 /* What is enabled now loads: fm_restart_needed compares against it. */
 void fm_mark_loaded_set(void);
 int fm_count(void);
 FmMod *fm_get(int index);
-FmMod *fm_find(const char *id);
+void fm_set_script_error(const char *id, const char *path, const char *why);
 void fm_set_mod_enabled(int index, bool on);
 void fm_move(int from, int to);
 /* Reads the folders again; what is loaded does not change until a restart. */

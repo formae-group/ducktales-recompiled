@@ -13,6 +13,7 @@
  * original code may have a hook site, including the dispatch and the
  * fixed-bank movement helpers.
  */
+#include "decomp/collision.h"
 #include "decomp/decomp.h"
 #include "decomp/level.h"
 #include "decomp/motion.h"
@@ -85,7 +86,6 @@
 #define gSprPhase         RAM_U8(DT_ADDR_SPR_PHASE)
 #define SpawnTable(i) \
     ((uint16_t)(RAM_U8(DT_ADDR_SPAWN_TABLES + 2 * (i)) | RAM_U8(DT_ADDR_SPAWN_TABLES + 2 * (i) + 1) << 8))
-#define gProbeCount      RAM_U8(DT_ADDR_PROBE_COUNT)
 #define gPaletteShown(i) RAM_U8(DT_ADDR_PALETTE_SHOWN + (i))
 
 /* ---- shared pieces of the handlers ---- */
@@ -134,14 +134,6 @@ static bool Obj_MoveLeftOff(uint8_t x)
     uint8_t page = gObjects->worldPage[x];
     Obj_MoveLeft(x);
     return page == 0 && gObjects->worldPage[x] == 0xFF;
-}
-
-/* The original's tile edit at the slot ($F506), not decompiled yet. It
- * leaves the caller's Y in $13 when it spawns nothing, so Y is passed as the
- * original has it. */
-static uint8_t Obj_EditTile(uint8_t x, uint8_t a, uint8_t y)
-{
-    return Decomp_Call(DT_CODE_OBJ_EDIT_TILE, a, x, y).x;
 }
 
 /* Scrooge swinging the cane, on the frame it reaches out (frame 3), at the
@@ -287,7 +279,7 @@ static void Obj_HitBlock(uint8_t x, uint8_t y)
         if (gBlockOpened) {
             return;
         }
-        x = Obj_EditTile(x, gBlockOpened, y);
+        Tile_EditBySlot(x, y);
         gObjects->state[x] &= (uint8_t)~OBJ_STATUS_HIDDEN;
     }
     Obj_ResolveBlock(x);
@@ -305,7 +297,7 @@ static void Obj_KickBlock(uint8_t x, uint8_t y)
     gBlockOpened++;
     if (gObjects->state[x] & OBJ_STATUS_HIDDEN) {
         gObjects->state[x] &= (uint8_t)~OBJ_STATUS_HIDDEN;
-        x = Obj_EditTile(x, gObjects->state[x], y);
+        Tile_EditBySlot(x, y);
     }
     Obj_LaunchBlock(x);
 }
@@ -1463,7 +1455,7 @@ static void Obj_Dropper(uint8_t x)
             gObjects->state[x] &= (uint8_t)~OBJ_STATUS_HIDDEN;
             gObjects->flags[x] = gObjects->state[x] & 0xF0;
             Obj_SetVelocityY(x, 0);
-            x = Obj_EditTile(x, 0, y);
+            Tile_EditBySlot(x, y);
             if (gObjects->y[x] < gObjects->y[P_]) {
                 gObjects->hitbox[x] = 0x10;
             }
@@ -1817,19 +1809,13 @@ static void Obj_Charger(uint8_t x)
     if (!(gProbeHits & 1)) {
         return;
     }
-    uint8_t block = gContactSlot;
-    if (gObjects->kind[block] == OBJ_KIND_BLOCK && (gObjects->state[block] & OBJ_STATUS_HIDDEN) && !gBlockOpened) {
-        /* The tile edit needs the Y the walls move left, which the C does
-         * not model: the original runs this call. */
-        Decomp_RunOriginal();
-        return;
-    }
     gObjects->dir[x] ^= 3;
     gObjects->action[x] = 0x2E;
     ResetAnim(x);
     gObjects->hitbox[x] &= 0x7F;
+    uint8_t block = gContactSlot;
     if (gObjects->kind[block] == OBJ_KIND_BLOCK) {
-        Obj_HitBlock(block, 0);
+        Obj_HitBlock(block, gProbeExitY);
     }
     Sound_Request(SFX_BOUNCE, x);
     gObjects->unk_06C0[x]++;
@@ -2715,9 +2701,7 @@ static void Obj_Bouncer(uint8_t x)
  * right at $0180 a frame with probe $35 (the walls move skips the block test
  * for this kind). At a wall it walks once more and stops for good (kind 0).
  * Within $15 px of him both ways it pushes him right ($73). The second walk
- * takes probe 1 and the Y the first one left: the probes left to test, 0
- * after a solid hit; a hit on a special tile would leave that tile's handler
- * index instead, which the C does not model. */
+ * takes probe 1 and the Y the first one left (gProbeExitY). */
 static void Obj_Boulder(uint8_t x)
 {
     Decomp_Enter(DT_CODE_KIND_BOULDER, 0x22, x, gObjects->kind[x]);
@@ -2730,7 +2714,7 @@ static void Obj_Boulder(uint8_t x)
     }
     x = Obj_WalkRight(x, 0x35, 0);
     if (gProbeHits & 1) {
-        x = Obj_WalkRight(x, 1, gProbeCount);
+        x = Obj_WalkRight(x, 1, gProbeExitY);
         gObjects->kind[x] = OBJ_KIND_NONE;
     }
     if (Obj_DistanceX(x) < 0x15 && Obj_DistanceY(x) < 0x15) {
@@ -3367,14 +3351,6 @@ static void Obj_Launcher(uint8_t x)
     }
 }
 
-/* $F4D8, not decompiled yet: draws a spawned block's tiles into the
- * background (through the tile queue). It keeps X and Y, leaving them in
- * $12/$13. */
-static void Obj_DrawBlock(uint8_t x, uint8_t a, uint8_t y)
-{
-    (void)Decomp_Call(DT_CODE_OBJ_DRAW_BLOCK, a, x, y);
-}
-
 /* $AF2B: spawn land record y (the spawner $AEA0 calls it for the records
  * entering the window $00-$03) unless its consumed bit is set, it lies left
  * of $01:$00, or a live slot already holds it. The object goes to the
@@ -3435,7 +3411,7 @@ uint8_t Obj_SpawnRecord(uint8_t y)
         }
         uint8_t kind = gObjects->kind[x];
         if (kind == OBJ_KIND_BLOCK || kind == OBJ_KIND_DROPPER) {
-            Obj_DrawBlock(x, kind, (uint8_t)(t + 3));
+            Tile_EditByAction(x, (uint8_t)(t + 3));
             return x;
         }
     }
@@ -3718,8 +3694,8 @@ static void Obj_TransylvaniaBoss(uint8_t x)
  * $0200 after frame 5; another wall or object speeds it up 1 px a frame.
  * From then on it slows by $08 a frame, flipping status bit 6, and once the
  * speed runs out it turns round at $02FF. Off screen, or hit (pose $58), it
- * is beaten and $4F becomes $3C. The kick passes the Y the fall leaves,
- * the probe count, as the original has it after a plain tile. */
+ * is beaten and $4F becomes $3C. The kick passes the Y the fall leaves
+ * (gProbeExitY). */
 static void Obj_BlockKicker(uint8_t x)
 {
     Decomp_Enter(DT_CODE_KIND_BLOCK_KICKER, 0x22, x, gObjects->kind[x]);
@@ -3761,7 +3737,7 @@ static void Obj_BlockKicker(uint8_t x)
             return;
         }
         gPlayerPushDir = gObjects->dir[x];
-        Obj_KickBlock(gObjects->timer[x], gProbeCount);
+        Obj_KickBlock(gObjects->timer[x], gProbeExitY);
         gObjects->timer[x] = 0;
         return;
     }

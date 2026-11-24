@@ -67,7 +67,6 @@ typedef struct DecompRoutine {
     uint8_t bank;   /* entries below $C000: the bank mapped at $8000 */
     bool interrupt; /* task code of the NMI handler: its C ends in RTI, not RTS */
     bool timed;     /* task code: its C states the original's cycles (Decomp_Cycles) */
-    bool own_stack; /* task code: sets S itself first, so its isolated run returns from the top of page 1 */
 } DecompRoutine;
 
 typedef enum DecompMode {
@@ -142,7 +141,8 @@ int Decomp_RaiseEvent(int event);
  *       left in its Regs; it returns to resume (the address after the
  *       original's JSR), which is usually the resume point of the next C.
  *       resume 0 is a JMP. The C returns right after it. uses (OUT_A, OUT_X,
- *       OUT_Y) names the registers the routine, or the code after it, reads:
+ *       OUT_Y, OUT_P) names the registers the next code reads. On a handoff,
+ *       OUT_P includes I and D:
  *       check compares those, and replace takes the others from the
  *       original (they are dead, but task_yield keeps X and Y on the stack).
  *   Decomp_PushReturn / Decomp_PullReturn  a JSR and RTS between two task
@@ -151,6 +151,8 @@ int Decomp_RaiseEvent(int event);
  *   Decomp_Push / Decomp_Pull / Decomp_SetStack / Decomp_Stack  the task's
  *       stack (PHA, PLA, TXS, TSX): values a routine keeps across a yield
  *       live there.
+ *   Decomp_KeepStackRam  keep and compare all page-1 RAM, including below S,
+ *       when a task initializes memory rather than just using the stack.
  *   Decomp_SelectBank  bank_select: maps the bank for the Decomp_Calls that
  *       follow, and in replace mode writes the mapper for real.
  *   Decomp_Store  a store to a device register, made for real in replace
@@ -179,6 +181,7 @@ void Decomp_Push(uint8_t value);
 uint8_t Decomp_Pull(void);
 void Decomp_SetStack(uint8_t s);
 uint8_t Decomp_Stack(void);
+void Decomp_KeepStackRam(void);
 void Decomp_SelectBank(uint8_t bank);
 void Decomp_Store(uint16_t addr, uint8_t value);
 
