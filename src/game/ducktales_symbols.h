@@ -943,6 +943,18 @@
 #define DT_SITE_ITEM_COLLECTED    0x8B21
 #define DT_SITE_ITEM_COLLECTED_ID "ducktales.event.item-collected"
 
+/* Bank 6, the object dispatch DT_B6_OBJECTS (src/game/ai.c): the JMP ($0000)
+ * at $8020 that runs a live slot's handler, with its address from
+ * DT_CODE_OBJ_HANDLER_LO/HI in $00/$01 and the return $8022 pushed at $801A,
+ * and the INC $4A at $8023 where that RTS returns, which the BPL at $800B also
+ * reaches for a slot that is not live. $4A holds the slot at both. Kind 0's
+ * handler is the RTS at $80B2. Each site's 8 bytes are found in no other bank
+ * at its address. */
+#define DT_SITE_AI_BEFORE    0x8020
+#define DT_SITE_AI_BEFORE_ID "ducktales.ai.before"
+#define DT_SITE_AI_AFTER     0x8023
+#define DT_SITE_AI_AFTER_ID  "ducktales.ai.after"
+
 /* In the frame loop: DT_FLOW_AFTER_PLAYER, where Player_Update's RTS returns
  * (the JSR at $DB6C) before the objects move. Reached once per unpaused
  * step of play, message boxes included. */

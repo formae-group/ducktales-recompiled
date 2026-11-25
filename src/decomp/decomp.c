@@ -7,6 +7,7 @@
  */
 #include "decomp/decomp_backend.h"
 
+#include "ducktales/ai.h"
 #include "ducktales/events.h"
 
 #include "cpu6502.h"
@@ -35,6 +36,8 @@ const DecompRoutine *dc_top;
 bool dc_top_entered;
 bool dc_damage_cancel[8];
 int dc_damage_raised;
+AiWrite dc_ai_writes[MAX_AI_WRITES];
+int dc_ai_written, dc_ai_replayed;
 BusOp dc_ops[MAX_BUS_OPS];
 int dc_nops, dc_played, dc_loads;
 DeviceStore dc_store[MAX_STORES];
@@ -241,6 +244,35 @@ void Decomp_RaiseSlotEvent(int event, uint8_t slot)
     }
 }
 
+bool Decomp_Ai(uint8_t slot, bool after)
+{
+    if (dc_mode != DECOMP_REPLACE || !Ai_Active()) {
+        return false;
+    }
+    uint8_t before[GAME_RAM_SIZE];
+    memcpy(before, gRam, GAME_RAM_SIZE);
+    bool skip = Ai_Run(slot, after ? AI_AFTER : AI_BEFORE);
+    for (uint16_t a = 0; a < GAME_RAM_SIZE; a++) {
+        if (gRam[a] == before[a]) {
+            continue;
+        }
+        if (dc_ai_written == MAX_AI_WRITES) {
+            dc_fail("dt.ai changed too many bytes in one call", DT_B6_OBJECTS);
+        }
+        dc_ai_writes[dc_ai_written++] = (AiWrite){ a, gRam[a], slot, after };
+    }
+    return skip;
+}
+
+void Decomp_AiReplay(uint8_t slot, bool after)
+{
+    while (dc_ai_replayed < dc_ai_written && dc_ai_writes[dc_ai_replayed].slot == slot &&
+           dc_ai_writes[dc_ai_replayed].after == after) {
+        cyc_mod_poke(dc_ai_writes[dc_ai_replayed].addr, dc_ai_writes[dc_ai_replayed].value);
+        dc_ai_replayed++;
+    }
+}
+
 bool dc_outside;
 
 void Decomp_Outside(void (*fn)(void *ctx), void *ctx)
@@ -260,6 +292,7 @@ void dc_run_c(const DecompRoutine *rt, const CycModRegs *in, Regs *out)
     dc_entry_p = in->p;
     dc_run_original = false;
     dc_damage_raised = 0;
+    dc_ai_written = 0;
     dc_top = rt;
     dc_top_entered = false;
     dc_nops = dc_played = dc_loads = 0;

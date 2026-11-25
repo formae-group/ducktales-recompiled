@@ -192,6 +192,7 @@ set(_ducktales_extras
     "${CMAKE_SOURCE_DIR}/src/game/ducktales_state.c"
     "${CMAKE_SOURCE_DIR}/src/game/game_ram.c"
     "${CMAKE_SOURCE_DIR}/src/game/events.c"
+    "${CMAKE_SOURCE_DIR}/src/game/ai.c"
     "${CMAKE_SOURCE_DIR}/src/game/tune.c"
     "${CMAKE_SOURCE_DIR}/src/game/ducktales_jump.c"
     "${CMAKE_SOURCE_DIR}/src/game/enhancements.c"
@@ -389,6 +390,7 @@ if(DUCKTALES_NATIVE)
     add_executable(ducktales_native "${CMAKE_SOURCE_DIR}/src/native/native_main.c"
         "${CMAKE_SOURCE_DIR}/src/game/game_ram.c"
         "${CMAKE_SOURCE_DIR}/src/game/events.c"
+        "${CMAKE_SOURCE_DIR}/src/game/ai.c"
         "${CMAKE_SOURCE_DIR}/src/game/tune.c"
         ${_ducktales_decomp}
         "${CMAKE_SOURCE_DIR}/src/decomp/decomp_native.c")
@@ -413,6 +415,7 @@ if(NOT DUCKTALES_HEADLESS)
         "${CMAKE_SOURCE_DIR}/src/game/ducktales_state.c"
         "${CMAKE_SOURCE_DIR}/src/game/game_ram.c"
         "${CMAKE_SOURCE_DIR}/src/game/events.c"
+        "${CMAKE_SOURCE_DIR}/src/game/ai.c"
         "${CMAKE_SOURCE_DIR}/src/game/tune.c"
         "${CMAKE_SOURCE_DIR}/src/game/ducktales_jump.c"
         "${CMAKE_SOURCE_DIR}/src/game/enhancements.c"

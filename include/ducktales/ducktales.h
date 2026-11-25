@@ -7,11 +7,13 @@
  *   hud.h      HP dots, lives, money, time
  *   game.h     difficulty, land, map, timer, bosses, progress flags
  *   events.h   events for mods: Events_On(EVENT_..., handler, user)
+ *   ai.h       a mod's own code for a kind's objects: Ai_Set(kind, handler, user)
  *
  * docs/DECOMPILATION.md describes the API, the events and the decompiled
  * routines built on it.
  */
 #pragma once
+#include "ducktales/ai.h"
 #include "ducktales/events.h"
 #include "ducktales/game.h"
 #include "ducktales/hud.h"

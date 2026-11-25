@@ -10,6 +10,13 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 - Script mods get random numbers of their own (docs/MODS.md "Random numbers"): `dt.random(n)`,
   `dt.random(m, n)` and `dt.random.seed(n)`, a generator per mod seeded from its id, the same every
   run and never the game's. The object tables also give `facing`, `speed` and `vy`.
+- Script mods can give the enemies code of their own (docs/MODS.md "Object code"):
+  `dt.ai(kind, {before = fn, after = fn})` runs at the turn of every object of one of the 23 enemy
+  kinds `dt.spawn` makes, before and after the kind's code, with the object's handle, and a `before`
+  that returns `dt.SKIP` skips the kind's code for that turn. Two hook sites in the object dispatch
+  (`$8020`, `$8023`), on only while a mod uses it; a mod's `dt.ai` callbacks run at most 250,000
+  Lua instructions a frame. The handles of those enemies can also set `facing`, `speed` and `vy`,
+  and `o:set` writes and logs its fields in the same order in every run.
 
 ## [1.1.0] - 2026-11-25
 

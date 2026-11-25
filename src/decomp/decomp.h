@@ -136,6 +136,13 @@ void Decomp_FrameEnd(void);
 int Decomp_RaiseEvent(int event);
 /* The same for an event about the object in slot (Events_RaiseSlot). */
 void Decomp_RaiseSlotEvent(int event, uint8_t slot);
+/* dt.ai's call at slot's turn in the decompiled dispatch, before (after
+ * false) or after the kind's code (Ai_Run; replace mode only, as for
+ * events): true skips the kind's code. The bytes it changes are kept for
+ * the cycle host's measuring call, which Decomp_AiReplay makes change them
+ * at the same sites of the original dispatch. */
+bool Decomp_Ai(uint8_t slot, bool after);
+void Decomp_AiReplay(uint8_t slot, bool after);
 /* Run fn(ctx) for code outside the game's own calls (a mod) that uses a
  * decompiled routine's C on the open RAM transaction: Decomp_Enter does
  * nothing meanwhile, so the routine is neither checked, timed nor counted. */

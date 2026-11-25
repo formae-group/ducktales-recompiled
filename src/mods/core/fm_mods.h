@@ -276,6 +276,14 @@ typedef struct {
     void (*begin_frame)(void);          /* opens the frame-end window: "frame" handlers and dt.set writes */
     void (*end_frame)(void);
     const char *store_dir; /* the folder of dt.store's <id>.ini files; "" for none */
+    /* dt.ai(kind, {before = fn, after = fn}): a script's own code for the
+     * game's objects of a kind (NULL ai_kind: no dt.ai). ai_kind checks a
+     * kind (false with the reason), ai_listen turns the game's calls for one
+     * on or off (fm_scripts_ai), and the callbacks get the object's handle,
+     * a record of queries[ai_query]. */
+    bool (*ai_kind)(long long kind, char *err, size_t cap);
+    void (*ai_listen)(int kind, bool on);
+    int ai_query;
 } FmScriptGame;
 
 void fm_scripts_configure(const FmScriptGame *game);
@@ -285,6 +293,12 @@ int fm_script_count(void);
 /* The game raised event with its values: runs its handlers; true when one
  * cancelled it. */
 bool fm_scripts_event(int event, const FmArg *args, int nargs);
+/* The kinds dt.ai can name: 0 to FM_AI_KINDS - 1. */
+#define FM_AI_KINDS 256
+/* An object of kind has its turn: runs the scripts' dt.ai before callbacks
+ * (after false) or after callbacks for it, with its record (values, as
+ * queries[ai_query] reads it); true when a before callback returned dt.SKIP. */
+bool fm_scripts_ai(int kind, bool after, const long long *values);
 /* After each machine frame: "frame" handlers, queued dt.set writes, toasts, hot reload, stores. */
 void fm_scripts_frame(void);
 /* The script notice to show now (dt.toast); false when none. */

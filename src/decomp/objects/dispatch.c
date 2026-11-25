@@ -117,7 +117,10 @@ uint8_t Obj_SpawnRecord(uint8_t y)
  * X = slot and Y = kind. The flags are those of the loop: the caller's carry
  * for slot 1, the CPX of the loop for the others, and the V the previous
  * handler left.
- * Kinds $43 and up read past the table in the original; here they do nothing. */
+ * Kinds $43 and up read past the table in the original; here they do nothing.
+ * A mod's dt.ai code runs before and after the kind's (Decomp_Ai,
+ * ducktales/ai.h, at the original's sites $8020 and $8023); a skip leaves
+ * kind 0's handler, an RTS, in $00/$01 and runs no kind's code. */
 static void Obj_RunHandler(uint8_t slot, Regs *r)
 {
     uint8_t kind = gObjects->kind[slot];
@@ -126,6 +129,9 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
     r->a = 0x22;
     r->y = kind;
     r->p = Flags_NZ(r->p, r->a);
+    if (Decomp_Ai(slot, false)) {
+        kind = OBJ_KIND_NONE;
+    }
     switch (kind) {
         case OBJ_KIND_NONE:
             break;
@@ -326,6 +332,7 @@ static void Obj_RunHandler(uint8_t slot, Regs *r)
             Obj_ChestHealth(slot);
             break;
     }
+    Decomp_Ai(slot, true);
 }
 
 /* Bank 6 $8000: once per frame from the frame loop. Returns with X = 16,

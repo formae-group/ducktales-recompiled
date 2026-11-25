@@ -33,7 +33,10 @@
  *            The isolated call runs with hook sites on, so it takes the same
  *            path as the C: an event site raises nothing there, and at the
  *            damage site ($EB5E) the original returns as its RTS would when
- *            the C's EVENT_PLAYER_DAMAGED was cancelled, in the C's order.
+ *            the C's EVENT_PLAYER_DAMAGED was cancelled, in the C's order;
+ *            at the object dispatch's dt.ai sites ($8020, $8023) it makes
+ *            the changes the C's dt.ai calls made there (a skip included),
+ *            in the C's order, and must reach every one of them.
  *
  * A call whose C ends in Decomp_RunOriginal runs the original in both modes
  * and is not compared: the paths that use it lead into code (a row scroll, a
@@ -325,6 +328,7 @@ static uint64_t run_original(const DecompRoutine *rt, const CycModRegs *in, CycM
         dc_fail("cannot open an isolated scope", rt->addr);
     }
     dc_damage_replayed = 0;
+    dc_ai_replayed = 0;
     cyc_mod_allow_isolated_hooks(hooked);
     cyc_mod_stats(&before);
     *out = *in;
@@ -658,14 +662,19 @@ static int replace(int i, const CycModRegs *in)
     for (int k = 0; k < dc_damage_raised; k++) {
         cancelled |= dc_damage_cancel[k];
     }
-    if (cancelled) {
+    bool hooked = cancelled || dc_ai_written;
+    if (hooked) {
         cycles = run_original(rt, in, &o, true);
     }
     if (dc_nreads) {
         cyc_mod_set_ram_read_hook(isolated_read);
-        cycles = run_original(rt, in, &o, cancelled);
+        cycles = run_original(rt, in, &o, hooked);
         cyc_mod_set_ram_read_hook(NULL);
     }
+    if (dc_ai_replayed != dc_ai_written) {
+        dc_fail("the measuring call did not reach every change of dt.ai", rt->addr);
+    }
+    dc_ai_written = 0;
     const uint8_t *ram = cyc_cpu_ram();
     for (uint16_t a = 0; a < GAME_RAM_SIZE; a++) {
         if (dc_live(a, in->s) && ram[a] != dc_image[a]) {

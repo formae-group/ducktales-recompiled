@@ -65,6 +65,18 @@ extern bool dc_top_entered;
 extern bool dc_outside; /* inside Decomp_Outside */
 extern bool dc_damage_cancel[8];
 extern int dc_damage_raised;
+/* The bytes dt.ai's calls changed in the C (Decomp_Ai), in order, and how
+ * many of them the measuring call has made again (Decomp_AiReplay). */
+#define MAX_AI_WRITES 4096
+
+typedef struct {
+    uint16_t addr;
+    uint8_t value, slot;
+    bool after;
+} AiWrite;
+
+extern AiWrite dc_ai_writes[MAX_AI_WRITES];
+extern int dc_ai_written, dc_ai_replayed;
 extern BusOp dc_ops[MAX_BUS_OPS];
 extern int dc_nops, dc_played, dc_loads;
 extern DeviceStore dc_store[MAX_STORES];

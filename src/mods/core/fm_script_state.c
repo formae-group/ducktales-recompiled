@@ -111,7 +111,18 @@ static bool handle_ready(lua_State *L, const FmQuery *q, const long long *values
     return false;
 }
 
-/* rec:set{field = value, ...}: upvalue 1 is the query's index. */
+void fm_script_push_handle(lua_State *L, int query, const long long *values)
+{
+    push_handle_meta(L, query);
+    push_record(L, &fm_script_game.queries[query], values);
+    lua_pushvalue(L, -2);
+    lua_setmetatable(L, -2);
+    lua_remove(L, -2);
+}
+
+/* rec:set{field = value, ...}: upvalue 1 is the query's index. The fields
+ * are written and logged in the query's order, the same in every run (a
+ * table's own order follows its hash seed). */
 int fm_script_handle_set(lua_State *L)
 {
     const FmQuery *q = &fm_script_game.queries[lua_tointeger(L, lua_upvalueindex(1))];
@@ -134,10 +145,14 @@ int fm_script_handle_set(lua_State *L)
         lua_pop(L, 1);
     }
     Script *s = fm_script_of(L);
-    lua_pushnil(L);
-    while (lua_next(L, 2)) {
-        const char *field = lua_tostring(L, -2);
+    for (int f = 0; f < q->field_count; f++) {
+        const char *field = q->fields[f];
+        if (lua_getfield(L, 2, field) == LUA_TNIL) {
+            lua_pop(L, 1);
+            continue;
+        }
         long long value = (long long)lua_tointeger(L, -1);
+        lua_pop(L, 1);
         q->write(values, field, value);
         char key[128], label[128], text[200];
         snprintf(key, sizeof key, "%s.%s", name, field);
@@ -146,10 +161,8 @@ int fm_script_handle_set(lua_State *L)
         snprintf(text, sizeof text, "%s, was %lld", label, (long long)lua_tointeger(L, -1));
         lua_pop(L, 1);
         fm_script_log_write(s, key, value, label, text);
-        lua_pushvalue(L, -2);
-        lua_pushvalue(L, -2);
-        lua_settable(L, 1);
-        lua_pop(L, 1);
+        lua_pushinteger(L, (lua_Integer)value);
+        lua_setfield(L, 1, field);
     }
     lua_pushboolean(L, 1);
     return 1;

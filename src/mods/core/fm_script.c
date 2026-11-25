@@ -12,8 +12,10 @@
  *              game's records, read only), dt.set.<field>(v) for the fields
  *              the game declares writable, dt.tune.<name> (the game's
  *              tunables), dt.toast(text), dt.draw.text/rect, dt.store.get/set,
- *              dt.log, dt.mod, dt.frame() and dt.random (the mod's own
- *              generator)
+ *              dt.log, dt.mod, dt.frame(), dt.random (the mod's own
+ *              generator), and dt.ai(kind, {before = fn, after = fn}) with
+ *              dt.SKIP: the mod's own code at the turn of each of the game's
+ *              objects of a kind, which it gets as a handle (fm_scripts_ai)
  *   writes     dt.set checks the value against the state when it is called.
  *              In a game event's handler it writes at once, inside the
  *              event's RAM transaction; in a "frame" handler it is queued,
@@ -34,7 +36,9 @@
  *              a second when changed and at exit
  *   limits     a callback (the main chunk included) runs at most
  *              SCRIPT_INSTRUCTIONS VM instructions (a count hook) and a mod's
- *              state holds at most SCRIPT_MEMORY bytes (its allocator).
+ *              state holds at most SCRIPT_MEMORY bytes (its allocator); a
+ *              mod's dt.ai callbacks run at most AI_INSTRUCTIONS in all in a
+ *              frame, a bound on what they add to it.
  *              pcall, xpcall, coroutine.resume and coroutine.close let a
  *              limit through: it stops the mod, not the call. The hook counts
  *              Lua instructions, so one long C library call (a pathological
@@ -76,11 +80,13 @@
 #define SCRIPT_EVENTS       63
 #define FRAME_BIT           63
 #define SCRIPT_WRITE_FLUSH  600
+#define AI_INSTRUCTIONS     250000
 
 FmScriptGame fm_script_game;
 Script *fm_script_scripts[FM_MAX_MODS];
 int fm_script_script_count;
 static bool s_registered[SCRIPT_EVENTS];
+static uint8_t s_ai_registered[FM_AI_KINDS / 8];
 static bool s_dirty;
 uint64_t fm_script_frame;
 static time_t s_checked;
@@ -150,7 +156,12 @@ static void count_hook(lua_State *L, lua_Debug *ar)
         return;
     }
     luaL_where(L, 0);
-    stop(s, "%sran more than %d instructions in one callback", lua_tostring(L, -1), SCRIPT_INSTRUCTIONS);
+    if (s->in_ai) {
+        stop(s, "%sran more than %d instructions in dt.ai callbacks in one frame", lua_tostring(L, -1),
+             AI_INSTRUCTIONS);
+    } else {
+        stop(s, "%sran more than %d instructions in one callback", lua_tostring(L, -1), SCRIPT_INSTRUCTIONS);
+    }
     lua_pop(L, 1);
     luaL_error(L, "%s", s->why);
 }
@@ -289,6 +300,52 @@ static int sb_on(lua_State *L)
     return 0;
 }
 
+/* dt.ai(kind, {before = fn, after = fn}) gives the kind's objects the mod's
+ * code; dt.ai(kind, nil) takes it back. */
+static int sb_ai(lua_State *L)
+{
+    lua_Integer kind = luaL_checkinteger(L, 1);
+    char err[160] = "no such kind";
+    if (!fm_script_game.ai_kind || kind < 0 || kind >= FM_AI_KINDS ||
+        !fm_script_game.ai_kind((long long)kind, err, sizeof err)) {
+        return luaL_error(L, "dt.ai(%I): %s", kind, err);
+    }
+    Script *s = fm_script_of(L);
+    uint8_t bit = (uint8_t)(1u << (kind & 7));
+    lua_rawgeti(L, LUA_REGISTRYINDEX, s->ai);
+    if (lua_isnoneornil(L, 2)) {
+        lua_pushnil(L);
+        lua_rawseti(L, -2, kind);
+        s->ai_kinds[kind >> 3] &= (uint8_t)~bit;
+        s_dirty = true;
+        return 0;
+    }
+    luaL_checktype(L, 2, LUA_TTABLE);
+    lua_createtable(L, 0, 2);
+    int n = 0;
+    lua_pushnil(L);
+    while (lua_next(L, 2)) {
+        const char *k = lua_type(L, -2) == LUA_TSTRING ? lua_tostring(L, -2) : NULL;
+        if (!k || (strcmp(k, "before") && strcmp(k, "after"))) {
+            return luaL_error(L, "dt.ai(%I, {...}): only before and after", kind);
+        }
+        if (!lua_isfunction(L, -1)) {
+            return luaL_error(L, "dt.ai(%I, {%s = ...}): a function is needed", kind, k);
+        }
+        lua_pushvalue(L, -2);
+        lua_insert(L, -2);
+        lua_rawset(L, -4);
+        n++;
+    }
+    if (!n) {
+        return luaL_error(L, "dt.ai(%I, {...}): before, after or both are needed", kind);
+    }
+    lua_rawseti(L, -2, kind);
+    s->ai_kinds[kind >> 3] |= bit;
+    s_dirty = true;
+    return 0;
+}
+
 static int sb_frame(lua_State *L)
 {
     lua_pushinteger(L, (lua_Integer)fm_script_frame);
@@ -403,8 +460,11 @@ static int setup(lua_State *L)
     set_function(L, "log", sb_log);
     set_function(L, "frame", sb_frame);
     set_function(L, "toast", fm_script_sb_toast);
+    set_function(L, "ai", sb_ai);
     lua_pushliteral(L, "cancel");
     lua_setfield(L, -2, "CANCEL");
+    lua_pushliteral(L, "skip");
+    lua_setfield(L, -2, "SKIP");
     lua_pushstring(L, fm_script_of(L)->id);
     lua_setfield(L, -2, "mod");
 
@@ -492,6 +552,8 @@ static int setup(lua_State *L)
 
     lua_newtable(L);
     fm_script_of(L)->handlers = luaL_ref(L, LUA_REGISTRYINDEX);
+    lua_newtable(L);
+    fm_script_of(L)->ai = luaL_ref(L, LUA_REGISTRYINDEX);
     return 0;
 }
 
@@ -543,6 +605,19 @@ static const char *event_name(int e)
     return e == FRAME_BIT ? "frame" : fm_script_game.events[e].name;
 }
 
+/* A callback's error (at the top of the stack) or limit stops the script;
+ * where says which callback, as " (in ...)" ends the reason. */
+static void fail(Script *s, const char *where)
+{
+    stop_if_over(s);
+    const char *msg = lua_tostring(s->L, -1);
+    stop(s, "%s", msg ? msg : "an error without a message");
+    size_t n = strlen(s->why);
+    snprintf(s->why + n, sizeof s->why - n, " (in %s)", where);
+    lua_pop(s->L, 1);
+    report(s);
+}
+
 /* Runs the script's handlers of event e: true when one returned dt.CANCEL
  * and e can be cancelled. */
 static bool run(Script *s, int e)
@@ -552,13 +627,9 @@ static bool run(Script *s, int e)
     lua_pushinteger(L, e);
     lua_pushinteger(L, (lua_Integer)fm_script_frame);
     if (lua_pcall(L, 2, 1, 0) != LUA_OK) {
-        stop_if_over(s);
-        const char *msg = lua_tostring(L, -1);
-        stop(s, "%s", msg ? msg : "an error without a message");
-        size_t n = strlen(s->why);
-        snprintf(s->why + n, sizeof s->why - n, " (in a \"%s\" handler)", event_name(e));
-        lua_pop(L, 1);
-        report(s);
+        char where[96];
+        snprintf(where, sizeof where, "a \"%s\" handler", event_name(e));
+        fail(s, where);
         return false;
     }
     bool cancel = lua_toboolean(L, -1);
@@ -596,6 +667,76 @@ bool fm_scripts_event(int event, const FmArg *args, int nargs)
     return cancel;
 }
 
+/* (kind, after, handle) -> whether the kind's before callback returned
+ * dt.SKIP; in protected mode. The callbacks share the frame's AI_INSTRUCTIONS. */
+static int ai_dispatch(lua_State *L)
+{
+    Script *s = fm_script_of(L);
+    bool after = lua_toboolean(L, 2);
+    lua_rawgeti(L, LUA_REGISTRYINDEX, s->ai);
+    lua_rawgeti(L, -1, lua_tointeger(L, 1));
+    if (lua_getfield(L, -1, after ? "after" : "before") != LUA_TFUNCTION) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    lua_pushvalue(L, 3);
+    s->steps = s->ai_steps;
+    s->in_ai = true;
+    lua_call(L, 1, 1);
+    s->in_ai = false;
+    s->ai_steps = s->steps;
+    lua_pushboolean(L, !after && lua_type(L, -1) == LUA_TSTRING && !strcmp(lua_tostring(L, -1), "skip"));
+    return 1;
+}
+
+static bool ai_live(const Script *s, int kind)
+{
+    return s->L && !s->stopped && (s->ai_kinds[kind >> 3] & 1u << (kind & 7));
+}
+
+bool fm_scripts_ai(int kind, bool after, const long long *values)
+{
+    if (kind < 0 || kind >= FM_AI_KINDS) {
+        return false;
+    }
+    const FmQuery *q = &fm_script_game.queries[fm_script_game.ai_query];
+    bool skip = false;
+    fm_script_in_event = true;
+    for (int i = 0; i < fm_script_script_count; i++) {
+        Script *s = fm_script_scripts[i];
+        if (!ai_live(s, kind)) {
+            continue;
+        }
+        if (s->ai_frame != fm_script_frame) {
+            s->ai_frame = fm_script_frame;
+            s->ai_steps = AI_INSTRUCTIONS / HOOK_STEP;
+        }
+        lua_State *L = s->L;
+        lua_pushcfunction(L, ai_dispatch);
+        lua_pushinteger(L, kind);
+        lua_pushboolean(L, after);
+        fm_script_push_handle(L, fm_script_game.ai_query, values);
+        if (lua_pcall(L, 3, 1, 0) != LUA_OK) {
+            s->in_ai = false;
+            char where[96];
+            snprintf(where, sizeof where, "dt.ai(%d)'s %s callback", kind, after ? "after" : "before");
+            fail(s, where);
+            continue;
+        }
+        bool skipped = lua_toboolean(L, -1);
+        lua_pop(L, 1);
+        if (skipped) {
+            char name[64], text[96];
+            q->describe(values, name, sizeof name);
+            snprintf(text, sizeof text, "dt.ai(%d): %s skipped", kind, name);
+            fm_script_log_write(s, text, 1, text, text);
+            skip = true;
+        }
+    }
+    fm_script_in_event = false;
+    return skip;
+}
+
 static void close_script(Script *s)
 {
     if (!s->L) {
@@ -617,6 +758,7 @@ static void close_script(Script *s)
     s->tuned = 0;
     fm_script_sync_tunes();
     s->wants = 0;
+    memset(s->ai_kinds, 0, sizeof s->ai_kinds);
     s_dirty = true;
 }
 
@@ -624,11 +766,22 @@ static void close_script(Script *s)
 static void sync_events(void)
 {
     uint64_t wants = 0;
+    uint8_t kinds[FM_AI_KINDS / 8] = { 0 };
     for (int i = 0; i < fm_script_script_count; i++) {
         if (fm_script_scripts[i]->stopped) {
             close_script(fm_script_scripts[i]);
         }
         wants |= fm_script_scripts[i]->wants;
+        for (int b = 0; b < FM_AI_KINDS / 8; b++) {
+            kinds[b] |= fm_script_scripts[i]->ai_kinds[b];
+        }
+    }
+    for (int k = 0; k < FM_AI_KINDS; k++) {
+        bool want = kinds[k >> 3] & 1u << (k & 7), had = s_ai_registered[k >> 3] & 1u << (k & 7);
+        if (want != had && fm_script_game.ai_listen) {
+            fm_script_game.ai_listen(k, want);
+            s_ai_registered[k >> 3] ^= (uint8_t)(1u << (k & 7));
+        }
     }
     s_dirty = false;
     for (int e = 0; e < fm_script_game.event_count; e++) {
@@ -689,6 +842,8 @@ static bool start_script(Script *s, char *err, size_t cap)
     s->why[0] = 0;
     s->wants = 0;
     s->warned = 0;
+    memset(s->ai_kinds, 0, sizeof s->ai_kinds);
+    s->in_ai = false;
     s->steps = SCRIPT_INSTRUCTIONS / HOOK_STEP;
     lua_State *L = lua_newstate(script_alloc, s);
     if (!L) {

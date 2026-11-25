@@ -9,18 +9,23 @@
  *   state      dt.state and dt.set = FIELDS below, dt.objects() and
  *              dt.camera() = QUERIES, read and written through the game API
  *              (ducktales/hud.h, game.h, player.h, objects.h) inside a RAM
- *              transaction; dt.objects() gives handles: o:set{x, y, action}
- *              and o:despawn() (the decompiled Obj_Despawn), and
+ *              transaction; dt.objects() gives handles: o:set{x, y, action,
+ *              and facing, speed and vy of an enemy} and o:despawn() (the
+ *              decompiled Obj_Despawn), and
  *              dt.spawn(kind, x, y [, action]) makes an enemy (the
  *              decompiled Obj_FindFreeSlot and Obj_SpawnTemplate)
  *   calls      dt.level.set(x, y, metatile) = CALLS below, a tile edit (the
  *              decompiled Level_EditCell)
  *   tunes      dt.tune = TUNES below, Scrooge's tunables (ducktales/tune.h)
+ *   ai         dt.ai(kind, ...) for the enemies dt.spawn makes: the kind's
+ *              objects run the script's code before and after their own
+ *              (ducktales/ai.h), and get their handle
  *   store      dt.store in the data folder's mods-data
  */
 #include "mods/app_mods.h"
 #include "mods/ducktales/dt_mods_internal.h"
 
+#include "ducktales/ai.h"
 #include "ducktales/events.h"
 #include "ducktales/game.h"
 #include "ducktales/hud.h"
@@ -461,6 +466,10 @@ static bool action_holds_item(uint8_t action)
     return action == OBJ_ACTION_CHEST || action == OBJ_ACTION_LAND_CHEST;
 }
 
+static bool spawns_enemy(long long kind);
+
+#define MOTION_MAX 0x0800 /* 8 px a frame, the fastest speed and vy a script sets */
+
 static bool check_object(const long long *v, const char *field, long long value, char *err, size_t cap)
 {
     int slot = (int)v[O_SLOT];
@@ -506,7 +515,17 @@ static bool check_object(const long long *v, const char *field, long long value,
         }
         return true;
     }
-    snprintf(err, cap, "%s cannot be set (x, y, action)", field);
+    bool facing = !strcmp(field, "facing"), speed = !strcmp(field, "speed");
+    if (facing || speed || !strcmp(field, "vy")) {
+        if (!spawns_enemy(kind)) {
+            snprintf(err, cap, "%s is set on the enemies only (docs/MODS.md)", field);
+            return false;
+        }
+        return facing  ? in_range(value, 0, 1, err, cap)
+               : speed ? in_range(value, 0, MOTION_MAX, err, cap)
+                       : in_range(value, -MOTION_MAX, MOTION_MAX, err, cap);
+    }
+    snprintf(err, cap, "%s cannot be set (x, y, action, facing, speed, vy)", field);
     return false;
 }
 
@@ -518,6 +537,15 @@ static void write_object(const long long *v, const char *field, long long value)
         Obj_SetWorldX(slot, (uint16_t)value);
     } else if (!strcmp(field, "y")) {
         gObjects->y[slot] = (uint8_t)value;
+    } else if (!strcmp(field, "facing")) {
+        gObjects->flags[slot] = (uint8_t)(value ? gObjects->flags[slot] | OBJ_FLAG_FACING_RIGHT
+                                                : gObjects->flags[slot] & ~OBJ_FLAG_FACING_RIGHT);
+    } else if (!strcmp(field, "speed")) {
+        gObjects->speed[slot] = (uint8_t)(value >> 8);
+        gObjects->speedFrac[slot] = (uint8_t)value;
+    } else if (!strcmp(field, "vy")) {
+        gObjects->vy[slot] = (uint8_t)((uint16_t)value >> 8);
+        gObjects->vyFrac[slot] = (uint8_t)value;
     } else {
         gObjects->action[slot] = (uint8_t)value;
         gObjects->animFrame[slot] = 0;
@@ -749,6 +777,28 @@ static EventResult on_event(EventId id, void *user)
     return cancel ? EVENT_CANCEL : EVENT_CONTINUE;
 }
 
+static bool ai_kind(long long kind, char *err, size_t cap)
+{
+    if (!spawns_enemy(kind)) {
+        snprintf(err, cap, "kind %lld is not one of the enemies (docs/MODS.md)", kind);
+        return false;
+    }
+    return true;
+}
+
+static bool on_ai(uint8_t slot, AiPhase phase, void *user)
+{
+    (void)user;
+    long long values[OBJECT_FIELD_COUNT];
+    read_object(slot, values);
+    return fm_scripts_ai(gObjects->kind[slot], phase == AI_AFTER, values);
+}
+
+static void ai_listen(int kind, bool on)
+{
+    Ai_Set((uint8_t)kind, on ? on_ai : NULL, NULL);
+}
+
 static void listen(int event, bool on)
 {
     if (on) {
@@ -791,6 +841,9 @@ void dt_mods_configure(void)
         .begin_frame = GameRam_Begin,
         .end_frame = GameRam_End,
         .store_dir = s_store_dir,
+        .ai_kind = ai_kind,
+        .ai_listen = ai_listen,
+        .ai_query = 0,
     };
     fm_scripts_configure(&script);
 }

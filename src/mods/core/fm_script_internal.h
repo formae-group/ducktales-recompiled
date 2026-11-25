@@ -56,6 +56,11 @@ typedef struct {
     long long tune[SCRIPT_TUNES];
     uint32_t tuned;  /* bit per tune: set by this script */
     uint64_t random; /* dt.random's state, never 0 */
+    int ai;          /* registry ref: dt.ai's {before, after} tables by kind */
+    uint8_t ai_kinds[FM_AI_KINDS / 8];
+    long ai_steps;     /* hook steps left to dt.ai callbacks in frame ai_frame */
+    uint64_t ai_frame; /* the frame (fm_script_frame) ai_steps counts for */
+    bool in_ai;        /* a dt.ai callback runs */
 } Script;
 
 typedef struct {
@@ -84,6 +89,8 @@ void fm_script_apply(Script *s, const FmField *f, long long value);
 /* label names the write in its repeat line ("dt.set.lives(7)"). */
 void fm_script_log_write(Script *s, const char *key, long long value, const char *label, const char *text);
 void fm_script_flush_writes(Script *s);
+/* Pushes a handle: the record values of queries[query] with its methods. */
+void fm_script_push_handle(lua_State *L, int query, const long long *values);
 int fm_script_handle_set(lua_State *L);
 int fm_script_handle_remove(lua_State *L);
 int fm_script_sb_create(lua_State *L);

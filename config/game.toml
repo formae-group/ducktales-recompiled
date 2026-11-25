@@ -77,6 +77,24 @@ addr = 0x8B21
 length = 8
 crc32 = 0x5D6EF23E
 
+# Bank 6, the object dispatch at $8000 (src/game/ai.c): the JMP ($0000) to a
+# live slot's handler, and the INC $4A its RTS returns to (also reached for a
+# slot that is not live). On only while a mod's dt.ai names a kind; each key
+# is unique to bank 6 at its address.
+[[mod_function_hook]]
+id = "ducktales.ai.before"
+bank = 6
+addr = 0x8020
+length = 8
+crc32 = 0xC632849E
+
+[[mod_function_hook]]
+id = "ducktales.ai.after"
+bank = 6
+addr = 0x8023
+length = 8
+crc32 = 0xAEE3E29D
+
 # Where Player_Update's RTS returns in the frame loop ($DB6F, LDA $6C), before
 # the objects move: once per unpaused step of play.
 [[mod_function_hook]]

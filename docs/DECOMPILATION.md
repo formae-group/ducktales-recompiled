@@ -168,6 +168,55 @@ as `Decomp_RaiseEvent` raises only there. So:
 with `--decomp off`, `check` and `replace`: the same log, no mismatch, and the same RAM outside the
 stack on every frame. The four cost 3 of the 128 hook sites (112 in use with them).
 
+## Object code
+
+`include/ducktales/ai.h` (`src/game/ai.c`) lets a mod run its own code at the turn of each
+object of a kind, before and after the kind's own (`dt.ai` in [MODS.md](MODS.md)). The object
+dispatch, bank 6 `$8000` (`Obj_UpdateAll`), walks slots 1-15 with the cursor in `$4A`; for a live
+slot (`$0700,X` bit 7) it loads the kind's handler from `$802C,Y`/`$806F,Y` into `$00`/`$01`,
+pushes the return `$8022` (`$801A`-`$801F`) and jumps with `JMP ($0000)` at `$8020`. The
+handler's `RTS` lands on the `INC $4A` at `$8023`, which the `BPL $8023` at `$800B` also reaches
+for a slot that is not live. Kind 0's entry is `$80B2`, an `RTS` (verified in the ROM).
+
+| Site | Where | What it does |
+|---|---|---|
+| `ducktales.ai.before` | `$8020`, the `JMP ($0000)` | `AI_BEFORE` for the slot in `$4A` when its kind has a handler; a skip stores `$80B2` in `$00`/`$01`, so the jump returns at once to `$8023` |
+| `ducktales.ai.after` | `$8023`, the `INC $4A` | `AI_AFTER` for the slot whose turn `AI_BEFORE` began, when it still holds a live object of that kind |
+
+Both are in bank 6 only (`bank = 6`; their 8 bytes are at that address in no other bank) and are
+on only while a kind has a handler, so with none the game runs the original instructions. They cost
+2 of the 128 hook sites (114 in use). Each call runs inside a RAM transaction; an object its
+`AI_BEFORE` despawned is skipped, since a handler run on a free slot would start it again.
+
+**The fields a mod may write.** Of an object's tables a handler may change through the handles
+only what `o:set` allows: `x`, `y`, `action`, and on the 23 enemy kinds `dt.spawn` makes also
+`facing` (`$0600` bit 6), `speed` (`$0770`:`$0760`, 0 to `$0800`) and `vy` (`$07C0`:`$07B0`,
+`-$0800` to `$0800`). The C of those kinds (`walkers.c`, `flyers.c`, `thieves.c`) and of the
+routines they call (`enemies.c`, `objcommon.c`, `motion.c`) was read for every use of the three
+(audit of this change): `speed` and `vy` are added to or subtracted from the position
+(`$F234`, `$F252`, `$F298` and the climbing steps), compared with the position in the off-screen
+tests of `$F1BE`, `$F192` and `$F1A8`, tested for their sign, negated (the flyer, the swooper and
+the pouncer keep their speed positive) or counted down (the block kicker's speed, the charger's
+bounce in `$06C0`, which keeps only the sign); `facing` is only tested and set. None is a table
+index, an address or a loop count in any of them, so no value in range reaches memory the game
+does not mean. The bosses and the other kinds are refused; the Transylvania boss, for one, reads its
+direction `$07E0` as a table index (no handle writes the direction).
+
+**With the decompiled code.** In replace mode the decompiled dispatch (`Obj_RunHandler`) makes the
+calls itself (`Decomp_Ai`): `AI_BEFORE` after loading `$00`/`$01`, a skip running no case, and
+`AI_AFTER` after the kind's C. Each call's changed bytes are kept, in order, and the measuring call
+of `replace` runs with hook sites on whenever there are any: at `$8020` and `$8023` the sites,
+inside the isolated call, store the kept bytes of that slot and site (`Decomp_AiReplay`), so the
+original takes the same path and the cycles spent are those of the changed run; a measuring call
+that does not reach every kept change stops the program. In check mode only the original makes
+the calls, at the sites, as for the events. An original that runs instead of the C (a call that
+VBlank would interrupt) makes them at its sites.
+
+`tests/mods_test.py` step 11 runs a script that skips one hopper, speeds up another, makes it jump
+higher and skips every hopper in turn once the slots are full, with the spawn, object and update
+scripts, under `--decomp off`, `check` and `replace`: the same lines, no mismatch, and the same
+RAM outside the stack on every frame.
+
 ## Decompiled routines
 
 ### How a routine replaces the recompiled one

@@ -15,7 +15,11 @@ positions out of bounds, calls outside a game event's handler, and the four even
 frame's end; dt.spawn on amazon_intro: a hopper made on the screen that the game runs as its own,
 the arguments it refuses, spawns until 2 slots are left and a spawned enemy despawned; dt.level.set
 puts a wall in front of Scrooge that stops him, logs its repeats in one line and refuses what it must;
-dt.set.boss_hits on full_amazon's fight and outside it.
+dt.ai on amazon_intro: a hopper skipped by dt.SKIP stays put, one given speed 512 walks further and
+one given vy 1536 at its take-off jumps higher, what dt.ai and the three fields refuse, the code taken
+back and given again, and the per-frame instruction bound; dt.set.boss_hits on full_amazon's fight
+and outside it. The dt.ai script, every hopper skipped in turn once dt.spawn filled the slots, is also
+in the --decomp off, check and replace runs.
 """
 
 import os
@@ -319,6 +323,107 @@ dt.on("frame", function(frame)
         dt.log("outside", ok, err)
     end
 end)
+'''
+
+# dt.ai on amazon_intro: three hoppers spawned at step 40, one skipped every turn, one walking at
+# speed 512 and taking off at vy 1536, one left alone; the calls it refuses; the code taken back at
+# step 100 and given again at 110; once the slots are full (SPAWN_LUA in the trio), every hopper
+# skipped in turn.
+AI_LUA = r'''
+local step, frozen, fast, plain, base, thawed = 0, nil, nil, nil, {}, nil
+local turns, afters, rise, heights = 0, 0, {}, {}
+local function try(f, ...)
+    local ok, err = pcall(f, ...)
+    return tostring(ok) .. " " .. (tostring(err):gsub("^.-: ", "", 1))
+end
+local function live(slot)
+    for _, o in ipairs(dt.objects()) do
+        if o.slot == slot then
+            return o
+        end
+    end
+end
+local hopper = {
+    before = function(o)
+        turns = turns + 1
+        if frozen and o.slot == frozen.slot then
+            return dt.SKIP
+        end
+        if fast and o.slot == fast.slot and o.speed ~= 512 then
+            o:set{speed = 512}
+        end
+        if step > 150 and (dt.frame() + o.slot) % 4 == 0 then
+            return dt.SKIP
+        end
+    end,
+    after = function(o)
+        afters = afters + 1
+        local r = rise[o.slot]
+        if not r and o.vy == 1024 then
+            if fast and o.slot == fast.slot then
+                o:set{vy = 1536}
+            end
+            rise[o.slot] = {o.y, o.y}
+        elseif r then
+            r[2] = math.min(r[2], o.y)
+            if o.vy < 0 then
+                heights[o.slot] = heights[o.slot] or (r[1] - r[2])
+                rise[o.slot] = nil
+            end
+        end
+        if fast and o.slot == fast.slot and step == 60 then
+            dt.log("range", try(o.set, o, {speed = 2049}), try(o.set, o, {vy = -2049}), try(o.set, o, {facing = 2}))
+        end
+    end,
+}
+dt.log("not an enemy", try(dt.ai, 8, hopper))
+dt.log("bad table", try(dt.ai, 1, {during = hopper.before}))
+dt.log("empty", try(dt.ai, 1, {}))
+dt.ai(1, hopper)
+dt.on("update", function()
+    step = step + 1
+    local left = dt.camera().x
+    if step == 40 then
+        frozen = dt.spawn(1, left + 200, 100)
+        fast = dt.spawn(1, left + 160, 100)
+        plain = dt.spawn(1, left + 120, 100)
+        base = {frozen.x, frozen.y, fast.x, plain.x}
+        for _, o in ipairs(dt.objects()) do
+            if o.kind == 8 then
+                dt.log("block", try(o.set, o, {facing = 1}))
+                break
+            end
+        end
+    elseif step == 70 then
+        local f, g, p = live(frozen.slot), live(fast.slot), live(plain.slot)
+        dt.log("moved", f.x - base[1], f.y - base[2], g.x - base[3], p.x - base[4])
+    elseif step == 100 then
+        dt.log("heights", heights[plain.slot], heights[fast.slot])
+        dt.ai(1, nil)
+        thawed = live(frozen.slot)
+    elseif step == 110 then
+        local f = live(frozen.slot)
+        dt.log("thawed", f == nil or f.y ~= thawed.y, turns, afters)
+        dt.ai(1, hopper)
+    end
+end)
+'''
+
+# dt.ai callbacks of about 80,000 instructions each: one passes, several in one frame stop the mod.
+AI_BUDGET_LUA = r'''
+local calls = 0
+dt.ai(1, {
+    before = function(o)
+        local n = 0
+        for i = 1, 40000 do
+            n = n + i
+        end
+        calls = calls + 1
+        if calls == 1 then
+            dt.log("first", n)
+        end
+    end,
+})
 '''
 
 # dt.level.set on amazon_intro (metatile 102 is solid in the Amazon's tileset, 158 special): a wall
@@ -719,6 +824,56 @@ def gameplay_checks(exe, native, dev):
                 f'the native player logs the same {len(spawn_lines["headless"])} lines with dt.spawn',
             )
 
+        ai_mods = mods('ai', {'ai': AI_LUA, 'ai-budget': AI_BUDGET_LUA})
+        ai_lines = {}
+        for host, host_exe, is_native in hosts:
+            log = run(host_exe, f'ai_{host.replace(" ", "_")}', is_native, ai_mods)
+            ai_lines[host] = [line for line in log.splitlines() if 'Mod ai' in line]
+            what = ('not an enemy', 'bad table', 'empty', 'block', 'range', 'moved', 'heights', 'thawed')
+            got = {w: (lines(log, 'ai', w) or [[]])[0] for w in what}
+            check(
+                got['not an enemy'] == ['false kind 8 is not one of the enemies (docs/MODS.md)']
+                and got['bad table'] == ['false only before and after']
+                and got['empty'] == ['false before, after or both are needed']
+                and got['block'] == ['false facing is set on the enemies only (docs/MODS.md)']
+                and got['range']
+                == ['false out of range 0 to 2048', 'false out of range -2048 to 2048', 'false out of range 0 to 1'],
+                f'{host}: dt.ai refuses a kind that is not an enemy and a table without before or after, and '
+                f'facing, speed and vy are refused out of range and on a block',
+                f'{got}',
+            )
+            moved, heights = got['moved'], got['heights']
+            check(
+                len(moved) == 4
+                and moved[:2] == ['0', '0']
+                and abs(int(moved[2])) > abs(int(moved[3])) + 10
+                and len(heights) == 2
+                and int(heights[1]) > int(heights[0]) + 20
+                and got['thawed'][:1] == ['true']
+                and any(line.endswith('Mod ai: dt.ai(1): object 8 (kind 1) skipped') for line in ai_lines[host])
+                and any(line.endswith(':set{speed = 512}, was 0') for line in ai_lines[host])
+                and any(line.endswith(':set{vy = 1536}, was 1024') for line in ai_lines[host]),
+                f'{host}: a hopper skipped by dt.SKIP stays where it was, one at speed 512 walks further than the '
+                f'game\'s ({moved[2:]}), vy 1536 at its take-off jumps higher ({heights}), the skip and the '
+                f'writes are logged, and dt.ai(1, nil) gives the hopper its own code back',
+                f'{got}',
+            )
+            budget = [line for line in ai_lines[host] if 'Mod ai-budget: script stopped: ' in line]
+            check(
+                (lines(log, 'ai-budget', 'first') or [[]])[0] == ['800020000']
+                and len(budget) == 1
+                and budget[0].endswith(
+                    "ran more than 250000 instructions in dt.ai callbacks in one frame (in dt.ai(1)'s before callback)"
+                ),
+                f'{host}: one dt.ai callback of about 80,000 instructions runs, and several in one frame stop the mod',
+                '\n'.join(budget),
+            )
+        if len(ai_lines) == 2:
+            check(
+                ai_lines['headless'] == ai_lines['native player'],
+                f'the native player logs the same {len(ai_lines["headless"])} lines with dt.ai',
+            )
+
         level_mods = mods('level', {'level': LEVEL_LUA})
         level_lines = {}
         for host, host_exe, is_native in hosts:
@@ -797,6 +952,7 @@ def gameplay_checks(exe, native, dev):
             'objects': OBJECTS_LUA,
             'spawn': SPAWN_LUA,
             'level': LEVEL_LUA,
+            'ai': AI_LUA,
         }
         trio_mods = mods('trio', scripts)
         logs, ram = {}, []
@@ -808,8 +964,8 @@ def gameplay_checks(exe, native, dev):
             logs[mode] = run(host_exe, f'decomp_{mode}', False, trio_mods, extra=extra)
         check(
             all('MISMATCH' not in log and 'TIMING' not in log for log in logs.values()),
-            'headless: with the writing, tuning, object, spawn and level scripts, --decomp check finds no mismatch and '
-            'no timing difference',
+            'headless: with the writing, tuning, object, spawn, level and dt.ai scripts, --decomp check finds no '
+            'mismatch and no timing difference',
             logs['check'][-3000:],
         )
         written = {
@@ -826,7 +982,7 @@ def gameplay_checks(exe, native, dev):
         diff, info = ram_diff(ram)
         check(
             diff is None,
-            f'headless: with the writing, tuning, object, spawn and level scripts, --decomp replace keeps the RAM of '
-            f'--decomp off outside the stack ({info})',
+            f'headless: with the writing, tuning, object, spawn, level and dt.ai scripts, --decomp replace keeps the '
+            f'RAM of --decomp off outside the stack ({info})',
             diff or '',
         )

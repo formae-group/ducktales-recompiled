@@ -175,6 +175,8 @@ end)
 | `dt.tune.<name>` | Scrooge's physics: assign a number to use in place of the game's, `nil` for the game's again; reads give the value in force or `nil` (see [Tunables](#tunables)) |
 | `dt.objects()`, `dt.camera()` | The live object slots, as handles that can move or remove an object in a game event's handler, and the camera, inside handlers (see [Objects and the camera](#objects-and-the-camera)) |
 | `dt.spawn(kind, x, y[, action])` | Makes an enemy the land uses, in a game event's handler; returns its handle, or `nil` and the reason (see [Spawning enemies](#spawning-enemies)) |
+| `dt.ai(kind, {before = fn, after = fn})` | The mod's own code for every enemy of a kind, run at each one's turn before and after the kind's own; `dt.ai(kind, nil)` takes it back (see [Object code](#object-code)) |
+| `dt.SKIP` | Returned by a `before` callback of `dt.ai`: the kind's own code does not run for that object this turn |
 | `dt.level.set(x, y, metatile)` | Replaces a metatile on the screen, with its collision, in an `update` handler; returns `true`, or `false` and the reason (see [Editing the level](#editing-the-level)) |
 | `dt.toast(text)` | Shows a short notice over the picture; returns `false` when it was refused (see [Toasts](#toasts)) |
 | `dt.draw.text(x, y, text[, color])`, `dt.draw.rect(x, y, w, h, color)` | Draws over the presented picture for one frame (see [Drawing](#drawing)) |
@@ -261,19 +263,26 @@ end)
 Each object table is also a handle on its object, with two methods that work only in a game
 event's handler (`update` is the one meant for them) and change the game at once:
 
-- `o:set{x = ..., y = ..., action = ...}` writes any of the three. `x` is a world X on the
+- `o:set{x = ..., y = ..., action = ..., facing = ..., speed = ..., vy = ...}` writes any of them. `x` is a world X on the
   screen now (from the camera's `x` to 255 more) and needs an object with a world position, `y` is
   0 to 239, and `action` must be one this land spawns that kind with (in a record or a timed
   object of any of its map rows); a new action
   starts its animation from the first frame. A pickup's, hidden item's or chest's action is its
-  item and cannot be set, and no action that holds an item can be given. The table's fields follow
+  item and cannot be set, and no action that holds an item can be given. `facing` (0 or 1),
+  `speed` (0 to 2048) and `vy` (-2048 to 2048), at most 8 px a frame, can be set on the enemies
+  `dt.spawn` makes (the kinds in its table) only: their code uses them to move the object and to
+  test which way it goes, never to choose a table entry or an address. They stay the kind's own,
+  so the kind's code may change them again: most kinds set `facing` again from the way they walk,
+  and a kind that is falling takes a `vy` that is not downward as having left the bottom of the
+  screen and despawns the object, as it does when the object falls off. The table's fields follow
   the values written. `kind`, `state` and the rest cannot be set: `state` is the step of the
   object's own code, and another value sends the game into code that does not belong to it.
 - `o:despawn()` frees the slot at once, through the game's own despawn routine. The land record is
   not used up, so the object comes back when the spawner reaches its record again. The bosses and
   the objects that drive a scene or the final climb cannot be despawned.
 
-Both return `true`. Every field is checked first, and a value that cannot be written is an error
+Both return `true`. Every field is checked before any is written (they are written, and logged,
+in the order the object table lists them), and a value that cannot be written is an error
 (catchable with `pcall`), as is a call on the player's slot or outside a game event's handler. A
 handle kept from an earlier call names a slot, a kind and a record: when the slot holds something
 else now, the call changes nothing, returns `false, "gone"` and the log says so. Every write is
@@ -326,6 +335,48 @@ dt.on("update", function()
         made = made + (o and 1 or 0)
     end
 end)
+```
+
+### Object code
+
+`dt.ai(kind, {before = fn, after = fn})` gives every object of `kind` the mod's own code. The game
+runs the code of its live objects, slot 1 to 15, once a step; at the turn of each object of that
+kind it calls `before(o)` first and `after(o)` once the kind's own code returned, with the object's
+handle (the fields and methods of [Objects and the camera](#objects-and-the-camera)). Either may be
+left out. A `before` that returns `dt.SKIP` keeps the kind's code from running for that object this
+turn. That code is what moves the object, tests its contacts with Scrooge and beats it once it is
+hit, so a skipped object does none of that on that turn. `after` runs only
+while the slot still holds a live object of that kind (not after the kind's code beat or removed it),
+whether its turn was skipped or not. `dt.ai(kind, nil)` takes the code back; calling `dt.ai` again
+for a kind replaces it.
+
+Only the enemies `dt.spawn` makes (see [Spawning enemies](#spawning-enemies)) can be named, a
+land's own or spawned; any other kind is an error. In the callbacks the handles, `dt.set`,
+`dt.spawn` and the reads work as in a game event's handler, and every write is logged; so is
+each skip, with its repeats counted in one line: `dt.ai(1): object 8 (kind 1) skipped`. Of the
+object's fields a callback can change only what `o:set` can: `kind`, `state`, the timer and the
+rest stay read only. An object whose `before` despawned it is skipped. When several mods name the
+same kind, each one's `before` runs, in the mods' order, and any `dt.SKIP` skips.
+
+A mod's `dt.ai` callbacks may run 250,000 Lua instructions in all in one frame (the game runs at
+most 15 objects a step); past that the mod stops, as for the other limits (see
+[The sandbox](#the-sandbox)). The game's own code for a kind costs nothing while no mod names one:
+the two hook sites are on only while a `dt.ai` is in force.
+
+```lua
+local held = {}
+dt.ai(1, {
+    before = function(o)
+        if dt.state.pad & 0x40 ~= 0 then -- B held: every hopper waits
+            return dt.SKIP
+        end
+    end,
+    after = function(o)
+        if o.vy == 1024 then -- it just jumped: twice as fast
+            o:set{vy = 2048}
+        end
+    end,
+})
 ```
 
 ### Editing the level
@@ -489,14 +540,15 @@ which can only hold `a-z`, `0-9`, `-`, `_` and `.`, and a mod whose id is a Wind
   `io`, `os`, `package`, `debug`, `require`, `dofile`, `loadfile` and `string.dump` are absent;
   the `io`, `os`, `package` and `debug` libraries are not even built into the game.
 - `load` reads text only: a binary chunk is refused, and `scripts/main.lua` must be text too.
-- A callback, and the script's first run, may run 1,000,000 Lua instructions. A mod's Lua state
-  may hold 16 MiB.
+- A callback, and the script's first run, may run 1,000,000 Lua instructions, and a mod's `dt.ai`
+  callbacks 250,000 in all in one frame. A mod's Lua state may hold 16 MiB.
 - An error, or a limit reached, stops that mod's script: its handlers and queued writes are dropped, the reason is
   written to the log and shown in the Mod Menu, and the game and the other mods go on. `pcall`,
   `xpcall`, `coroutine.resume` and `coroutine.close` do not catch a limit.
 - The reason names the line and where it ran: *scripts/main.lua:12: attempt to index a nil value
   (field 'x') (in a "frame" handler)*, *scripts/main.lua:3: ran more than 1000000 instructions in
-  one callback (in a "timer-tick" handler)*, or *(when the script started)* for the script's first
+  one callback (in a "timer-tick" handler)*, *scripts/main.lua:6: ran more than 250000 instructions
+  in dt.ai callbacks in one frame (in dt.ai(1)'s before callback)*, or *(when the script started)* for the script's first
   run. The memory limit has no line: *used more than 16 MiB of memory*.
 - The instruction limit counts Lua instructions. A single long call into the C library, such as a
   pathological string pattern, is not interrupted.
@@ -515,9 +567,9 @@ save a fix. Only the scripts of mods loaded at start reload: a mod that had no
 
 | Folder | What it holds |
 |---|---|
-| `core/` | Knows no game. `fm_mods.h` is its interface: the package format and catalogue (`fm_catalog.c`: folders, `mod.toml`, order, switches, restart check), the archive and folder reader (`fm_archive.c`), PNG, OGG, WAV and deflate on stb (`fm_codec.c`) and the Lua sandbox with the generic script API (`fm_script.c`: `dt.on`, cancel, log, limits, hot reload; `fm_script_state.c`: `dt.state`, `dt.set`, `dt.tune` and the queries over the fields, tunables and records the game describes, with the records' handle methods; `fm_script_show.c`: toast and `dt.draw`; `fm_script_store.c`: store; `fm_script_internal.h`: what they share) |
+| `core/` | Knows no game. `fm_mods.h` is its interface: the package format and catalogue (`fm_catalog.c`: folders, `mod.toml`, order, switches, restart check), the archive and folder reader (`fm_archive.c`), PNG, OGG, WAV and deflate on stb (`fm_codec.c`) and the Lua sandbox with the generic script API (`fm_script.c`: `dt.on`, cancel, `dt.ai`, log, limits, hot reload; `fm_script_state.c`: `dt.state`, `dt.set`, `dt.tune` and the queries over the fields, tunables and records the game describes, with the records' handle methods; `fm_script_show.c`: toast and `dt.draw`; `fm_script_store.c`: store; `fm_script_internal.h`: what they share) |
 | `nes/` | NES games: tile keys, the replacement tile table, `.pal` palettes and tile templates (`fm_nes.c`) |
-| `ducktales/` | This game: what the assets mean and how they are loaded (`dt_mods.c`), painted (`dt_mods_picture.c`, with the toast and `dt.draw` overlay) and mixed (`dt_mods_audio.c`); the event list, the `dt.state` and writable fields, the tunables, the queries and their handles (`o:despawn()` runs the decompiled `Obj_Despawn` and `dt.spawn` `Obj_FindFreeSlot` and `Obj_SpawnTemplate`, through `Decomp_Outside`), `dt.level.set` (`Level_EditCell`) and the store folder (`dt_mods_script.c`) |
+| `ducktales/` | This game: what the assets mean and how they are loaded (`dt_mods.c`), painted (`dt_mods_picture.c`, with the toast and `dt.draw` overlay) and mixed (`dt_mods_audio.c`); the event list, the `dt.state` and writable fields, the tunables, the queries and their handles, the `dt.ai` kinds (`o:despawn()` runs the decompiled `Obj_Despawn` and `dt.spawn` `Obj_FindFreeSlot` and `Obj_SpawnTemplate`, through `Decomp_Outside`), `dt.level.set` (`Level_EditCell`) and the store folder (`dt_mods_script.c`) |
 | `app_mods.h` | The interface the hosts and the menu call |
 
 Both hosts and the native player call the same entry points:
@@ -549,6 +601,16 @@ Both hosts and the native player call the same entry points:
   a game event's handler, and the game's routines they use run as decompiled C
   (`Obj_Despawn`, `Obj_FindFreeSlot` and `Obj_SpawnTemplate`, the template step `Obj_SpawnRecord`
   shares) through `Decomp_Outside`.
+- **Object code.** `src/game/ai.c` (`include/ducktales/ai.h`) owns `dt.ai`'s calls. The object
+  dispatch (bank 6 `$8000`) loads a live slot's handler address into `$00`/`$01` and runs it with
+  `JMP ($0000)` at `$8020`; the handler's `RTS` returns to the `INC $4A` at `$8023`. Each has a
+  hook site, on only while a kind has `dt.ai` code: 2 of the 128 (114 in use). The before site runs
+  the `before` callbacks; a skip stores the address of kind 0's handler, an `RTS`, in `$00`/`$01`,
+  so the jump returns at once. The decompiled dispatch makes the same calls itself, and replace mode's
+  measuring call makes the same changes at the sites, in the same order (see "Object code" in
+  [docs/DECOMPILATION.md](DECOMPILATION.md)). With no `dt.ai` code a step costs nothing; with it,
+  each live object of a named kind costs its callbacks, at most 250,000 Lua instructions a frame
+  for each mod.
 - **Level.** `dt.level.set` has no hook site either: in the `update` handler it runs
   `Level_EditCell`, the part of the tile edit `$F574` it shares with the game's, which writes
   the `$0440` queue entry, the collision map `$0580` and the attribute shadow `$0500`, and
