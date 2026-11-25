@@ -37,6 +37,7 @@ extern uint64_t dc_nmi_debt;
 FILE *dc_device_dump(void);
 HwState dc_hw_state(void);
 bool dc_spans_frame_end(uint64_t cycles);
+bool dc_crosses_vblank(uint64_t cycles);
 void dc_spend_cycles(uint16_t addr, uint64_t cycles);
 
 /* decomp_cycle_task.c: dc_run_active while a task routine's original runs

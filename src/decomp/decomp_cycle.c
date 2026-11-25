@@ -28,8 +28,8 @@
  *            the routine's first byte, polling interrupts in the last read as
  *            the RTS would; then the scheduler returns from the routine as
  *            its RTS would. Interrupts and frames therefore come at the same
- *            points of the game's work as on the console (an NMI that the
- *            original would take inside the routine is taken right after it).
+ *            points of the game's work as on the console (a call during
+ *            which VBlank would come goes to the original: dc_crosses_vblank).
  *            The isolated call runs with hook sites on, so it takes the same
  *            path as the C: an event site raises nothing there, and at the
  *            damage site ($EB5E) the original returns as its RTS would when
@@ -77,7 +77,7 @@
  *
  * Routines of the switchable window ($8000-$BFFF) match their site only with
  * their bank (DecompRoutine.bank) mapped. A replaced routine that an NMI
- * interrupts while it spends the original's cycles owes the rest; the NMI
+ * interrupts anyway while it spends the original's cycles owes the rest; the NMI
  * handler's RTI spends it, so the interrupted code resumes at the console's
  * time: the RTI of an interrupt routine's C, or the original's
  * (DT_SITE_NMI_EXIT).
@@ -608,13 +608,40 @@ bool dc_spans_frame_end(uint64_t cycles)
     return cyc_cycle_count() + cycles + FRAME_END_MARGIN >= s_last_frame_end + s_frame_cycles;
 }
 
+/* Whether VBlank starts within this many cycles from now (a margin covers the
+ * last instruction): such a call goes to the original. The original takes the
+ * NMI at the end of one of its own instructions, where it polls interrupts,
+ * and the handler's length depends on the cycle it starts at (the sprite
+ * DMA's alignment); the cycles a replaced routine spends poll only at their
+ * end, so the NMI would come a cycle or more off the original's, and the work
+ * after it with it. Task code has a reason more: the NMI's handler steps
+ * state the task code also uses (the random generator, the scratch bytes),
+ * and the original takes it inside a long task routine, so taking it after
+ * the C's results would change the order. So does a call made while the NMI
+ * line has risen but the CPU has not latched the edge yet (a warm reset at
+ * the frame boundary: the original takes that NMI before its first store to
+ * $2000). */
+bool dc_crosses_vblank(uint64_t cycles)
+{
+    hw_native_flush();
+    if (ppu_nmi_output() && !cpu.nmi_input) {
+        return true;
+    }
+    long now = (long)ppu.scanline * 341 + ppu.dot;
+    long dots = 241L * 341 + 1 - now;
+    if (dots <= 0) {
+        dots += 262L * 341;
+    }
+    return cycles + 12 >= (uint64_t)(dots / 3);
+}
+
 static int replace(int i, const CycModRegs *in)
 {
     const DecompRoutine *rt = dc_routine[i];
     CycModRegs o;
     uint64_t cycles = run_original(rt, in, &o, false);
     dc_stats[i].calls++;
-    if (cycles && dc_spans_frame_end(cycles)) {
+    if (cycles && (dc_spans_frame_end(cycles) || dc_crosses_vblank(cycles))) {
         dc_stats[i].original++;
         return 0;
     }

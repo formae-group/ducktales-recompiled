@@ -37,28 +37,6 @@ typedef struct {
 static TaskRun s_run;
 bool dc_run_active;
 
-/* Whether VBlank starts within this many cycles from now (a margin covers the
- * last instruction). The NMI's handler steps state the task code also uses
- * (the random generator, the scratch bytes): the original takes it inside a
- * long task routine, and taking it after the C's results would change the
- * order, so such a call goes to the original. So does a call made while the
- * NMI line has risen but the CPU has not latched the edge yet (a warm reset
- * at the frame boundary: the original takes that NMI before its first store
- * to $2000). */
-static bool crosses_vblank(uint64_t cycles)
-{
-    hw_native_flush();
-    if (ppu_nmi_output() && !cpu.nmi_input) {
-        return true;
-    }
-    long now = (long)ppu.scanline * 341 + ppu.dot;
-    long dots = 241L * 341 + 1 - now;
-    if (dots <= 0) {
-        dots += 262L * 341;
-    }
-    return cycles + 12 >= (uint64_t)(dots / 3);
-}
-
 /* A site reached inside the isolated run of a task routine's original. */
 int dc_task_isolated_site(uint16_t addr)
 {
@@ -314,7 +292,7 @@ bool dc_task_replace(int i, const CycModRegs *in)
     }
     bool rti = rt->interrupt && !dc_handoff_set;
     uint64_t debt = rti ? dc_nmi_debt : 0;
-    if (dc_spans_frame_end(s_run.cycles + debt) || crosses_vblank(s_run.cycles + debt)) {
+    if (dc_spans_frame_end(s_run.cycles + debt) || dc_crosses_vblank(s_run.cycles + debt)) {
         dc_stats[i].original++;
         return false;
     }

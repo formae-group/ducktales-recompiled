@@ -237,6 +237,12 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Fixed
 
+- `--decomp replace` on the cycle host no longer drifts a cycle from the console on lag frames with
+  many enemies: a plain routine during which VBlank would come goes to the original, as task code
+  already did, since the cycles spent for the C took the NMI a cycle or more off the original's
+  instruction boundary. The step 11 mod scripts (write, tune, objects, spawn and level) now keep
+  the RAM of `--decomp off` together.
+
 - Script mods: `o:set{action}` accepted only the actions of the records of the land's first map
   row; it now takes those of every row's records and timed objects.
 - Extra lives at start had no effect with the decompiled code on: the decompiled title set-up

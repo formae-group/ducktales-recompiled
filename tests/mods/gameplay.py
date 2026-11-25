@@ -713,46 +713,42 @@ def gameplay_checks(exe, native, dev):
             f'({held[:1]} steps, the game\'s is 11)',
         )
 
-        # The level script runs in a trio of its own: added to the other four, it makes lag frames
-        # where --decomp replace drifts from off by a few cycles, as the other four alone do with
-        # walk_speed 0x220 to 0x280 (docs/DECOMPILATION.md "Tunables", known limit).
-        trios = (
-            (
-                'writing, tuning, object and spawn',
-                {'gameplay': UPDATE_LUA, 'knock': KNOCK_LUA, 'objects': OBJECTS_LUA, 'spawn': SPAWN_LUA},
-            ),
-            ('level', {'level': LEVEL_LUA}),
+        scripts = {
+            'gameplay': UPDATE_LUA,
+            'knock': KNOCK_LUA,
+            'objects': OBJECTS_LUA,
+            'spawn': SPAWN_LUA,
+            'level': LEVEL_LUA,
+        }
+        trio_mods = mods('trio', scripts)
+        logs, ram = {}, []
+        for mode in ('off', 'check', 'replace'):
+            host_exe, extra = exe, ['--decomp', mode]
+            if dev and mode != 'check':
+                ram.append(tmp / f'{mode}.ram')
+                host_exe, extra = dev, [*extra, '--dt-ram-log', ram[-1]]
+            logs[mode] = run(host_exe, f'decomp_{mode}', False, trio_mods, extra=extra)
+        check(
+            all('MISMATCH' not in log and 'TIMING' not in log for log in logs.values()),
+            'headless: with the writing, tuning, object, spawn and level scripts, --decomp check finds no mismatch and '
+            'no timing difference',
+            logs['check'][-3000:],
         )
-        for what, scripts in trios:
-            folder = mods(f'trio {what}', scripts)
-            logs, ram = {}, []
-            for mode in ('off', 'check', 'replace'):
-                host_exe, extra = exe, ['--decomp', mode]
-                if dev and mode != 'check':
-                    ram.append(tmp / f'{mode}.ram')
-                    host_exe, extra = dev, [*extra, '--dt-ram-log', ram[-1]]
-                logs[mode] = run(host_exe, f'decomp_{mode}', False, folder, extra=extra)
-            check(
-                all('MISMATCH' not in log and 'TIMING' not in log for log in logs.values()),
-                f'headless: with the {what} scripts, --decomp check finds no mismatch and no timing difference',
-                logs['check'][-3000:],
-            )
-            written = {
-                m: [line for line in log.splitlines() if any(f'Mod {i}:' in line for i in scripts)]
-                for m, log in logs.items()
-            }
-            check(
-                written['off'] == written['check'] == written['replace'],
-                f'headless: with the {what} scripts, --decomp off, check and replace log the same '
-                f'{len(written["off"])} lines',
-            )
-            if not dev:
-                print('SKIP  the RAM of --decomp replace: no developer build (--dev-build)')
-                continue
-            diff, info = ram_diff(ram)
-            check(
-                diff is None,
-                f'headless: with the {what} scripts, --decomp replace keeps the RAM of --decomp off outside the '
-                f'stack ({info})',
-                diff or '',
-            )
+        written = {
+            m: [line for line in log.splitlines() if any(f'Mod {i}:' in line for i in scripts)]
+            for m, log in logs.items()
+        }
+        check(
+            written['off'] == written['check'] == written['replace'],
+            f'headless: --decomp off, check and replace log the same {len(written["off"])} lines',
+        )
+        if not dev:
+            print('SKIP  the RAM of --decomp replace: no developer build (--dev-build)')
+            return
+        diff, info = ram_diff(ram)
+        check(
+            diff is None,
+            f'headless: with the writing, tuning, object, spawn and level scripts, --decomp replace keeps the RAM of '
+            f'--decomp off outside the stack ({info})',
+            diff or '',
+        )

@@ -168,14 +168,6 @@ as `Decomp_RaiseEvent` raises only there. So:
 with `--decomp off`, `check` and `replace`: the same log, no mismatch, and the same RAM outside the
 stack on every frame. The four cost 3 of the 128 hook sites (112 in use with them).
 
-**Known limit.** With many enemies on the screen, `replace` can drift from `off` by a few cycles in
-a lag frame: the RAM taken at the frame's end then shows a routine at another point (scratch bytes
-and S), the sprite slots follow, and later the random generator. The step 11 scripts that write,
-tune and use handles, with `dt.spawn` filling the slots, do it on `amazon_intro` with
-`walk_speed` 0x220 to 0x280 instead of 0x200 (the same on the sources before `dt.level.set`), and
-with the level script added; each alone keeps the RAM equal, and `check` finds no mismatch and no
-timing difference in any of them. The cause is not known yet.
-
 ## Decompiled routines
 
 ### How a routine replaces the recompiled one
@@ -221,8 +213,7 @@ compares CIRAM, palette RAM, CHR RAM and the PRG bank with the original's (contr
 spacing matters: the PPU acts on a `$2006` or `$2007` write a few cycles late, so writes made back to
 back put every byte of a VRAM queue one address off. That left 84 nametable bytes wrong from
 `african_mines_intro` frame 221, which moved the sprite-0 split and showed in RAM only at frame
-1383 (found on the level branch). The one difference: an NMI that the original would take in the middle of a
-routine is taken right after it, so the bytes it pushes on the stack differ. With this, replace
+1383 (found on the level branch). With this, replace
 mode is RAM-identical to the console on every frame of every route (see Verification).
 
 **Calls that would run past the frame end** go to the original in replace mode. The host's
@@ -231,6 +222,15 @@ measured cycles from the call would reach the next frame end (with a margin of 3
 counted as "original" and the original runs. Otherwise the RAM at that frame end would hold the
 C's finished results where the console is still inside the routine, as with the level's blanked
 whole-screen draws (found on the level branch).
+
+**Calls that VBlank would interrupt** go to the original too (`dc_crosses_vblank`, which task code
+already used): the original takes the NMI at the end of one of its own instructions, but the cycles
+spent for the C poll interrupts at every read, so the NMI came a cycle or more early, and the NMI
+handler's length depends on the cycle it starts at (the sprite DMA's alignment). The work after the
+NMI then ran a cycle off the console's, once per lag frame with many enemies, until an NMI landed in
+another routine: the step 11 mod scripts on `amazon_intro` showed it (all five at `walk_speed`
+0x200: from frame 1477, where the edge came during `Obj_Fall`'s first instruction, 3 cycles, and
+replace took the NMI after 2).
 
 The measuring call runs with hook sites on, so it takes the C's path through a cancelled event:
 an event site raises nothing there, and at `$EB5E` the original returns as its RTS would whenever
