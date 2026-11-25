@@ -57,7 +57,7 @@ runs do not scan the player's mods folder, so pass `--mods-dir` explicitly.
 | `--mods on\|off` | Load mods or not (the window's default is `[Mods] Enabled`; headless runs default to off) |
 | `--mods-dir DIR` | Another folder to scan (repeatable, up to 4); a path that is not a folder is an error |
 | `--mods-order ID:on\|off,...` | The order and switches, as `[Mods] Order` |
-| `--mods-dump DIR` | Writes every tile drawn, once, as a replacement template, even with mods off or without `--present-out` in a headless run. Creates missing parent folders and reports a write failure before stopping the dump |
+| `--mods-dump DIR` | Writes every tile drawn, once, as a replacement template, and every object frame drawn as `DIR/sprites/<kind>/<frame>_<x>_<y>.png`, even with mods off or without `--present-out` in a headless run. Creates missing parent folders and reports a write failure before stopping the dump |
 
 ## Making a mod
 
@@ -68,6 +68,7 @@ work on it):
 my-mod.dtmod
   mod.toml
   tiles/        8x8 PNG replacements, named by tile key
+  sprites/      whole object frames, any size, by kind and frame
   palettes/     global.pal, or one per land
   music/        OGG Vorbis or WAV, named by music request id
   sfx/          OGG Vorbis or WAV, named by effect request id
@@ -117,6 +118,46 @@ Run the game with `--mods-dump DIR` and play to the place you want to change: `D
 fills with `<hash>_<palette>.png`, one per tile and palette drawn, each the tile as the console
 shows it. Edit a copy and put it in `tiles/`. Replacements are 8x8 for now. Pixels with alpha
 below 128 show the original pixel, so a replacement can change part of a tile.
+
+### Sprites
+
+A sprite replacement is one picture for a whole object frame, drawn in place of the 8x8 sprites the
+game builds that frame from. It can be larger than the original and use any colours: pixel art at
+the console's scale, not a high-resolution layer.
+
+`sprites/<kind>/<frame>_<x>_<y>.png`
+
+- `<kind>` is the object's kind (`$0710`, the `kind` the scripts see; Scrooge's slot is `00`) and
+  `<frame>` the metasprite id the animation shows (the frame the sprite builder at bank 5 `$8000`
+  draws), each in 2 hex digits.
+- `<x>_<y>` is the anchor in decimal: the pixel of the picture that sits on the object's position,
+  the point the game places the frame's sprites from (its X, and one line below its Y). The
+  picture may extend past the original on any side.
+- `..._flip.png` is the art for the frame flipped (the object facing the other way). Without it
+  the plain picture is mirrored about the axis the game mirrors that frame about.
+
+Run with `--mods-dump DIR` and play to the place you want to change: `DIR/sprites/` fills with
+every object frame drawn, once, unflipped, in the colours it was first drawn in, already named with
+its anchor. Edit a copy, keeping the anchor in its name pointing at the same spot, and put it in
+`sprites/`. Pixels with alpha below 128 are transparent. The kinds and frames seen on the five land
+intros never changed shape from one land to another, but a frame is not checked against the
+graphics loaded, so a kind that uses other graphics elsewhere shows the same replacement there.
+
+Replacements change only the presented picture. The object's sprites are left out and the picture
+is drawn where they were, in their place in the drawing order:
+
+- behind the background when the object is (`$0600` bit 2), and not at all while it blinks out
+  after a hit or the game hides it;
+- cut at the edges of the picture pixel by pixel (the console drops a whole sprite that would wrap),
+  in the left 8 columns when the game hides sprites there, and above the HUD band as the object's
+  own sprites are;
+- with No sprite flicker off, in the console's order and with its 8 sprites a line: the picture
+  counts as the sprites it replaces, and the columns only its dropped sprites covered are left out;
+- dimmed with the game's fades, a quarter for each step the fade takes off the sprite colours.
+
+A sprite replacement wins over tile replacements and palettes for the pixels it draws. Earlier
+mods in the order win per kind, frame and flip, as for tiles. A file named in another way, or a
+PNG larger than 256x240, refuses the mod with the reason.
 
 ### Palettes
 
@@ -609,7 +650,7 @@ save a fix. Only the scripts of mods loaded at start reload: a mod that had no
 |---|---|
 | `core/` | Knows no game. `fm_mods.h` is its interface: the package format and catalogue (`fm_catalog.c`: folders, `mod.toml`, order, switches, restart check), the archive and folder reader (`fm_archive.c`), PNG, OGG, WAV and deflate on stb (`fm_codec.c`) and the Lua sandbox with the generic script API (`fm_script.c`: `dt.on`, cancel, `dt.ai`, log, limits, hot reload; `fm_script_state.c`: `dt.state`, `dt.set`, `dt.tune` and the queries over the fields, tunables and records the game describes, with the records' handle methods; `fm_script_show.c`: toast and `dt.draw`; `fm_script_store.c`: store; `fm_script_internal.h`: what they share) |
 | `nes/` | NES games: tile keys, the replacement tile table, `.pal` palettes and tile templates (`fm_nes.c`) |
-| `ducktales/` | This game: what the assets mean and how they are loaded (`dt_mods.c`), painted (`dt_mods_picture.c`, with the toast and `dt.draw` overlay) and mixed (`dt_mods_audio.c`); the event list, the `dt.state` and writable fields, the tunables, the queries and their handles, the `dt.ai` kinds (`o:despawn()` runs the decompiled `Obj_Despawn` and `dt.spawn` `Obj_FindFreeSlot` and `Obj_SpawnTemplate`, through `Decomp_Outside`), `dt.level.set` (`Level_EditCell`) and the store folder (`dt_mods_script.c`) |
+| `ducktales/` | This game: what the assets mean and how they are loaded (`dt_mods.c`), painted (`dt_mods_picture.c`, with the toast and `dt.draw` overlay), the sprite replacements and their dump (`dt_mods_sprites.c`) and mixed (`dt_mods_audio.c`); the event list, the `dt.state` and writable fields, the tunables, the queries and their handles, the `dt.ai` kinds (`o:despawn()` runs the decompiled `Obj_Despawn` and `dt.spawn` `Obj_FindFreeSlot` and `Obj_SpawnTemplate`, through `Decomp_Outside`), `dt.level.set` (`Level_EditCell`) and the store folder (`dt_mods_script.c`) |
 | `app_mods.h` | The interface the hosts and the menu call |
 
 Both hosts and the native player call the same entry points:
@@ -618,7 +659,12 @@ Both hosts and the native player call the same entry points:
   renderer runs again on the same video memory with a per-pixel source (tile, row, column,
   palette), and every pixel whose colour is still the console's is repainted from the mod's tile or
   palette. The HUD split repair (`ui/app_present.c`) uses the mod's palette for the pixels it
-  redraws, but not its tiles.
+  redraws, but not its tiles. Sprite replacements are drawn by the compositor itself: it replays
+  the sprite builder on the RAM the frame's OAM was built from, so it knows each slot's kind,
+  metasprite id, flip, position, priority and blink, and puts the picture in the list instead of
+  the slot's sprites; their pixels are marked so the tile and palette painting leaves them alone.
+  With No sprite flicker off it composes the OAM in its own order only while a replaced object is
+  on screen, and presents the machine's picture otherwise.
 - **Sound.** At the end of each frame the sound driver's request ids in RAM start and stop the
   replacements; the mixer mutes the channels the driver gave the request and adds the decoded file.
 - **Scripts.** Each mod gets its own `lua_State` with a capped allocator and a count hook. A game

@@ -23,8 +23,12 @@
  *   audio       app_mods_audio_*: a music or effect request id with a
  *               replacement plays the file and mutes the driver's channels
  *               for it (audio-only: the APU still runs them)
+ *   sprites     a whole object frame (sprites/<kind>/<frame>_<x>_<y>.png)
+ *               drawn by the compositor in place of that frame's 8x8
+ *               sprites (host/ducktales_sprites.c, dt_mods_sprites.c)
  *   key dumps   app_mods_dump_dir: every tile drawn is written once as
- *               <key>.png, the template a tile replacement starts from
+ *               <key>.png, the template a tile replacement starts from, and
+ *               every object frame as sprites/<kind>/<frame>_<x>_<y>.png
  *
  * Folders: --mods-dir (both hosts) or, in the window build, the data folder's
  * mods (%APPDATA%\DuckTales Recompiled\mods, or DUCKTALES_DATA_DIR\mods).
@@ -108,18 +112,40 @@ void app_mods_scripts_frame(void);
 
 /* ---- video ---- */
 
-/* A tile or palette replacement is loaded, a key dump is on, or a script
- * runs (its notices are drawn over the picture). */
+/* A tile, palette or sprite replacement is loaded, a key dump is on, or a
+ * script runs (its notices are drawn over the picture). */
 bool app_mods_video_active(void);
 /* Paints the replacements over argb, the 256x240 picture drawn from video
  * with options (NULL: the console's rules). A pixel changes only where argb
  * still shows the colour that rule gives it, so a compositor's own pixels
- * stay as they are. ram (2 KiB, may be NULL) gives the land for per-land
- * palettes. */
-void app_mods_video_apply(const NvVideo *video, const NvRenderOptions *options, const uint8_t *ram, uint32_t *argb);
+ * stay as they are, and never where keep (256x240, may be NULL) is set: the
+ * pixels a sprite replacement drew. ram (2 KiB, may be NULL) gives the land
+ * for per-land palettes. */
+void app_mods_video_apply(const NvVideo *video, const NvRenderOptions *options, const uint8_t *ram, const uint8_t *keep,
+                          uint32_t *argb);
 /* Developer: from now on write every tile drawn, once, into dir as
- * <key>.png (from the player's own ROM; never distribute them). */
+ * <key>.png, and every object frame as sprites/<kind>/<frame>_<x>_<y>.png
+ * (from the player's own ROM; never distribute them). */
 bool app_mods_dump_dir(const char *dir);
+
+/* A sprite replacement: w x h straight-alpha 0xAARRGGBB, drawn where alpha
+ * is 0x80 or more, with pixel (ax, ay) at the object's position (the point
+ * the game offsets the frame's sprites from, one line below its Y). */
+typedef struct {
+    int w, h, ax, ay;
+    const uint32_t *argb;
+} AppModsSprite;
+
+/* The art for frame (metasprite id) of an object of kind facing flip: the
+ * _flip file when there is one, else the plain one with *mirror set when
+ * it is to be mirrored. NULL when there is none. */
+const AppModsSprite *app_mods_sprite(uint8_t kind, uint8_t frame, bool flip, bool *mirror);
+/* A sprite replacement is loaded or the dump is on. */
+bool app_mods_sprites_active(void);
+/* The dump is on and has not written kind's frame yet. */
+bool app_mods_sprite_wanted(uint8_t kind, uint8_t frame);
+/* Writes kind's frame, drawn unflipped as w x h with the anchor (ax, ay), once. */
+void app_mods_sprite_dump(uint8_t kind, uint8_t frame, const uint32_t *argb, int w, int h, int ax, int ay);
 /* Collect the finished frame if a tile dump is active, even off screen. */
 void app_mods_dump_frame(void);
 /* Draws the scripts' drawings (dt.draw) and the notice showing now (dt.toast)

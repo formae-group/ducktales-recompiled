@@ -56,7 +56,11 @@ templates come from the player's own ROM through --mods-dump and are deleted wit
      the invulnerability in a knock-back (refused where it would never end), and the level script in
      a run of its own, log the same lines with --decomp off, check and replace,
      find no mismatch, and with the developer build (--dev-build) replace keeps the RAM of off
-     outside the stack on every frame.
+     outside the stack on every frame;
+ 12. sprite replacements (tests/mods/sprites.py, headless and the native player): the dump of
+     whole object frames, the dumped frames as art giving the same picture with No sprite flicker on
+     and off and the same machine hashes, a larger box replacing Scrooge, a _flip file, the art
+     winning over tiles and palettes, and a badly named file refused.
 
     py -3 -I tests/mods_test.py --build build/headless [--dev-build build/headless-dev]
 """
@@ -72,6 +76,7 @@ from mods.common import ROOT, failures  # noqa: E402
 from mods.events import event_checks  # noqa: E402
 from mods.gameplay import gameplay_checks  # noqa: E402
 from mods.scripts import script_checks  # noqa: E402
+from mods.sprites import sprite_checks  # noqa: E402
 
 
 def main():
@@ -97,6 +102,7 @@ def main():
     event_checks(None if args.native_only else exe, native)
     dev = ROOT / args.dev_build / args.config / 'ducktales.exe'
     gameplay_checks(None if args.native_only else exe, native, dev if dev.exists() else None)
+    sprite_checks(None if args.native_only else exe, native, route)
     print(f'\n{"FAILED: " + ", ".join(failures) if failures else "all mods checks passed"}')
     return 1 if failures else 0
 

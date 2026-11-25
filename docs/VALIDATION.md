@@ -653,6 +653,37 @@ Reused: verify_routes ran on 037339c. The two commits after it are the build wit
 the ROM build's Original mode unchanged, and the decompiled objects' tables read from the ROM, which the
 C runs only with Decompiled code on, so the decomp_test above covers them.
 
+## Sprite replacements (2026-11-25)
+
+On `mods/sprites` (from main 9dc68b0), with `--jobs 2`:
+
+- Headless (with the oracle and the native runtime), headless with developer diagnostics and
+  windows builds without warnings of ours (the oracle target's four C4018 in
+  `external/nesrecomp` are as on main); `tools/format.py --check` clean.
+- `--decomp check`: 391 `decomp:` lines in 30 frames.
+- `tests/quick_verify.py`: native 13/13 routes, 88,826 frames, 21.1 s; `--runtime cycle` 13/13,
+  88,826 frames, 432.7 s.
+- `tests/sprites_test.py --build build/headless --dev-build build/headless-dev`: all checks pass.
+- `tests/mods_test.py`: all 142 checks pass, among them step 12 (`tests/mods/sprites.py`) on the
+  headless build and the native player: the dump of whole object frames; the dumped frames as the
+  art give the same picture as no mods on amazon_intro frames 900-1100 and 1500, with No sprite
+  flicker on and off; per-frame machine hashes (frames 0-1501) equal the run without mods with
+  that mod and with a magenta-box one (headless); Scrooge as a box 4 pixels larger on each side is
+  whole and every changed pixel is the box's; a `_flip` file shows in exactly the flipped frames,
+  8 of the compared ones (so the identity check covers the mirroring); with every tile template
+  magenta and an inverted palette the art keeps its colours (809 pixels of frame 1500); a badly
+  named file refuses the mod.
+- `tests/window_smoke.py --build build/windows`: all passed.
+
+Outside the tests: with the identity mod, 57 of the 61 presented frames of amazon_intro 0-1500
+(every 25) are identical to the run without mods; the other four are a fade (the art dims in
+quarters, the console in `$10` steps) and three frames where an object stands at the left edge
+(the art is cut pixel by pixel, the console drops a whole sprite that would wrap). Dumps of the
+five land intros give 91 kind and frame keys, none drawn with a different shape in another land.
+
+Not verified: kinds and frames past the land intros against other graphics, sprite replacements in
+the window by eye.
+
 ## Not verified
 
 - The full `tests/verify_routes.py`, `tests/enhancements_test.py` and `tests/decomp_test.py` on
