@@ -36,7 +36,10 @@ static int hex2(const char *s)
     int v = 0;
     for (int i = 0; i < 2; i++) {
         char c = s[i];
-        int d = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
+        int d = c >= '0' && c <= '9'   ? c - '0'
+                : c >= 'a' && c <= 'f' ? c - 'a' + 10
+                : c >= 'A' && c <= 'F' ? c - 'A' + 10
+                                       : -1;
         if (d < 0) {
             return -1;
         }

@@ -89,7 +89,9 @@ def one_host(host, exe, route, options, hashes):
         dump = tmp / 'templates'
         run('dump', extra=('--mods', 'on', '--mods-dump', dump))
         frames = sorted(dump.glob('sprites/*/*.png'))
-        named = all(re.fullmatch(r'[0-9a-f]{2}/[0-9a-f]{2}_-?\d+_-?\d+\.png', f'{f.parent.name}/{f.name}') for f in frames)
+        named = all(
+            re.fullmatch(r'[0-9a-f]{2}/[0-9a-f]{2}_-?\d+_-?\d+\.png', f'{f.parent.name}/{f.name}') for f in frames
+        )
         scrooge = list((dump / 'sprites' / '00').glob('*.png'))
         check(
             len(frames) > 10 and named and len(scrooge) > 5,
