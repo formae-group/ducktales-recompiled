@@ -8,6 +8,9 @@ option(DUCKTALES_HEADLESS "Build the headless verification host only (no SDL win
 option(DUCKTALES_ORACLE "Also build the TriCNES reference machine used by differential tests" OFF)
 option(DUCKTALES_DEV_DIAGNOSTICS "Developer diagnostics (typed state log, TCP commands); never in distribution builds" OFF)
 option(DUCKTALES_NATIVE "Also build ducktales_native, the native-runtime prototype (docs/NATIVE-RUNTIME.md)" OFF)
+# The build with no ROM in it (docs/ROMLESS.md): the native player and its
+# tools without the generated code; the player imports the ROM at first run.
+option(DUCKTALES_ROMLESS "Build the native player without the ROM: nothing generated, none of the ROM in the program" OFF)
 # Which window executable is ducktales.exe, the game as players run it
 # (docs/NATIVE-RUNTIME.md "The player build"). Window builds make both: the
 # other one is ducktales_cycle.exe (native player, the default) or
@@ -22,33 +25,43 @@ set(NESRECOMP_ROOT "${CMAKE_SOURCE_DIR}/external/nesrecomp")
 if(NOT EXISTS "${NESRECOMP_ROOT}/runner/cyc/project.cmake")
     message(FATAL_ERROR "external/nesrecomp is missing; run: git submodule update --init external/nesrecomp")
 endif()
-set(_ducktales_rom "${DUCKTALES_ROM}")
-if(NOT _ducktales_rom)
-    file(GLOB _ducktales_rom_candidates LIST_DIRECTORIES false "${CMAKE_SOURCE_DIR}/roms/*")
-    foreach(_candidate IN LISTS _ducktales_rom_candidates)
-        file(SIZE "${_candidate}" _candidate_size)
-        if(_candidate_size EQUAL 131088)
-            file(SHA256 "${_candidate}" _candidate_sha256)
-            if(_candidate_sha256 STREQUAL DUCKTALES_ROM_SHA256_EXPECTED)
-                set(_ducktales_rom "${_candidate}")
-                break()
-            endif()
-        endif()
-    endforeach()
-    if(NOT _ducktales_rom)
-        message(FATAL_ERROR "No DuckTales (USA) ROM in roms/. Copy yours there under any name (baserom.nes, for "
-            "example) or pass -DDUCKTALES_ROM=<path>; it is found by its SHA-256, ${DUCKTALES_ROM_SHA256_EXPECTED}.")
+if(DUCKTALES_ROMLESS)
+    # Nothing is generated, so no ROM is read here; the player's import checks
+    # its ROM against the supported revision's SHA-256 (docs/ROMLESS.md).
+    if(NOT DUCKTALES_PLAYER STREQUAL "native" OR DUCKTALES_ORACLE)
+        message(FATAL_ERROR "DUCKTALES_ROMLESS builds the native player only: DUCKTALES_PLAYER=native, no DUCKTALES_ORACLE")
     endif()
+    set(_ducktales_rom_sha256 "${DUCKTALES_ROM_SHA256_EXPECTED}")
+    message(STATUS "DuckTales ROM: none (DUCKTALES_ROMLESS)")
+else()
+    set(_ducktales_rom "${DUCKTALES_ROM}")
+    if(NOT _ducktales_rom)
+        file(GLOB _ducktales_rom_candidates LIST_DIRECTORIES false "${CMAKE_SOURCE_DIR}/roms/*")
+        foreach(_candidate IN LISTS _ducktales_rom_candidates)
+            file(SIZE "${_candidate}" _candidate_size)
+            if(_candidate_size EQUAL 131088)
+                file(SHA256 "${_candidate}" _candidate_sha256)
+                if(_candidate_sha256 STREQUAL DUCKTALES_ROM_SHA256_EXPECTED)
+                    set(_ducktales_rom "${_candidate}")
+                    break()
+                endif()
+            endif()
+        endforeach()
+        if(NOT _ducktales_rom)
+            message(FATAL_ERROR "No DuckTales (USA) ROM in roms/. Copy yours there under any name (baserom.nes, for "
+                "example) or pass -DDUCKTALES_ROM=<path>; it is found by its SHA-256, ${DUCKTALES_ROM_SHA256_EXPECTED}.")
+        endif()
+    endif()
+    if(NOT EXISTS "${_ducktales_rom}")
+        message(FATAL_ERROR "ROM not found: ${_ducktales_rom}")
+    endif()
+    file(SHA256 "${_ducktales_rom}" _ducktales_rom_sha256)
+    if(NOT _ducktales_rom_sha256 STREQUAL DUCKTALES_ROM_SHA256_EXPECTED)
+        message(FATAL_ERROR "${_ducktales_rom} is not DuckTales (USA): its SHA-256 is ${_ducktales_rom_sha256}, "
+            "the supported revision's is ${DUCKTALES_ROM_SHA256_EXPECTED} (docs/ROM.md).")
+    endif()
+    message(STATUS "DuckTales ROM: ${_ducktales_rom}")
 endif()
-if(NOT EXISTS "${_ducktales_rom}")
-    message(FATAL_ERROR "ROM not found: ${_ducktales_rom}")
-endif()
-file(SHA256 "${_ducktales_rom}" _ducktales_rom_sha256)
-if(NOT _ducktales_rom_sha256 STREQUAL DUCKTALES_ROM_SHA256_EXPECTED)
-    message(FATAL_ERROR "${_ducktales_rom} is not DuckTales (USA): its SHA-256 is ${_ducktales_rom_sha256}, "
-        "the supported revision's is ${DUCKTALES_ROM_SHA256_EXPECTED} (docs/ROM.md).")
-endif()
-message(STATUS "DuckTales ROM: ${_ducktales_rom}")
 
 # Players need no Visual C++ redistributable: the window build links the static
 # MSVC runtime (/MT). Verification builds keep CMake's default.
@@ -56,7 +69,18 @@ if(MSVC AND NOT DUCKTALES_HEADLESS)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
 
-include("${NESRECOMP_ROOT}/runner/cyc/project.cmake")
+if(DUCKTALES_ROMLESS)
+    find_package(Python3 3.11 REQUIRED COMPONENTS Interpreter)
+    if(NOT DUCKTALES_HEADLESS)
+        # The SDL2 development kit NESRecomp carries, found as nesrecomp_cyc_enable_sdl finds it.
+        if(WIN32)
+            list(APPEND CMAKE_PREFIX_PATH "${NESRECOMP_ROOT}/runner/external/SDL2/cmake")
+        endif()
+        find_package(SDL2 CONFIG REQUIRED)
+    endif()
+else()
+    include("${NESRECOMP_ROOT}/runner/cyc/project.cmake")
+endif()
 
 set(_ducktales_options PLAYERS 1)
 if(DUCKTALES_HEADLESS)
@@ -216,21 +240,19 @@ if(DUCKTALES_HEADLESS)
     list(APPEND _ducktales_extras "${CMAKE_SOURCE_DIR}/src/host/ducktales_ramhash.c"
         "${CMAKE_SOURCE_DIR}/src/ui/app_rom.c")
 endif()
-nesrecomp_add_cycle_game(ducktales
-    ROM "${_ducktales_rom}"
-    GAME_CONFIG "${CMAKE_SOURCE_DIR}/config/game.toml"
-    ${_ducktales_options}
-    HOST_EXTRAS ${_ducktales_extras})
-target_include_directories(ducktales PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/include")
-target_link_libraries(ducktales PRIVATE ducktales_lua)
+if(NOT DUCKTALES_ROMLESS)
+    nesrecomp_add_cycle_game(ducktales
+        ROM "${_ducktales_rom}"
+        GAME_CONFIG "${CMAKE_SOURCE_DIR}/config/game.toml"
+        ${_ducktales_options}
+        HOST_EXTRAS ${_ducktales_extras})
+    target_include_directories(ducktales PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/include")
+    target_link_libraries(ducktales PRIVATE ducktales_lua)
+endif()
 if(NOT DUCKTALES_HEADLESS)
-    # The ROM identity the first-run import checks (docs/ROM.md: SHA-256 of
-    # the whole file), taken from the ROM this build was generated from.
-    target_compile_features(ducktales PRIVATE cxx_std_17)
-    target_compile_definitions(ducktales PRIVATE DUCKTALES_WINDOW=1
-        "DUCKTALES_ROM_SHA256=\"${_ducktales_rom_sha256}\"")
     # One Dear ImGui for the program and formae-ui: its core is the imgui
-    # target formae-ui links, the SDL backends are compiled into ducktales.
+    # target formae-ui links, the SDL backends are compiled into each window
+    # executable.
     add_library(imgui STATIC
         "${IMGUI_ROOT}/imgui.cpp"
         "${IMGUI_ROOT}/imgui_draw.cpp"
@@ -239,7 +261,6 @@ if(NOT DUCKTALES_HEADLESS)
     target_include_directories(imgui PUBLIC "${IMGUI_ROOT}" "${IMGUI_ROOT}/backends")
     target_compile_definitions(imgui PUBLIC IMGUI_DISABLE_OBSOLETE_FUNCTIONS)
     add_subdirectory("${FORMAE_UI_ROOT}" formae-ui)
-    target_link_libraries(ducktales PRIVATE imgui formae::ui)
     # The About page (src/ui/app_ui.cpp): the version (git describe) and the
     # build date when CMake configures, and the Formae logo, embedded by
     # formae_ui_embed_file so the program needs no loose file.
@@ -254,6 +275,19 @@ if(NOT DUCKTALES_HEADLESS)
 const char app_about_version[] = "@_ducktales_version@";
 const char app_about_build_date[] = "@_ducktales_build_date@";
 ]] @ONLY)
+    if(WIN32)
+        # The executable's icon; SDL gives every window the module's first icon.
+        set(DUCKTALES_ICON "${CMAKE_SOURCE_DIR}/assets/icon/ducktales.ico")
+        configure_file("${CMAKE_SOURCE_DIR}/assets/icon/ducktales.rc.in" "${CMAKE_BINARY_DIR}/ducktales.rc" @ONLY)
+    endif()
+endif()
+if(NOT DUCKTALES_ROMLESS AND NOT DUCKTALES_HEADLESS)
+    # The ROM identity the first-run import checks (docs/ROM.md: SHA-256 of
+    # the whole file), taken from the ROM this build was generated from.
+    target_compile_features(ducktales PRIVATE cxx_std_17)
+    target_compile_definitions(ducktales PRIVATE DUCKTALES_WINDOW=1
+        "DUCKTALES_ROM_SHA256=\"${_ducktales_rom_sha256}\"")
+    target_link_libraries(ducktales PRIVATE imgui formae::ui)
     target_sources(ducktales PRIVATE "${CMAKE_BINARY_DIR}/app_about.c")
     formae_ui_embed_file(ducktales app_about_logo_png "${CMAKE_SOURCE_DIR}/assets/brand/formae.png")
     # The program entry (src/host/ducktales_main.c) runs before NESRecomp's
@@ -263,9 +297,6 @@ const char app_about_build_date[] = "@_ducktales_build_date@";
         "$<$<STREQUAL:$<TARGET_PROPERTY:NAME>,ducktales>:main=ducktales_host_main>")
     if(WIN32)
         target_link_libraries(ducktales PRIVATE comdlg32 shell32)
-        # The executable's icon; SDL gives every window the module's first icon.
-        set(DUCKTALES_ICON "${CMAKE_SOURCE_DIR}/assets/icon/ducktales.ico")
-        configure_file("${CMAKE_SOURCE_DIR}/assets/icon/ducktales.rc.in" "${CMAKE_BINARY_DIR}/ducktales.rc" @ONLY)
         target_sources(ducktales PRIVATE "${CMAKE_BINARY_DIR}/ducktales.rc")
         # A Windows program, not a console one: no terminal opens beside the
         # window. main() stays the entry; src/host/ducktales_main.c attaches
@@ -276,11 +307,13 @@ const char app_about_build_date[] = "@_ducktales_build_date@";
         endif()
     endif()
 endif()
-if(DUCKTALES_DEV_DIAGNOSTICS)
-    target_compile_definitions(ducktales PRIVATE DUCKTALES_DEV_DIAGNOSTICS=1)
-endif()
-if(DUCKTALES_HEADLESS)
-    target_compile_definitions(ducktales PRIVATE DUCKTALES_NATIVE_CHECK=1)
+if(NOT DUCKTALES_ROMLESS)
+    if(DUCKTALES_DEV_DIAGNOSTICS)
+        target_compile_definitions(ducktales PRIVATE DUCKTALES_DEV_DIAGNOSTICS=1)
+    endif()
+    if(DUCKTALES_HEADLESS)
+        target_compile_definitions(ducktales PRIVATE DUCKTALES_NATIVE_CHECK=1)
+    endif()
 endif()
 
 # Unit test of the typed state decoder (pure C, no machine).
@@ -308,8 +341,20 @@ endif()
 # ducktales target, linked against src/native/ instead of NESRecomp's cycle
 # host, PPU and APU. Only the CPU's instruction sequences (cpu6502.c), its
 # instruction templates for uncompiled code (cpu6502_interp.c) and the hook
-# registry (mod_function_hooks.c) come from NESRecomp's machine side.
+# registry (mod_function_hooks.c) come from NESRecomp's machine side. The
+# build with no ROM (DUCKTALES_ROMLESS) links no generated C:
+# src/native/native_romless.c stands in for it, every instruction runs in the
+# instruction templates, and the hook sites are written from config/game.toml.
 set(_nes_cyc "${NESRECOMP_ROOT}/runner/cyc")
+if(DUCKTALES_ROMLESS)
+    execute_process(COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/hook_sites.py"
+        "${CMAKE_SOURCE_DIR}/config/game.toml" "${CMAKE_BINARY_DIR}/hook_sites.c" RESULT_VARIABLE _hook_sites_result)
+    if(NOT _hook_sites_result EQUAL 0)
+        message(FATAL_ERROR "tools/hook_sites.py failed (${_hook_sites_result})")
+    endif()
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+        "${CMAKE_SOURCE_DIR}/config/game.toml" "${CMAKE_SOURCE_DIR}/tools/hook_sites.py")
+endif()
 set(_native_runtime
     "${CMAKE_SOURCE_DIR}/src/native/native_bus.c"
     "${CMAKE_SOURCE_DIR}/src/native/native_video.c"
@@ -322,8 +367,13 @@ set(_native_runtime
     "${_nes_cyc}/cpu6502_interp.c"
     "${NESRECOMP_ROOT}/runner/src/mod_function_hooks.c")
 function(ducktales_native_target target)
-    include("${CMAKE_CURRENT_BINARY_DIR}/cycle-ducktales/sources.cmake")
-    target_sources(${target} PRIVATE ${_native_runtime} ${CYC_PROJECT_SOURCES})
+    if(DUCKTALES_ROMLESS)
+        target_sources(${target} PRIVATE ${_native_runtime} "${CMAKE_SOURCE_DIR}/src/native/native_romless.c"
+            "${CMAKE_BINARY_DIR}/hook_sites.c")
+    else()
+        include("${CMAKE_CURRENT_BINARY_DIR}/cycle-ducktales/sources.cmake")
+        target_sources(${target} PRIVATE ${_native_runtime} ${CYC_PROJECT_SOURCES})
+    endif()
     target_include_directories(${target} PRIVATE "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}/include" "${_nes_cyc}"
         "${NESRECOMP_ROOT}/runner/include" "${NESRECOMP_ROOT}")
     target_compile_definitions(${target} PRIVATE NESRECOMP_NATIVE_INTERVALS=0
@@ -400,7 +450,9 @@ if(NOT DUCKTALES_HEADLESS)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:SDL2::SDL2> $<TARGET_FILE_DIR:ducktales_player>)
     endif()
     if(DUCKTALES_PLAYER STREQUAL "native")
-        set_target_properties(ducktales PROPERTIES OUTPUT_NAME ducktales_cycle)
+        if(NOT DUCKTALES_ROMLESS)
+            set_target_properties(ducktales PROPERTIES OUTPUT_NAME ducktales_cycle)
+        endif()
         set_target_properties(ducktales_player PROPERTIES OUTPUT_NAME ducktales)
         set(_ducktales_player_target ducktales_player)
     else()

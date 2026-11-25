@@ -81,6 +81,7 @@ Run the checks that cover what you touched before submitting:
 | Menu, settings, ROM import, window | `py -3 -I tests/window_smoke.py --build build/windows` |
 | ROM identity and import | `build\headless\Release\app_rom_test.exe` |
 | Native player sound output | `py -3 -I tests/audio_output_test.py --build build/windows` |
+| Native runtime, build with no ROM, a release | `py -3 -I tests/romless_test.py --build build/headless --romless build/romless-headless` |
 
 Checks come in two tiers ([docs/VALIDATION.md](docs/VALIDATION.md#fast-verification)):
 
@@ -141,34 +142,39 @@ not verify in its *Not verified* section.
 
 ## Releasing
 
-A release is a ZIP for players built from a clean checkout of a tagged commit on `main`. Its version
-is `git describe --tags --always --dirty` when CMake configures (the same string the About page
-shows), so a package built from an untagged or modified tree says so in its name.
+A release is a ZIP for players, built by GitHub Actions from a tag `v*` on `main`
+(`.github/workflows/release.yml`) with no ROM: the build with no ROM
+([docs/ROMLESS.md](docs/ROMLESS.md)), the native player and the decompiled code, each player
+importing their own ROM at first run. Its version is `git describe --tags --always --dirty` when
+CMake configures (the same string the About page shows), so the tag.
 
-1. Run the checks in [Verification](#verification) on the release commit, then tag it:
-   `git tag -a v1.0.0 -m "DuckTales Recompiled 1.0.0"`.
-2. Configure the window build again so it reads the new version, then build and test the package:
+1. Run the checks in [Verification](#verification) on the release commit, with the build with no ROM
+   against the ROM build:
 
    ```powershell
-   cmake -S . -B build/windows -G "Visual Studio 17 2022" -A x64
-   cmake --build build/windows --config Release --parallel
-   py -3 -I tests/window_smoke.py --build build/windows
-   py -3 -I tests/package_test.py --build build/windows
+   cmake -S . -B build/romless-headless -G "Visual Studio 17 2022" -A x64 -DDUCKTALES_ROMLESS=ON -DDUCKTALES_HEADLESS=ON -DDUCKTALES_NATIVE=ON
+   cmake --build build/romless-headless --config Release --parallel
+   py -3 -I tests/romless_test.py --build build/headless --romless build/romless-headless --golden build/golden
+   cmake -S . -B build/romless-windows -G "Visual Studio 17 2022" -A x64 -DDUCKTALES_ROMLESS=ON
+   cmake --build build/romless-windows --config Release --parallel
+   py -3 -I tests/window_smoke.py --build build/romless-windows
+   py -3 -I tests/package_test.py --build build/romless-windows
    ```
 
-3. Write the package: `cmake --build build/windows --config Release --target PACKAGE`. It is
-   `build\windows\DuckTalesRecompiled-v1.0.0-win64.zip`.
-4. Push the tag and publish the ZIP free of charge (NESRecomp's licence, see below) as the GitHub
-   release, with the version's `CHANGELOG.md` section as its notes:
-   `gh release create v1.0.0 build/windows/DuckTalesRecompiled-v1.0.0-win64.zip --verify-tag --notes-file <notes>`.
-   The release is built on a maintainer's machine because the build needs the ROM, which never goes
-   to GitHub, to CI or into the package.
+2. Tag it and push the tag: `git tag -a v1.0.0 -m "DuckTales Recompiled 1.0.0"`,
+   `git push origin v1.0.0`. The workflow checks the formatting, builds both builds with no ROM,
+   runs the unit tests, checks that the player refuses a file that is not the ROM, packs the ZIP,
+   scans the player, `SDL2.dll` and the ZIP for any run of the ROM (`tools/rom_scan.py --windows
+   tests/rom_windows.txt`) and publishes `DuckTalesRecompiled-v1.0.0-win64.zip` as the release,
+   free of charge (NESRecomp's licence, see below). Put the version's `CHANGELOG.md` section in the
+   release's notes.
 
-The package holds `ducktales.exe` (static MSVC runtime, so players need no Visual C++
-redistributable), `SDL2.dll`, the player `README.txt` (from `packaging/README.txt.in`),
+The package holds `ducktales.exe`, the native player (static MSVC runtime, so players need no Visual
+C++ redistributable), `SDL2.dll`, the player `README.txt` (from `packaging/README.txt.in`),
 `LICENSE.txt` and the third-party licences under `licenses/`; the install rules at the end of
-`CMakeLists.txt` list them and [docs/LICENSING.md](docs/LICENSING.md) says why each is there. It
-never contains the ROM, generated sources or test tools; `tests/package_test.py` checks the file list.
+`CMakeLists.txt` list them and [docs/LICENSING.md](docs/LICENSING.md) says why each is there. The cycle
+host, `ducktales_cycle.exe`, is a maintainer's build and is not in it. It never contains the ROM,
+generated sources or test tools; `tests/package_test.py` checks the file list and scans the archive.
 
 ## Licensing
 

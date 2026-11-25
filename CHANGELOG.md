@@ -7,6 +7,12 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
+- The build with no ROM (docs/ROMLESS.md): `-DDUCKTALES_ROMLESS=ON` builds the native player
+  without generating code from the ROM or reading one at configure time; every instruction the
+  decompiled code leaves to the original runs in NESRecomp's instruction templates over the ROM
+  the player imports, equal to the ROM build on every frame of the 13 routes. Releases are built
+  this way by GitHub Actions on every `v*` tag (`.github/workflows/release.yml`), scanned for any
+  run of the ROM (`tools/rom_scan.py`), and hold the native player only.
 - Script mods can change gameplay (docs/MODS.md "Writing the game"): the `update` event runs once
   per step of play, where `Player_Update` returns in the frame loop (one hook site, `$DB6F`, and the
   decompiled frame loop raises it itself), and `dt.set` in a game event's handler writes at once.

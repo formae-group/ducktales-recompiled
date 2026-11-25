@@ -5,9 +5,12 @@ DuckTalesRecompiled-<version>-win64.zip as a player gets it:
 
   1. the archive's name carries the version the executable reports on its
      About page (git describe when CMake configured);
-  2. it holds exactly the executable, SDL2.dll, README.txt, LICENSE.txt and the
-     third-party licences under licenses/, in one top-level folder, and no ROM,
-     generated source or test tool;
+  2. it holds exactly the executable (the native player: ducktales_cycle.exe,
+     the cycle host, stays a maintainer build), SDL2.dll, README.txt,
+     LICENSE.txt and the third-party licences under licenses/, in one top-level
+     folder, and no ROM, generated source or test tool; and neither the archive
+     nor any file in it holds a 32-byte run of the PRG (tools/rom_scan.py, the
+     leak scan of the build with no ROM, docs/ROMLESS.md);
   3. neither ducktales.exe nor SDL2.dll imports a Visual C++ runtime DLL (the
      executable links the static /MT runtime), so players need no
      redistributable;
@@ -20,6 +23,7 @@ DuckTalesRecompiled-<version>-win64.zip as a player gets it:
      the unpacked folder.
 
     py -3 -I tests/package_test.py --build build/windows
+    py -3 -I tests/package_test.py --build build/romless-windows   (-DDUCKTALES_ROMLESS=ON)
 
 Nothing appears on screen. The ROM is never written into the package.
 """
@@ -149,6 +153,13 @@ def main():
             ),
             'no ROM, generated source, symbols or test tool in the archive',
         )
+        check(not any('ducktales_cycle' in n for n in listed), 'the archive holds the native player only')
+        p = subprocess.run(
+            [sys.executable, '-I', str(ROOT / 'tools' / 'rom_scan.py'), '--rom', args.rom, str(zips[0])],
+            capture_output=True,
+            text=True,
+        )
+        check(p.returncode == 0, 'no run of the PRG in the archive or any file in it', p.stdout + p.stderr)
         app = tmp / 'unpacked' / top
         exe = app / 'ducktales.exe'
         exe_bytes = exe.read_bytes() if exe.exists() else b''

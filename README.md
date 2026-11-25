@@ -234,6 +234,7 @@ the CPU registers, and must be identical on every frame. The oracle's hashes are
 | `tests/decomp_test.py` | Decompiled routines against the original on every call, and the routes with them running in its place |
 | `tests/window_smoke.py` | Start-up, ROM import and refusal, settings persistence, every menu tab and category |
 | `tests/package_test.py` | The release ZIP's contents, and the game starting from it unpacked |
+| `tests/romless_test.py` | The build with no ROM against the ROM build on every route (docs/ROMLESS.md) |
 | `tests/audio_output_test.py` | The native player's presented sound: no sample at full scale, no click, no underrun |
 
 New routes can reach code no route has executed; append its interpreter misses to the seeds and

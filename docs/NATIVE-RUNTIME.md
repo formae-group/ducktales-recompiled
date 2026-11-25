@@ -58,7 +58,10 @@ helpers in `runner/cyc/cpu6502.h`:
 So the runtime has to provide a bus, not a PPU or an APU. `ducktales_native` links the generated
 C, `cpu6502.c` (interrupt and power-on sequences) and `cpu6502_interp.c` (instruction templates for
 code the recompiler did not reach), and nothing else from NESRecomp. It reports
-`fallback_instructions=0` on every route: the interpreter is linked but never runs.
+`fallback_instructions=0` on every route in Original mode (`--lag faithful`) and with the decompiled
+code; with No slowdown alone (`--lag none`) `amazon_intro` runs 346 instructions in the templates.
+The build with no ROM ([ROMLESS.md](ROMLESS.md)) links no generated C and runs every instruction
+there, with the same result on every frame.
 
 The cost of counting cycles stays in the generated code (each bus helper calls `hw_cycle_start` and
 `hw_cycle_finish`), which is acceptable: counting cycles is not emulating hardware. Nothing in the

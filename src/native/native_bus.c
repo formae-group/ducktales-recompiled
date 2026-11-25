@@ -73,6 +73,7 @@ void cyc_trace_instruction(uint16_t pc, uint8_t a, uint8_t x, uint8_t y, uint8_t
 static uint8_t ram[0x800];
 static uint8_t *prg;
 static size_t prg_size;
+static uint32_t prg_hash;
 static unsigned prg_banks, prg_bank;
 static uint8_t data_bus;
 static bool dma_pending;
@@ -121,6 +122,10 @@ bool native_load_ines(const uint8_t *image, size_t size, char *err, size_t err_s
     }
     memcpy(prg, image + offset, prg_size);
     prg_banks = (unsigned)banks;
+    prg_hash = 2166136261u;
+    for (size_t i = 0; i < prg_size; i++) {
+        prg_hash = (prg_hash ^ prg[i]) * 16777619u;
+    }
     return true;
 }
 
@@ -306,6 +311,11 @@ const uint8_t *native_prg(size_t *size)
 {
     *size = prg_size;
     return prg;
+}
+
+uint32_t native_prg_hash(void)
+{
+    return prg_hash;
 }
 
 static inline uint8_t prg_byte(uint16_t addr)

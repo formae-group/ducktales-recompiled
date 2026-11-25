@@ -204,7 +204,7 @@ static void save_state(void)
     FILE *f = blob ? fopen(path, "wb") : NULL;
     bool ok = false;
     if (f) {
-        uint32_t head[3] = { STATE_VERSION, cyc_native_prg_hash, (uint32_t)size };
+        uint32_t head[3] = { STATE_VERSION, native_prg_hash(), (uint32_t)size };
         native_state_save(blob, size);
         ok = fwrite(STATE_MAGIC, 1, 8, f) == 8 && fwrite(head, sizeof head, 1, f) == 1 &&
              fwrite(blob, 1, size, f) == size;
@@ -227,7 +227,7 @@ static void load_state(void)
         snprintf(why, sizeof why, "not a state file");
     } else {
         memcpy(head, data + 8, sizeof head);
-        if (head[0] != STATE_VERSION || head[1] != cyc_native_prg_hash || head[2] != size - 8 - sizeof head) {
+        if (head[0] != STATE_VERSION || head[1] != native_prg_hash() || head[2] != size - 8 - sizeof head) {
             snprintf(why, sizeof why, "saved by another version");
         } else if (!native_state_load(data + 8 + sizeof head, size - 8 - sizeof head)) {
             snprintf(why, sizeof why, "the state does not fit this build");

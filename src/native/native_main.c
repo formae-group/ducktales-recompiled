@@ -155,7 +155,7 @@ static bool write_state(const char *path, long next_frame)
     FILE *f = blob ? fopen(path, "wb") : NULL;
     bool ok = false;
     if (f) {
-        uint32_t head[4] = { STATE_VERSION, cyc_native_prg_hash, (uint32_t)size, (uint32_t)next_frame };
+        uint32_t head[4] = { STATE_VERSION, native_prg_hash(), (uint32_t)size, (uint32_t)next_frame };
         native_state_save(blob, size);
         ok = fwrite(STATE_MAGIC, 1, 8, f) == 8 && fwrite(head, sizeof head, 1, f) == 1 &&
              fwrite(blob, 1, size, f) == size;
@@ -173,7 +173,7 @@ static long read_state(const char *path)
     long frame = -1;
     if (data && size >= 8 + sizeof head && !memcmp(data, STATE_MAGIC, 8)) {
         memcpy(head, data + 8, sizeof head);
-        if (head[0] == STATE_VERSION && head[1] == cyc_native_prg_hash && head[2] == size - 8 - sizeof head &&
+        if (head[0] == STATE_VERSION && head[1] == native_prg_hash() && head[2] == size - 8 - sizeof head &&
             native_state_load(data + 8 + sizeof head, head[2])) {
             frame = (long)head[3];
         }

@@ -91,6 +91,9 @@ uint64_t native_unmodeled_reads(void);
 /* The PRG image, and what a CPU read of RAM or ROM returns / a store to CPU
  * RAM (any mirror) without bus cycles: for hook callbacks (cyc_mod_peek). */
 const uint8_t *native_prg(size_t *size);
+/* FNV-1a of the PRG image loaded, the value the recompiler writes as
+ * cyc_native_prg_hash: the identity save states carry. */
+uint32_t native_prg_hash(void);
 bool native_peek(uint16_t addr, uint8_t *value);
 bool native_poke(uint16_t addr, uint8_t value);
 /* The whole machine between frames: CPU, bus, video. Save returns the size

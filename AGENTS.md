@@ -66,6 +66,7 @@ Configure with `-G "Visual Studio 17 2022" -A x64` and build with
 | Menu, settings, window | `py -3 -I tests/window_smoke.py --build build/windows` |
 | ROM identity and import | `build/headless/Release/app_rom_test.exe` |
 | Release package, install rules | `py -3 -I tests/package_test.py --build build/windows` |
+| Build with no ROM (docs/ROMLESS.md) | `py -3 -I tests/romless_test.py --build build/headless --romless build/romless-headless` |
 | Native player sound output, synth, mods audio | `py -3 -I tools/test_slot.py -- py -3 -I tests/audio_output_test.py --build build/windows --jobs 2` |
 | Any source change | `py -3 tools/format.py --check` |
 

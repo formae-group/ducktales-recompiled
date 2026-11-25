@@ -1,9 +1,9 @@
 # .github/workflows/ci.yml - the checks that need no ROM: every C, C++ and
 # Python source laid out by the pinned clang-format and Black
 # (tools/format.py --check), and every Python test and tool byte-compiled.
-# The game is generated from the player's own ROM at configure time, so
-# building it and running the verification suites (tests/verify_routes.py
-# and the rest) happens on a maintainer's machine, never in CI.
+# The verification suites (tests/verify_routes.py and the rest) need the ROM,
+# so they run on a maintainer's machine, never in CI; release.yml builds the
+# game with no ROM on every v* tag (docs/ROMLESS.md).
 name: CI
 
 on:

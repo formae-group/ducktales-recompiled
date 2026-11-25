@@ -1,0 +1,90 @@
+# .github/workflows/release.yml - the release on every v* tag (CONTRIBUTING.md
+# "Releasing"). The game is built with no ROM (-DDUCKTALES_ROMLESS=ON,
+# docs/ROMLESS.md): the native player and the decompiled code, with nothing
+# generated from the ROM, which each player imports at first run. The checks
+# here need no ROM; the proof that this build plays as the ROM build does
+# (tests/romless_test.py) runs on a maintainer's machine before the tag.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: build, check and publish
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out with CRLF, the layout .clang-format and Windows expect
+        run: git config --global core.autocrlf true
+
+      # The whole history, so that git describe gives the tag as the version.
+      # Only the top-level submodules: NESRecomp's own (recomp-net, rbengine)
+      # are not built.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install the pinned formatters
+        run: python -m pip install clang-format==23.1.5 black==26.10.1
+
+      - name: Format check
+        run: python tools/format.py --check
+
+      - name: Byte-compile the tests and tools
+        run: python -m compileall -q tests tools
+
+      - name: Configure the headless build (ducktales_native and the unit tests)
+        run: cmake -S . -B build/romless-headless -A x64 -DDUCKTALES_ROMLESS=ON -DDUCKTALES_HEADLESS=ON -DDUCKTALES_NATIVE=ON
+
+      - name: Build the headless build
+        run: cmake --build build/romless-headless --config Release --parallel
+
+      - name: Unit tests
+        run: |
+          bin=build/romless-headless/Release
+          scratch="$RUNNER_TEMP/unit"
+          mkdir -p "$scratch/rom" "$scratch/mods"
+          "$bin/ducktales_state_test.exe"
+          "$bin/app_rom_test.exe" "$scratch/rom"
+          "$bin/mods_catalogue_test.exe" "$scratch/mods"
+
+      - name: Configure the player
+        run: cmake -S . -B build/windows -A x64 -DDUCKTALES_ROMLESS=ON
+
+      - name: Build the player
+        run: cmake --build build/windows --config Release --parallel
+
+      - name: The player refuses a file that is not the ROM and stores nothing
+        run: |
+          data="$RUNNER_TEMP/data"
+          status=0
+          DUCKTALES_DATA_DIR="$data" build/windows/Release/ducktales.exe --import-rom README.md || status=$?
+          if [ "$status" -eq 0 ] || [ -e "$data/DuckTales (USA).nes" ]; then
+            echo "--import-rom accepted README.md (exit $status)"
+            exit 1
+          fi
+
+      - name: Package
+        run: |
+          cd build/windows
+          cpack -G ZIP -C Release -B "$GITHUB_WORKSPACE/dist"
+
+      - name: No run of the ROM in the player, its DLL or the package
+        run: python -I tools/rom_scan.py --windows tests/rom_windows.txt build/windows/Release/ducktales.exe build/windows/Release/SDL2.dll dist/*.zip
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/*.zip --verify-tag --title "DuckTales Recompiled $GITHUB_REF_NAME" --generate-notes
