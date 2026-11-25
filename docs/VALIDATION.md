@@ -623,6 +623,24 @@ original routine reached.
 
 Not run on this tree: the full `tests/verify_routes.py` (last run on 21a7ffb with 12 routes).
 
+## The build with no ROM (2026-11-25)
+
+Branch build/romless on main 037339c ([ROMLESS.md](ROMLESS.md)), with the 38 inline object tables
+read from the ROM. With `--jobs 2` through `tools/test_slot.py`:
+
+| Check | Result |
+|---|---|
+| `tests/romless_test.py` (ROM-less against the ROM build) | 13/13, byte-equal in Original mode, No slowdown and Decompiled code; Original mode 0.496 ms per frame ROM-less, 0.428 ms with the recompiled code |
+| `tests/quick_verify.py` | native 13/13 on both builds, cycle 13/13 (88,826 frames each) |
+| `tests/decomp_test.py --modes check replace --changed` (the 15 routines whose tables moved; every route covers one) | check 13/13, replace 13/13 |
+| `tests/native_decomp_test.py` | 13/13 on both builds, logic steps equal |
+| `tests/window_smoke.py`, `tests/package_test.py` | all passed on the ROM build and on the build with no ROM (first-run import, the native player only in the archive, no run of the PRG in it) |
+| `tests/audio_output_test.py` | all passed |
+| `tools/rom_scan.py` | the ROM-less `ducktales.exe`, `SDL2.dll` and the package clean with `--rom` and with `tests/rom_windows.txt`; the ROM itself is found |
+| `.github/workflows/release.yml` | actionlint 1.7.12 clean (without shellcheck); not run on GitHub |
+
+Not run on this tree: the full `tests/verify_routes.py` and the full `tests/decomp_test.py`.
+
 ## Not verified
 
 - The full `tests/verify_routes.py`, `tests/enhancements_test.py` and `tests/decomp_test.py` on
