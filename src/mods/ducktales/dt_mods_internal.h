@@ -1,10 +1,12 @@
 /*
  * dt_mods_internal.h - what DuckTales' mods files share: the sound
  * replacements' loader (dt_mods_audio.c), the game's description for the
- * core (dt_mods_script.c) and the palettes the loaded mods use (dt_mods.c,
- * painted by dt_mods_picture.c).
+ * core (dt_mods_script.c), the palettes the loaded mods use (dt_mods.c,
+ * painted by dt_mods_picture.c) and the sprite replacements' table
+ * (dt_mods_sprites.c).
  */
 #pragma once
+#include "mods/app_mods.h"
 #include "mods/core/fm_mods.h"
 
 #define LANDS 5
@@ -13,6 +15,14 @@
  * at LANDS, everywhere else: the first mod's that has one wins. */
 extern int dt_mods_palette_count;
 extern const uint32_t *dt_mods_palette_for[LANDS + 1];
+
+/* A sprite file's name (sprites/<kind>/<frame>_<x>_<y>[_flip].png) as its key. */
+bool dt_mods_sprite_key(const char *name, uint8_t *kind, uint8_t *frame, bool *flip, int *ax, int *ay);
+/* Takes art->argb; false (and frees it) when the key is taken or memory is short. */
+bool dt_mods_sprite_insert(uint8_t kind, uint8_t frame, bool flip, const AppModsSprite *art);
+int dt_mods_sprite_count(void);
+/* --mods-dump also writes object frames under dir/sprites. */
+bool dt_mods_sprites_dump_to(const char *dir);
 
 /* Tells the core about this game and its scripts, once (dt_mods_script.c). */
 void dt_mods_configure(void);

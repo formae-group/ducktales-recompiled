@@ -5,6 +5,19 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ## [Unreleased]
 
+### Added
+
+- Sprite replacements for mods (docs/MODS.md "Sprites"): `sprites/<kind>/<frame>_<x>_<y>.png`
+  replaces a whole object frame, keyed by the object's kind (`$0710`) and the metasprite id the
+  animation shows, with the anchor in the name and an optional `_flip` file; any size, any
+  colours, pixel art at the console's scale. The sprite compositor draws it in place of the
+  frame's sprites, in their place in the order, behind the background when the object is, gone
+  while it blinks out, cut at the picture's edges and the HUD band, mirrored about the game's own
+  axis when facing the other way, dimmed with the fades, and with No sprite flicker off in the
+  OAM's order and 8-a-line limit. It wins over tile replacements and palettes; presentation only,
+  on the headless build and the native player. `--mods-dump` writes every object frame drawn as
+  `sprites/<kind>/<frame>_<x>_<y>.png`, ready to edit.
+
 ## [1.1.0] - 2026-11-25
 
 ### Added

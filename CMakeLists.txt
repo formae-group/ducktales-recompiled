@@ -106,6 +106,7 @@ set(_ducktales_mods
     "${CMAKE_SOURCE_DIR}/src/mods/ducktales/dt_mods.c"
     "${CMAKE_SOURCE_DIR}/src/mods/ducktales/dt_mods_audio.c"
     "${CMAKE_SOURCE_DIR}/src/mods/ducktales/dt_mods_picture.c"
+    "${CMAKE_SOURCE_DIR}/src/mods/ducktales/dt_mods_sprites.c"
     "${CMAKE_SOURCE_DIR}/src/mods/ducktales/dt_mods_script.c")
 set_property(SOURCE "${CMAKE_SOURCE_DIR}/src/mods/core/fm_codec.c" APPEND PROPERTY INCLUDE_DIRECTORIES "${STB_ROOT}")
 # Script mods (docs/MODS.md "Scripts") run in Lua 5.4 (external/lua, the

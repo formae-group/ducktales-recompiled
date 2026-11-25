@@ -226,6 +226,9 @@ Known limits: colors use the emphasis of the picture's last line (`cyc_render_co
 never changes mid-frame (hypothesis); a sprite whose priority quirk relies on the 8-per-line limit to
 hide another (not seen in DuckTales) would show.
 
+Sprite replacements of mods (docs/MODS.md "Sprites") are drawn by the same compositor from the
+same replay: a slot with one becomes one entry of the list, its picture, in place of its sprites.
+
 ## Native renderer
 
 `src/native/native_render.[ch]` draws the 256x240 picture with no PPU from the frame's video state:
