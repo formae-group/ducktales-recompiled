@@ -166,7 +166,9 @@ the backdrop colour; the line above it is drawn again from the nametable with it
 scroll (`cyc_render_line_scroll_x/y`, `cyc_render_nametable`, `cyc_render_chr`), and sprite 0's
 opaque pixels over the backdrop become backdrop. Other screens (title, Land Select, the map)
 have no such sprite 0 and are untouched. Checked in Amazon, Himalayas, Transylvania, African
-Mines, the Moon, the title screen and Land Select.
+Mines, the Moon, the title screen and Land Select. The two lines it redraws show no sprite, and
+no sprite replacement of a mod either (docs/MODS.md "Sprites"): the compositor draws those as
+sprites, before this step.
 
 ## Scaling and pixel aspect
 

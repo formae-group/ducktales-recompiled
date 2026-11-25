@@ -38,6 +38,25 @@
  *               painted over the composed picture, drawn again natively from
  *               the same list; with the sprites off, or before a picture can
  *               be composed, over the machine's own picture
+ *   replaced    a slot whose kind ($0710) and metasprite id have a sprite
+ *               replacement (app_mods_sprite) is drawn as that one picture
+ *               in place of its sprites, at its place in the order: anchored
+ *               at the slot's X and Y + 1, mirrored about the frame's own
+ *               flip axis (piece 0 plain and flipped) when facing the other
+ *               way without a _flip file, behind the background with $0600
+ *               bit 2, gone while the slot blinks out, cut above the HUD band
+ *               as its sprites are and at the picture's edges and left
+ *               column, pixel by pixel. It dims with the game's fades: a
+ *               quarter for each $10 the fade takes off the sprite colours
+ *               (the palette shown against the master palette at $0100,
+ *               docs/RENDERING.md "Fades"), black from $40 on. Its pixels
+ *               are kept from the tile and palette
+ *               painting. With the sprites off the list is the OAM in its
+ *               order, 8 sprites a line, the replaced slots' entries swapped
+ *               for their pictures; the machine's own picture is shown as
+ *               long as no replaced slot is on screen
+ *   dump        --mods-dump: every slot frame in the list is drawn unflipped
+ *               with the lines' pattern table and palettes, once
  */
 #include "host/ducktales_sprites.h"
 
@@ -50,6 +69,7 @@
 #include "cyc_render.h"
 #include "cyc_ring.h"
 
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -58,10 +78,30 @@
 #define HUD_RECORDS  16
 #define LIST_MAX     (64 + 3 * HUD_RECORDS + DT_OBJ_SLOTS * SLOT_SPRITES)
 
-typedef struct {
+/* An OAM sprite, or with art a sprite replacement: art column c of row r
+ * at (left + step * c, top + r), rows above clip cut, attr bit 5 behind;
+ * pieces are the sprites it replaces, counted for the line limit. */
+typedef struct Sprite {
     uint8_t y, tile, attr, x;
     bool hud;
+    const AppModsSprite *art;
+    int left, top, clip, step, piece_n;
+    const struct Sprite *pieces;
 } Sprite;
+
+/* What a slot shows: its kind, metasprite id, position and look. */
+typedef struct {
+    uint8_t kind, id, x, y;
+    bool flip, behind, band;
+} Frame;
+
+/* The builder replayed on a RAM image and matched with the OAM. */
+typedef struct {
+    Sprite slot[DT_OBJ_SLOTS][SLOT_SPRITES];
+    Frame frame[DT_OBJ_SLOTS];
+    int count[DT_OBJ_SLOTS], start[DT_OBJ_SLOTS], shown[DT_OBJ_SLOTS], end, hud_n;
+    Sprite hud[3 * HUD_RECORDS];
+} Replay;
 
 static bool s_on = DT_SPRITES_DEFAULT;
 static bool s_installed;
@@ -74,6 +114,8 @@ static FILE *s_log;
 static uint8_t s_last_oam[256];
 static bool s_last_valid;
 static uint32_t s_background[256 * 240];
+static uint8_t s_keep[256 * 240];
+static int s_fade; /* $10 steps the shown sprite colours are below the master palette, 0-4 */
 
 /* ---- the builder's rules on a saved RAM image ---- */
 
@@ -135,7 +177,7 @@ static int hud_records(const uint8_t *ram, Sprite *out)
 }
 
 /* One slot's sprites as bank 5 $8000 writes them, -1 when it draws nothing. */
-static int slot_sprites(const uint8_t *ram, int n, Sprite *out)
+static int slot_sprites(const uint8_t *ram, int n, Sprite *out, Frame *frame)
 {
     uint8_t status = ram[DT_ROW_STATUS + n], flags = ram[DT_ROW_FLAGS + n];
     if (!(status & 0x80) || flags == 0xFF) {
@@ -163,6 +205,9 @@ static int slot_sprites(const uint8_t *ram, int n, Sprite *out)
     uint8_t table = (uint8_t)(rd((uint16_t)(meta + 1)) + (flip ? 1 : 0));
     uint16_t offsets = (uint16_t)(rd16(DT_SPR_OFFSET_LO, DT_SPR_OFFSET_HI, table) - 2);
     int y0 = ram[DT_ROW_Y + n], made = 0;
+    *frame = (Frame){
+        ram[DT_ROW_KIND + n], id, x, (uint8_t)y0, flip, (flags & 0x04) != 0, n != DT_SLOT_SCROOGE && !(flags & 0x10)
+    };
     for (int k = 0; k < count && made < SLOT_SPRITES; k++) {
         int at = 2 + 2 * k;
         uint8_t dy = rd((uint16_t)(offsets + at)), dx = rd((uint16_t)(offsets + at + 1));
@@ -188,54 +233,150 @@ static bool same(const Sprite *s, const uint8_t *e)
     return s->y == e[0] && s->tile == e[1] && s->attr == e[2] && s->x == e[3];
 }
 
-/* The list in drawing order (front first) from the RAM image the frame's OAM
- * was built from. */
-static int rebuild(const uint8_t *ram, const uint8_t *oam, Sprite *list, bool *hud_restored, int *leftover)
+/* The slots replayed on the RAM image the frame's OAM was built from: a slot
+ * whose sprites are not the next OAM entries gets count -1. */
+static void replay(const uint8_t *ram, const uint8_t *oam, Replay *r)
 {
-    static Sprite slot[DT_OBJ_SLOTS][SLOT_SPRITES];
-    int count[DT_OBJ_SLOTS], pos = 1;
-    Sprite hud[3 * HUD_RECORDS];
-    int hud_n = hud_allowed(ram) ? hud_records(ram, hud) : 0;
+    int pos = 1;
+    r->hud_n = hud_allowed(ram) ? hud_records(ram, r->hud) : 0;
     if (hud_in_oam(ram)) {
-        for (int i = 0; i < hud_n && pos < 64; i++, pos++) {
-            hud[i] = (Sprite){ oam[pos * 4], oam[pos * 4 + 1], oam[pos * 4 + 2], oam[pos * 4 + 3], true };
+        for (int i = 0; i < r->hud_n && pos < 64; i++, pos++) {
+            r->hud[i] = (Sprite){ oam[pos * 4], oam[pos * 4 + 1], oam[pos * 4 + 2], oam[pos * 4 + 3], true };
         }
     }
     bool odd = ram[DT_ADDR_SPR_PHASE] & 1;
     for (int i = 0; i < DT_OBJ_SLOTS; i++) {
         int n = odd ? DT_OBJ_SLOTS - 1 - i : i;
-        count[n] = slot_sprites(ram, n, slot[n]);
-        if (count[n] <= 0 || pos >= 64) {
+        r->count[n] = slot_sprites(ram, n, r->slot[n], &r->frame[n]);
+        r->start[n] = pos;
+        r->shown[n] = 0;
+        if (r->count[n] <= 0 || pos >= 64) {
             continue;
         }
-        int shown = count[n] < 64 - pos ? count[n] : 64 - pos, k = 0;
-        while (k < shown && same(&slot[n][k], &oam[(pos + k) * 4])) {
+        int shown = r->count[n] < 64 - pos ? r->count[n] : 64 - pos, k = 0;
+        while (k < shown && same(&r->slot[n][k], &oam[(pos + k) * 4])) {
             k++;
         }
         if (k < shown) {
-            count[n] = -1;
+            r->count[n] = -1;
         } else {
+            r->shown[n] = shown;
             pos += shown;
         }
     }
-    int n = 0;
-    list[n++] = (Sprite){ oam[0], oam[1], oam[2], oam[3], false };
-    for (int k = 0; k < count[DT_SLOT_SCROOGE]; k++) {
-        list[n++] = slot[DT_SLOT_SCROOGE][k];
+    r->end = pos;
+}
+
+/* What the plain and flipped X of a frame's sprites add up to, plus 8: its
+ * first sprite's. A plain column u is mirrored to axis - 1 - u. */
+static int flip_axis(uint8_t id)
+{
+    uint16_t meta = rd16(DT_SPR_META_LO, DT_SPR_META_HI, id);
+    uint8_t table = rd((uint16_t)(meta + 1));
+    uint16_t plain = (uint16_t)(rd16(DT_SPR_OFFSET_LO, DT_SPR_OFFSET_HI, table) - 2);
+    uint16_t flipped = (uint16_t)(rd16(DT_SPR_OFFSET_LO, DT_SPR_OFFSET_HI, (uint8_t)(table + 1)) - 2);
+    return (int8_t)rd((uint16_t)(plain + 3)) + (int8_t)rd((uint16_t)(flipped + 3)) + 8;
+}
+
+/* The two pattern bytes of row r of a sprite h lines tall, flipped
+ * vertically with attr bit 7. */
+static void sprite_row(uint8_t tile, uint8_t attr, int r, int h, uint16_t table, uint8_t *lo, uint8_t *hi)
+{
+    int row = (attr & 0x80) ? h - 1 - r : r;
+    uint16_t pattern = h == 16 ? (uint16_t)(((tile & 1) ? 0x1000 : 0) + (tile & 0xFE) * 16 + (row >= 8 ? 16 : 0))
+                               : (uint16_t)(table + tile * 16);
+    *lo = cyc_render_chr((uint16_t)(pattern + (row & 7)));
+    *hi = cyc_render_chr((uint16_t)(pattern + (row & 7) + 8));
+}
+
+/* --mods-dump: the frame unflipped, its sprites front first, with the
+ * pattern table, size and palettes of the line below the slot's Y. */
+static void dump_frame(const Frame *f)
+{
+    static uint32_t px[272 * 272];
+    uint16_t meta = rd16(DT_SPR_META_LO, DT_SPR_META_HI, f->id);
+    int count = rd(meta) + 1, line = f->y + 1 > 239 ? 239 : f->y + 1;
+    uint16_t offsets = (uint16_t)(rd16(DT_SPR_OFFSET_LO, DT_SPR_OFFSET_HI, rd((uint16_t)(meta + 1))) - 2);
+    int h = cyc_render_line_sprite16(line) ? 16 : 8, x0 = INT_MAX, y0 = INT_MAX, x1 = INT_MIN, y1 = INT_MIN;
+    uint16_t table = cyc_render_line_sprite_table(line);
+    count = count < SLOT_SPRITES ? count : SLOT_SPRITES;
+    for (int k = 0; k < count; k++) {
+        int dy = (int8_t)rd((uint16_t)(offsets + 2 + 2 * k)), dx = (int8_t)rd((uint16_t)(offsets + 3 + 2 * k));
+        x0 = dx < x0 ? dx : x0;
+        y0 = dy < y0 ? dy : y0;
+        x1 = dx + 8 > x1 ? dx + 8 : x1;
+        y1 = dy + h > y1 ? dy + h : y1;
     }
-    for (int i = 0; i < hud_n; i++) {
-        list[n++] = hud[i];
-    }
-    *hud_restored = hud_n > 0 && !hud_in_oam(ram);
-    for (int s = 0; s < DT_OBJ_SLOTS; s++) {
-        if (s != DT_SLOT_SCROOGE) {
-            for (int k = 0; k < count[s]; k++) {
-                list[n++] = slot[s][k];
+    int w = x1 - x0, height = y1 - y0;
+    memset(px, 0, (size_t)w * (size_t)height * sizeof *px);
+    for (int k = 0; k < count; k++) {
+        int dy = (int8_t)rd((uint16_t)(offsets + 2 + 2 * k)) - y0,
+            dx = (int8_t)rd((uint16_t)(offsets + 3 + 2 * k)) - x0;
+        uint8_t tile = rd((uint16_t)(meta + 2 + 2 * k)), attr = rd((uint16_t)(meta + 3 + 2 * k)), lo, hi;
+        for (int r = 0; r < h; r++) {
+            sprite_row(tile, attr, r, h, table, &lo, &hi);
+            for (int c = 0; c < 8; c++) {
+                int bit = (attr & 0x40) ? c : 7 - c, v = ((lo >> bit) & 1) | (((hi >> bit) & 1) << 1);
+                uint32_t *p = &px[(dy + r) * w + dx + c];
+                if (v && !*p) {
+                    *p = cyc_render_color(16 + (attr & 3) * 4 + v) | 0xFF000000u;
+                }
             }
         }
     }
+    app_mods_sprite_dump(f->kind, f->id, px, w, height, -x0, -y0);
+}
+
+/* Slot s of r into the list: its sprite replacement, or its first count
+ * sprites. */
+static int add_slot(const Replay *r, int s, int count, Sprite *list, int n, int *replaced)
+{
+    const Frame *f = &r->frame[s];
+    if (r->count[s] <= 0) {
+        return n;
+    }
+    if (app_mods_sprite_wanted(f->kind, f->id)) {
+        dump_frame(f);
+    }
+    bool mirror;
+    const AppModsSprite *art = app_mods_sprite(f->kind, f->id, f->flip, &mirror);
+    if (art) {
+        list[n] = (Sprite){ 0xFF, 0, f->behind ? 0x20 : 0, 0, false, art };
+        list[n].left = mirror ? f->x + flip_axis(f->id) - 1 + art->ax : f->x - art->ax;
+        list[n].step = mirror ? -1 : 1;
+        list[n].top = f->y + 1 - art->ay;
+        list[n].clip = f->band ? DT_HUD_BAND_Y + 1 : 0;
+        list[n].pieces = r->slot[s];
+        list[n].piece_n = count;
+        ++*replaced;
+        return n + 1;
+    }
+    for (int k = 0; k < count; k++) {
+        list[n++] = r->slot[s][k];
+    }
+    return n;
+}
+
+/* The list in drawing order (front first) from the RAM image the frame's OAM
+ * was built from. */
+static int rebuild(const uint8_t *ram, const uint8_t *oam, Sprite *list, bool *hud_restored, int *leftover)
+{
+    static Replay r;
+    int n = 0, replaced = 0;
+    replay(ram, oam, &r);
+    list[n++] = (Sprite){ oam[0], oam[1], oam[2], oam[3], false };
+    n = add_slot(&r, DT_SLOT_SCROOGE, r.count[DT_SLOT_SCROOGE], list, n, &replaced);
+    for (int i = 0; i < r.hud_n; i++) {
+        list[n++] = r.hud[i];
+    }
+    *hud_restored = r.hud_n > 0 && !hud_in_oam(ram);
+    for (int s = 0; s < DT_OBJ_SLOTS; s++) {
+        if (s != DT_SLOT_SCROOGE) {
+            n = add_slot(&r, s, r.count[s], list, n, &replaced);
+        }
+    }
     *leftover = 0;
-    for (int e = pos; e < 64; e++) {
+    for (int e = r.end; e < 64; e++) {
         if (oam[e * 4] >= 0xF0) {
             continue;
         }
@@ -245,12 +386,57 @@ static int rebuild(const uint8_t *ram, const uint8_t *oam, Sprite *list, bool *h
     return n;
 }
 
+/* The OAM in its order with each replaced slot's entries as its picture,
+ * where its first entry was; *replaced counts the pictures. */
+static int console_list(const uint8_t *ram, const uint8_t *oam, Sprite *list, int *replaced)
+{
+    static Replay r;
+    int n = 0;
+    replay(ram, oam, &r);
+    *replaced = 0;
+    for (int e = 0; e < 64; e++) {
+        int s = 0;
+        while (s < DT_OBJ_SLOTS && !(r.shown[s] && e == r.start[s])) {
+            s++;
+        }
+        if (s == DT_OBJ_SLOTS) {
+            list[n++] = (Sprite){ oam[e * 4], oam[e * 4 + 1], oam[e * 4 + 2], oam[e * 4 + 3], false };
+            continue;
+        }
+        n = add_slot(&r, s, r.shown[s], list, n, replaced);
+        e += r.shown[s] - 1;
+    }
+    return n;
+}
+
 /* ---- drawing ---- */
 
-static int draw(uint32_t *out, const Sprite *list, int n, uint16_t hud_table)
+/* The fade of the sprite colours shown: the most $10 steps an entry is below
+ * its master colour of the same hue, one more than the master's when it is
+ * clamped to $0F. */
+static int sprite_fade(const uint8_t *ram)
+{
+    int fade = 0;
+    for (int e = 17; e < 32; e++) {
+        uint8_t master = ram[DT_ADDR_PALETTE + e] & 0x3F, shown = cyc_render_palette(e);
+        int steps = shown == 0x0F && master != 0x0F                       ? (master >> 4) + 1
+                    : (shown & 0x0F) == (master & 0x0F) && shown < master ? (master >> 4) - (shown >> 4)
+                                                                          : 0;
+        fade = steps > fade ? steps : fade;
+    }
+    return fade > 4 ? 4 : fade;
+}
+
+/* limit: sprites a line shows (8 on the console), 0 for no limit; a sprite
+ * replacement counts as its sprites on the line, and the columns only its
+ * sprites past the limit cover are left out of it there. s_keep marks the
+ * pixels the replacements drew. */
+static int draw(uint32_t *out, const Sprite *list, int n, uint16_t hud_table, int limit)
 {
     int crowded = 0;
     const uint8_t *opaque = cyc_frame_bg_opaque();
+    memset(s_keep, 0, sizeof s_keep);
+    s_fade = sprite_fade(s_ram[1]);
     for (int y = 0; y < 240; y++) {
         uint32_t *line = &out[y * 256];
         const uint32_t *bg = &s_background[y * 256];
@@ -263,20 +449,50 @@ static int draw(uint32_t *out, const Sprite *list, int n, uint16_t hud_table)
         int h = tall ? 16 : 8, on_line = 0;
         uint16_t table = cyc_render_line_sprite_table(y);
         uint32_t color[256];
-        uint8_t taken[256] = { 0 }, behind[256];
+        uint8_t taken[256] = { 0 }, behind[256], art[256] = { 0 };
         for (int i = 0; i < n; i++) {
             const Sprite *s = &list[i];
+            if (s->art) {
+                int r = y - s->top;
+                uint8_t cut[256] = { 0 };
+                for (int k = 0; k < s->piece_n; k++) {
+                    const Sprite *p = &s->pieces[k];
+                    int pr = y - (p->y + 1);
+                    if (p->y >= 0xEF || pr < 0 || pr >= h) {
+                        continue;
+                    }
+                    uint8_t mark = ++on_line > limit && limit ? 1 : 2;
+                    for (int c = 0; c < 8 && p->x + c < 256; c++) {
+                        cut[p->x + c] = cut[p->x + c] > mark ? cut[p->x + c] : mark;
+                    }
+                }
+                if (r < 0 || r >= s->art->h || y < s->clip) {
+                    continue;
+                }
+                const uint32_t *row = &s->art->argb[r * s->art->w];
+                for (int c = 0; c < s->art->w; c++) {
+                    int px = s->left + s->step * c;
+                    if (px < 0 || px > 255 || taken[px] || cut[px] == 1 || (px < 8 && !(mask & 0x04)) ||
+                        (row[c] >> 24) < 0x80) {
+                        continue;
+                    }
+                    uint32_t rgb = row[c], keep = (uint32_t)(4 - s_fade);
+                    taken[px] = art[px] = 1;
+                    behind[px] = (s->attr & 0x20) != 0;
+                    color[px] = 0xFF000000u | ((rgb >> 16 & 0xFF) * keep / 4) << 16 |
+                                ((rgb >> 8 & 0xFF) * keep / 4) << 8 | (rgb & 0xFF) * keep / 4;
+                }
+                continue;
+            }
             int r = y - (s->y + 1);
             if (s->y >= 0xEF || r < 0 || r >= h) {
                 continue;
             }
-            on_line++;
-            int row = (s->attr & 0x80) ? h - 1 - r : r;
-            uint16_t pattern = tall ? (uint16_t)(((s->tile & 1) ? 0x1000 : 0) + (s->tile & 0xFE) * 16 +
-                                                 (row >= 8 ? 16 : 0))
-                                    : (uint16_t)((s->hud ? hud_table : table) + s->tile * 16);
-            uint8_t lo = cyc_render_chr((uint16_t)(pattern + (row & 7)));
-            uint8_t hi = cyc_render_chr((uint16_t)(pattern + (row & 7) + 8));
+            if (++on_line > limit && limit) {
+                continue;
+            }
+            uint8_t lo, hi;
+            sprite_row(s->tile, s->attr, r, h, s->hud ? hud_table : table, &lo, &hi);
             for (int c = 0; c < 8; c++) {
                 int px = s->x + c;
                 if (px > 255) {
@@ -299,14 +515,16 @@ static int draw(uint32_t *out, const Sprite *list, int n, uint16_t hud_table)
         for (int x = 0; x < 256; x++) {
             if (taken[x] && !(behind[x] && opaque[y * 256 + x])) {
                 line[x] = color[x];
+                s_keep[y * 256 + x] = art[x];
             }
         }
     }
     return crowded;
 }
 
-/* The mods' tiles and palettes over the picture, drawn from list (NULL: the OAM). */
-static void paint_mods(uint32_t *out, const Sprite *list, int n, uint16_t hud_table)
+/* The mods' tiles and palettes over the picture, drawn from list (NULL: the
+ * OAM) with limit sprites a line; keep: the pixels sprite replacements drew. */
+static void paint_mods(uint32_t *out, const Sprite *list, int n, uint16_t hud_table, int limit, const uint8_t *keep)
 {
     static NvVideo video;
     static NvSprite sprites[LIST_MAX];
@@ -315,14 +533,36 @@ static void paint_mods(uint32_t *out, const Sprite *list, int n, uint16_t hud_ta
     }
     NvRenderOptions options = { 8, NULL, 0 };
     if (list) {
+        int m = 0;
         for (int i = 0; i < n; i++) {
-            sprites[i] = (NvSprite){ list[i].y, list[i].tile, list[i].attr, list[i].x,
-                                     list[i].hud ? hud_table : NV_TABLE_LINE };
+            if (!list[i].art) {
+                sprites[m++] = (NvSprite){ list[i].y, list[i].tile, list[i].attr, list[i].x,
+                                           list[i].hud ? hud_table : NV_TABLE_LINE };
+            }
         }
-        options = (NvRenderOptions){ 0, sprites, n };
+        options = (NvRenderOptions){ limit, sprites, m };
     }
-    app_mods_video_apply(&video, &options, s_ram[1], out);
+    app_mods_video_apply(&video, &options, s_ram[1], keep, out);
     app_mods_draw_overlay(out, 256, 240);
+}
+
+/* With the sprites off: the OAM's own order and limit, drawn by draw only
+ * while a replaced slot is in it (else the machine's picture is exact). */
+static bool compose_console(uint32_t *out, int width, int height)
+{
+    static Sprite list[LIST_MAX];
+    int replaced = 0;
+    if (!app_mods_sprites_active() || width != 256 || height != 240 || s_seen < 2 || !load_prg() ||
+        !cyc_render_background(s_background)) {
+        return false;
+    }
+    int n = console_list(s_ram[0], cyc_render_oam(), list, &replaced);
+    if (!replaced) {
+        return false;
+    }
+    draw(out, list, n, 0, 8);
+    paint_mods(out, list, n, 0, 8, s_keep);
+    return true;
 }
 
 static int compose(uint32_t *out, int width, int height, int native_x0, const uint32_t *native, void *user)
@@ -337,8 +577,10 @@ static int compose(uint32_t *out, int width, int height, int native_x0, const ui
         if (!app_mods_video_active() || width != 256 || height != 240 || !native) {
             return 0;
         }
-        memcpy(out, native, 256 * 240 * sizeof *out);
-        paint_mods(out, NULL, 0, 0);
+        if (!compose_console(out, width, height)) {
+            memcpy(out, native, 256 * 240 * sizeof *out);
+            paint_mods(out, NULL, 0, 0, 8, NULL);
+        }
         return 1;
     }
     static Sprite list[LIST_MAX];
@@ -379,9 +621,9 @@ static int compose(uint32_t *out, int width, int height, int native_x0, const ui
     if (visible > 63) {
         s_stats.beyond_63 += (uint64_t)(visible - 63);
     }
-    int crowded = draw(out, list, n, hud_table);
+    int crowded = draw(out, list, n, hud_table, 0);
     if (app_mods_video_active()) {
-        paint_mods(out, list, n, hud_table);
+        paint_mods(out, list, n, hud_table, 0, s_keep);
     }
     s_stats.lines_over_8 += (uint64_t)crowded;
     if (s_log) {
@@ -399,7 +641,7 @@ static void apply(void)
         cyc_render_set_compositor(compose, NULL);
         s_installed = true;
     }
-    cyc_render_capture_background(s_on);
+    cyc_render_capture_background(s_on || app_mods_sprites_active());
     cyc_render_set_stock_compositing(s_on || app_mods_video_active());
 }
 
@@ -408,6 +650,7 @@ void dt_sprites_mods_changed(void)
     if (!s_installed) {
         apply();
     }
+    cyc_render_capture_background(s_on || app_mods_sprites_active());
     cyc_render_set_stock_compositing(s_on || app_mods_video_active());
 }
 

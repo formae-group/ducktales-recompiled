@@ -8,7 +8,10 @@
  *              the presented picture shows the colour that drawing gives it
  *   palettes   a land's palette is used while $F6 is that land and the music
  *              is neither Land Select's nor the title's, else global.pal
- *   dump       --mods-dump: every tile drawn, once (fm_nes.h)
+ *   sprites    a pixel a sprite replacement drew (keep) is left as it is:
+ *              that object's art wins over tile replacements and palettes
+ *   dump       --mods-dump: every tile drawn, once (fm_nes.h); the object
+ *              frames are dt_mods_sprites.c's
  *   overlay    the scripts' toast and dt.draw, drawn with cyc_overlay
  */
 #include "mods/app_mods.h"
@@ -32,12 +35,12 @@ static bool painting(void)
 
 bool app_mods_video_active(void)
 {
-    return painting() || fm_script_count() > 0;
+    return painting() || dt_mods_sprite_count() > 0 || fm_script_count() > 0;
 }
 
 bool app_mods_dump_dir(const char *dir)
 {
-    return fm_nes_dump_to(dir);
+    return fm_nes_dump_to(dir) && dt_mods_sprites_dump_to(dir);
 }
 
 void app_mods_dump_frame(void)
@@ -129,7 +132,8 @@ void app_mods_keep_overlay(uint32_t *pic, const uint32_t *src, int width, int he
     }
 }
 
-void app_mods_video_apply(const NvVideo *video, const NvRenderOptions *options, const uint8_t *ram, uint32_t *argb)
+void app_mods_video_apply(const NvVideo *video, const NvRenderOptions *options, const uint8_t *ram, const uint8_t *keep,
+                          uint32_t *argb)
 {
     if (!painting() || !video || !argb) {
         return;
@@ -155,7 +159,7 @@ void app_mods_video_apply(const NvVideo *video, const NvRenderOptions *options, 
     const bool tiles = fm_nes_tile_count() || fm_nes_dumping();
     for (int p = 0; p < NV_WIDTH * NV_HEIGHT; p++) {
         uint16_t i = index[p] & 0x1FF;
-        if (argb[p] != base[i]) {
+        if (argb[p] != base[i] || (keep && keep[p])) {
             continue;
         }
         uint32_t out = pal ? pal[i] : base[i];

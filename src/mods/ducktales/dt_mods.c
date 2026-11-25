@@ -12,10 +12,12 @@
  *   palettes   palettes/global.pal or palettes/<land>.pal; a land's palette is
  *              used while $F6 is that land and the music is neither Land
  *              Select's nor the title's
+ *   sprites    sprites/<kind>/<frame>_<x>_<y>[_flip].png, a whole object
+ *              frame drawn in place of its 8x8 sprites (dt_mods_sprites.c)
  *   sounds     music/<id> and sfx/<id> (dt_mods_audio.c)
  *   loading    top first; a mod is used whole or not at all: any unreadable
  *              or invalid asset refuses it with the reason. Per asset the
- *              first mod that has it wins: a tile key, a land's palette (the
+ *              first mod that has it wins: a tile key, a sprite key, a land's palette (the
  *              mod's file for that land, else its global.pal), a sound id
  *   scripts    events = include/ducktales/events.h, with their values
  *              (Events_Args); dt.state and dt.set = FIELDS, dt.objects()
@@ -27,6 +29,7 @@
  *   files      dt_mods.c: the game, folders, settings, options, the
  *              catalogue and loading; dt_mods_script.c: the scripts' side;
  *              dt_mods_picture.c: painting, the tile dump and the overlay;
+ *              dt_mods_sprites.c: the sprite replacements and their dump;
  *              dt_mods_audio.c: the sounds
  */
 #include "mods/app_mods.h"
@@ -268,6 +271,12 @@ typedef struct {
 } PendingSound;
 
 typedef struct {
+    uint8_t kind, frame;
+    bool flip;
+    AppModsSprite art;
+} PendingSprite;
+
+typedef struct {
     uint64_t hash;
     uint32_t palette;
     int entry;
@@ -317,6 +326,8 @@ static bool load_mod(AppMod *m, bool use, char *err, size_t cap)
     uint32_t *pals[LANDS + 1] = { NULL };
     PendingSound *sounds = NULL;
     int sound_n = 0;
+    PendingSprite *sprites = NULL;
+    int sprite_n = 0;
     bool ok = true;
     for (int i = 0; i < a.count && ok; i++) {
         const char *n = fm_archive_name(&a, i);
@@ -325,10 +336,11 @@ static bool load_mod(AppMod *m, bool use, char *err, size_t cap)
         }
         bool tile = !_strnicmp(n, "tiles/", 6), pal = !_strnicmp(n, "palettes/", 9);
         bool music = !_strnicmp(n, "music/", 6), sfx = !_strnicmp(n, "sfx/", 4);
-        if (!tile && !pal && !music && !sfx) {
+        bool sprite = !_strnicmp(n, "sprites/", 8);
+        if (!tile && !pal && !music && !sfx && !sprite) {
             continue;
         }
-        if (tile && !fm_ends_with(n, ".png")) {
+        if ((tile || sprite) && !fm_ends_with(n, ".png")) {
             continue;
         }
         if (pal && !fm_ends_with(n, ".pal")) {
@@ -340,6 +352,25 @@ static bool load_mod(AppMod *m, bool use, char *err, size_t cap)
         uint64_t hash = 0;
         uint32_t palette = 0;
         int land = 0, id = 0;
+        PendingSprite key = { 0 };
+        if (sprite && !dt_mods_sprite_key(n, &key.kind, &key.frame, &key.flip, &key.art.ax, &key.art.ay)) {
+            snprintf(err, cap,
+                     "%s: a sprite is sprites/<kind in 2 hex digits>/<frame in 2 hex digits>_<x>_<y>.png, "
+                     "or _<x>_<y>_flip.png.",
+                     n);
+            ok = false;
+            break;
+        }
+        for (int k = 0; k < sprite_n && sprite; k++) {
+            if (sprites[k].kind == key.kind && sprites[k].frame == key.frame && sprites[k].flip == key.flip) {
+                snprintf(err, cap, "%s: the mod has another file for kind %02x frame %02x%s.", n, key.kind, key.frame,
+                         key.flip ? " flipped" : "");
+                ok = false;
+            }
+        }
+        if (!ok) {
+            break;
+        }
         if (tile && !fm_nes_tile_key(n, &hash, &palette)) {
             snprintf(err, cap, "%s: a tile is named <16 hex digits>.png or <16 hex digits>_<8 hex digits>.png.", n);
             ok = false;
@@ -376,7 +407,30 @@ static bool load_mod(AppMod *m, bool use, char *err, size_t cap)
             ok = false;
             break;
         }
-        if (tile) {
+        if (sprite) {
+            int w, h;
+            uint32_t *argb = fm_png_decode(data, size, &w, &h);
+            free(data);
+            PendingSprite *grown = argb ? realloc(sprites, (size_t)(sprite_n + 1) * sizeof *grown) : NULL;
+            if (!argb) {
+                snprintf(err, cap, "%s: not a readable PNG.", n);
+                ok = false;
+            } else if (w > NV_WIDTH || h > NV_HEIGHT) {
+                free(argb);
+                snprintf(err, cap, "%s: %dx%d; a sprite is at most %dx%d.", n, w, h, NV_WIDTH, NV_HEIGHT);
+                ok = false;
+            } else if (!grown) {
+                free(argb);
+                snprintf(err, cap, "Out of memory.");
+                ok = false;
+            } else {
+                sprites = grown;
+                key.art.w = w;
+                key.art.h = h;
+                key.art.argb = argb;
+                sprites[sprite_n++] = key;
+            }
+        } else if (tile) {
             int w, h;
             uint32_t *argb = fm_png_decode(data, size, &w, &h);
             free(data);
@@ -449,6 +503,9 @@ static bool load_mod(AppMod *m, bool use, char *err, size_t cap)
         for (int i = 0; i < tile_n; i++) {
             fm_nes_tile_insert(&tiles[i]);
         }
+        for (int i = 0; i < sprite_n; i++) {
+            dt_mods_sprite_insert(sprites[i].kind, sprites[i].frame, sprites[i].flip, &sprites[i].art);
+        }
         for (int l = 0; l <= LANDS; l++) {
             if (pals[l]) {
                 s_palettes[dt_mods_palette_count++] = pals[l];
@@ -474,6 +531,9 @@ static bool load_mod(AppMod *m, bool use, char *err, size_t cap)
         for (int i = 0; i < tile_n; i++) {
             free(tiles[i].argb);
         }
+        for (int i = 0; i < sprite_n; i++) {
+            free((void *)sprites[i].art.argb);
+        }
         for (int l = 0; l <= LANDS; l++) {
             free(pals[l]);
         }
@@ -484,6 +544,7 @@ static bool load_mod(AppMod *m, bool use, char *err, size_t cap)
     free(tiles);
     free(tile_entries);
     free(sounds);
+    free(sprites);
     return ok;
 }
 
@@ -541,9 +602,9 @@ void app_mods_start(const uint8_t *prg, size_t prg_size)
         }
     }
     fm_mark_loaded_set();
-    fm_log("Mods: %s, %d found, %d loaded (%zu tiles, %d palettes, sounds %s, %d scripts)", fm_enabled() ? "on" : "off",
-           fm_count(), used, fm_nes_tile_count(), dt_mods_palette_count, app_mods_audio_active() ? "replaced" : "none",
-           scripts);
+    fm_log("Mods: %s, %d found, %d loaded (%zu tiles, %d sprites, %d palettes, sounds %s, %d scripts)",
+           fm_enabled() ? "on" : "off", fm_count(), used, fm_nes_tile_count(), dt_mods_sprite_count(),
+           dt_mods_palette_count, app_mods_audio_active() ? "replaced" : "none", scripts);
     log_catalogue();
     for (int i = 0; i < fm_count(); i++) {
         if (fm_get(i)->loaded && fm_get(i)->script) {
