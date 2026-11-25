@@ -536,6 +536,12 @@ static int setup(lua_State *L)
     }
     for (int i = 0; i < fm_script_game.call_count; i++) {
         const FmCall *c = &fm_script_game.calls[i];
+        if (!c->table) {
+            lua_pushinteger(L, i);
+            lua_pushcclosure(L, fm_script_sb_call, 1);
+            lua_setfield(L, -2, c->name);
+            continue;
+        }
         if (lua_getfield(L, -1, c->table) != LUA_TTABLE) {
             lua_pop(L, 1);
             lua_newtable(L);

@@ -246,7 +246,7 @@ int fm_script_sb_call(lua_State *L)
 {
     const FmCall *c = &fm_script_game.calls[lua_tointeger(L, lua_upvalueindex(1))];
     char name[64];
-    snprintf(name, sizeof name, "%s.%s", c->table, c->name);
+    snprintf(name, sizeof name, "%s%s%s", c->table ? c->table : "", c->table ? "." : "", c->name);
     long long args[FM_CALL_ARGS];
     char call[160], err[160];
     int nargs = call_args(L, name, args, call, sizeof call);

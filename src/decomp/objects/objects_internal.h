@@ -145,7 +145,6 @@ void Obj_Thrown(uint8_t x);
 /* items.c */
 void Hud_RestoreDot(void);
 void Obj_Pickup(uint8_t x);
-void Obj_ShowItem(uint8_t x, uint8_t item);
 void Obj_HiddenItem(uint8_t x);
 void Obj_Chest(uint8_t x);
 void Obj_ChestOpening(uint8_t x);

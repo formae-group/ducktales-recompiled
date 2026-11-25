@@ -175,6 +175,7 @@ end)
 | `dt.tune.<name>` | Scrooge's physics: assign a number to use in place of the game's, `nil` for the game's again; reads give the value in force or `nil` (see [Tunables](#tunables)) |
 | `dt.objects()`, `dt.camera()` | The live object slots, as handles that can move or remove an object in a game event's handler, and the camera, inside handlers (see [Objects and the camera](#objects-and-the-camera)) |
 | `dt.spawn(kind, x, y[, action])` | Makes an enemy the land uses, in a game event's handler; returns its handle, or `nil` and the reason (see [Spawning enemies](#spawning-enemies)) |
+| `dt.spawn_item(item, x, y)` | Makes a pickup of money, HP or a life, in a game event's handler; returns `true`, or `false` and the reason (see [Spawning items](#spawning-items)) |
 | `dt.ai(kind, {before = fn, after = fn})` | The mod's own code for every enemy of a kind, run at each one's turn before and after the kind's own; `dt.ai(kind, nil)` takes it back (see [Object code](#object-code)) |
 | `dt.SKIP` | Returned by a `before` callback of `dt.ai`: the kind's own code does not run for that object this turn |
 | `dt.level.set(x, y, metatile)` | Replaces a metatile on the screen, with its collision, in an `update` handler; returns `true`, or `false` and the reason (see [Editing the level](#editing-the-level)) |
@@ -333,6 +334,45 @@ dt.on("update", function()
     if made < 3 and dt.state.pad_new & 0x40 ~= 0 then -- B
         local o, why = dt.spawn(1, dt.camera().x + 200, 100)
         made = made + (o and 1 or 0)
+    end
+end)
+```
+
+### Spawning items
+
+`dt.spawn_item(item, x, y)` makes a pickup at world X `x` and Y `y` on the screen now (the same
+ranges as `o:set`), as the game shows the item of a hidden item it found: a pickup (kind 19) in the
+highest free slot, with land record 255, that falls to the floor, blinks after a while and vanishes.
+Scrooge takes it as any other, through the game's own code, and `item-collected` reports it. It
+works only in a game event's handler and returns `true`. Only the items whose taking adds money,
+HP or a life, and nothing else, can be made:
+
+| Item | Taken |
+|---|---|
+| 35 (`$23`) | 2,000 money |
+| 40 (`$28`) | 10,000 money |
+| 97 (`$61`) | 50,000 money |
+| 36 (`$24`) | the first lost HP dot back |
+| 37 (`$25`) | every HP dot back; on Difficult the game makes it a 10,000 one, as it does its own |
+| 39 (`$27`) | one more life, up to 9 as the game caps it |
+
+The power-up, the key items, the extra HP dot and the treasures cannot be made, nor any other
+item; such an item, a position off the screen, a call during a boss fight and a call outside a game
+event's handler are errors (catchable with `pcall`). The same two slots as for `dt.spawn` are kept
+for the game: with fewer than three free, it makes nothing and returns `false` and the reason. Each
+call is logged as a write: `dt.spawn_item(39, 214, 60)`.
+
+Nothing of the land's progress can change through it. Taking these items adds to the HUD's money,
+HP dots or lives only: the code that sets the treasure bits, the key items, the extra dot's flag or
+starts a scene runs for the items left out. A record of 255 is none of the land's, and a pickup's own
+code never marks a record used up (blocks, chests, hidden items and props do) and gives one back
+only for item 41, so no record bit is touched; and no chest, hidden item or block is made. Their sprites are in every
+land.
+
+```lua
+dt.on("enemy-defeated", function(e)
+    if dt.random(4) == 1 then
+        dt.spawn_item(35, e.x, e.y) -- a diamond, now and then
     end
 end)
 ```
@@ -600,7 +640,8 @@ Both hosts and the native player call the same entry points:
 - **Objects.** Handles and `dt.spawn` have no hook site: they write the object tables at once from
   a game event's handler, and the game's routines they use run as decompiled C
   (`Obj_Despawn`, `Obj_FindFreeSlot` and `Obj_SpawnTemplate`, the template step `Obj_SpawnRecord`
-  shares) through `Decomp_Outside`.
+  shares) through `Decomp_Outside`. `dt.spawn_item` takes a free slot the same way and runs
+  `Obj_ShowItem` (`$8CAC`), the step that turns a hidden item into its pickup.
 - **Object code.** `src/game/ai.c` (`include/ducktales/ai.h`) owns `dt.ai`'s calls. The object
   dispatch (bank 6 `$8000`) loads a live slot's handler address into `$00`/`$01` and runs it with
   `JMP ($0000)` at `$8020`; the handler's `RTS` returns to the `INC $4A` at `$8023`. Each has a

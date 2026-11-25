@@ -17,6 +17,10 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   (`$8020`, `$8023`), on only while a mod uses it; a mod's `dt.ai` callbacks run at most 250,000
   Lua instructions a frame. The handles of those enemies can also set `facing`, `speed` and `vy`,
   and `o:set` writes and logs its fields in the same order in every run.
+- Script mods can make pickups (docs/MODS.md "Spawning items"): `dt.spawn_item(item, x, y)` makes a
+  diamond (2,000, 10,000 or 50,000), an HP dot, full HP or a life, through the game's own code
+  for a hidden item's pickup, with no land record; the power-up, key items, extra dot and
+  treasures cannot be made. No hook site.
 
 ## [1.1.0] - 2026-11-25
 

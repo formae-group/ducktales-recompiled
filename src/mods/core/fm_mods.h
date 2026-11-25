@@ -246,7 +246,7 @@ enum {
     FM_REFUSED
 };
 
-/* dt.<table>.<name>(arg, ...): a change of the game's that no field or
+/* dt.<table>.<name>(arg, ...), or dt.<name>(arg, ...) for a NULL table: a change of the game's that no field or
  * handle gives, from up to FM_CALL_ARGS integers, in a game event's handler
  * only. call checks them against the state now and makes the change:
  * FM_DONE (true), FM_INVALID with the reason (an error) or FM_REFUSED with it

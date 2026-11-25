@@ -15,7 +15,8 @@
  *              dt.spawn(kind, x, y [, action]) makes an enemy (the
  *              decompiled Obj_FindFreeSlot and Obj_SpawnTemplate)
  *   calls      dt.level.set(x, y, metatile) = CALLS below, a tile edit (the
- *              decompiled Level_EditCell)
+ *              decompiled Level_EditCell), and dt.spawn_item(item, x, y), a
+ *              pickup of money, HP or a life (the decompiled Obj_ShowItem)
  *   tunes      dt.tune = TUNES below, Scrooge's tunables (ducktales/tune.h)
  *   ai         dt.ai(kind, ...) for the enemies dt.spawn makes: the kind's
  *              objects run the script's code before and after their own
@@ -609,6 +610,20 @@ static bool spawns_enemy(long long kind)
     }
 }
 
+/* More than SPAWN_KEEP_FREE slots are free; false with the reason. */
+static bool slot_left(char *err, size_t cap)
+{
+    int empty = 0;
+    for (int slot = 1; slot < OBJ_SLOTS; slot++) {
+        empty += !(gObjects->state[slot] & OBJ_STATUS_LIVE);
+    }
+    if (empty > SPAWN_KEEP_FREE) {
+        return true;
+    }
+    snprintf(err, cap, "%d free slots, %d kept for the game", empty, SPAWN_KEEP_FREE);
+    return false;
+}
+
 typedef struct {
     uint8_t template[4];
     uint16_t x;
@@ -660,12 +675,7 @@ static int spawn_object(const long long *args, int nargs, long long *values, cha
     if (!in_range(args[2], 0, OBJ_Y_MAX, err, cap)) {
         return FM_INVALID;
     }
-    int empty = 0;
-    for (int slot = 1; slot < OBJ_SLOTS; slot++) {
-        empty += !(gObjects->state[slot] & OBJ_STATUS_LIVE);
-    }
-    if (empty <= SPAWN_KEEP_FREE) {
-        snprintf(err, cap, "%d free slots, %d kept for the game", empty, SPAWN_KEEP_FREE);
+    if (!slot_left(err, cap)) {
         return FM_REFUSED;
     }
     Decomp_Outside(spawn, &s);
@@ -736,8 +746,85 @@ static int level_set(const long long *args, int nargs, char *err, size_t cap)
     return FM_DONE;
 }
 
+/* The items dt.spawn_item makes: those whose taking ($8B21, Pickup_Take)
+ * adds money or HP or a life and nothing else. The power-up, the key items,
+ * the extra HP dot and the treasures, which set progress bits ($A0, $A1,
+ * $AE) or start a scene, are left out. */
+static bool safe_item(long long item)
+{
+    switch (item) {
+        case 0x23:                 /* 2,000 ($8B71: Money_Add(2, 3)) */
+        case 0x24:                 /* the first lost HP dot ($8B82) */
+        case 0x25:                 /* every HP dot ($F812); 10,000 on Difficult ($F822 makes it $28) */
+        case 0x27:                 /* one more life, up to 9 ($8BB0) */
+        case 0x28:                 /* 10,000 ($8BBB: Money_Add(1, 2)) */
+        case OBJ_ITEM_BIG_DIAMOND: /* 50,000 (Money_Add(5, 2)) */
+            return true;
+        default:
+            return false;
+    }
+}
+
+typedef struct {
+    uint8_t item, y, slot;
+    uint16_t x;
+} ItemSpawn;
+
+/* A free slot shows item as the game's hidden items do ($8CAC): a pickup
+ * (kind $13) that falls to the floor, blinks and vanishes, with record 255,
+ * and the fields $AF2B's template step clears for a new object. Its flags
+ * are on screen, as a template's live status leaves them: the pickup's code
+ * frees a slot without that bit at once, before the sprite builder sets it. */
+static void spawn_item_slot(void *ctx)
+{
+    ItemSpawn *s = ctx;
+    Obj_FindFreeSlot(&s->slot);
+    gObjects->record[s->slot] = 0xFF;
+    Obj_SetWorldX(s->slot, s->x);
+    gObjects->unk_0740[s->slot] = gObjects->y[s->slot] = s->y;
+    gObjects->flags[s->slot] = OBJ_FLAG_ON_SCREEN;
+    gObjects->unk_0690[s->slot] = 0;
+    gObjects->bossCooldown[s->slot] = 0;
+    Obj_ShowItem(s->slot, s->item);
+}
+
+/* dt.spawn_item(item, x, y): a pickup of item at world X x on the screen
+ * and Y y, in the highest free slot. Its sprite's tiles are in every land:
+ * the common sprite page ($0000-$07FF), and for the life tiles $8E-$8F of
+ * page $0800, the same in the five lands' lists ($C301). */
+static int spawn_item(const long long *args, int nargs, char *err, size_t cap)
+{
+    if (nargs != 3) {
+        snprintf(err, cap, "an item, x and y are needed");
+        return FM_INVALID;
+    }
+    if (!safe_item(args[0])) {
+        snprintf(err, cap, "item %lld is not one dt.spawn_item makes (docs/MODS.md)", args[0]);
+        return FM_INVALID;
+    }
+    if (gBossFight & 0x80) {
+        snprintf(err, cap, "not during a boss fight");
+        return FM_INVALID;
+    }
+    long long left = gCameraPage << 8 | gCameraX;
+    if (!in_range(args[1], left, left + 0xFF, err, cap)) {
+        strncat(err, " (the screen)", cap - strlen(err) - 1);
+        return FM_INVALID;
+    }
+    if (!in_range(args[2], 0, OBJ_Y_MAX, err, cap)) {
+        return FM_INVALID;
+    }
+    if (!slot_left(err, cap)) {
+        return FM_REFUSED;
+    }
+    ItemSpawn s = { .item = (uint8_t)args[0], .y = (uint8_t)args[2], .x = (uint16_t)args[1] };
+    Decomp_Outside(spawn_item_slot, &s);
+    return FM_DONE;
+}
+
 static const FmCall CALLS[] = {
     { "level", "set", level_set },
+    { NULL, "spawn_item", spawn_item },
 };
 
 static const FmQuery QUERIES[] = {

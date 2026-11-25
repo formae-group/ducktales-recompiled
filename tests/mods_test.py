@@ -48,9 +48,11 @@ templates come from the player's own ROM through --mods-dump and are deleted wit
      its own, refuses what it must and stops with 2 slots free; dt.level.set puts a solid metatile
      in front of Scrooge that stops him and refuses what it must; dt.ai skips a hopper's own code
      (dt.SKIP), makes another walk faster and jump higher through speed and vy, refuses what it must
-     and stops a mod past 250,000 instructions of callbacks in a frame; on full_amazon
-     dt.set.boss_hits during the fight only; on the headless build scripts that write, tune, use
-     handles, spawn, give the hoppers dt.ai code and set
+     and stops a mod past 250,000 instructions of callbacks in a frame; dt.spawn_item makes each
+     of its six items, which Scrooge takes for their money, HP or life and nothing else, and
+     refuses the others; on full_amazon dt.set.boss_hits during the fight only and dt.spawn_item
+     refused there; on the headless build scripts that write, tune, use handles, spawn enemies and
+     items, give the hoppers dt.ai code and set
      the invulnerability in a knock-back (refused where it would never end), and the level script in
      a run of its own, log the same lines with --decomp off, check and replace,
      find no mismatch, and with the developer build (--dev-build) replace keeps the RAM of off

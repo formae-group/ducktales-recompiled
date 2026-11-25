@@ -15,11 +15,14 @@ positions out of bounds, calls outside a game event's handler, and the four even
 frame's end; dt.spawn on amazon_intro: a hopper made on the screen that the game runs as its own,
 the arguments it refuses, spawns until 2 slots are left and a spawned enemy despawned; dt.level.set
 puts a wall in front of Scrooge that stops him, logs its repeats in one line and refuses what it must;
-dt.ai on amazon_intro: a hopper skipped by dt.SKIP stays put, one given speed 512 walks further and
-one given vy 1536 at its take-off jumps higher, what dt.ai and the three fields refuse, the code taken
-back and given again, and the per-frame instruction bound; dt.set.boss_hits on full_amazon's fight
-and outside it. The dt.ai script, every hopper skipped in turn once dt.spawn filled the slots, is also
-in the --decomp off, check and replace runs.
+dt.spawn_item on amazon_intro: the items it refuses, and a pickup of each item it makes that Scrooge
+takes through the game's code (money, an HP dot, full HP, a life and none past 9, with the treasures
+and key items unchanged); dt.ai on amazon_intro: a hopper skipped by dt.SKIP stays put, one given
+speed 512 walks further and one given vy 1536 at its take-off jumps higher, what dt.ai and the
+three fields refuse, the code taken back and given again, and the per-frame instruction bound;
+dt.set.boss_hits on full_amazon's fight and outside it, and dt.spawn_item refused in the fight. The
+dt.ai script, every hopper skipped in turn once dt.spawn filled the slots, and the item script are
+also in the --decomp off, check and replace runs.
 """
 
 import os
@@ -325,6 +328,75 @@ dt.on("frame", function(frame)
 end)
 '''
 
+# dt.spawn_item on amazon_intro: the items it refuses, then each item it makes in turn, 60 lines up,
+# moved onto Scrooge every step until he takes it (HP set to 1 before the HP items, lives to 3 and
+# then 9 before the lives); each take logs its item and what changed.
+ITEM_LUA = r'''
+local step, n, took, wait = 0, 0, nil, 40
+local plan = {
+    {0x23}, {0x28}, {0x61}, {0x24, hp = 1}, {0x25, hp = 1}, {0x27, lives = 3}, {0x27, lives = 9},
+}
+local function try(...)
+    local ok, err = pcall(dt.spawn_item, ...)
+    return tostring(ok) .. " " .. (tostring(err):gsub("^.-: ", "", 1))
+end
+local function made()
+    for _, o in ipairs(dt.objects()) do
+        if o.kind == 19 and o.record == 255 then
+            return o
+        end
+    end
+end
+dt.on("update", function()
+    step = step + 1
+    local s = dt.state
+    if took then
+        dt.log("took", took.item, s.money - took.money, s.hp - took.hp, s.lives - took.lives, s.lives, s.hp == s.hp_max,
+            s.treasures == took.treasures and s.key_items == took.key_items)
+        took = nil
+    end
+    if step == 30 then
+        dt.log("power", try(0x26, s.x, s.y))
+        dt.log("treasure", try(0x6F, s.x, s.y))
+        dt.log("key", try(0x29, s.x, s.y))
+        dt.log("extra dot", try(0x2B, s.x, s.y))
+        dt.log("off screen", try(0x23, dt.camera().x - 1, s.y))
+        dt.log("arguments", try(0x23, s.x))
+    end
+    local o = made()
+    if o then
+        o:set{x = s.x, y = s.y}
+    elseif step >= wait and n < #plan then
+        n = n + 1
+        local p = plan[n]
+        if p.hp then
+            dt.set.hp(p.hp)
+        end
+        if p.lives then
+            dt.set.lives(p.lives)
+        end
+        local ok = dt.spawn_item(p[1], s.x, 60)
+        o = made()
+        dt.log("spawned", p[1], ok, o.kind, o.action, o.record, o.state)
+        wait = step + 10
+    end
+end)
+dt.on("item-collected", function(e)
+    local s = dt.state
+    if made() and e.slot == made().slot then
+        took = {
+            item = e.item, money = s.money, hp = s.hp, lives = s.lives,
+            treasures = s.treasures, key_items = s.key_items,
+        }
+    end
+end)
+dt.on("frame", function(frame)
+    if frame == 1400 then
+        dt.log("outside", pcall(dt.spawn_item, 0x23, 0, 0))
+    end
+end)
+'''
+
 # dt.ai on amazon_intro: three hoppers spawned at step 40, one skipped every turn, one walking at
 # speed 512 and taking off at vy 1536, one left alone; the calls it refuses; the code taken back at
 # step 100 and given again at 110; once the slots are full (SPAWN_LUA in the trio), every hopper
@@ -481,6 +553,7 @@ end)
 dt.on("boss-hit", function()
     hits = hits + 1
     if hits == 2 then
+        dt.log("item in fight", pcall(dt.spawn_item, 0x23, dt.state.x, dt.state.y))
         local ok, err = pcall(dt.set.boss_hits, 6)
         dt.log("range", ok, err)
         dt.set.boss_hits(5)
@@ -824,6 +897,52 @@ def gameplay_checks(exe, native, dev):
                 f'the native player logs the same {len(spawn_lines["headless"])} lines with dt.spawn',
             )
 
+        item_mods = mods('item', {'item': ITEM_LUA})
+        item_lines = {}
+        for host, host_exe, is_native in hosts:
+            log = run(host_exe, f'item_{host.replace(" ", "_")}', is_native, item_mods)
+            item_lines[host] = [line for line in log.splitlines() if 'Mod item:' in line]
+            what = ('power', 'treasure', 'key', 'extra dot', 'off screen', 'arguments', 'outside')
+            got = {w: (lines(log, 'item', w) or [[]])[0] for w in what}
+            took = {}
+            for t in lines(log, 'item', 'took'):
+                took.setdefault(t[0], []).append(t[1:])
+            check(
+                all(
+                    got[w] == [f'false item {i} is not one dt.spawn_item makes (docs/MODS.md)']
+                    for w, i in (('power', 38), ('treasure', 111), ('key', 41), ('extra dot', 43))
+                )
+                and got['off screen'][0].endswith('(the screen)')
+                and got['arguments'] == ['false an item, x and y are needed']
+                and got['outside'][:1] == ['false']
+                and got['outside'][-1].endswith("dt.spawn_item(35, 0, 0) is called in a game event's handler"),
+                f'{host}: dt.spawn_item refuses the power-up, a treasure, a key item, the extra dot, a position off '
+                f'the screen, missing arguments and a call outside a game event\'s handler',
+                f'{got}',
+            )
+            spawned = [s for s in lines(log, 'item', 'spawned')]
+            check(
+                [s[:1] + s[2:] for s in spawned]
+                == [[i, '19', i, '255', '161'] for i in ('35', '40', '97', '36', '37', '39', '39')]
+                and [t[0] for t in took.get('35', [])] == ['2000']
+                and [t[0] for t in took.get('40', [])] == ['10000']
+                and [t[0] for t in took.get('97', [])] == ['50000']
+                and [t[1] for t in took.get('36', [])] == ['1']
+                and [t[4] for t in took.get('37', [])] == ['true']
+                and [t[2:4] for t in took.get('39', [])] == [['1', '4'], ['0', '9']]
+                and all(t[-1] == 'true' for ts in took.values() for t in ts)
+                and any(line.endswith('Mod item: dt.spawn_item(35, 188, 60)') for line in item_lines[host]),
+                f'{host}: dt.spawn_item makes a pickup with record 255 that Scrooge takes through the game\'s code: '
+                f'2,000, 10,000 and 50,000 money, an HP dot, full HP and a life (none at 9), with the treasures and '
+                f'key items unchanged',
+                f'{spawned} {took}',
+            )
+        if len(item_lines) == 2:
+            check(
+                item_lines['headless'] == item_lines['native player'],
+                f'the native player logs the same {len(item_lines["headless"])} lines with dt.spawn_item',
+            )
+
         ai_mods = mods('ai', {'ai': AI_LUA, 'ai-budget': AI_BUDGET_LUA})
         ai_lines = {}
         for host, host_exe, is_native in hosts:
@@ -919,14 +1038,20 @@ def gameplay_checks(exe, native, dev):
         log = run(
             exe, 'boss', False, mods('boss', {'boss': BOSS_LUA}), ROOT / 'tests' / 'routes' / 'full_amazon.txt', 7310
         )
-        boss = {what: (lines(log, 'boss', what) or [[]])[0] for what in ('outside fight', 'range', 'hits left')}
+        boss = {
+            what: (lines(log, 'boss', what) or [[]])[0]
+            for what in ('outside fight', 'range', 'hits left', 'item in fight')
+        }
         check(
             boss['outside fight'] == ['false', 'dt.set.boss_hits(3): only during a boss fight']
             and boss['range'] == ['false', 'dt.set.boss_hits(6): out of range 1 to 5']
             and 'Mod boss: dt.set.boss_hits(5), was 4' in log
-            and boss['hits left'] == ['2', '4'],
+            and boss['hits left'] == ['2', '4']
+            and boss['item in fight'][:1] == ['false']
+            and boss['item in fight'][-1].endswith('not during a boss fight'),
             f'headless: dt.set.boss_hits works only during the fight, 1 to 5; written at the second hit, '
-            f'the boss has {boss["hits left"][1:]} hits left where the game leaves 3',
+            f'the boss has {boss["hits left"][1:]} hits left where the game leaves 3; dt.spawn_item is refused in '
+            f'the fight',
             f'{boss}',
         )
 
@@ -953,6 +1078,7 @@ def gameplay_checks(exe, native, dev):
             'spawn': SPAWN_LUA,
             'level': LEVEL_LUA,
             'ai': AI_LUA,
+            'item': ITEM_LUA,
         }
         trio_mods = mods('trio', scripts)
         logs, ram = {}, []
@@ -964,7 +1090,7 @@ def gameplay_checks(exe, native, dev):
             logs[mode] = run(host_exe, f'decomp_{mode}', False, trio_mods, extra=extra)
         check(
             all('MISMATCH' not in log and 'TIMING' not in log for log in logs.values()),
-            'headless: with the writing, tuning, object, spawn, level and dt.ai scripts, --decomp check finds no '
+            'headless: with the writing, tuning, object, spawn, level, dt.ai and item scripts, --decomp check finds no '
             'mismatch and no timing difference',
             logs['check'][-3000:],
         )
@@ -982,7 +1108,7 @@ def gameplay_checks(exe, native, dev):
         diff, info = ram_diff(ram)
         check(
             diff is None,
-            f'headless: with the writing, tuning, object, spawn, level and dt.ai scripts, --decomp replace keeps the '
-            f'RAM of --decomp off outside the stack ({info})',
+            f'headless: with the writing, tuning, object, spawn, level, dt.ai and item scripts, --decomp replace '
+            f'keeps the RAM of --decomp off outside the stack ({info})',
             diff or '',
         )

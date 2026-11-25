@@ -41,3 +41,4 @@ void Money_Max(void);
 void Hud_RefillHp(void);
 uint8_t Obj_SpawnRecord(uint8_t y);
 void Obj_SpawnTemplate(uint8_t x, const uint8_t template[4]);
+void Obj_ShowItem(uint8_t x, uint8_t item);
