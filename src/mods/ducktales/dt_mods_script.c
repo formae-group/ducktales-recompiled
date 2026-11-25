@@ -13,6 +13,8 @@
  *              and o:despawn() (the decompiled Obj_Despawn), and
  *              dt.spawn(kind, x, y [, action]) makes an enemy (the
  *              decompiled Obj_FindFreeSlot and Obj_SpawnTemplate)
+ *   calls      dt.level.set(x, y, metatile) = CALLS below, a tile edit (the
+ *              decompiled Level_EditCell)
  *   tunes      dt.tune = TUNES below, Scrooge's tunables (ducktales/tune.h)
  *   store      dt.store in the data folder's mods-data
  */
@@ -22,10 +24,12 @@
 #include "ducktales/events.h"
 #include "ducktales/game.h"
 #include "ducktales/hud.h"
+#include "ducktales/level.h"
 #include "ducktales/objects.h"
 #include "ducktales/player.h"
 #include "ducktales/tune.h"
 #include "decomp/decomp.h"
+#include "decomp/level.h"
 #include "decomp/objcommon.h"
 #include "game/ducktales_symbols.h"
 #include "ui/app_rom.h"
@@ -34,6 +38,7 @@
 #include <string.h>
 
 static bool s_configured;
+static EventId s_event = EVENT_COUNT; /* the game event whose handlers run, EVENT_COUNT for none */
 static char s_store_dir[1024];
 
 /* ---- the script API's game side ---- */
@@ -596,29 +601,29 @@ static int spawn_object(const long long *args, int nargs, long long *values, cha
 {
     if (nargs < 3 || nargs > 4) {
         snprintf(err, cap, "kind, x, y and an optional action are needed");
-        return FM_CREATE_INVALID;
+        return FM_INVALID;
     }
     long long kind = args[0];
     Spawn s = { .x = (uint16_t)args[1], .y = (uint8_t)args[2] };
     if (!spawns_enemy(kind)) {
         snprintf(err, cap, "kind %lld is not one of the enemies (docs/MODS.md)", kind);
-        return FM_CREATE_INVALID;
+        return FM_INVALID;
     }
     if (gBossFight & 0x80) {
         snprintf(err, cap, "not during a boss fight");
-        return FM_CREATE_INVALID;
+        return FM_INVALID;
     }
     if (!land_template((uint8_t)kind, nargs == 4 ? args[3] : -1, s.template)) {
         snprintf(err, cap, "this land spawns no kind %lld%s", kind, nargs == 4 ? " with that action" : "");
-        return FM_CREATE_INVALID;
+        return FM_INVALID;
     }
     long long left = gCameraPage << 8 | gCameraX;
     if (!in_range(args[1], left, left + 0xFF, err, cap)) {
         strncat(err, " (the screen)", cap - strlen(err) - 1);
-        return FM_CREATE_INVALID;
+        return FM_INVALID;
     }
     if (!in_range(args[2], 0, OBJ_Y_MAX, err, cap)) {
-        return FM_CREATE_INVALID;
+        return FM_INVALID;
     }
     int empty = 0;
     for (int slot = 1; slot < OBJ_SLOTS; slot++) {
@@ -626,11 +631,11 @@ static int spawn_object(const long long *args, int nargs, long long *values, cha
     }
     if (empty <= SPAWN_KEEP_FREE) {
         snprintf(err, cap, "%d free slots, %d kept for the game", empty, SPAWN_KEEP_FREE);
-        return FM_CREATE_REFUSED;
+        return FM_REFUSED;
     }
     Decomp_Outside(spawn, &s);
     read_object(s.slot, values);
-    return FM_CREATED;
+    return FM_DONE;
 }
 
 static const char *const CAMERA_FIELDS[] = { "x", "row", "screen" };
@@ -643,6 +648,62 @@ static int read_camera(long long *v)
     v[2] = gCameraScreen;
     return 1;
 }
+
+#define LEVEL_Y_MIN     0x30 /* the first line below the HUD (tile rows 0-5) */
+#define TILE_EDIT_ENTRY 14
+#define CLASS_SPECIAL   3
+
+/* dt.level.set(x, y, metatile): the metatile at world X x and Y y on the
+ * screen becomes metatile of the land's tileset, as an object's tile edit
+ * does it ($F574): in the $0440 queue, the collision map and the attribute
+ * shadow. Only in an "update" handler, with the queue empty and not yet
+ * given to the NMI ($5C and $1A 0, so one edit a step) and no row scroll.
+ * The tileset is read from its bank, with no bank switch. A special
+ * metatile (class 3) is refused: the game finds its effect from the
+ * metatile of the map, which is not this one. */
+static int level_set(const long long *args, int nargs, char *err, size_t cap)
+{
+    if (nargs != 3) {
+        snprintf(err, cap, "x, y and a metatile are needed");
+        return FM_INVALID;
+    }
+    if (s_event != EVENT_UPDATE) {
+        snprintf(err, cap, "only in an \"update\" handler");
+        return FM_INVALID;
+    }
+    long long left = gCameraPage << 8 | gCameraX;
+    if (!in_range(args[0], left, left + 0xFF, err, cap)) {
+        strncat(err, " (the screen)", cap - strlen(err) - 1);
+        return FM_INVALID;
+    }
+    if (!in_range(args[1], LEVEL_Y_MIN, OBJ_Y_MAX, err, cap)) {
+        strncat(err, " (below the HUD)", cap - strlen(err) - 1);
+        return FM_INVALID;
+    }
+    if (!in_range(args[2], 0, 0xFF, err, cap)) {
+        return FM_INVALID;
+    }
+    uint8_t metatile[5];
+    for (int i = 0; i < 4; i++) {
+        metatile[i] = Game_ReadPrg(gTilesetBank, (uint16_t)(DT_METATILE_TILES + 0x100 * i + args[2]));
+    }
+    metatile[4] = Game_ReadPrg(gTilesetBank, (uint16_t)(DT_METATILE_ATTR + args[2]));
+    if ((metatile[4] >> 4 & 3) == CLASS_SPECIAL) {
+        snprintf(err, cap, "metatile %lld is a special one (collision class 3)", args[2]);
+        return FM_INVALID;
+    }
+    if (RAM_U8(DT_ADDR_TILE_EDIT_END) || gTileEditReady || gRowScroll) {
+        snprintf(err, cap, "the tile edit queue is in use");
+        return FM_REFUSED;
+    }
+    Level_EditCell((uint8_t)args[0], (uint8_t)(args[0] >> 8), (uint8_t)args[1], metatile);
+    RAM_U8(DT_ADDR_TILE_EDIT_END) = TILE_EDIT_ENTRY;
+    return FM_DONE;
+}
+
+static const FmCall CALLS[] = {
+    { "level", "set", level_set },
+};
 
 static const FmQuery QUERIES[] = {
     { "objects", true, OBJECT_FIELD_COUNT, OBJECT_FIELDS, read_objects, same_object, check_object, write_object,
@@ -674,7 +735,11 @@ static EventResult on_event(EventId id, void *user)
     for (int i = 0; i < n; i++) {
         values[i] = (FmArg){ args[i].name, args[i].value };
     }
-    return fm_scripts_event((int)id, values, n) ? EVENT_CANCEL : EVENT_CONTINUE;
+    EventId was = s_event;
+    s_event = id;
+    bool cancel = fm_scripts_event((int)id, values, n);
+    s_event = was;
+    return cancel ? EVENT_CANCEL : EVENT_CONTINUE;
 }
 
 static void listen(int event, bool on)
@@ -711,6 +776,8 @@ void dt_mods_configure(void)
         .query_count = (int)(sizeof QUERIES / sizeof QUERIES[0]),
         .tunes = TUNES,
         .tune_count = TUNE_COUNT,
+        .calls = CALLS,
+        .call_count = (int)(sizeof CALLS / sizeof CALLS[0]),
         .tune = tune,
         .state_open = GameRam_Open,
         .listen = listen,

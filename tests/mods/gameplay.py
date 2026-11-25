@@ -11,7 +11,8 @@ dt.set.invulnerable is refused where it would hold the knock-back forever. Objec
 amazon_intro: a timed enemy moved and despawned, a stale handle, the player's slot, actions and
 positions out of bounds, calls outside a game event's handler, and the four events seen at the
 frame's end; dt.spawn on amazon_intro: a hopper made on the screen that the game runs as its own,
-the arguments it refuses, spawns until 2 slots are left and a spawned enemy despawned;
+the arguments it refuses, spawns until 2 slots are left and a spawned enemy despawned; dt.level.set
+puts a wall in front of Scrooge that stops him, logs its repeats in one line and refuses what it must;
 dt.set.boss_hits on full_amazon's fight and outside it.
 """
 
@@ -285,6 +286,49 @@ end)
 dt.on("frame", function(frame)
     if frame == 1000 then
         local ok, err = pcall(dt.spawn, 1, 0, 0)
+        dt.log("outside", ok, err)
+    end
+end)
+'''
+
+# dt.level.set on amazon_intro (metatile 102 is solid in the Amazon's tileset, 158 special): a wall
+# put in front of Scrooge as he walks right, set again for 10 steps, and the calls it refuses.
+LEVEL_LUA = r'''
+local step, wall, other = 0, nil, false
+local function refused(...)
+    local ok, a, b = pcall(dt.level.set, ...)
+    if ok then
+        return tostring(a) .. " " .. tostring(b)
+    end
+    return "error " .. a:gsub("^.-: ", "", 1)
+end
+dt.on("update", function()
+    step = step + 1
+    local left = dt.camera().x
+    if step == 70 then
+        wall = { dt.state.x + 20, dt.state.y }
+        dt.log("wall", dt.state.x, dt.level.set(wall[1], wall[2], 102))
+        dt.log("second", refused(wall[1], wall[2] - 16, 102))
+        dt.log("off screen", refused(left - 1, 100, 102))
+        dt.log("hud", refused(left + 10, 40, 102))
+        dt.log("special", refused(left + 10, 100, 158))
+        dt.log("metatile", refused(left + 10, 100, 256))
+        dt.log("arguments", refused(left + 10, 100))
+    elseif wall and step < 70 + 10 then
+        dt.level.set(wall[1], wall[2], 102)
+    elseif step == 90 then
+        dt.log("blocked", dt.state.x, wall[1])
+    end
+end)
+dt.on("object-spawned", function()
+    if wall and not other then
+        other = true
+        dt.log("other event", refused(dt.camera().x + 10, 100, 102))
+    end
+end)
+dt.on("frame", function(frame)
+    if frame == 1000 then
+        local ok, err = pcall(dt.level.set, 0, 0, 0)
         dt.log("outside", ok, err)
     end
 end)
@@ -597,6 +641,46 @@ def gameplay_checks(exe, native, dev):
                 f'the native player logs the same {len(spawn_lines["headless"])} lines with dt.spawn',
             )
 
+        level_mods = mods('level', {'level': LEVEL_LUA})
+        level_lines = {}
+        for host, host_exe, is_native in hosts:
+            log = run(host_exe, f'level_{host.replace(" ", "_")}', is_native, level_mods)
+            level_lines[host] = [line for line in log.splitlines() if 'Mod level:' in line]
+            what = ('wall', 'second', 'off screen', 'hud', 'special', 'metatile', 'arguments', 'other event')
+            got = {w: (lines(log, 'level', w) or [[]])[0] for w in (*what, 'blocked', 'outside')}
+            written = [line.split(': ', 1)[1] for line in level_lines[host] if ': dt.level.set(' in line]
+            blocked = got['blocked']
+            check(
+                got['wall'][1:] == ['true']
+                and len(blocked) == 2
+                and int(blocked[0]) < int(blocked[1]) - 9
+                and written == ['dt.level.set(214, 180, 102)', 'dt.level.set(214, 180, 102) repeated 9 more times'],
+                f'{host}: dt.level.set puts a solid metatile in front of Scrooge and it stops him '
+                f'(x {blocked[:1]}, the wall at {blocked[1:]}); set again each step, it is logged once with its '
+                f'repeats',
+                f'{got}\n' + '\n'.join(written),
+            )
+            check(
+                got['second'] == ['false the tile edit queue is in use']
+                and got['off screen'][0].endswith('(the screen)')
+                and got['hud'] == ['error out of range 48 to 239 (below the HUD)']
+                and got['special'] == ['error metatile 158 is a special one (collision class 3)']
+                and got['metatile'] == ['error out of range 0 to 255']
+                and got['arguments'] == ['error x, y and a metatile are needed']
+                and got['other event'] == ['error only in an "update" handler']
+                and got['outside'][:1] == ['false']
+                and got['outside'][-1].endswith("dt.level.set(0, 0, 0) is called in a game event's handler"),
+                f'{host}: dt.level.set refuses a second edit in the same step (false and the reason), a cell off '
+                f'the screen or in the HUD, a special or unknown metatile, missing arguments, another event\'s '
+                f'handler and a call outside a game event\'s handler',
+                f'{got}',
+            )
+        if len(level_lines) == 2:
+            check(
+                level_lines['headless'] == level_lines['native player'],
+                f'the native player logs the same {len(level_lines["headless"])} lines with dt.level.set',
+            )
+
         if not exe:
             return
         log = run(
@@ -613,16 +697,6 @@ def gameplay_checks(exe, native, dev):
             f'{boss}',
         )
 
-        trio_mods = mods(
-            'trio', {'gameplay': UPDATE_LUA, 'knock': KNOCK_LUA, 'objects': OBJECTS_LUA, 'spawn': SPAWN_LUA}
-        )
-        logs, ram = {}, []
-        for mode in ('off', 'check', 'replace'):
-            host_exe, extra = exe, ['--decomp', mode]
-            if dev and mode != 'check':
-                ram.append(tmp / f'{mode}.ram')
-                host_exe, extra = dev, [*extra, '--dt-ram-log', ram[-1]]
-            logs[mode] = run(host_exe, f'decomp_{mode}', False, trio_mods, extra=extra)
         knock_log = run(exe, 'knock', False, mods('knock', {'knock': KNOCK_LUA}))
         knock = (lines(knock_log, 'knock', 'knock-back write') or [[]])[0]
         check(
@@ -638,31 +712,47 @@ def gameplay_checks(exe, native, dev):
             f'headless: the knock-back lasts until the written invulnerability counts down to its end '
             f'({held[:1]} steps, the game\'s is 11)',
         )
-        check(
-            all('MISMATCH' not in log and 'TIMING' not in log for log in logs.values()),
-            'headless: with the writing, tuning, object and spawn scripts, --decomp check finds no mismatch and no timing '
-            'difference',
-            logs['check'][-3000:],
+
+        # The level script runs in a trio of its own: added to the other four, it makes lag frames
+        # where --decomp replace drifts from off by a few cycles, as the other four alone do with
+        # walk_speed 0x220 to 0x280 (docs/DECOMPILATION.md "Tunables", known limit).
+        trios = (
+            (
+                'writing, tuning, object and spawn',
+                {'gameplay': UPDATE_LUA, 'knock': KNOCK_LUA, 'objects': OBJECTS_LUA, 'spawn': SPAWN_LUA},
+            ),
+            ('level', {'level': LEVEL_LUA}),
         )
-        written = {
-            m: [
-                line
-                for line in log.splitlines()
-                if any(f'Mod {i}:' in line for i in ('gameplay', 'knock', 'objects', 'spawn'))
-            ]
-            for m, log in logs.items()
-        }
-        check(
-            written['off'] == written['check'] == written['replace'],
-            f'headless: --decomp off, check and replace log the same {len(written["off"])} lines',
-        )
-        if not dev:
-            print('SKIP  the RAM of --decomp replace: no developer build (--dev-build)')
-            return
-        diff, info = ram_diff(ram)
-        check(
-            diff is None,
-            f'headless: with the writing, tuning, object and spawn scripts, --decomp replace keeps the RAM of --decomp off '
-            f'outside the stack ({info})',
-            diff or '',
-        )
+        for what, scripts in trios:
+            folder = mods(f'trio {what}', scripts)
+            logs, ram = {}, []
+            for mode in ('off', 'check', 'replace'):
+                host_exe, extra = exe, ['--decomp', mode]
+                if dev and mode != 'check':
+                    ram.append(tmp / f'{mode}.ram')
+                    host_exe, extra = dev, [*extra, '--dt-ram-log', ram[-1]]
+                logs[mode] = run(host_exe, f'decomp_{mode}', False, folder, extra=extra)
+            check(
+                all('MISMATCH' not in log and 'TIMING' not in log for log in logs.values()),
+                f'headless: with the {what} scripts, --decomp check finds no mismatch and no timing difference',
+                logs['check'][-3000:],
+            )
+            written = {
+                m: [line for line in log.splitlines() if any(f'Mod {i}:' in line for i in scripts)]
+                for m, log in logs.items()
+            }
+            check(
+                written['off'] == written['check'] == written['replace'],
+                f'headless: with the {what} scripts, --decomp off, check and replace log the same '
+                f'{len(written["off"])} lines',
+            )
+            if not dev:
+                print('SKIP  the RAM of --decomp replace: no developer build (--dev-build)')
+                continue
+            diff, info = ram_diff(ram)
+            check(
+                diff is None,
+                f'headless: with the {what} scripts, --decomp replace keeps the RAM of --decomp off outside the '
+                f'stack ({info})',
+                diff or '',
+            )

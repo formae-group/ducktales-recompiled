@@ -29,6 +29,11 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   decompiled `Obj_FindFreeSlot` and `Obj_SpawnTemplate` (the template step of `Obj_SpawnRecord`,
   now shared), and returns its handle; no bosses, chests or pickups, none in a boss fight, and two
   slots always left to the game. No hook site.
+- Script mods can edit the level (docs/MODS.md "Editing the level"): `dt.level.set(x, y, metatile)`
+  in an `update` handler replaces a metatile on the screen through the game's tile edit queue, with
+  its collision class and palette, through the decompiled `Level_EditCell` (the queue and map step
+  of `Level_TileEdit`, now shared). One edit a step, below the HUD, no special metatiles; it lasts
+  until the game draws that part of the level again. No hook site, so the use stays at 112 of 128.
 - Decompiled the scheduler `$FF35-$FF7C` as timed task code (`Task_Schedule`, `Task_Pass`,
   `Task_Resume`), whose time the native runtime spends, giving the call to the original when an NMI
   is pending or VBlank would come during it. The native step dumps and lag logs are unchanged on all

@@ -123,20 +123,15 @@ uint8_t Chr_StreamRow(uint8_t x)
     return Vram_EndQueue(3 + CHR_CHUNK, CHR_CHUNK);
 }
 
-/* $F574: replace the metatile under the object in slot (its world X and
- * the Y in $0740) by entry $08 of the table at $F653: two 2-tile entries and
- * an attribute entry in the $0440 queue at $5C, and the new collision class
- * and palette in the collision map and attribute shadow (the HUD half of
- * the top attribute bytes is kept out of the queue). */
-void Level_TileEdit(int slot)
+/* The part of $F574 an object's tile edit shares with a mod's
+ * (dt.level.set, docs/MODS.md): the metatile at world X page:x and Y y
+ * becomes the one whose four tiles and attribute byte are metatile[0-4]:
+ * two 2-tile entries and an attribute entry in the $0440 queue at $5C
+ * (closed, $5C not moved), and its collision class and palette in the
+ * collision map and attribute shadow (the HUD half of the top attribute
+ * bytes is kept out of the queue). */
+LevelCell Level_EditCell(uint8_t x, uint8_t page, uint8_t y, const uint8_t metatile[5])
 {
-    Decomp_Enter(DT_CODE_TILE_EDIT, 0, (uint8_t)slot, 0);
-    uint8_t y = gObjects->unk_0740[slot];
-    uint8_t x = gObjects->worldX[slot];
-    uint8_t page = gObjects->worldPage[slot];
-    gScratch9 = y;
-    gScratch0A = x;
-    gScratch0B = page;
     uint8_t *q = gTileEditQueue + gTileEditEnd;
     q[12] = 0;
     q[2] = 1;
@@ -147,25 +142,44 @@ void Level_TileEdit(int slot)
     q[5] = hi;
     q[10] = hi | 3;
     uint8_t quadrant = (uint8_t)((y >> 3 & 2) | (x >> 4 & 1));
-    gTargetPage = quadrant;
     q[1] = (uint8_t)(rom((uint16_t)(DT_CODE_TILE_EDIT_LO + blockRow)) | (x >> 3 & 0x1E) |
                      rom((uint16_t)(DT_CODE_TILE_EDIT_HALF + quadrant)));
     q[6] = q[1] | 0x20;
     uint8_t cell = (uint8_t)((page & 1) << 6 | (y >> 2 & 0x38) | (x >> 5 & 7));
-    gBlockCell = cell;
     q[11] = ATTR_TABLE_LO | cell;
-    uint8_t metatile = rom((uint16_t)(DT_CODE_TILE_EDIT_METATILE + gScratch8));
-    Bank_Select(gTilesetBank);
-    q[3] = rom((uint16_t)(DT_METATILE_TILES + metatile));
-    q[4] = rom((uint16_t)(DT_METATILE_TILES + 0x100 + metatile));
-    q[8] = rom((uint16_t)(DT_METATILE_TILES + 0x200 + metatile));
-    q[9] = rom((uint16_t)(DT_METATILE_TILES + 0x300 + metatile));
-    q[13] = rom((uint16_t)(DT_METATILE_ATTR + metatile));
-    gScratch0A = (uint8_t)((q[13] >> 4 & 3) << 2 * quadrant);
-    gScratch0B = (uint8_t)((q[13] & 3) << 2 * quadrant);
+    q[3] = metatile[0];
+    q[4] = metatile[1];
+    q[8] = metatile[2];
+    q[9] = metatile[3];
+    LevelCell c = { quadrant, cell, (uint8_t)((metatile[4] >> 4 & 3) << 2 * quadrant),
+                    (uint8_t)((metatile[4] & 3) << 2 * quadrant) };
     uint8_t keep = rom((uint16_t)(DT_CODE_QUADRANT_KEEP + quadrant));
-    gCollisionMap[cell] = (gCollisionMap[cell] & keep) | gScratch0A;
-    uint8_t attr = gAttrShadow[cell] = (gAttrShadow[cell] & keep) | gScratch0B;
+    gCollisionMap[cell] = (gCollisionMap[cell] & keep) | c.collision;
+    uint8_t attr = gAttrShadow[cell] = (gAttrShadow[cell] & keep) | c.palette;
     q[13] = cell < 0x10 ? attr & 0xF0 : attr;
     q[14] = 0xFF;
+    return c;
+}
+
+/* $F574: replace the metatile under the object in slot (its world X and
+ * the Y in $0740) by entry $08 of the table at $F653, read from the tileset
+ * bank. $09 is left with the Y, $0A and $0B with the collision and palette
+ * bits, $10 with the cell and $11 with the quadrant. */
+void Level_TileEdit(int slot)
+{
+    Decomp_Enter(DT_CODE_TILE_EDIT, 0, (uint8_t)slot, 0);
+    uint8_t y = gObjects->unk_0740[slot];
+    uint8_t index = rom((uint16_t)(DT_CODE_TILE_EDIT_METATILE + gScratch8));
+    Bank_Select(gTilesetBank);
+    const uint8_t metatile[5] = { rom((uint16_t)(DT_METATILE_TILES + index)),
+                                  rom((uint16_t)(DT_METATILE_TILES + 0x100 + index)),
+                                  rom((uint16_t)(DT_METATILE_TILES + 0x200 + index)),
+                                  rom((uint16_t)(DT_METATILE_TILES + 0x300 + index)),
+                                  rom((uint16_t)(DT_METATILE_ATTR + index)) };
+    LevelCell c = Level_EditCell(gObjects->worldX[slot], gObjects->worldPage[slot], y, metatile);
+    gScratch9 = y;
+    gScratch0A = c.collision;
+    gScratch0B = c.palette;
+    gBlockCell = c.cell;
+    gTargetPage = c.quadrant;
 }

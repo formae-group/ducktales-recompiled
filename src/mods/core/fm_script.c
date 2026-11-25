@@ -413,6 +413,19 @@ static int setup(lua_State *L)
             lua_setfield(L, -2, fm_script_game.queries[i].create);
         }
     }
+    for (int i = 0; i < fm_script_game.call_count; i++) {
+        const FmCall *c = &fm_script_game.calls[i];
+        if (lua_getfield(L, -1, c->table) != LUA_TTABLE) {
+            lua_pop(L, 1);
+            lua_newtable(L);
+            lua_pushvalue(L, -1);
+            lua_setfield(L, -3, c->table);
+        }
+        lua_pushinteger(L, i);
+        lua_pushcclosure(L, fm_script_sb_call, 1);
+        lua_setfield(L, -2, c->name);
+        lua_pop(L, 1);
+    }
     lua_setfield(L, -2, "dt");
     lua_pop(L, 1);
 

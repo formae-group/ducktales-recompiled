@@ -168,6 +168,14 @@ as `Decomp_RaiseEvent` raises only there. So:
 with `--decomp off`, `check` and `replace`: the same log, no mismatch, and the same RAM outside the
 stack on every frame. The four cost 3 of the 128 hook sites (112 in use with them).
 
+**Known limit.** With many enemies on the screen, `replace` can drift from `off` by a few cycles in
+a lag frame: the RAM taken at the frame's end then shows a routine at another point (scratch bytes
+and S), the sprite slots follow, and later the random generator. The step 11 scripts that write,
+tune and use handles, with `dt.spawn` filling the slots, do it on `amazon_intro` with
+`walk_speed` 0x220 to 0x280 instead of 0x200 (the same on the sources before `dt.level.set`), and
+with the level script added; each alone keeps the RAM equal, and `check` finds no mismatch and no
+timing difference in any of them. The cause is not known yet.
+
 ## Decompiled routines
 
 ### How a routine replaces the recompiled one
@@ -268,8 +276,12 @@ too and are not counted.
 open RAM transaction, as `o:despawn()` runs `Obj_Despawn` and `dt.spawn` runs `Obj_FindFreeSlot`
 and `Obj_SpawnTemplate` (docs/MODS.md), through `Decomp_Outside(fn, ctx)`: meanwhile
 `Decomp_Enter` does nothing, so the routine is neither checked nor timed nor counted, and it needs
-no call of the game's to be running (outside one `dc_top` names none). Its RAM changes are the handler's: on the machine at an event site, in the C's image when
-the C raises the event (replace mode).
+no call of the game's to be running (outside one `dc_top` names none). Its RAM changes are the
+handler's: on the machine at an event site, in the C's image when the C raises the event (replace
+mode). `dt.level.set` runs `Level_EditCell`, the part of `Level_TileEdit` (`$F574`) that writes
+the queue entry, the collision map and the attribute shadow; it has no entry of its own and no
+bank switch (`Level_TileEdit` selects the tileset bank and reads the metatile's five bytes, the
+mod reads them from the ROM), so it needs no `Decomp_Outside`, and `$F574` is compared as before.
 
 ### Task code
 

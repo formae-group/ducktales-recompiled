@@ -23,3 +23,16 @@ uint8_t Camera_Update(uint8_t x);
 void Block_Draw(uint8_t record);
 void Tile_EditByAction(uint8_t x, uint8_t y);
 void Tile_EditBySlot(uint8_t x, uint8_t y);
+
+/* A cell Level_EditCell changed: the metatile's quadrant of its 32x32 block
+ * (bit 0 right, bit 1 lower), the block's index in the collision map and
+ * attribute shadow (page bit 6, row * 8 + column), and the collision and
+ * palette bits it put there (shifted to the quadrant). */
+typedef struct {
+    uint8_t quadrant;
+    uint8_t cell;
+    uint8_t collision;
+    uint8_t palette;
+} LevelCell;
+
+LevelCell Level_EditCell(uint8_t x, uint8_t page, uint8_t y, const uint8_t metatile[5]);

@@ -175,6 +175,7 @@ end)
 | `dt.tune.<name>` | Scrooge's physics: assign a number to use in place of the game's, `nil` for the game's again; reads give the value in force or `nil` (see [Tunables](#tunables)) |
 | `dt.objects()`, `dt.camera()` | The live object slots, as handles that can move or remove an object in a game event's handler, and the camera, inside handlers (see [Objects and the camera](#objects-and-the-camera)) |
 | `dt.spawn(kind, x, y[, action])` | Makes an enemy the land uses, in a game event's handler; returns its handle, or `nil` and the reason (see [Spawning enemies](#spawning-enemies)) |
+| `dt.level.set(x, y, metatile)` | Replaces a metatile on the screen, with its collision, in an `update` handler; returns `true`, or `false` and the reason (see [Editing the level](#editing-the-level)) |
 | `dt.toast(text)` | Shows a short notice over the picture; returns `false` when it was refused (see [Toasts](#toasts)) |
 | `dt.draw.text(x, y, text[, color])`, `dt.draw.rect(x, y, w, h, color)` | Draws over the presented picture for one frame (see [Drawing](#drawing)) |
 | `dt.store.get(key)`, `dt.store.set(key, value)` | The mod's own saved values (see [Store](#store)) |
@@ -320,6 +321,40 @@ dt.on("update", function()
     if made < 3 and dt.state.pad_new & 0x40 ~= 0 then -- B
         local o, why = dt.spawn(1, dt.camera().x + 200, 100)
         made = made + (o and 1 or 0)
+    end
+end)
+```
+
+### Editing the level
+
+`dt.level.set(x, y, metatile)` replaces the 16x16 metatile at world X `x` and Y `y` with
+`metatile` (0 to 255) of the land's tileset, through the game's own tile edit, the one a block
+uses when it opens: the new tiles go in the queue the game uploads to the screen at the next
+VBlank, and the metatile's collision class (empty, solid or climbable) and palette replace the
+old ones at once, so Scrooge and the objects collide with the new metatile from this step on.
+A land's metatiles are the 256 of its tileset bank, with the format in
+[docs/RENDERING.md](RENDERING.md) ("Map, screen, block and metatile format"); in the Amazon, for
+example, metatile 0 is empty and 102 is solid.
+
+It works only in an `update` handler, and only on a cell on the screen now: `x` from the camera's
+`x` to 255 more, `y` from 48 (below the HUD) to 239. The game's queue takes one edit a step: a
+second call in the same step, or one while the game's own edit or a row scroll is under way,
+changes nothing and returns `false, "the tile edit queue is in use"`. A position off the screen
+or in the HUD, a metatile above 255, a special metatile (collision class 3, whose effect the game
+finds from the map's own metatile) and a call from any other handler are errors (catchable with
+`pcall`). Each edit is logged, and the same call repeated is counted in one line:
+`dt.level.set(214, 180, 102)`, `dt.level.set(214, 180, 102) repeated 9 more times`.
+
+An edit changes the screen, not the map: it lasts until the game draws that part of the level
+again from the map, when it scrolls off the screen and back. A mod that wants the change to stay
+sets it again whenever the cell is back on the screen:
+
+```lua
+local wall = { x = 600, y = 176 }
+dt.on("update", function()
+    local left = dt.camera().x
+    if wall.x >= left and wall.x <= left + 255 then
+        dt.level.set(wall.x, wall.y, 102) -- false while the queue is busy; tried again next step
     end
 end)
 ```
@@ -470,7 +505,7 @@ save a fix. Only the scripts of mods loaded at start reload: a mod that had no
 |---|---|
 | `core/` | Knows no game. `fm_mods.h` is its interface: the package format and catalogue (`fm_catalog.c`: folders, `mod.toml`, order, switches, restart check), the archive and folder reader (`fm_archive.c`), PNG, OGG, WAV and deflate on stb (`fm_codec.c`) and the Lua sandbox with the generic script API (`fm_script.c`: `dt.on`, cancel, log, limits, hot reload; `fm_script_state.c`: `dt.state`, `dt.set`, `dt.tune` and the queries over the fields, tunables and records the game describes, with the records' handle methods; `fm_script_show.c`: toast and `dt.draw`; `fm_script_store.c`: store; `fm_script_internal.h`: what they share) |
 | `nes/` | NES games: tile keys, the replacement tile table, `.pal` palettes and tile templates (`fm_nes.c`) |
-| `ducktales/` | This game: what the assets mean and how they are loaded (`dt_mods.c`), painted (`dt_mods_picture.c`, with the toast and `dt.draw` overlay) and mixed (`dt_mods_audio.c`); the event list, the `dt.state` and writable fields, the tunables, the queries and their handles (`o:despawn()` runs the decompiled `Obj_Despawn` and `dt.spawn` `Obj_FindFreeSlot` and `Obj_SpawnTemplate`, through `Decomp_Outside`) and the store folder (`dt_mods_script.c`) |
+| `ducktales/` | This game: what the assets mean and how they are loaded (`dt_mods.c`), painted (`dt_mods_picture.c`, with the toast and `dt.draw` overlay) and mixed (`dt_mods_audio.c`); the event list, the `dt.state` and writable fields, the tunables, the queries and their handles (`o:despawn()` runs the decompiled `Obj_Despawn` and `dt.spawn` `Obj_FindFreeSlot` and `Obj_SpawnTemplate`, through `Decomp_Outside`), `dt.level.set` (`Level_EditCell`) and the store folder (`dt_mods_script.c`) |
 | `app_mods.h` | The interface the hosts and the menu call |
 
 Both hosts and the native player call the same entry points:
@@ -502,6 +537,12 @@ Both hosts and the native player call the same entry points:
   a game event's handler, and the game's routines they use run as decompiled C
   (`Obj_Despawn`, `Obj_FindFreeSlot` and `Obj_SpawnTemplate`, the template step `Obj_SpawnRecord`
   shares) through `Decomp_Outside`.
+- **Level.** `dt.level.set` has no hook site either: in the `update` handler it runs
+  `Level_EditCell`, the part of the tile edit `$F574` it shares with the game's, which writes
+  the `$0440` queue entry, the collision map `$0580` and the attribute shadow `$0500`, and
+  moves the queue's end `$5C` past the entry; the frame loop hands the queue to the NMI at its
+  end as for the game's edits. The metatile's tiles are read from the tileset bank (`$F7`) in
+  the ROM, with no bank switch.
 
 The tests are in `tests/mods_test.py` (its steps in `tests/mods/`), `tests/mods_catalogue_test.c` and `tests/window_smoke.py`.
 They generate their fixtures in scratch folders, and the tile templates come from the player's own

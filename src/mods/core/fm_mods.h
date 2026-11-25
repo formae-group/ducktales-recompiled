@@ -229,22 +229,33 @@ typedef struct {
     void (*do_remove)(const long long *values);
     void (*describe)(const long long *values, char *out, size_t cap);
     /* dt.<create>(arg, ...) (NULL: none) makes a new thing from up to
-     * FM_CREATE_ARGS integers, in a game event's handler only, and returns
-     * its handle. do_create checks them against the state now and returns
-     * FM_CREATED with the handle's record in values, FM_CREATE_INVALID with
-     * the reason (an error) or FM_CREATE_REFUSED with it (nil and the reason:
-     * the state has no room for it now). */
+     * FM_CALL_ARGS integers, in a game event's handler only, and returns its
+     * handle. do_create checks them against the state now and returns FM_DONE
+     * with the handle's record in values, FM_INVALID with the reason (an
+     * error) or FM_REFUSED with it (nil and the reason: the state has no room
+     * for it now). */
     const char *create;
     int (*do_create)(const long long *args, int nargs, long long *values, char *err, size_t cap);
 } FmQuery;
 
-#define FM_CREATE_ARGS 8
+#define FM_CALL_ARGS 8
 
 enum {
-    FM_CREATED,
-    FM_CREATE_INVALID,
-    FM_CREATE_REFUSED
+    FM_DONE,
+    FM_INVALID,
+    FM_REFUSED
 };
+
+/* dt.<table>.<name>(arg, ...): a change of the game's that no field or
+ * handle gives, from up to FM_CALL_ARGS integers, in a game event's handler
+ * only. call checks them against the state now and makes the change:
+ * FM_DONE (true), FM_INVALID with the reason (an error) or FM_REFUSED with it
+ * (false and the reason: not now). */
+typedef struct {
+    const char *table;
+    const char *name;
+    int (*call)(const long long *args, int nargs, char *err, size_t cap);
+} FmCall;
 
 typedef struct {
     const FmEvent *events;
@@ -255,6 +266,8 @@ typedef struct {
     int query_count;
     const FmTune *tunes;
     int tune_count;
+    const FmCall *calls;
+    int call_count;
     /* The value in force of tunes[tune] changed: on with value (the highest
      * mod's in the order that set it), or off for the game's own. */
     void (*tune)(int tune, bool on, long long value);
