@@ -2,7 +2,8 @@
  * fm_script_state.c - the game's state in script mods (fm_mods.h): dt.state
  * reads the fields the game describes (FmField), dt.set.<field>(v) checks the
  * value against the state when it is called, and dt.<query>() gives the
- * game's records (FmQuery), read only. All of them work in dt.on callbacks
+ * game's records (FmQuery), as handles where the game gives their methods,
+ * and dt.<create>() makes a new one. All of them work in dt.on callbacks
  * only. In a game event's handler dt.set writes at once, inside the event's
  * RAM transaction; in a "frame" handler it queues the write for fm_script.c
  * to apply at the frame's end. dt.tune.<name> = v (FmTune) works anywhere:
@@ -172,6 +173,48 @@ int fm_script_handle_remove(lua_State *L)
     snprintf(text, sizeof text, "%s:%s()", name, q->remove);
     fm_script_log_line(fm_script_of(L), "", text);
     lua_pushboolean(L, 1);
+    return 1;
+}
+
+/* dt.<create>(arg, ...): upvalue 1 is the query's index. */
+int fm_script_sb_create(lua_State *L)
+{
+    lua_Integer query = lua_tointeger(L, lua_upvalueindex(1));
+    const FmQuery *q = &fm_script_game.queries[query];
+    int nargs = lua_gettop(L);
+    if (nargs > FM_CREATE_ARGS) {
+        return luaL_error(L, "dt.%s: at most %d arguments", q->create, FM_CREATE_ARGS);
+    }
+    long long args[FM_CREATE_ARGS];
+    char call[160];
+    int used = snprintf(call, sizeof call, "dt.%s(", q->create);
+    for (int i = 0; i < nargs; i++) {
+        args[i] = (long long)luaL_checkinteger(L, i + 1);
+        used += snprintf(call + used, sizeof call - (size_t)used, "%s%lld", i ? ", " : "", args[i]);
+    }
+    snprintf(call + used, sizeof call - (size_t)used, ")");
+    if (!fm_script_in_event || !fm_script_game.state_open || !fm_script_game.state_open()) {
+        return luaL_error(L, "%s is called in a game event's handler", call);
+    }
+    long long values[FM_QUERY_VALUES];
+    char err[160];
+    int result = q->do_create(args, nargs, values, err, sizeof err);
+    if (result == FM_CREATE_INVALID) {
+        return luaL_error(L, "%s: %s", call, err);
+    }
+    if (result == FM_CREATE_REFUSED) {
+        lua_pushnil(L);
+        lua_pushstring(L, err);
+        return 2;
+    }
+    push_handle_meta(L, query);
+    push_record(L, q, values);
+    lua_pushvalue(L, -2);
+    lua_setmetatable(L, -2);
+    char name[64], text[240];
+    q->describe(values, name, sizeof name);
+    snprintf(text, sizeof text, "%s: %s", call, name);
+    fm_script_log_line(fm_script_of(L), "", text);
     return 1;
 }
 

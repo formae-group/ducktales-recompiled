@@ -228,7 +228,23 @@ typedef struct {
     const char *remove;
     void (*do_remove)(const long long *values);
     void (*describe)(const long long *values, char *out, size_t cap);
+    /* dt.<create>(arg, ...) (NULL: none) makes a new thing from up to
+     * FM_CREATE_ARGS integers, in a game event's handler only, and returns
+     * its handle. do_create checks them against the state now and returns
+     * FM_CREATED with the handle's record in values, FM_CREATE_INVALID with
+     * the reason (an error) or FM_CREATE_REFUSED with it (nil and the reason:
+     * the state has no room for it now). */
+    const char *create;
+    int (*do_create)(const long long *args, int nargs, long long *values, char *err, size_t cap);
 } FmQuery;
+
+#define FM_CREATE_ARGS 8
+
+enum {
+    FM_CREATED,
+    FM_CREATE_INVALID,
+    FM_CREATE_REFUSED
+};
 
 typedef struct {
     const FmEvent *events;

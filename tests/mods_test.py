@@ -43,8 +43,9 @@ templates come from the player's own ROM through --mods-dump and are deleted wit
      tunables (dt.tune) changes its fall, walk, jump or pogo bounce against a run without it, nil
      gives the game's value back, the highest mod in the order wins and the limits are refused;
      object handles move and despawn an enemy and refuse what they must, and the four frame-end
-     events report spawns, despawns, screens and modes; on full_amazon dt.set.boss_hits during the
-     fight only; on the headless build scripts that write, tune, use handles and set the
+     events report spawns, despawns, screens and modes; dt.spawn makes a hopper the game runs as
+     its own, refuses what it must and stops with 2 slots free; on full_amazon dt.set.boss_hits
+     during the fight only; on the headless build scripts that write, tune, use handles, spawn and set the
      invulnerability in a knock-back (refused where it would never end) log the same lines with
      --decomp off, check and replace,
      find no mismatch, and with the developer build (--dev-build) replace keeps the RAM of off

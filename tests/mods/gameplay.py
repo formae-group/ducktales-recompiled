@@ -10,7 +10,9 @@ on every frame with the decompiled code in place of the original (decomp_test.py
 dt.set.invulnerable is refused where it would hold the knock-back forever. Object handles on
 amazon_intro: a timed enemy moved and despawned, a stale handle, the player's slot, actions and
 positions out of bounds, calls outside a game event's handler, and the four events seen at the
-frame's end; dt.set.boss_hits on full_amazon's fight and outside it.
+frame's end; dt.spawn on amazon_intro: a hopper made on the screen that the game runs as its own,
+the arguments it refuses, spawns until 2 slots are left and a spawned enemy despawned;
+dt.set.boss_hits on full_amazon's fight and outside it.
 """
 
 import os
@@ -224,6 +226,65 @@ dt.on("frame", function(frame)
     if frame == 1000 then
         local o = dt.objects()[1]
         local ok, err = pcall(o.set, o, { y = 1 })
+        dt.log("outside", ok, err)
+    end
+end)
+'''
+
+# dt.spawn on amazon_intro: a hopper (a timed enemy of the land) on the screen, refused arguments,
+# the hopper walking and falling as the game's own, spawns until the 2 slots kept free, and the
+# last one despawned.
+SPAWN_LUA = r'''
+local step, made, last, events = 0, nil, nil, {}
+local function refused(...)
+    local ok, err = pcall(dt.spawn, ...)
+    return tostring(ok) .. " " .. err:gsub("^.-: ", "", 1)
+end
+local function live(slot)
+    for _, o in ipairs(dt.objects()) do
+        if o.slot == slot then
+            return o
+        end
+    end
+end
+dt.on("update", function()
+    step = step + 1
+    local left = dt.camera().x
+    if step == 40 then
+        made = dt.spawn(1, left + 200, 100)
+        local o = live(made.slot)
+        dt.log("spawned", made.kind, made.action, made.x - left, made.y, made.record, o.kind, o.record)
+        dt.log("not an enemy", refused(8, left + 200, 100))
+        dt.log("not this land", refused(24, left + 200, 100))
+        dt.log("action", refused(1, left + 200, 100, 99))
+        dt.log("off screen", refused(1, left - 1, 100))
+        dt.log("below", refused(1, left + 200, 240))
+        dt.log("arguments", refused(1, left + 200))
+    elseif step == 80 then
+        local o = live(made.slot)
+        dt.log("moved", o.kind, o.x < made.x, o.y > made.y)
+    elseif step == 150 then
+        local n, why = 0, nil
+        repeat
+            local o
+            o, why = dt.spawn(1, left + 100 + n, 80)
+            last = o or last
+            n = n + (o and 1 or 0)
+        until not o
+        dt.log("full", n, why, 16 - #dt.objects())
+    elseif step == 151 then
+        dt.log("despawn", last:despawn(), live(last.slot) == nil)
+    end
+end)
+dt.on("object-spawned", function(e)
+    if made and e.slot == made.slot and #events == 0 then
+        events[1] = e.kind .. "/" .. e.record
+        dt.log("spawned event", step, events[1])
+    end
+end)
+dt.on("frame", function(frame)
+    if frame == 1000 then
+        local ok, err = pcall(dt.spawn, 1, 0, 0)
         dt.log("outside", ok, err)
     end
 end)
@@ -443,14 +504,14 @@ def gameplay_checks(exe, native, dev):
                 got['player'][:3] == ['0', '1', 'false']
                 and refused['player'][0].endswith("slot 0 is player 1's: read only")
                 and got['bad action'][:1] == ['false']
-                and refused['bad action'][0].endswith('no record of this land spawns kind 8 with that action')
+                and refused['bad action'][0].endswith('this land spawns no kind 8 with that action')
                 and got['chest'][:1] == ['false']
                 and refused['chest'][0].endswith('the action of kind 21 is the item it gives')
                 and got['off screen'][:1] == ['false']
                 and refused['off screen'][0].endswith('(the screen)')
                 and got['outside'][:1] == ['false']
                 and refused['outside'][0].endswith("is called in a game event's handler"),
-                f'{host}: a handle refuses the player\'s slot, an action no record of the land spawns, a '
+                f'{host}: a handle refuses the player\'s slot, an action the land does not spawn, a '
                 f'chest\'s item, a position off the screen and a call outside a game event\'s handler',
                 f'{got}',
             )
@@ -490,6 +551,52 @@ def gameplay_checks(exe, native, dev):
                 f'the native player logs the same {len(object_lines["headless"])} lines with the handles',
             )
 
+        spawn_mods = mods('spawn', {'spawn': SPAWN_LUA})
+        spawn_lines = {}
+        for host, host_exe, is_native in hosts:
+            log = run(host_exe, f'spawn_{host.replace(" ", "_")}', is_native, spawn_mods)
+            spawn_lines[host] = [line for line in log.splitlines() if 'Mod spawn:' in line]
+            what = ('spawned', 'not an enemy', 'not this land', 'action', 'off screen', 'below', 'arguments')
+            got = {w: (lines(log, 'spawn', w) or [[]])[0] for w in (*what, 'spawned event', 'moved', 'full', 'despawn')}
+            got['outside'] = (lines(log, 'spawn', 'outside') or [[]])[0]
+            check(
+                got['spawned'] == ['1', '11', '200', '100', '255', '1', '255']
+                and any(
+                    line.endswith('Mod spawn: dt.spawn(1, 258, 100): object 8 (kind 1)') for line in spawn_lines[host]
+                )
+                and got['spawned event'] == ['40', '1/255'],
+                f'{host}: dt.spawn makes a hopper on the screen with the land\'s template and record 255, logs it, '
+                f'and object-spawned reports it ({got["spawned"]})',
+                f'{got}',
+            )
+            check(
+                got['not an enemy'] == ['false kind 8 is not one of the enemies (docs/MODS.md)']
+                and got['not this land'] == ['false this land spawns no kind 24']
+                and got['action'] == ['false this land spawns no kind 1 with that action']
+                and got['off screen'][0].endswith('(the screen)')
+                and got['below'] == ['false out of range 0 to 239']
+                and got['arguments'] == ['false kind, x, y and an optional action are needed']
+                and got['outside'][:1] == ['false']
+                and got['outside'][-1].endswith("dt.spawn(1, 0, 0) is called in a game event's handler"),
+                f'{host}: dt.spawn refuses a block, an enemy the land does not use, an action it does not spawn, a '
+                f'position off the screen or below it, missing arguments and a call outside a game event\'s handler',
+                f'{got}',
+            )
+            check(
+                got['moved'] == ['1', 'true', 'true']
+                and got['full'][1:] == ['2 free slots, 2 kept for the game', '2']
+                and int(got['full'][0]) > 0
+                and got['despawn'] == ['true', 'true'],
+                f'{host}: the spawned hopper walks and falls as the game\'s own, spawns stop with 2 slots free '
+                f'({got["full"][:1]} more made, then nil and the reason), and a spawned enemy despawns',
+                f'{got}',
+            )
+        if len(spawn_lines) == 2:
+            check(
+                spawn_lines['headless'] == spawn_lines['native player'],
+                f'the native player logs the same {len(spawn_lines["headless"])} lines with dt.spawn',
+            )
+
         if not exe:
             return
         log = run(
@@ -506,7 +613,9 @@ def gameplay_checks(exe, native, dev):
             f'{boss}',
         )
 
-        trio_mods = mods('trio', {'gameplay': UPDATE_LUA, 'knock': KNOCK_LUA, 'objects': OBJECTS_LUA})
+        trio_mods = mods(
+            'trio', {'gameplay': UPDATE_LUA, 'knock': KNOCK_LUA, 'objects': OBJECTS_LUA, 'spawn': SPAWN_LUA}
+        )
         logs, ram = {}, []
         for mode in ('off', 'check', 'replace'):
             host_exe, extra = exe, ['--decomp', mode]
@@ -531,12 +640,16 @@ def gameplay_checks(exe, native, dev):
         )
         check(
             all('MISMATCH' not in log and 'TIMING' not in log for log in logs.values()),
-            'headless: with the writing, tuning and object scripts, --decomp check finds no mismatch and no timing '
+            'headless: with the writing, tuning, object and spawn scripts, --decomp check finds no mismatch and no timing '
             'difference',
             logs['check'][-3000:],
         )
         written = {
-            m: [line for line in log.splitlines() if any(f'Mod {i}:' in line for i in ('gameplay', 'knock', 'objects'))]
+            m: [
+                line
+                for line in log.splitlines()
+                if any(f'Mod {i}:' in line for i in ('gameplay', 'knock', 'objects', 'spawn'))
+            ]
             for m, log in logs.items()
         }
         check(
@@ -549,7 +662,7 @@ def gameplay_checks(exe, native, dev):
         diff, info = ram_diff(ram)
         check(
             diff is None,
-            f'headless: with the writing, tuning and object scripts, --decomp replace keeps the RAM of --decomp off '
+            f'headless: with the writing, tuning, object and spawn scripts, --decomp replace keeps the RAM of --decomp off '
             f'outside the stack ({info})',
             diff or '',
         )

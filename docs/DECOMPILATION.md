@@ -265,10 +265,10 @@ too and are not counted.
   "original" and are not compared.
 
 **C used from outside the game's calls.** A mod's handler runs the decompiled C of a routine on the
-open RAM transaction, as `o:despawn()` runs `Obj_Despawn` (docs/MODS.md), through
-`Decomp_Outside(fn, ctx)`: meanwhile `Decomp_Enter` does nothing, so the routine is neither checked
-nor timed nor counted, and it needs no call of the game's to be running (outside one `dc_top` names
-none). Its RAM changes are the handler's: on the machine at an event site, in the C's image when
+open RAM transaction, as `o:despawn()` runs `Obj_Despawn` and `dt.spawn` runs `Obj_FindFreeSlot`
+and `Obj_SpawnTemplate` (docs/MODS.md), through `Decomp_Outside(fn, ctx)`: meanwhile
+`Decomp_Enter` does nothing, so the routine is neither checked nor timed nor counted, and it needs
+no call of the game's to be running (outside one `dc_top` names none). Its RAM changes are the handler's: on the machine at an event site, in the C's image when
 the C raises the event (replace mode).
 
 ### Task code
@@ -973,7 +973,9 @@ through `Obj_Defeat`), the vertical moves `$F270`/`$F284`/`$F298` and the seven 
 
 All 67 entries in the object handler table are handled in C. The boss hit routine `$F6D7` emits
 `EVENT_BOSS_HIT`. The spawner that calls `Obj_SpawnRecord`
-(bank 6 `$AE20-$B163`) is in `level/spawn.c`. The movers and the climbing steps test the
+(bank 6 `$AE20-$B163`) is in `level/spawn.c`. `Obj_SpawnTemplate` is the step of `$AF2B` that
+fills a slot from a 4-byte template (`$BE16`), with no entry of its own: `Obj_SpawnRecord` and a
+mod's `dt.spawn` share it, and `$AF2B` is compared as before. The movers and the climbing steps test the
 background through the C of the probe `$D120` and its snaps (`collision.c`).
 
 ### Progress

@@ -18,6 +18,22 @@
  */
 #include "decomp/objects/objects_internal.h"
 
+/* The part of $AF2B a land record's spawn shares with a mod's (dt.spawn,
+ * docs/MODS.md): slot x takes a 4-byte template of $BE16 (timer and status,
+ * pose, kind, hitbox), with its counters and animation cleared. */
+void Obj_SpawnTemplate(uint8_t x, const uint8_t template[4])
+{
+    gObjects->unk_0690[x] = 0;
+    gObjects->unk_06C0[x] = 0;
+    gObjects->bossCooldown[x] = 0;
+    gObjects->timer[x] = template[0] & 0x0F;
+    gObjects->state[x] = gObjects->flags[x] = template[0] & 0xF0;
+    gObjects->action[x] = template[1];
+    gObjects->kind[x] = template[2];
+    gObjects->hitbox[x] = template[3];
+    ResetAnim(x);
+}
+
 /* $AF2B: spawn land record y (the spawner $AEA0 calls it for the records
  * entering the window $00-$03) unless its consumed bit is set, it lies left
  * of $01:$00, or a live slot already holds it. The object goes to the
@@ -61,16 +77,8 @@ uint8_t Obj_SpawnRecord(uint8_t y)
     gScratch(4) = (uint8_t)DT_CODE_SPAWN_TEMPLATES;
     gScratch(5) = (uint8_t)((DT_CODE_SPAWN_TEMPLATES >> 8) + ((type >> 6) & 1));
     uint16_t at = (uint16_t)((gScratch(5) << 8 | gScratch(4)) + t);
-    gObjects->unk_0690[x] = 0;
-    gObjects->unk_06C0[x] = 0;
-    gObjects->bossCooldown[x] = 0;
-    uint8_t b = Rom(at);
-    gObjects->timer[x] = b & 0x0F;
-    gObjects->state[x] = gObjects->flags[x] = b & 0xF0;
-    gObjects->action[x] = Rom((uint16_t)(at + 1));
-    gObjects->kind[x] = Rom((uint16_t)(at + 2));
-    gObjects->hitbox[x] = Rom((uint16_t)(at + 3));
-    ResetAnim(x);
+    const uint8_t template[4] = { Rom(at), Rom((uint16_t)(at + 1)), Rom((uint16_t)(at + 2)), Rom((uint16_t)(at + 3)) };
+    Obj_SpawnTemplate(x, template);
     if (gRowScroll == 0 && (gObjects->state[x] & OBJ_STATUS_HIDDEN)) {
         if (gObjects->action[x] & 0x80) {
             gObjects->action[x] &= 0x7F;

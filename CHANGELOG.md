@@ -24,6 +24,11 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
   slot's kind and land record; actions only those the land's records spawn, no items, no player
   slot. `dt.set.boss_hits` during a fight. Four events seen at the frame's end, with no hook site:
   `object-spawned`, `object-despawned`, `screen-changed` and `player-mode-changed`.
+- Script mods can make enemies (docs/MODS.md "Spawning enemies"): `dt.spawn(kind, x, y[, action])`
+  in a game event's handler puts an enemy this land already uses on the screen, through the
+  decompiled `Obj_FindFreeSlot` and `Obj_SpawnTemplate` (the template step of `Obj_SpawnRecord`,
+  now shared), and returns its handle; no bosses, chests or pickups, none in a boss fight, and two
+  slots always left to the game. No hook site.
 - Decompiled the scheduler `$FF35-$FF7C` as timed task code (`Task_Schedule`, `Task_Pass`,
   `Task_Resume`), whose time the native runtime spends, giving the call to the original when an NMI
   is pending or VBlank would come during it. The native step dumps and lag logs are unchanged on all
@@ -227,6 +232,8 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Fixed
 
+- Script mods: `o:set{action}` accepted only the actions of the records of the land's first map
+  row; it now takes those of every row's records and timed objects.
 - Extra lives at start had no effect with the decompiled code on: the decompiled title set-up
   (`Title_Lit`) did not raise the new-game event the option uses.
 

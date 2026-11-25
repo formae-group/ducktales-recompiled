@@ -174,6 +174,7 @@ end)
 | `dt.set.<field>(value)` | Sets a writable field, inside handlers: at once in a game event's handler, at the frame's end in a `frame` handler (see [Writing the game](#writing-the-game)) |
 | `dt.tune.<name>` | Scrooge's physics: assign a number to use in place of the game's, `nil` for the game's again; reads give the value in force or `nil` (see [Tunables](#tunables)) |
 | `dt.objects()`, `dt.camera()` | The live object slots, as handles that can move or remove an object in a game event's handler, and the camera, inside handlers (see [Objects and the camera](#objects-and-the-camera)) |
+| `dt.spawn(kind, x, y[, action])` | Makes an enemy the land uses, in a game event's handler; returns its handle, or `nil` and the reason (see [Spawning enemies](#spawning-enemies)) |
 | `dt.toast(text)` | Shows a short notice over the picture; returns `false` when it was refused (see [Toasts](#toasts)) |
 | `dt.draw.text(x, y, text[, color])`, `dt.draw.rect(x, y, w, h, color)` | Draws over the presented picture for one frame (see [Drawing](#drawing)) |
 | `dt.store.get(key)`, `dt.store.set(key, value)` | The mod's own saved values (see [Store](#store)) |
@@ -258,7 +259,8 @@ event's handler (`update` is the one meant for them) and change the game at once
 
 - `o:set{x = ..., y = ..., action = ...}` writes any of the three. `x` is a world X on the
   screen now (from the camera's `x` to 255 more) and needs an object with a world position, `y` is
-  0 to 239, and `action` must be one a record of this land spawns that kind with; a new action
+  0 to 239, and `action` must be one this land spawns that kind with (in a record or a timed
+  object of any of its map rows); a new action
   starts its animation from the first frame. A pickup's, hidden item's or chest's action is its
   item and cannot be set, and no action that holds an item can be given. The table's fields follow
   the values written. `kind`, `state` and the rest cannot be set: `state` is the step of the
@@ -279,6 +281,45 @@ dt.on("update", function()
         if o.player == 0 and o.kind == 1 and o.y > 140 then
             o:despawn() -- no hoppers on the floor
         end
+    end
+end)
+```
+
+### Spawning enemies
+
+`dt.spawn(kind, x, y[, action])` makes an enemy at world X `x` and Y `y` on the screen now (the
+same ranges as `o:set`) through the game's own spawn code: the highest free slot of 15 to 1, the
+4-byte template of the first record or timed object of this land that spawns that kind (with that
+`action`, when one is given), and land record 255, as the game's timed enemies have. It works only
+in a game event's handler, writes at once and returns the new object's handle, which the game then
+runs as one of its own. Only enemies this land already uses can be made, since only their tiles and
+code are loaded:
+
+| Kinds | Enemy |
+|---|---|
+| 1, 2, 3, 5, 6 | hopper, walker, thrower, watcher, dangler |
+| 12, 13, 16, 17 | crawler, flyer, charger, swooper |
+| 24 to 31, 32, 34, 37 | patroller, pouncer, pit jumper, bouncer, leaper, block kicker, ledge walker, pacer, bobber, hop walker, ceiling hopper |
+| 48, 49, 50 | the thieves that take money |
+
+Bosses, scenes, doors, blocks, chests, pickups and the other objects cannot be made: a chest or a
+pickup made twice would give its treasure twice. A kind outside the list or not used by this land,
+an action the land does not spawn it with, a position off the screen, a call during a boss fight
+and a call outside a game event's handler are errors (catchable with `pcall`). Two slots are
+always left free for the game's own spawns and shots: when fewer than three are free,
+`dt.spawn` makes nothing and returns `nil, "2 free slots, 2 kept for the game"` (with the count
+free now). Each spawn is logged: `dt.spawn(1, 258, 100): object 8 (kind 1)`.
+
+A spawned enemy is not tied to a record, so it does not come back once it leaves the screen or is
+beaten. Its handle names slot, kind and record 255 like any other: a later enemy of the same kind
+made in the same slot is taken for the same one.
+
+```lua
+local made = 0
+dt.on("update", function()
+    if made < 3 and dt.state.pad_new & 0x40 ~= 0 then -- B
+        local o, why = dt.spawn(1, dt.camera().x + 200, 100)
+        made = made + (o and 1 or 0)
     end
 end)
 ```
@@ -429,7 +470,7 @@ save a fix. Only the scripts of mods loaded at start reload: a mod that had no
 |---|---|
 | `core/` | Knows no game. `fm_mods.h` is its interface: the package format and catalogue (`fm_catalog.c`: folders, `mod.toml`, order, switches, restart check), the archive and folder reader (`fm_archive.c`), PNG, OGG, WAV and deflate on stb (`fm_codec.c`) and the Lua sandbox with the generic script API (`fm_script.c`: `dt.on`, cancel, log, limits, hot reload; `fm_script_state.c`: `dt.state`, `dt.set`, `dt.tune` and the queries over the fields, tunables and records the game describes, with the records' handle methods; `fm_script_show.c`: toast and `dt.draw`; `fm_script_store.c`: store; `fm_script_internal.h`: what they share) |
 | `nes/` | NES games: tile keys, the replacement tile table, `.pal` palettes and tile templates (`fm_nes.c`) |
-| `ducktales/` | This game: what the assets mean and how they are loaded (`dt_mods.c`), painted (`dt_mods_picture.c`, with the toast and `dt.draw` overlay) and mixed (`dt_mods_audio.c`); the event list, the `dt.state` and writable fields, the tunables, the queries and their handles (`o:despawn()` runs the decompiled `Obj_Despawn` through `Decomp_Outside`) and the store folder (`dt_mods_script.c`) |
+| `ducktales/` | This game: what the assets mean and how they are loaded (`dt_mods.c`), painted (`dt_mods_picture.c`, with the toast and `dt.draw` overlay) and mixed (`dt_mods_audio.c`); the event list, the `dt.state` and writable fields, the tunables, the queries and their handles (`o:despawn()` runs the decompiled `Obj_Despawn` and `dt.spawn` `Obj_FindFreeSlot` and `Obj_SpawnTemplate`, through `Decomp_Outside`) and the store folder (`dt_mods_script.c`) |
 | `app_mods.h` | The interface the hosts and the menu call |
 
 Both hosts and the native player call the same entry points:
@@ -457,6 +498,10 @@ Both hosts and the native player call the same entry points:
   take-off velocity the land set-up stored (`$07A0:$0790`) is replaced while it holds the game's
   value, and put back once the tunable is `nil`. See "Tunables" in
   [docs/DECOMPILATION.md](DECOMPILATION.md).
+- **Objects.** Handles and `dt.spawn` have no hook site: they write the object tables at once from
+  a game event's handler, and the game's routines they use run as decompiled C
+  (`Obj_Despawn`, `Obj_FindFreeSlot` and `Obj_SpawnTemplate`, the template step `Obj_SpawnRecord`
+  shares) through `Decomp_Outside`.
 
 The tests are in `tests/mods_test.py` (its steps in `tests/mods/`), `tests/mods_catalogue_test.c` and `tests/window_smoke.py`.
 They generate their fixtures in scratch folders, and the tile templates come from the player's own

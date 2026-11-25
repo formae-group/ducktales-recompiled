@@ -85,6 +85,7 @@ void fm_script_log_write(Script *s, const char *key, long long value, const char
 void fm_script_flush_writes(Script *s);
 int fm_script_handle_set(lua_State *L);
 int fm_script_handle_remove(lua_State *L);
+int fm_script_sb_create(lua_State *L);
 int fm_script_tune_index(lua_State *L);
 int fm_script_tune_newindex(lua_State *L);
 /* Gives the game the tunes' values in force where they changed. */

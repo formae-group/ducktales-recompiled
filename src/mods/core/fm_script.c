@@ -407,6 +407,11 @@ static int setup(lua_State *L)
         lua_pushinteger(L, i);
         lua_pushcclosure(L, fm_script_sb_query, 1);
         lua_setfield(L, -2, fm_script_game.queries[i].name);
+        if (fm_script_game.queries[i].create) {
+            lua_pushinteger(L, i);
+            lua_pushcclosure(L, fm_script_sb_create, 1);
+            lua_setfield(L, -2, fm_script_game.queries[i].create);
+        }
     }
     lua_setfield(L, -2, "dt");
     lua_pop(L, 1);

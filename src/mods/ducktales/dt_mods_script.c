@@ -10,7 +10,9 @@
  *              dt.camera() = QUERIES, read and written through the game API
  *              (ducktales/hud.h, game.h, player.h, objects.h) inside a RAM
  *              transaction; dt.objects() gives handles: o:set{x, y, action}
- *              and o:despawn() (the decompiled Obj_Despawn)
+ *              and o:despawn() (the decompiled Obj_Despawn), and
+ *              dt.spawn(kind, x, y [, action]) makes an enemy (the
+ *              decompiled Obj_FindFreeSlot and Obj_SpawnTemplate)
  *   tunes      dt.tune = TUNES below, Scrooge's tunables (ducktales/tune.h)
  *   store      dt.store in the data folder's mods-data
  */
@@ -323,26 +325,30 @@ static int player_of(int slot)
     return slot == PLAYER_SLOT ? 1 : 0;
 }
 
-/* The live object slots (Scrooge is slot 0): x is the world X, y and
- * screen_x where the slot is on the screen, record the land record it was
- * spawned from ($FF none), player the player it is (0 for an object). */
+/* The record of an object slot: x is the world X, y and screen_x where the
+ * slot is on the screen, record the land record it was spawned from ($FF
+ * none), player the player it is (0 for an object). */
+static void read_object(int slot, long long *r)
+{
+    r[O_SLOT] = slot;
+    r[O_KIND] = gObjects->kind[slot];
+    r[O_ACTION] = gObjects->action[slot];
+    r[O_STATE] = gObjects->state[slot];
+    r[O_X] = Obj_GetWorldX(slot);
+    r[O_Y] = gObjects->y[slot];
+    r[O_SCREEN_X] = gObjects->x[slot];
+    r[O_RECORD] = gObjects->record[slot];
+    r[O_PLAYER] = player_of(slot);
+}
+
+/* The live object slots (Scrooge is slot 0). */
 static int read_objects(long long *v)
 {
     int n = 0;
     for (int slot = 0; slot < OBJ_SLOTS; slot++) {
-        if (!(gObjects->state[slot] & OBJ_STATUS_LIVE)) {
-            continue;
+        if (gObjects->state[slot] & OBJ_STATUS_LIVE) {
+            read_object(slot, &v[n++ * OBJECT_FIELD_COUNT]);
         }
-        long long *r = &v[n++ * OBJECT_FIELD_COUNT];
-        r[O_SLOT] = slot;
-        r[O_KIND] = gObjects->kind[slot];
-        r[O_ACTION] = gObjects->action[slot];
-        r[O_STATE] = gObjects->state[slot];
-        r[O_X] = Obj_GetWorldX(slot);
-        r[O_Y] = gObjects->y[slot];
-        r[O_SCREEN_X] = gObjects->x[slot];
-        r[O_RECORD] = gObjects->record[slot];
-        r[O_PLAYER] = player_of(slot);
     }
     return n;
 }
@@ -367,19 +373,49 @@ static uint8_t record_byte(int table, int y)
     return addr < GAME_RAM_SIZE ? gRam[addr] : Game_ReadPrg(DT_BANK_OBJECTS, addr);
 }
 
-/* Whether a record of this land spawns kind with action: the template of the
- * record's type, as $AF2B reads it (records end at a page with bit 7). */
-static bool land_spawns(uint8_t kind, uint8_t action)
+/* The 4-byte template of an object type ($BE16), and whether it is kind
+ * with action (any action when action < 0). */
+static bool type_spawns(uint8_t type, uint8_t kind, long long action, uint8_t template[4])
 {
-    for (int y = 0; y < 256 && !(record_byte(0, y) & 0x80); y++) {
-        uint8_t type = record_byte(4, y);
-        uint16_t at = (uint16_t)(DT_CODE_SPAWN_TEMPLATES + ((type >> 6 & 1) << 8)) + (uint8_t)(type << 2);
-        if (Game_ReadPrg(DT_BANK_OBJECTS, (uint16_t)(at + 2)) == kind &&
-            Game_ReadPrg(DT_BANK_OBJECTS, (uint16_t)(at + 1)) == action) {
-            return true;
+    uint16_t at = (uint16_t)(DT_CODE_SPAWN_TEMPLATES + ((type >> 6 & 1) << 8)) + (uint8_t)(type << 2);
+    for (int i = 0; i < 4; i++) {
+        template[i] = Game_ReadPrg(DT_BANK_OBJECTS, (uint16_t)(at + i));
+    }
+    return template[2] == kind && (action < 0 || template[1] == action);
+}
+
+static uint8_t timed_byte(uint16_t table, int y)
+{
+    return Game_ReadPrg(DT_BANK_OBJECTS, (uint16_t)(table + y));
+}
+
+/* The template of the first object of this land that spawns kind with
+ * action (any action when action < 0); false when none does. Each map row
+ * has its records ($AF2B: from the row's first, up to a page with bit 7)
+ * and its timed objects ($B105: from the land's first timed row, up to a
+ * page $FF). */
+static bool land_template(uint8_t kind, long long action, uint8_t template[4])
+{
+    for (int row = 0; row < gMapRows; row++) {
+        for (int y = record_byte(2, row); y < 256 && !(record_byte(0, y) & 0x80); y++) {
+            if (type_spawns(record_byte(4, y), kind, action, template)) {
+                return true;
+            }
+        }
+        int timed = timed_byte(DT_B6_TIMED_LAND, gLand) + row;
+        for (int y = timed_byte(DT_B6_TIMED_ROW, timed); y < 256 && timed_byte(DT_B6_TIMED_PAGE, y) != 0xFF; y++) {
+            if (type_spawns(timed_byte(DT_B6_TIMED_TYPE, y), kind, action, template)) {
+                return true;
+            }
         }
     }
     return false;
+}
+
+static bool land_spawns(uint8_t kind, uint8_t action)
+{
+    uint8_t template[4];
+    return land_template(kind, action, template);
 }
 
 /* Kinds the game's progress waits for (a boss fight, a scene, the final
@@ -453,7 +489,7 @@ static bool check_object(const long long *v, const char *field, long long value,
             return false;
         }
         if (value < 0 || value > 0xFF || !land_spawns(kind, (uint8_t)value)) {
-            snprintf(err, cap, "no record of this land spawns kind %d with that action", kind);
+            snprintf(err, cap, "this land spawns no kind %d with that action", kind);
             return false;
         }
         return true;
@@ -493,6 +529,110 @@ static void describe_object(const long long *v, char *out, size_t cap)
     snprintf(out, cap, "object %lld (kind %lld)", v[O_SLOT], v[O_KIND]);
 }
 
+/* The object slots a mod's spawn leaves free, for the game's own spawns and
+ * shots (and, later, a second player's slot). */
+#define SPAWN_KEEP_FREE 2
+
+/* The kinds dt.spawn makes: the enemies, without the plant that catches
+ * Scrooge and the enemy that lives in a block. Bosses, scenes, doors,
+ * blocks, chests and pickups are left out: a pickup or chest would give
+ * its treasure twice. */
+static bool spawns_enemy(long long kind)
+{
+    switch (kind) {
+        case OBJ_KIND_HOPPER:
+        case OBJ_KIND_WALKER:
+        case OBJ_KIND_THROWER:
+        case OBJ_KIND_WATCHER:
+        case OBJ_KIND_DANGLER:
+        case OBJ_KIND_CRAWLER:
+        case OBJ_KIND_FLYER:
+        case OBJ_KIND_CHARGER:
+        case OBJ_KIND_SWOOPER:
+        case OBJ_KIND_PATROLLER:
+        case OBJ_KIND_POUNCER:
+        case OBJ_KIND_PIT_JUMPER:
+        case OBJ_KIND_BOUNCER:
+        case OBJ_KIND_LEAPER:
+        case OBJ_KIND_BLOCK_KICKER:
+        case OBJ_KIND_LEDGE_WALKER:
+        case OBJ_KIND_PACER:
+        case OBJ_KIND_BOBBER:
+        case OBJ_KIND_HOP_WALKER:
+        case OBJ_KIND_CEILING_HOPPER:
+        case OBJ_KIND_THIEF:
+        case OBJ_KIND_SHORT_THIEF:
+        case OBJ_KIND_PICKPOCKET:
+            return true;
+        default:
+            return false;
+    }
+}
+
+typedef struct {
+    uint8_t template[4];
+    uint16_t x;
+    uint8_t y;
+    uint8_t slot;
+} Spawn;
+
+/* $AF2B's spawn without a land record: no enemy template is a hidden one
+ * with pose bit 7, so its hidden-object tail never applies, and spawns are
+ * refused in a boss fight. */
+static void spawn(void *ctx)
+{
+    Spawn *s = ctx;
+    Obj_FindFreeSlot(&s->slot);
+    gObjects->record[s->slot] = 0xFF;
+    Obj_SetWorldX(s->slot, s->x);
+    gObjects->unk_0740[s->slot] = gObjects->y[s->slot] = s->y;
+    Obj_SpawnTemplate(s->slot, s->template);
+}
+
+/* dt.spawn(kind, x, y [, action]): an enemy this land's records spawn, with
+ * the template of the first record that spawns it (with that action), at
+ * world X x on the screen and Y y, in the highest free slot. */
+static int spawn_object(const long long *args, int nargs, long long *values, char *err, size_t cap)
+{
+    if (nargs < 3 || nargs > 4) {
+        snprintf(err, cap, "kind, x, y and an optional action are needed");
+        return FM_CREATE_INVALID;
+    }
+    long long kind = args[0];
+    Spawn s = { .x = (uint16_t)args[1], .y = (uint8_t)args[2] };
+    if (!spawns_enemy(kind)) {
+        snprintf(err, cap, "kind %lld is not one of the enemies (docs/MODS.md)", kind);
+        return FM_CREATE_INVALID;
+    }
+    if (gBossFight & 0x80) {
+        snprintf(err, cap, "not during a boss fight");
+        return FM_CREATE_INVALID;
+    }
+    if (!land_template((uint8_t)kind, nargs == 4 ? args[3] : -1, s.template)) {
+        snprintf(err, cap, "this land spawns no kind %lld%s", kind, nargs == 4 ? " with that action" : "");
+        return FM_CREATE_INVALID;
+    }
+    long long left = gCameraPage << 8 | gCameraX;
+    if (!in_range(args[1], left, left + 0xFF, err, cap)) {
+        strncat(err, " (the screen)", cap - strlen(err) - 1);
+        return FM_CREATE_INVALID;
+    }
+    if (!in_range(args[2], 0, OBJ_Y_MAX, err, cap)) {
+        return FM_CREATE_INVALID;
+    }
+    int empty = 0;
+    for (int slot = 1; slot < OBJ_SLOTS; slot++) {
+        empty += !(gObjects->state[slot] & OBJ_STATUS_LIVE);
+    }
+    if (empty <= SPAWN_KEEP_FREE) {
+        snprintf(err, cap, "%d free slots, %d kept for the game", empty, SPAWN_KEEP_FREE);
+        return FM_CREATE_REFUSED;
+    }
+    Decomp_Outside(spawn, &s);
+    read_object(s.slot, values);
+    return FM_CREATED;
+}
+
 static const char *const CAMERA_FIELDS[] = { "x", "row", "screen" };
 
 /* The camera's world X (its left edge), map row and screen index. */
@@ -506,7 +646,7 @@ static int read_camera(long long *v)
 
 static const FmQuery QUERIES[] = {
     { "objects", true, OBJECT_FIELD_COUNT, OBJECT_FIELDS, read_objects, same_object, check_object, write_object,
-      "despawn", despawn_object, describe_object },
+      "despawn", despawn_object, describe_object, "spawn", spawn_object },
     { "camera", false, (int)(sizeof CAMERA_FIELDS / sizeof CAMERA_FIELDS[0]), CAMERA_FIELDS, read_camera },
 };
 

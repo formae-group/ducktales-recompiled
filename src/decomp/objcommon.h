@@ -40,3 +40,4 @@ uint8_t Obj_ClearSlots(uint8_t *x);
 void Money_Max(void);
 void Hud_RefillHp(void);
 uint8_t Obj_SpawnRecord(uint8_t y);
+void Obj_SpawnTemplate(uint8_t x, const uint8_t template[4]);
