@@ -399,7 +399,6 @@ void Obj_ChestOpening(uint8_t x)
  * when it stops or hits something. */
 void Obj_ChestSlider(uint8_t x)
 {
-    static const int8_t shake[4] = { 1, -1, -1, 1 };
     Decomp_Enter(DT_CODE_KIND_CHEST_SLIDER, 0x22, x, gObjects->kind[x]);
     if (!OnScreen(x)) {
         gObjects->state[x] = 0;
@@ -414,7 +413,8 @@ void Obj_ChestSlider(uint8_t x)
     }
     if (gObjects->timer[x] != 8) {
         if (!(gSprPhase & 3)) {
-            Obj_SetWorldX(x, (uint16_t)(Obj_GetWorldX(x) + shake[gObjects->timer[x] & 3]));
+            Obj_SetWorldX(x, (uint16_t)(Obj_GetWorldX(x) + (int8_t)Rom((uint16_t)(DT_CODE_CHEST_SLIDER_SHAKE +
+                                                                                  (gObjects->timer[x] & 3)))));
             gObjects->timer[x]++;
         }
         return;

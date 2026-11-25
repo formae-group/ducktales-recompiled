@@ -77,7 +77,6 @@ void Obj_LaunchpadRide(uint8_t x)
  * frames for the next. With no free slot it tries again next frame. */
 static void SkyFlyer_Drop(uint8_t x)
 {
-    static const uint8_t gaps[8] = { 0x1E, 0x1E, 0x1E, 0x3C, 0x3C, 0x3C, 0x78, 0x78 };
     for (uint8_t o = OBJ_SLOTS - 1; o > 8; o--) {
         if (gObjects->state[o] & OBJ_STATUS_LIVE) {
             continue;
@@ -95,7 +94,7 @@ static void SkyFlyer_Drop(uint8_t x)
         gObjects->vyFrac[o] = 0;
         gObjects->vy[o] = 4;
         gRandom(1) = (uint8_t)(gRandom(0) + gRandom(1) + 1);
-        gObjects->unk_06C0[x] = gaps[gRandom(1) & 7];
+        gObjects->unk_06C0[x] = Rom((uint16_t)(DT_CODE_SKY_FLYER_GAPS + (gRandom(1) & 7)));
         return;
     }
 }
@@ -218,11 +217,6 @@ void Obj_SkyRope(uint8_t x)
  * one makes it kind $3B. */
 void Obj_FinalStandIn(uint8_t x, bool carry)
 {
-    static const uint8_t spots[16] = { 0x20, 0x50, 0x80, 0xB0, 0xE0, 0x20, 0x20, 0x20,
-                                       0x50, 0x50, 0x80, 0xB0, 0xB0, 0xE0, 0xE0, 0xE0 };
-    static const uint8_t throwX[2] = { 0x10, 0xF0 };
-    static const uint8_t facing[2] = { 0, OBJ_FLAG_FACING_RIGHT };
-
     Decomp_Enter(DT_CODE_KIND_FINAL_STAND_IN, 0x22, x, gObjects->kind[x]);
     if (gObjects->unk_0690[x] != 0) {
         if (Boss_Hit(&x)) {
@@ -248,12 +242,13 @@ void Obj_FinalStandIn(uint8_t x, bool carry)
             return;
         }
         gRandom(0) = (uint8_t)(gRandom(0) + gRandom(1) + carry);
-        gObjects->worldX[x] = spots[gRandom(0) & 0x0F];
+        gObjects->worldX[x] = Rom((uint16_t)(DT_CODE_FINAL_STAND_IN_SPOTS + (gRandom(0) & 0x0F)));
         gObjects->unk_06C0[x] = STAND_IN_SHOW;
         gObjects->flags[x] |= OBJ_FLAG_BLINK;
         gObjects->state[x] &= (uint8_t)~OBJ_STATUS_HIDDEN;
         Obj_FaceScrooge(x);
-        gObjects->flags[x] = (uint8_t)((gObjects->flags[x] & ~OBJ_FLAG_FACING_RIGHT) | facing[gObjects->dir[x] & 1]);
+        gObjects->flags[x] = (uint8_t)((gObjects->flags[x] & ~OBJ_FLAG_FACING_RIGHT) |
+                                       Rom((uint16_t)(DT_CODE_FINAL_STAND_IN_FACING + (gObjects->dir[x] & 1))));
         return;
     }
     if (gObjects->unk_06C0[x] != 0) {
@@ -275,7 +270,8 @@ void Obj_FinalStandIn(uint8_t x, bool carry)
         gObjects->hitbox[o] = STAND_IN_SHOT_BOX;
         gObjects->worldPage[o] = gObjects->worldPage[x];
         gObjects->dir[o] = gObjects->dir[x];
-        gObjects->worldX[o] = (uint8_t)(gObjects->worldX[x] + throwX[gObjects->dir[x] & 1]);
+        gObjects->worldX[o] = (uint8_t)(gObjects->worldX[x] +
+                                        Rom((uint16_t)(DT_CODE_FINAL_STAND_IN_THROW_X + (gObjects->dir[x] & 1))));
         gObjects->unk_06D0[x] = STAND_IN_STAY;
         return;
     }

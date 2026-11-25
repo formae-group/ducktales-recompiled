@@ -841,6 +841,54 @@
 #define DT_CODE_OBJ_DIFFICULT_ACTION      0xF822 /* actions on Difficult (fixed bank) */
 #define DT_CODE_MONEY_MAX                 0xF83F /* money capped at 9,999,990 (fixed bank) */
 
+/* Tables the decompiled objects and player modes read from the ROM (bank 6
+ * unless noted), where the original reads them. */
+#define DT_CODE_MINES_BOSS_PATTERN           0xA8AC /* kind $28: the pattern by step (20 entries) */
+#define DT_CODE_MINES_BOSS_EXPECTED          0xA8C0 /* kind $28: what each step expects (20 entries) */
+#define DT_CODE_HIMALAYAS_BOSS_DROP_X        0xAAA8 /* kind $2A: X of each drop (14 entries) */
+#define DT_CODE_HIMALAYAS_BOSS_DROP_AT       0xAAB6 /* kind $2A: when each drop falls (14 entries) */
+#define DT_CODE_HIMALAYAS_BOSS_PATTERNS      0xAAC4 /* kind $2A: first drop by pattern (2 entries) */
+#define DT_CODE_HIMALAYAS_BOSS_SHAKES        0xAAC6 /* kind $2A: shake by pattern (2 entries) */
+#define DT_CODE_MOON_BOSS_SPEED_LO           0xAC39 /* kind $29: speed, 8.8, low bytes (2 entries) */
+#define DT_CODE_MOON_BOSS_SPEED_HI           0xAC3B
+#define DT_CODE_AMAZON_BOSS_WAITS            0xA6C9 /* kind $2E: waits (8 entries) */
+#define DT_CODE_AMAZON_BOSS_SPLITS           0xA6D1 /* kind $2E: split points (2 entries) */
+#define DT_CODE_TRANSYLVANIA_BOSS_HEIGHTS    0xA58F /* kind $26: heights (4 entries) */
+#define DT_CODE_TRANSYLVANIA_BOSS_WAITS      0xA593 /* kind $26: waits (2 entries) */
+#define DT_CODE_TRANSYLVANIA_BOSS_WAYS       0xA595 /* kind $26: directions (2 entries) */
+#define DT_CODE_TRANSYLVANIA_BOSS_TARGETS    0xA597 /* kind $26: target X (8 entries) */
+#define DT_CODE_TRANSYLVANIA_BOSS_WEAVE      0xA5A0 /* kind $26: motion indexes of the weave (14 entries) */
+#define DT_CODE_TRANSYLVANIA_BOSS_AHEAD      0xA5AE /* kind $26: X offset ahead by direction (2 entries) */
+#define DT_CODE_TRANSYLVANIA_BOSS_FACING     0xA5B0 /* kind $26: facing flag by direction (2 entries) */
+#define DT_CODE_TRANSYLVANIA_BOSS_SHOT_VY_LO 0xA5B2 /* kind $26: shot vertical velocity, 8.8, low bytes (3 entries) */
+#define DT_CODE_TRANSYLVANIA_BOSS_SHOT_VY_HI 0xA5B5
+#define DT_CODE_TRANSYLVANIA_BOSS_SHOT_SPEED_LO 0xA5B8 /* kind $26: shot speed, 8.8, low bytes (3 entries) */
+#define DT_CODE_TRANSYLVANIA_BOSS_SHOT_SPEED_HI 0xA5BB
+#define DT_CODE_POUNCER_MOTIONS                 0x9946 /* kind $19: motion indexes (14 entries) */
+#define DT_CODE_POUNCER_STEP_LO                 0x993C /* kind $19's code by step, low bytes (5 entries) */
+#define DT_CODE_POUNCER_STEP_HI                 0x9941
+#define DT_CODE_PIT_JUMPER_JUMP_LO         0x9A75 /* kind $1A: jump velocity by variant, 8.8, low bytes (3 entries) */
+#define DT_CODE_PIT_JUMPER_JUMP_HI         0x9A78
+#define DT_CODE_PIT_JUMPER_SPLASH_OUT_AT   0x9A7B /* kind $1A: when it splashes out, by variant (3 entries) */
+#define DT_CODE_PIT_JUMPER_SPLASH_IN_AT    0x9A7E /* kind $1A: when it splashes in, by variant (3 entries) */
+#define DT_CODE_BLOCK_DWELLER_DIRS         0x96BB /* kind $12: directions (4 entries) */
+#define DT_CODE_BLOCK_DWELLER_FACING       0x96BF /* kind $12: facing flags (4 entries) */
+#define DT_CODE_BLOCK_DWELLER_CYCLES       0x96C3 /* kind $12: cycles (2 entries) */
+#define DT_CODE_BLOCK_DWELLER_BLOCK_POSES  0x96C5 /* kind $12: poses of its block (8 entries) */
+#define DT_CODE_BLOCK_DWELLER_BLOCK_FACING 0x96CD /* kind $12: facing flags of its block (8 entries) */
+#define DT_CODE_TREAT_SPOUT_DIRS           0xA2AE /* kind $2C: directions (4 entries) */
+#define DT_CODE_TREAT_SPOUT_SPEED_LO       0xA2B2 /* kind $2C: speed, 8.8, low bytes (4 entries) */
+#define DT_CODE_TREAT_SPOUT_SPEED_HI       0xA2B6
+#define DT_CODE_CHEST_SLIDER_SHAKE         0x8EDE /* the chest slider's X shake, signed (4 entries) */
+#define DT_CODE_MOVING_PLATFORM_DIRS       0xFED6 /* kind $39: directions (4 entries, fixed bank) */
+#define DT_CODE_SKY_FLYER_GAPS             0xF9F0 /* kind $37: frames between drops (8 entries, fixed bank) */
+#define DT_CODE_FINAL_STAND_IN_SPOTS       0xFB54 /* the final stand-in's X spots (16 entries, fixed bank) */
+#define DT_CODE_FINAL_STAND_IN_THROW_X \
+    0xFB64 /* the final stand-in's throw X offset by direction (2 entries, fixed bank) */
+#define DT_CODE_FINAL_STAND_IN_FACING 0xFB66 /* the final stand-in's facing flag by direction (2 entries, fixed bank) */
+#define DT_CODE_THIEF_SPANS           0xACBC /* the thieves: spans by kind from OBJ_KIND_THIEF (2 entries) */
+#define DT_CODE_GRAB_COLUMN_OFFSET 0xE7E6 /* $E740: X offset of each probe of the climb grab (4 entries, fixed bank) */
+
 /* ---- hook sites of the event system (src/game/events.c) ----
  * config/game.toml declares each with a length/crc32 content key, so another
  * revision fails code generation instead of firing at the wrong code. */

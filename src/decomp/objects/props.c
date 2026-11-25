@@ -151,8 +151,6 @@ void Obj_KeySpot(uint8_t x)
  * he touches it (hitbox $8A for the test, $84 after). */
 void Obj_MovingPlatform(uint8_t x)
 {
-    static const uint8_t dirs[4] = { OBJ_DIR_LEFT, OBJ_DIR_RIGHT, OBJ_DIR_RIGHT, OBJ_DIR_LEFT };
-
     Decomp_Enter(DT_CODE_KIND_MOVING_PLATFORM, 0x22, x, gObjects->kind[x]);
     if (Step(x) == 0) {
         gObjects->timer[x] = 0;
@@ -161,7 +159,7 @@ void Obj_MovingPlatform(uint8_t x)
         gObjects->state[x]++;
     }
     if (gObjects->unk_06C0[x] == 0) {
-        gObjects->dir[x] = dirs[gObjects->timer[x] & 3];
+        gObjects->dir[x] = Rom((uint16_t)(DT_CODE_MOVING_PLATFORM_DIRS + (gObjects->timer[x] & 3)));
         gObjects->unk_06C0[x] = 0x30;
         gObjects->timer[x]++;
     }

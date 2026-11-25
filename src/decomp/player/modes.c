@@ -205,7 +205,6 @@ static void Player_DropToRowBelow(void)
 void Player_GrabClimb(void)
 {
     Decomp_Enter(DT_CODE_GRAB_CLIMB, 0, 0, 0);
-    static const uint8_t COLUMN_OFFSET[4] = { 0x00, 0x00, 0x08, 0x08 };
     if (!(gPadHeld & DT_PAD_UP)) {
         return;
     }
@@ -217,7 +216,8 @@ void Player_GrabClimb(void)
     }
     int i;
     for (i = 3; i >= 0; i--) {
-        if (((gObjects->worldX[P_] + COLUMN_OFFSET[i]) & 0x0F) < 8 && gProbeClass(i) == 2) {
+        if (((gObjects->worldX[P_] + Game_ReadRom((uint16_t)(DT_CODE_GRAB_COLUMN_OFFSET + i))) & 0x0F) < 8 &&
+            gProbeClass(i) == 2) {
             break;
         }
     }

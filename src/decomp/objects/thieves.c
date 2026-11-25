@@ -108,8 +108,6 @@ void Obj_Pickpocket(uint8_t x)
  * also adds to its span left). A hit beats it. */
 void Obj_Thief(uint8_t x)
 {
-    static const uint8_t spans[2] = { 0x16, 0x0B };
-
     Decomp_Enter(DT_CODE_KIND_THIEF, 0x22, x, gObjects->kind[x]);
     if (gObjects->unk_0690[x] != 0) {
         Obj_Defeat(x);
@@ -117,7 +115,7 @@ void Obj_Thief(uint8_t x)
     }
     if (Step(x) == 0) {
         gObjects->unk_06C0[x] = 0;
-        uint8_t span = spans[(uint8_t)(gObjects->kind[x] - OBJ_KIND_THIEF)];
+        uint8_t span = Rom((uint16_t)(DT_CODE_THIEF_SPANS + ((uint8_t)(gObjects->kind[x] - OBJ_KIND_THIEF))));
         gObjects->timer[x] = span;
         gObjects->unk_06D0[x] = span;
         Obj_SetSpeed(x, 0x0100);

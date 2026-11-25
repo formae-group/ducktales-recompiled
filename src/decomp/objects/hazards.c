@@ -166,12 +166,6 @@ static void Obj_DwellerLinkBlock(uint8_t x)
  * pose $31 for 60 frames, then pose $32. */
 void Obj_BlockDweller(uint8_t x)
 {
-    static const uint8_t dirs[4] = { OBJ_DIR_RIGHT, OBJ_DIR_LEFT, OBJ_DIR_LEFT, OBJ_DIR_RIGHT };
-    static const uint8_t facing[4] = { OBJ_FLAG_FACING_RIGHT, 0, 0, OBJ_FLAG_FACING_RIGHT };
-    static const uint8_t cycles[2] = { 0, 4 };
-    static const uint8_t blockPoses[8] = { 0x1E, 0x1D, 0x1E, 0x1E, 0x1E, 0x1D, 0x1E, 0x1E };
-    static const uint8_t blockFacing[8] = { 0, OBJ_FLAG_FACING_RIGHT, 0, 0, 0, 0, 0, 0 };
-
     Decomp_Enter(DT_CODE_KIND_BLOCK_DWELLER, 0x22, x, gObjects->kind[x]);
     if (gObjects->action[x] == 0x31) {
         if (gObjects->timer[x] == 0) {
@@ -205,23 +199,25 @@ void Obj_BlockDweller(uint8_t x)
         gScratch0 = x;
         if ((gObjects->state[block] & OBJ_STATUS_LIVE) &&
             (gObjects->action[block] == 0x1D || gObjects->action[block] == 0x1E)) {
-            gObjects->action[block] = blockPoses[c];
+            gObjects->action[block] = Rom((uint16_t)(DT_CODE_BLOCK_DWELLER_BLOCK_POSES + c));
             gObjects->flags[block] = (uint8_t)((gObjects->flags[block] & (uint8_t)~OBJ_FLAG_FACING_RIGHT) |
-                                               blockFacing[c]);
+                                               Rom((uint16_t)(DT_CODE_BLOCK_DWELLER_BLOCK_FACING + c)));
         }
         if (c & 1) {
             gObjects->timer[x] = 0x3C;
             gObjects->dir[x] = 0;
             gObjects->action[x] = 0x30;
         } else {
-            gObjects->dir[x] = dirs[c >> 1];
-            gObjects->flags[x] = (uint8_t)((gObjects->flags[x] & (uint8_t)~OBJ_FLAG_FACING_RIGHT) | facing[c >> 1]);
+            gObjects->dir[x] = Rom((uint16_t)(DT_CODE_BLOCK_DWELLER_DIRS + (c >> 1)));
+            gObjects->flags[x] = (uint8_t)((gObjects->flags[x] & (uint8_t)~OBJ_FLAG_FACING_RIGHT) |
+                                           Rom((uint16_t)(DT_CODE_BLOCK_DWELLER_FACING + (c >> 1))));
             gObjects->timer[x] = 0x20;
             gObjects->action[x] = 0x2F;
         }
         ResetAnim(x);
         if ((++gObjects->unk_06C0[x] & 3) == 0) {
-            gObjects->unk_06C0[x] = cycles[(gRandom(0) + gRandom(2) + (c & 1)) & 1];
+            gObjects->unk_06C0[x] = Rom(
+                (uint16_t)(DT_CODE_BLOCK_DWELLER_CYCLES + ((gRandom(0) + gRandom(2) + (c & 1)) & 1)));
         }
     }
     gObjects->timer[x]--;
@@ -288,9 +284,6 @@ void Obj_Roller(uint8_t x)
  * on animation frame 7). The thrower's slot is left in $00. */
 void Obj_TreatSpout(uint8_t x)
 {
-    static const uint8_t dirs[4] = { 0, OBJ_DIR_RIGHT, 0, OBJ_DIR_LEFT };
-    static const uint16_t speeds[4] = { 0x0000, 0x0100, 0x0000, 0x0100 };
-
     Decomp_Enter(DT_CODE_KIND_TREAT_SPOUT, 0x22, x, gObjects->kind[x]);
     if (Step(x) == 0) {
         if (Obj_DistanceX(x) >= 4) {
@@ -322,8 +315,9 @@ void Obj_TreatSpout(uint8_t x)
         gScratch0 = x;
         Obj_SetVelocityY(y, 0x02D4);
         uint8_t i = gObjects->timer[x];
-        gObjects->dir[y] = dirs[i];
-        Obj_SetSpeed(y, speeds[i]);
+        gObjects->dir[y] = Rom((uint16_t)(DT_CODE_TREAT_SPOUT_DIRS + i));
+        Obj_SetSpeed(y, (uint16_t)(Rom((uint16_t)(DT_CODE_TREAT_SPOUT_SPEED_LO + i)) |
+                                   Rom((uint16_t)(DT_CODE_TREAT_SPOUT_SPEED_HI + i)) << 8));
         gObjects->unk_06C0[x] = ++gObjects->timer[x] == 4 ? 0xFF : 0x3C;
         return;
     }

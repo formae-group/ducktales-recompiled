@@ -364,10 +364,6 @@ void Obj_CeilingHopper(uint8_t x)
  * beaten. Each step's address in the jump table is left in $00/$01. */
 void Obj_Pouncer(uint8_t x)
 {
-    static const uint8_t motions[14] = { 0x1F, 0x1E, 0x1D, 0x1C, 0x1B, 0x1A, 0x19,
-                                         0x17, 0x16, 0x15, 0x14, 0x13, 0x12, 0x11 };
-    static const uint16_t steps[5] = { 0x9768, 0x9787, 0x97F3, 0x97F3, 0x98C8 };
-
     Decomp_Enter(DT_CODE_KIND_POUNCER, 0x22, x, gObjects->kind[x]);
     if (!OnScreen(x) || gObjects->unk_0690[x] != 0) {
         Obj_Defeat(x);
@@ -377,8 +373,8 @@ void Obj_Pouncer(uint8_t x)
         (void)Obj_TouchScrooge(x);
     }
     uint8_t step = Step(x);
-    gScratch(0) = (uint8_t)steps[step];
-    gScratch(1) = (uint8_t)(steps[step] >> 8);
+    gScratch(0) = Rom((uint16_t)(DT_CODE_POUNCER_STEP_LO + step));
+    gScratch(1) = Rom((uint16_t)(DT_CODE_POUNCER_STEP_HI + step));
     switch (step) {
         case 0:
             if (Obj_DistanceX(x) >= 0x0C) {
@@ -417,7 +413,7 @@ void Obj_Pouncer(uint8_t x)
         case 3:
             if (gObjects->timer[x] == 0) {
                 gObjects->vdir[x] = 0;
-                Obj_SetMotionIndex(x, motions[gObjects->unk_06C0[x]]);
+                Obj_SetMotionIndex(x, Rom((uint16_t)(DT_CODE_POUNCER_MOTIONS + gObjects->unk_06C0[x])));
                 if (gObjects->speed[x] & 0x80) {
                     Obj_SetSpeed(x, (uint16_t)-Obj_GetSpeed(x));
                 }
@@ -535,10 +531,6 @@ static void Obj_PitSplashIn(uint8_t x)
  * it. */
 void Obj_PitJumper(uint8_t x)
 {
-    static const uint16_t jumps[3] = { 0x0652, 0x07A5, 0x07A5 };
-    static const uint8_t splashOut[3] = { 0x08, 0x07, 0x00 };
-    static const uint8_t splashIn[3] = { 0x2A, 0x37, 0x00 };
-
     Decomp_Enter(DT_CODE_KIND_PIT_JUMPER, 0x22, x, gObjects->kind[x]);
     if (gObjects->unk_0690[x] != 0) {
         Obj_Defeat(x);
@@ -556,7 +548,8 @@ void Obj_PitJumper(uint8_t x)
         gObjects->unk_06C0[x] = 0;
         gObjects->unk_06D0[x] = 0;
         gObjects->y[x] = 0xEF;
-        Obj_SetVelocityY(x, jumps[gObjects->timer[x]]);
+        Obj_SetVelocityY(x, (uint16_t)(Rom((uint16_t)(DT_CODE_PIT_JUMPER_JUMP_LO + gObjects->timer[x])) |
+                                       Rom((uint16_t)(DT_CODE_PIT_JUMPER_JUMP_HI + gObjects->timer[x])) << 8));
         gObjects->animTimer[x] = 0x80;
         gObjects->animFrame[x] = 0;
         gObjects->state[x]++;
@@ -571,7 +564,8 @@ void Obj_PitJumper(uint8_t x)
             Obj_SetVelocityY(x, 0);
             gObjects->animFrame[x] = 1;
         }
-        if (splashOut[variant] != 0 && splashOut[variant] == gObjects->unk_06D0[x]) {
+        if (Rom((uint16_t)(DT_CODE_PIT_JUMPER_SPLASH_OUT_AT + variant)) != 0 &&
+            Rom((uint16_t)(DT_CODE_PIT_JUMPER_SPLASH_OUT_AT + variant)) == gObjects->unk_06D0[x]) {
             Obj_PitSplashOut(x);
         }
         return;
@@ -588,7 +582,8 @@ void Obj_PitJumper(uint8_t x)
         gObjects->state[x] &= 0xF0;
         return;
     }
-    if (splashIn[variant] != 0 && splashIn[variant] == gObjects->unk_06D0[x]) {
+    if (Rom((uint16_t)(DT_CODE_PIT_JUMPER_SPLASH_IN_AT + variant)) != 0 &&
+        Rom((uint16_t)(DT_CODE_PIT_JUMPER_SPLASH_IN_AT + variant)) == gObjects->unk_06D0[x]) {
         Obj_PitSplashIn(x);
     }
 }

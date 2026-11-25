@@ -68,11 +68,6 @@ bool Boss_Hit(uint8_t *x)
  * the last one beats it. */
 void Obj_MinesBoss(uint8_t x)
 {
-    static const uint8_t pattern[20] = { 0x05, 0x09, 0x05, 0x09, 0x05, 0x09, 0x0A, 0x09, 0x0A, 0x09,
-                                         0x0A, 0x06, 0x0A, 0x06, 0x0A, 0x06, 0x05, 0x06, 0x05, 0x06 };
-    static const uint8_t expected[20] = { 0x01, 0x00, 0x01, 0x00, 0x01, 0x02, 0x00, 0x02, 0x00, 0x02,
-                                          0x01, 0x00, 0x01, 0x00, 0x01, 0x02, 0x00, 0x02, 0x00, 0x02 };
-
     Decomp_Enter(DT_CODE_KIND_MINES_BOSS, 0x22, x, gObjects->kind[x]);
     if (gObjects->unk_0690[x] != 0 && Boss_Hit(&x)) {
         Obj_Defeat(x);
@@ -148,7 +143,7 @@ void Obj_MinesBoss(uint8_t x)
             x = Obj_WalkLeft(x, 0x37, 2);
         }
         gProbeHits = (uint8_t)(vertical + (gProbeHits & 1));
-        uint8_t want = expected[gObjects->unk_06C0[x]];
+        uint8_t want = Rom((uint16_t)(DT_CODE_MINES_BOSS_EXPECTED + gObjects->unk_06C0[x]));
         if (want != 0) {
             gProbeHits &= want;
         }
@@ -178,7 +173,7 @@ void Obj_MinesBoss(uint8_t x)
         }
         gObjects->unk_06C0[x] = step;
     }
-    uint8_t p = pattern[step];
+    uint8_t p = Rom((uint16_t)(DT_CODE_MINES_BOSS_PATTERN + step));
     gObjects->dir[x] = (uint8_t)(p & 3);
     if (gObjects->timer[x] != 1) {
         gObjects->dir[x] ^= 3;
@@ -197,13 +192,6 @@ void Obj_MinesBoss(uint8_t x)
  * the last one beats it. The spawning slot is left in $00. */
 void Obj_HimalayasBoss(uint8_t x)
 {
-    static const uint8_t dropX[14] = { 0x70, 0xD8, 0x48, 0xA8, 0x18, 0x88, 0x00,
-                                       0x68, 0x98, 0x28, 0xD8, 0x48, 0x88, 0x00 };
-    static const uint8_t dropAt[14] = { 0x00, 0x08, 0x18, 0x18, 0x20, 0x30, 0x00,
-                                        0x00, 0x08, 0x18, 0x18, 0x28, 0x28, 0x00 };
-    static const uint8_t patterns[2] = { 0x00, 0x07 };
-    static const uint8_t shakes[2] = { 0x00, 0x04 };
-
     Decomp_Enter(DT_CODE_KIND_HIMALAYAS_BOSS, 0x22, x, gObjects->kind[x]);
     if (gObjects->unk_0690[x] != 0 && Boss_Hit(&x)) {
         Obj_Defeat(x);
@@ -228,23 +216,23 @@ void Obj_HimalayasBoss(uint8_t x)
             gObjects->animFrame[x] = 0;
             gObjects->timer[x] = 0;
             gRandom(1) = (uint8_t)(gRandom(0) + gRandom(1) + 1);
-            gObjects->unk_06C0[x] = patterns[gRandom(1) & 1];
+            gObjects->unk_06C0[x] = Rom((uint16_t)(DT_CODE_HIMALAYAS_BOSS_PATTERNS + (gRandom(1) & 1)));
             gObjects->unk_06D0[x] = 8;
         }
         for (;;) {
             gObjects->animTimer[x] = 0;
-            gCameraX = shakes[(RAM_U8(DT_ADDR_SPR_PHASE) >> 2) & 1];
+            gCameraX = Rom((uint16_t)(DT_CODE_HIMALAYAS_BOSS_SHAKES + ((RAM_U8(DT_ADDR_SPR_PHASE) >> 2) & 1)));
             uint8_t i = gObjects->unk_06C0[x];
-            if (dropX[i] == 0) {
+            if (Rom((uint16_t)(DT_CODE_HIMALAYAS_BOSS_DROP_X + i)) == 0) {
                 break;
             }
-            if (gObjects->timer[x] != dropAt[i]) {
+            if (gObjects->timer[x] != Rom((uint16_t)(DT_CODE_HIMALAYAS_BOSS_DROP_AT + i))) {
                 gObjects->timer[x]++;
                 return;
             }
             gScratch0 = x;
             uint8_t s = gObjects->unk_06D0[x];
-            gObjects->worldX[s] = dropX[i];
+            gObjects->worldX[s] = Rom((uint16_t)(DT_CODE_HIMALAYAS_BOSS_DROP_X + i));
             gObjects->worldPage[s] = 4;
             gObjects->y[s] = 0x38;
             gObjects->state[s] = 0xA0;
@@ -343,8 +331,6 @@ static void Obj_MoonBossRestart(uint8_t x)
  * last one beats it. */
 void Obj_MoonBoss(uint8_t x, bool carry)
 {
-    static const uint16_t speeds[2] = { 0x03C0, 0x01CC };
-
     Decomp_Enter(DT_CODE_KIND_MOON_BOSS, 0x22, x, gObjects->kind[x]);
     if (gObjects->unk_0690[x] != 0) {
         if (Boss_Hit(&x)) {
@@ -380,7 +366,8 @@ void Obj_MoonBoss(uint8_t x, bool carry)
         gRandom(1) = (uint8_t)sum;
         uint8_t slow = sum & 1;
         gObjects->timer[x] = slow;
-        Obj_SetSpeed(x, speeds[slow]);
+        Obj_SetSpeed(x, (uint16_t)(Rom((uint16_t)(DT_CODE_MOON_BOSS_SPEED_LO + slow)) |
+                                   Rom((uint16_t)(DT_CODE_MOON_BOSS_SPEED_HI + slow)) << 8));
         if (slow) {
             gObjects->timer[x]++;
             Obj_SetVelocityY(x, 0x06EE);
@@ -478,9 +465,6 @@ void Obj_Launcher(uint8_t x)
  * stops the shake and beats it. */
 void Obj_AmazonBoss(uint8_t x, bool carry)
 {
-    static const uint8_t waits[8] = { 0x3C, 0x3C, 0x78, 0x78, 0x78, 0xB4, 0xB4, 0xB4 };
-    static const uint8_t splits[2] = { 0xC0, 0xE0 };
-
     Decomp_Enter(DT_CODE_KIND_AMAZON_BOSS, 0x22, x, gObjects->kind[x]);
     if (gObjects->unk_0690[x] != 0) {
         if (Boss_Hit(&x)) {
@@ -521,12 +505,12 @@ void Obj_AmazonBoss(uint8_t x, bool carry)
             if (shaking) {
                 if (--gObjects->unk_06C0[x] != 0) {
                     gRowScroll = (uint8_t)((gSprPhase >> 2) & 1);
-                    gRowScrollAddr = splits[gRowScroll];
+                    gRowScrollAddr = Rom((uint16_t)(DT_CODE_AMAZON_BOSS_SPLITS + gRowScroll));
                     return;
                 }
                 gObjects->state[x]--;
                 gRandom(0) = (uint8_t)(gRandom(0) + gRandom(3) + carry);
-                gObjects->timer[x] = waits[gRandom(0) & 7];
+                gObjects->timer[x] = Rom((uint16_t)(DT_CODE_AMAZON_BOSS_WAITS + (gRandom(0) & 7)));
                 gRowScrollAddr = 0xC0;
                 gRowScroll = 0;
                 gPogoCeiling = 0;
@@ -575,17 +559,6 @@ static void Obj_TransylvaniaBossRise(uint8_t x)
  * the boss hit $F6D7; the last one beats it. */
 void Obj_TransylvaniaBoss(uint8_t x)
 {
-    static const uint8_t heights[4] = { 0x68, 0x48, 0x88, 0x68 };
-    static const uint8_t waits[2] = { 0x3C, 0x96 };
-    static const uint8_t ways[2] = { OBJ_DIR_RIGHT, OBJ_DIR_LEFT };
-    static const uint8_t targets[8] = { 0x30, 0x50, 0x80, 0xB0, 0xD0, 0x30, 0x80, 0xD0 };
-    static const uint8_t weave[14] = { 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F,
-                                       0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17 };
-    static const uint8_t ahead[2] = { 0xF0, 0x10 };
-    static const uint8_t facing[2] = { 0, OBJ_FLAG_FACING_RIGHT };
-    static const uint16_t shotVy[3] = { 0x0000, 0x016A, 0x0200 };
-    static const uint16_t shotSpeed[3] = { 0x0200, 0x016A, 0x0000 };
-
     Decomp_Enter(DT_CODE_KIND_TRANSYLVANIA_BOSS, 0x22, x, gObjects->kind[x]);
     if (gObjects->unk_0690[x] != 0 && Boss_Hit(&x)) {
         Obj_Defeat(x);
@@ -610,7 +583,7 @@ void Obj_TransylvaniaBoss(uint8_t x)
                 gObjects->action[x] = 0x5E;
                 ResetAnim(x);
                 gRandom(1) = (uint8_t)(gRandom(0) + gRandom(2) + 1);
-                gObjects->timer[x] = heights[gRandom(1) & 3];
+                gObjects->timer[x] = Rom((uint16_t)(DT_CODE_TRANSYLVANIA_BOSS_HEIGHTS + (gRandom(1) & 3)));
                 return;
             }
             Obj_SubVelocityY(x);
@@ -620,11 +593,11 @@ void Obj_TransylvaniaBoss(uint8_t x)
             gRandom(2) = (uint8_t)(gRandom(1) + gRandom(3));
             {
                 uint8_t i = gRandom(2) & 7;
-                gObjects->unk_06C0[x] = targets[i];
-                gObjects->timer[x] = waits[i & 1];
+                gObjects->unk_06C0[x] = Rom((uint16_t)(DT_CODE_TRANSYLVANIA_BOSS_TARGETS + i));
+                gObjects->timer[x] = Rom((uint16_t)(DT_CODE_TRANSYLVANIA_BOSS_WAITS + (i & 1)));
                 gObjects->unk_06D0[x] = 0;
                 gObjects->unk_06E0[x] = 0;
-                gObjects->dir[x] = ways[i & 1];
+                gObjects->dir[x] = Rom((uint16_t)(DT_CODE_TRANSYLVANIA_BOSS_WAYS + (i & 1)));
             }
             gObjects->state[x]++;
             return;
@@ -633,7 +606,7 @@ void Obj_TransylvaniaBoss(uint8_t x)
                 gObjects->timer[x]--;
             }
             if (gObjects->unk_06D0[x] == 0) {
-                Obj_SetMotionIndex(x, weave[gObjects->unk_06E0[x]]);
+                Obj_SetMotionIndex(x, Rom((uint16_t)(DT_CODE_TRANSYLVANIA_BOSS_WEAVE + gObjects->unk_06E0[x])));
                 if (gObjects->speed[x] & 0x80) {
                     Obj_SetSpeed(x, (uint16_t)-Obj_GetSpeed(x));
                 }
@@ -670,7 +643,7 @@ void Obj_TransylvaniaBoss(uint8_t x)
             gObjects->state[x]++;
             Obj_FaceScrooge(x);
             gObjects->flags[x] = (uint8_t)((gObjects->flags[x] & (uint8_t)~OBJ_FLAG_FACING_RIGHT) |
-                                           facing[gObjects->dir[x] & 1]);
+                                           Rom((uint16_t)(DT_CODE_TRANSYLVANIA_BOSS_FACING + (gObjects->dir[x] & 1))));
             return;
         case 4:
             if (gObjects->action[x] == 0x2A) {
@@ -696,7 +669,8 @@ void Obj_TransylvaniaBoss(uint8_t x)
             if (gObjects->animFrame[x] != 2) {
                 return;
             }
-            gScratch0 = (uint8_t)(gObjects->worldX[x] + ahead[gObjects->dir[x] & 1]);
+            gScratch0 = (uint8_t)(gObjects->worldX[x] +
+                                  Rom((uint16_t)(DT_CODE_TRANSYLVANIA_BOSS_AHEAD + (gObjects->dir[x] & 1))));
             for (int i = 2; i >= 0; i--) {
                 uint8_t s = (uint8_t)(8 + i);
                 gObjects->state[s] = 0xA0;
@@ -708,8 +682,10 @@ void Obj_TransylvaniaBoss(uint8_t x)
                 gObjects->worldPage[s] = gObjects->worldPage[x];
                 gObjects->worldX[s] = gScratch0;
                 gObjects->dir[s] = gObjects->dir[x];
-                Obj_SetVelocityY(s, shotVy[i]);
-                Obj_SetSpeed(s, shotSpeed[i]);
+                Obj_SetVelocityY(s, (uint16_t)(Rom((uint16_t)(DT_CODE_TRANSYLVANIA_BOSS_SHOT_VY_LO + i)) |
+                                               Rom((uint16_t)(DT_CODE_TRANSYLVANIA_BOSS_SHOT_VY_HI + i)) << 8));
+                Obj_SetSpeed(s, (uint16_t)(Rom((uint16_t)(DT_CODE_TRANSYLVANIA_BOSS_SHOT_SPEED_LO + i)) |
+                                           Rom((uint16_t)(DT_CODE_TRANSYLVANIA_BOSS_SHOT_SPEED_HI + i)) << 8));
                 gObjects->kind[s] = OBJ_KIND_RISING_SHOT;
                 gObjects->hitbox[s] = 0x1D;
             }
