@@ -54,7 +54,8 @@ typedef struct {
     WriteLog write_log[SCRIPT_WRITE_KEYS];
     int write_logs;
     long long tune[SCRIPT_TUNES];
-    uint32_t tuned; /* bit per tune: set by this script */
+    uint32_t tuned;  /* bit per tune: set by this script */
+    uint64_t random; /* dt.random's state, never 0 */
 } Script;
 
 typedef struct {

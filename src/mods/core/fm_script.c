@@ -12,7 +12,8 @@
  *              game's records, read only), dt.set.<field>(v) for the fields
  *              the game declares writable, dt.tune.<name> (the game's
  *              tunables), dt.toast(text), dt.draw.text/rect, dt.store.get/set,
- *              dt.log, dt.mod and dt.frame()
+ *              dt.log, dt.mod, dt.frame() and dt.random (the mod's own
+ *              generator)
  *   writes     dt.set checks the value against the state when it is called.
  *              In a game event's handler it writes at once, inside the
  *              event's RAM transaction; in a "frame" handler it is queued,
@@ -294,6 +295,53 @@ static int sb_frame(lua_State *L)
     return 1;
 }
 
+/* dt.random: a xorshift64* generator of the mod's own, seeded from its id
+ * (FNV-1a) when the script starts, so a run draws the same numbers every
+ * time and the game's generator ($C0) is never touched. */
+static uint64_t random_seed(uint64_t h, const char *text)
+{
+    for (; *text; text++) {
+        h = (h ^ (uint8_t)*text) * 0x100000001B3ull;
+    }
+    return h ? h : 1;
+}
+
+/* dt.random(n): 1 to n; dt.random(m, n): m to n (called through the table's __call). */
+static int sb_random(lua_State *L)
+{
+    lua_Integer lo = 1, hi;
+    if (lua_gettop(L) == 3) {
+        lo = luaL_checkinteger(L, 2);
+        hi = luaL_checkinteger(L, 3);
+    } else if (lua_gettop(L) == 2) {
+        hi = luaL_checkinteger(L, 2);
+    } else {
+        return luaL_error(L, "dt.random(n) or dt.random(m, n)");
+    }
+    if (hi < lo) {
+        return luaL_error(L, "dt.random(%I, %I): the range is empty", lo, hi);
+    }
+    Script *s = fm_script_of(L);
+    uint64_t x = s->random;
+    x ^= x >> 12;
+    x ^= x << 25;
+    x ^= x >> 27;
+    s->random = x;
+    x *= 0x2545F4914F6CDD1Dull;
+    uint64_t span = (uint64_t)hi - (uint64_t)lo + 1;
+    lua_pushinteger(L, (lua_Integer)((uint64_t)lo + (span ? x % span : x)));
+    return 1;
+}
+
+/* dt.random.seed(n): the same n gives the same numbers again. */
+static int sb_random_seed(lua_State *L)
+{
+    char text[32];
+    snprintf(text, sizeof text, "%lld", (long long)luaL_checkinteger(L, 1));
+    fm_script_of(L)->random = random_seed(0xCBF29CE484222325ull, text);
+    return 0;
+}
+
 /* ---- the state ---- */
 
 static void set_function(lua_State *L, const char *name, lua_CFunction fn)
@@ -359,6 +407,19 @@ static int setup(lua_State *L)
     lua_setfield(L, -2, "CANCEL");
     lua_pushstring(L, fm_script_of(L)->id);
     lua_setfield(L, -2, "mod");
+
+    fm_script_of(L)->random = random_seed(0xCBF29CE484222325ull, fm_script_of(L)->id);
+    lua_newtable(L);
+    set_function(L, "seed", sb_random_seed);
+    lua_newtable(L);
+    set_function(L, "__call", sb_random);
+    lua_pushliteral(L, "dt.random");
+    lua_pushcclosure(L, fm_script_read_only, 1);
+    lua_setfield(L, -2, "__newindex");
+    lua_pushliteral(L, "dt.random");
+    lua_setfield(L, -2, "__metatable");
+    lua_setmetatable(L, -2);
+    lua_setfield(L, -2, "random");
 
     lua_newtable(L);
     lua_newtable(L);

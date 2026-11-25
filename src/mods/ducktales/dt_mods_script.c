@@ -305,9 +305,8 @@ static const FmField FIELDS[] = {
     { "y", false, get_y, NULL, NULL },
 };
 
-static const char *const OBJECT_FIELDS[] = {
-    "slot", "kind", "action", "state", "x", "y", "screen_x", "record", "player"
-};
+static const char *const OBJECT_FIELDS[] = { "slot",     "kind",   "action", "state",  "x",     "y",
+                                             "screen_x", "record", "player", "facing", "speed", "vy" };
 
 enum {
     O_SLOT,
@@ -319,6 +318,9 @@ enum {
     O_SCREEN_X,
     O_RECORD,
     O_PLAYER,
+    O_FACING,
+    O_SPEED,
+    O_VY,
     OBJECT_FIELD_COUNT
 };
 
@@ -332,7 +334,9 @@ static int player_of(int slot)
 
 /* The record of an object slot: x is the world X, y and screen_x where the
  * slot is on the screen, record the land record it was spawned from ($FF
- * none), player the player it is (0 for an object). */
+ * none), player the player it is (0 for an object), facing 1 when it faces
+ * right, speed its horizontal speed (8.8, the kind's code moves it left or
+ * right by it) and vy its vertical velocity (8.8, signed). */
 static void read_object(int slot, long long *r)
 {
     r[O_SLOT] = slot;
@@ -344,6 +348,9 @@ static void read_object(int slot, long long *r)
     r[O_SCREEN_X] = gObjects->x[slot];
     r[O_RECORD] = gObjects->record[slot];
     r[O_PLAYER] = player_of(slot);
+    r[O_FACING] = (gObjects->flags[slot] & OBJ_FLAG_FACING_RIGHT) != 0;
+    r[O_SPEED] = gObjects->speed[slot] << 8 | gObjects->speedFrac[slot];
+    r[O_VY] = (int16_t)(gObjects->vy[slot] << 8 | gObjects->vyFrac[slot]);
 }
 
 /* The live object slots (Scrooge is slot 0). */

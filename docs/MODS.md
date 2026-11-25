@@ -181,6 +181,7 @@ end)
 | `dt.store.get(key)`, `dt.store.set(key, value)` | The mod's own saved values (see [Store](#store)) |
 | `dt.log(...)` | Writes a line to `mods.log` and the console (`print` does the same) |
 | `dt.frame()` | Frames since the game started |
+| `dt.random(n)`, `dt.random(m, n)`, `dt.random.seed(n)` | The mod's own random numbers, anywhere (see [Random numbers](#random-numbers)) |
 | `dt.mod` | The mod's id |
 
 The events are the game's events (`include/ducktales/events.h`) and `frame`. A game event's
@@ -239,8 +240,10 @@ game, as the matching enhancement does.
 
 `dt.objects()` returns an array with a table for every live object slot (Scrooge is slot 0):
 `slot`, `kind`, `action` (for a pickup, its item), `state`, `x` (world X), `y` (Y on the screen),
-`screen_x` (X on the screen), `record` (the land record it was spawned from, 255 for none) and
-`player` (1 for Scrooge's slot, 0 for an object). `dt.camera()` returns `x` (the world X of the
+`screen_x` (X on the screen), `record` (the land record it was spawned from, 255 for none),
+`player` (1 for Scrooge's slot, 0 for an object), `facing` (1 facing right, 0 left), `speed` (the
+horizontal speed, 8.8 fixed point: 256 is a pixel a frame; the object's code moves it left or right
+by it) and `vy` (the vertical velocity, 8.8 and signed, as the kind's code uses it). `dt.camera()` returns `x` (the world X of the
 camera's left edge), `row` (the map row) and `screen` (the screen index, row * 8 + page). Both
 read the game when they are called, only inside handlers. The object tables are in
 [docs/MEMORY-MAP.md](MEMORY-MAP.md).
@@ -457,6 +460,15 @@ written. The notice is drawn with
 the hosts' overlay font (`cyc_overlay`) over the presented picture only, after the mods' tiles and
 palettes: it never reaches the machine's picture, screenshots taken from it, or any hash. It is also
 written to the log.
+
+### Random numbers
+
+`dt.random(n)` returns a whole number from 1 to `n`, and `dt.random(m, n)` one from `m` to `n`.
+Each mod has a generator of its own (xorshift64*), seeded from its id when the script starts: a run
+gives the same numbers every time, whatever the other mods draw, and the game's own generator
+(`$C0`, which its enemies use) is never read or changed, so drawing numbers is not a write.
+`dt.random.seed(n)` starts the sequence again from `n`. Lua's `math.random` is still there; it is
+not tied to the mod and its numbers differ from one run to the next.
 
 ### Store
 

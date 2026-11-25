@@ -37,8 +37,9 @@ templates come from the player's own ROM through --mods-dump and are deleted wit
      shows its rectangle and text over the presented picture and stops at 64 a frame; with all of
      it running the per-frame machine hashes equal a run without mods, and the native player logs
      the same events in the same frames;
- 11. gameplay scripts (headless, and the native player when it is built): on amazon_intro the
-     "update" event once per step of play, dt.set in a game event's handler written at once and
+ 11. gameplay scripts (headless, and the native player when it is built): dt.random repeats
+     after the same seed, keeps to its range, is its own per mod and leaves the RAM of a run
+     without mods; on amazon_intro the "update" event once per step of play, dt.set in a game event's handler written at once and
      logged, identical repeats counted in one line; on a short Amazon route each of Scrooge's
      tunables (dt.tune) changes its fall, walk, jump or pogo bounce against a run without it, nil
      gives the game's value back, the highest mod in the order wins and the limits are refused;

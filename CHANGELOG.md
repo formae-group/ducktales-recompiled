@@ -5,6 +5,12 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ## [Unreleased]
 
+### Added
+
+- Script mods get random numbers of their own (docs/MODS.md "Random numbers"): `dt.random(n)`,
+  `dt.random(m, n)` and `dt.random.seed(n)`, a generator per mod seeded from its id, the same every
+  run and never the game's. The object tables also give `facing`, `speed` and `vy`.
+
 ## [1.1.0] - 2026-11-25
 
 ### Added

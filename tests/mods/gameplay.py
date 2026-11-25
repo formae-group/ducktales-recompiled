@@ -1,5 +1,7 @@
 """Step 11 of the mods test (tests/mods_test.py): gameplay scripts.
 
+dt.random: the same numbers after the same seed and on both hosts, its range, two mods' own
+sequences, the refused calls, and the RAM of a run without mods on every frame while it draws.
 The "update" event once per step of play, dt.set inside a game event's handler written at once and
 logged (repeats counted in one line), on the headless build and the native player. Scrooge's
 tunables on a short Amazon route: each changes what it should against a run without them, nil
@@ -44,6 +46,33 @@ dt.on("frame", function(frame)
         dt.log("steps", steps, dt.state.lives)
     end
 end)
+'''
+
+# dt.random: the same numbers again after the same seed, a range, a second mod's own sequence,
+# and the refused calls; with only these scripts the RAM is the run without mods' on every frame.
+RANDOM_LUA = r'''
+local function draw(count, ...)
+    local out = {}
+    for i = 1, count do
+        out[i] = dt.random(...)
+    end
+    return table.concat(out, ",")
+end
+local first = draw(8, 1000)
+dt.random.seed(7)
+local seven = draw(8, 1000)
+dt.random.seed(7)
+dt.log("seed", draw(8, 1000) == seven, seven ~= first)
+local low, high = 99, 0
+for _ = 1, 500 do
+    local v = dt.random(3, 5)
+    low, high = math.min(low, v), math.max(high, v)
+end
+dt.log("range", low, high, dt.random(-2, -2))
+dt.log("first", first)
+dt.log("empty", pcall(dt.random, 5, 4))
+dt.log("no range", pcall(dt.random))
+dt.log("write", pcall(function() dt.random.x = 1 end))
 '''
 
 # Amazon from Land Select: Scrooge falls in, walks left, jumps straight up, lands on the pogo and
@@ -264,6 +293,7 @@ dt.on("update", function()
     elseif step == 80 then
         local o = live(made.slot)
         dt.log("moved", o.kind, o.x < made.x, o.y > made.y)
+        dt.log("fields", o.facing, o.speed, o.vy)
     elseif step == 150 then
         local n, why = 0, nil
         repeat
@@ -429,6 +459,50 @@ def gameplay_checks(exe, native, dev):
             ]
 
         hosts = [(h, e, n) for h, e, n in (('headless', exe, False), ('native player', native, True)) if e]
+        random_mods = mods('random', {'random': RANDOM_LUA, 'random-b': RANDOM_LUA})
+        for host, host_exe, is_native in hosts:
+            log = run(host_exe, f'random_{host.replace(" ", "_")}', is_native, random_mods, frames=60)
+            got = {
+                w: (lines(log, 'random', w) or [[]])[0]
+                for w in ('seed', 'range', 'first', 'empty', 'no range', 'write')
+            }
+            other = (lines(log, 'random-b', 'first') or [[]])[0]
+            check(
+                got['seed'] == ['true', 'true']
+                and got['range'] == ['3', '5', '-2']
+                and got['first'][:1] != other[:1]
+                and got['empty'] == ['false', 'dt.random(5, 4): the range is empty']
+                and got['no range'] == ['false', 'dt.random(n) or dt.random(m, n)']
+                and got['write'][:1] == ['false'],
+                f'{host}: dt.random repeats after the same seed, keeps to its range, differs between two mods and '
+                f'refuses an empty range',
+                f'{got} {other}',
+            )
+            if host == 'headless':
+                random_first = got['first']
+            else:
+                check(
+                    got['first'] == random_first,
+                    f'the native player draws the same dt.random numbers ({got["first"][0][:20]}...)',
+                )
+        if dev:
+            ram = [tmp / 'random.ram', tmp / 'none.ram']
+            run(dev, 'random_ram', False, random_mods, extra=['--dt-ram-log', ram[0]])
+            subprocess.run(
+                [
+                    str(c)
+                    for c in (dev, ROM, '--frames', 1500, '--input', amazon, '--mods', 'off', '--dt-ram-log', ram[1])
+                ],
+                capture_output=True,
+                timeout=3600,
+                env=env,
+            )
+            diff, info = ram_diff(ram)
+            check(
+                diff is None,
+                f'headless: with dt.random drawing, the RAM is the run without mods\' on every frame ({info})',
+                diff or '',
+            )
         update_mods = mods('update', {'gameplay': UPDATE_LUA})
         steps = {}
         for host, host_exe, is_native in hosts:
@@ -601,7 +675,10 @@ def gameplay_checks(exe, native, dev):
             log = run(host_exe, f'spawn_{host.replace(" ", "_")}', is_native, spawn_mods)
             spawn_lines[host] = [line for line in log.splitlines() if 'Mod spawn:' in line]
             what = ('spawned', 'not an enemy', 'not this land', 'action', 'off screen', 'below', 'arguments')
-            got = {w: (lines(log, 'spawn', w) or [[]])[0] for w in (*what, 'spawned event', 'moved', 'full', 'despawn')}
+            got = {
+                w: (lines(log, 'spawn', w) or [[]])[0]
+                for w in (*what, 'spawned event', 'moved', 'fields', 'full', 'despawn')
+            }
             got['outside'] = (lines(log, 'spawn', 'outside') or [[]])[0]
             check(
                 got['spawned'] == ['1', '11', '200', '100', '255', '1', '255']
@@ -628,10 +705,11 @@ def gameplay_checks(exe, native, dev):
             )
             check(
                 got['moved'] == ['1', 'true', 'true']
+                and got['fields'] == ['0', '256', '0']
                 and got['full'][1:] == ['2 free slots, 2 kept for the game', '2']
                 and int(got['full'][0]) > 0
                 and got['despawn'] == ['true', 'true'],
-                f'{host}: the spawned hopper walks and falls as the game\'s own, spawns stop with 2 slots free '
+                f'{host}: the spawned hopper walks left at speed 256 (facing 0) and falls as the game\'s own, spawns stop with 2 slots free '
                 f'({got["full"][:1]} more made, then nil and the reason), and a spawned enemy despawns',
                 f'{got}',
             )
