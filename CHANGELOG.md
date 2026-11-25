@@ -5,6 +5,8 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-25
+
 ### Added
 
 - The build with no ROM (docs/ROMLESS.md): `-DDUCKTALES_ROMLESS=ON` builds the native player

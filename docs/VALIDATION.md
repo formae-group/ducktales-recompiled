@@ -641,6 +641,18 @@ read from the ROM. With `--jobs 2` through `tools/test_slot.py`:
 
 Not run on this tree: the full `tests/verify_routes.py` and the full `tests/decomp_test.py`.
 
+## Release 1.1.0
+
+| Check | Tree | Result |
+|---|---|---|
+| `tests/verify_routes.py --jobs 3` | 037339c | 13/13 routes PASS, native 100.0%, oracle/interp match on every route (2,344 s, part of the oracle cached) |
+| `tests/decomp_test.py` (every route, all modes) | 4c3b17e | check 13/13, replace 13/13, pokes 184/184 (92 cases in check and replace), events 12/12 (1,494 s) |
+| `tests/romless_test.py` and the gates in "Build with no ROM" | 4c3b17e | see that section |
+
+Reused: verify_routes ran on 037339c. The two commits after it are the build with no ROM, which leaves
+the ROM build's Original mode unchanged, and the decompiled objects' tables read from the ROM, which the
+C runs only with Decompiled code on, so the decomp_test above covers them.
+
 ## Not verified
 
 - The full `tests/verify_routes.py`, `tests/enhancements_test.py` and `tests/decomp_test.py` on
