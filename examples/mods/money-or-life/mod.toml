@@ -1,0 +1,7 @@
+id = "money-or-life"
+name = "Money or Life"
+version = "1.0.0"
+author = "DuckTales Recompiled"
+description = """One beaten enemy in three drops money, an HP dot or, now and then, a life."""
+game = "DuckTales (USA)"
+prg_sha256 = "8ba8baed01a9fbaf1e9ff29e0c9825db1963ac2aff211d6f1f3bcfd3839e2013"

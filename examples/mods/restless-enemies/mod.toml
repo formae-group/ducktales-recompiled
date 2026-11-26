@@ -1,0 +1,7 @@
+id = "restless-enemies"
+name = "Restless Enemies"
+version = "1.0.0"
+author = "DuckTales Recompiled"
+description = """The enemies move half again as fast."""
+game = "DuckTales (USA)"
+prg_sha256 = "8ba8baed01a9fbaf1e9ff29e0c9825db1963ac2aff211d6f1f3bcfd3839e2013"

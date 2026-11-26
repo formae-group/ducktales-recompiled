@@ -79,6 +79,22 @@ my-mod.dtmod
 The files may sit in one folder inside the archive, next to `mod.toml`. Subfolders under
 `tiles/` are allowed (`tiles/hud/...`). Other files are ignored.
 
+### Example mods
+
+`examples/mods/` holds two script mods to copy into the mods folder or to start from:
+
+- **Money or Life** (`money-or-life`): one beaten enemy in three drops a pickup made with
+  `dt.spawn_item`, mostly 2,000 or 10,000 money, sometimes an HP dot (money when HP is full), now and
+  then a life (money at 9 lives) with a toast, rarely 50,000. The chance and the weights are at the
+  top of its script.
+- **Restless Enemies** (`restless-enemies`): every enemy `dt.ai` can name moves half again as fast,
+  up to 8 px a frame. Its `after` callback scales `speed` each time the kind's code sets a new one.
+  Turning an enemy around through `facing` does not work for the walkers: their code sets `facing`
+  again from the way they walk.
+
+Both are folders with a `mod.toml` and `scripts/main.lua` and change gameplay, so the machine
+differs from the console's while one is on.
+
 ### mod.toml
 
 ```toml
