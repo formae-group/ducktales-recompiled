@@ -7,9 +7,10 @@ All notable changes to DuckTales Recompiled are recorded here. The format follow
 
 ### Added
 
-- Two example script mods in `examples/mods/` (docs/MODS.md "Example mods"): Money or Life, where
+- Three example script mods in `examples/mods/` (docs/MODS.md "Example mods"): Money or Life, where
   one beaten enemy in three drops money, an HP dot or now and then a life through `dt.spawn_item`,
-  and Restless Enemies, where the enemies move half again as fast through `dt.ai`.
+  Money Rain, where diamonds rain from the top of the screen for 8 seconds every 20 or so, and
+  Restless Enemies, where the enemies move half again as fast through `dt.ai`.
 - Script mods get random numbers of their own (docs/MODS.md "Random numbers"): `dt.random(n)`,
   `dt.random(m, n)` and `dt.random.seed(n)`, a generator per mod seeded from its id, the same every
   run and never the game's. The object tables also give `facing`, `speed` and `vy`.

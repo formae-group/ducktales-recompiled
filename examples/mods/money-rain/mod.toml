@@ -1,0 +1,7 @@
+id = "money-rain"
+name = "Money Rain"
+version = "1.0.0"
+author = "DuckTales Recompiled"
+description = """Every 20 seconds or so, diamonds rain from the top of the screen for 8 seconds."""
+game = "DuckTales (USA)"
+prg_sha256 = "8ba8baed01a9fbaf1e9ff29e0c9825db1963ac2aff211d6f1f3bcfd3839e2013"
